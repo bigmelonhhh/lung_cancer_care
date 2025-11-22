@@ -1,1 +1,5 @@
-django
+django==5.2.8
+pymysql==1.1.2
+django-extensions
+ipython
+python-dotenv==1.1.1

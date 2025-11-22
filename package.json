@@ -1,0 +1,31 @@
+{
+  "name": "lung_cancer_care",
+  "version": "1.0.0",
+  "description": "Tailwind CSS build/watch scripts for the lung_cancer_care project. Run npm run tailwind:watch during development, npm run tailwind:build for production assets.",
+  "main": "index.js",
+  "directories": {
+    "doc": "doc",
+    "test": "tests"
+  },
+  "scripts": {
+    "tailwind:build": "tailwindcss -i static/src/tailwind.css -o static/css/app.css --minify",
+    "tailwind:watch": "tailwindcss -i static/src/tailwind.css -o static/css/app.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ericliu1002000/lung_cancer_care.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/ericliu1002000/lung_cancer_care/issues"
+  },
+  "homepage": "https://github.com/ericliu1002000/lung_cancer_care#readme",
+  "devDependencies": {
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.13"
+  }
+}
