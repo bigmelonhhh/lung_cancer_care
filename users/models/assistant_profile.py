@@ -54,8 +54,8 @@ class AssistantProfile(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "Assistant Profile"
-        verbose_name_plural = "Assistant Profiles"
+        verbose_name = "医生助理"
+        verbose_name_plural = "医生助理"
 
     def clean(self):
         """
@@ -67,6 +67,8 @@ class AssistantProfile(TimeStampedModel):
         """
 
         super().clean()
+        if not self.user_id:
+            return
         if self.user.user_type != choices.UserType.ASSISTANT:
             raise ValidationError("关联账号必须是助理类型。")
 
