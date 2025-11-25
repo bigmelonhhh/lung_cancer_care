@@ -1,4 +1,4 @@
-from .custom_user import CustomUser
+from .custom_user import CustomUser, PlatformAdminUser
 from .patient_profile import PatientProfile
 from .patient_relation import PatientRelation
 from .sales_profile import SalesProfile
@@ -9,6 +9,7 @@ from .doctor_assistant_map import DoctorAssistantMap
 
 __all__ = [
     "CustomUser",
+    "PlatformAdminUser",
     "PatientProfile",
     "PatientRelation",
     "SalesProfile",

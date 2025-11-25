@@ -154,3 +154,21 @@ class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
         """
 
         return self.wx_nickname or self.username
+
+
+class PlatformAdminUserManager(CustomUserManager):
+    """Manager that restricts queryset to platform administrators."""
+
+    def get_queryset(self):  # pragma: no cover - simple override
+        return super().get_queryset().filter(user_type=choices.UserType.ADMIN)
+
+
+class PlatformAdminUser(CustomUser):
+    """Proxy model for managing platform administrators in Django admin."""
+
+    objects = PlatformAdminUserManager()
+
+    class Meta:
+        proxy = True
+        verbose_name = "平台管理员"
+        verbose_name_plural = "平台管理员"
