@@ -21,6 +21,13 @@ class PlatformAdminCreationForm(forms.ModelForm):
         model = PlatformAdminUser
         fields = []
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # ensure validation treats this as platform admin
+        self.instance.user_type = choices.UserType.ADMIN
+        self.instance.wx_openid = None
+        self.instance.wx_unionid = None
+
     def clean_phone(self):
         phone = self.cleaned_data["phone"].strip()
         if CustomUser.objects.filter(phone=phone).exists():
