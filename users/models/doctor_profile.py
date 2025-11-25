@@ -22,17 +22,17 @@ class DoctorProfile(TimeStampedModel):
         help_text="【业务说明】医生登录账号；【用法】user_type=医生；【示例】CustomUser#30；【参数】外键；【返回值】CustomUser",
     )
     name = models.CharField(
-        "医生姓名",
+        "* 医生姓名",
         max_length=50,
         help_text="【业务说明】医生姓名；【用法】前端展示；【示例】张主任；【参数】str；【返回值】str",
     )
     hospital = models.CharField(
-        "所属医院",
+        "* 所属医院",
         max_length=100,
         help_text="【业务说明】所属医院；【用法】展示/筛选；【示例】上海市第一人民医院；【参数】str；【返回值】str",
     )
     department = models.CharField(
-        "所属科室",
+        "* 所属科室",
         max_length=50,
         help_text="【业务说明】所属科室；【用法】帮助患者识别；【示例】肿瘤科；【参数】str；【返回值】str",
     )
@@ -67,8 +67,8 @@ class DoctorProfile(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "Doctor Profile"
-        verbose_name_plural = "Doctor Profiles"
+        verbose_name = "医生档案"
+        verbose_name_plural = "医生档案"
 
     def clean(self):
         """
@@ -80,6 +80,8 @@ class DoctorProfile(TimeStampedModel):
         """
 
         super().clean()
+        if not self.user_id:
+            return
         if self.user.user_type != choices.UserType.DOCTOR:
             raise ValidationError("关联账号必须是医生类型。")
 
