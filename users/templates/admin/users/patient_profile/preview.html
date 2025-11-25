@@ -1,0 +1,36 @@
+<div class="card">
+  <div class="card-body">
+    {% if patient %}
+    <h5 class="card-title">{{ patient.name }} ({{ patient.get_service_status_display }})</h5>
+    <ul class="list-unstyled">
+      <li>性别：{{ patient.get_gender_display }}</li>
+      <li>年龄：{{ patient.age|default:"-" }}</li>
+      <li>注册日期：{{ patient.created_at|date:"Y-m-d" }}</li>
+      <li>主治医生：{{ patient.doctor|default:"-" }}</li>
+      <li>销售专员：{{ patient.sales|default:"-" }}</li>
+    </ul>
+    <div class="mb-3">
+      <h6>依从性数据</h6>
+      <ul>
+        <li>用药打卡：{{ adherence_metrics.medication }}</li>
+        <li>监测完成：{{ adherence_metrics.monitoring }}</li>
+        <li>随访响应：{{ adherence_metrics.followup }}</li>
+      </ul>
+    </div>
+    <div>
+      <h6>最近病历</h6>
+      {% if medical_histories %}
+      <ul>
+        {% for history in medical_histories %}
+        <li>{{ history.record_date|date:"Y-m-d" }} - {{ history.diagnosis|default:history.pathology|default:"更新记录" }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>暂无病历记录</p>
+      {% endif %}
+    </div>
+    {% else %}
+    <p>未找到患者信息</p>
+    {% endif %}
+  </div>
+</div>

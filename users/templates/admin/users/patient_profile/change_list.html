@@ -1,0 +1,109 @@
+{% extends "admin/change_list.html" %}
+{% load admin_list i18n static %}
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+{% endblock %}
+{% block extrahead %}
+{{ block.super }}
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+{% endblock %}
+
+{% block change_list %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card mb-3">
+        <div class="card-body">
+          <form method="get" class="row g-3">
+            <div class="col-md-4">
+              {{ filter_form.q.label_tag }}
+              {{ filter_form.q }}
+            </div>
+            <div class="col-md-4">
+              {{ filter_form.gender.label_tag }}
+              {{ filter_form.gender }}
+            </div>
+            <div class="col-md-4">
+              {{ filter_form.doctor_name.label_tag }}
+              {{ filter_form.doctor_name }}
+            </div>
+            <div class="col-md-4">
+              {{ filter_form.sales_name.label_tag }}
+              {{ filter_form.sales_name }}
+            </div>
+            <div class="col-md-4">
+              {{ filter_form.birth_start.label_tag }}
+              {{ filter_form.birth_start }}
+            </div>
+            <div class="col-md-4">
+              {{ filter_form.birth_end.label_tag }}
+              {{ filter_form.birth_end }}
+            </div>
+            <div class="col-md-3">
+              {{ filter_form.date_range_start.label_tag }}
+              {{ filter_form.date_range_start }}
+            </div>
+            <div class="col-md-3">
+              {{ filter_form.date_range_end.label_tag }}
+              {{ filter_form.date_range_end }}
+            </div>
+            <div class="col-md-3">
+              {{ filter_form.purchase_start.label_tag }}
+              {{ filter_form.purchase_start }}
+            </div>
+            <div class="col-md-3">
+              {{ filter_form.purchase_end.label_tag }}
+              {{ filter_form.purchase_end }}
+            </div>
+            <div class="col-12 text-end">
+              <button type="submit" class="btn btn-primary">筛选</button>
+              <a href="{{ request.path }}" class="btn btn-secondary">重置</a>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-body table-responsive" id="patient-table-wrapper">
+          {% result_list cl %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div id="patient-detail-panel" class="card">
+        <div class="card-body">
+          <p>请点击左侧患者查看详情</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block footer %}
+{{ block.super }}
+<script>
+(function() {
+  const previewBase = "{{ preview_url_base|default:''|escapejs }}";
+  function initPatientRows() {
+    const rows = document.querySelectorAll('#result_list tbody tr');
+    rows.forEach(function(row) {
+      const pk = row.getAttribute('data-object-id');
+      if (!pk || !previewBase) {
+        return;
+      }
+      row.setAttribute('hx-get', `${previewBase}${pk}/`);
+      row.setAttribute('hx-target', '#patient-detail-panel');
+      row.setAttribute('hx-swap', 'innerHTML');
+      row.style.cursor = 'pointer';
+    });
+  }
+  document.addEventListener('DOMContentLoaded', initPatientRows);
+  document.body.addEventListener('htmx:afterSwap', function(evt) {
+    if (evt.target && evt.target.closest && evt.target.closest('#patient-table-wrapper')) {
+      initPatientRows();
+    }
+  });
+})();
+</script>
+{% endblock %}

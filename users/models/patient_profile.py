@@ -126,8 +126,8 @@ class PatientProfile(TimeStampedModel):
     )
 
     class Meta:
-        verbose_name = "Patient Profile"
-        verbose_name_plural = "Patient Profiles"
+        verbose_name = "患者列表"
+        verbose_name_plural = "患者列表"
         indexes = [
             models.Index(fields=["doctor"]),
             models.Index(fields=["phone"]),
