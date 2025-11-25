@@ -4,8 +4,12 @@ from .client import wechat_client
 
 
 def send_template_message(openid, template_id, data, url=None, mini_program=None):
-    """发送模板消息。url 建议指向 OAuth 回调以便识别用户。"""
+    """封装模板消息发送。
 
-    # 注：业务上建议构造形如 /wx/auth/redirect?target=REAL_URL 的跳转链接，
-    # 以便后端在 OAuth 回调中静默获取 OpenID 并绑定用户身份。
+    作用：向公众号用户发送业务通知（如预约提醒）。
+    使用场景：服务层或 Celery 任务在满足条件时调用。
+    注意：模板跳转 URL 建议指向我们自己的 OAuth 回调，如
+    /wx/auth/redirect?target=REAL_URL，这样后端可静默换取 openid 并识别用户。
+    """
+
     return wechat_client.message.send_template(openid, template_id, data, url=url, miniprogram=mini_program)
