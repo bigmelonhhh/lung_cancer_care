@@ -133,6 +133,17 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】如父子/配偶；【用法】便于识别联系人；【示例】父子；【参数】str；【返回值】str",
     )
+    qrcode_url = models.URLField(
+        "绑定二维码",
+        blank=True,
+        help_text="【业务说明】缓存患者绑定二维码 URL；【用法】销售端展示扫码绑定；【示例】https://wx.qq.com/qrcode；【参数】str；【返回值】str",
+    )
+    qrcode_expire_at = models.DateTimeField(
+        "二维码过期时间",
+        null=True,
+        blank=True,
+        help_text="【业务说明】记录二维码失效时间，避免频繁请求微信；【用法】每次生成更新；【示例】2025-01-01 10:00；【参数】datetime；【返回值】datetime",
+    )
     is_active = models.BooleanField(
         "是否有效",
         default=True,

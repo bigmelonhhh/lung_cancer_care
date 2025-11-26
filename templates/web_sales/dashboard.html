@@ -127,8 +127,8 @@
                   {% for patient in patients %}
                   <div
                     class="py-3 px-2 hover:bg-white/10 rounded-xl transition cursor-pointer space-y-1"
-                    hx-get="#"
-                    hx-target="#sales-dashboard-panel"
+                    hx-get="{% url 'web_sales:patient_detail' patient.id %}"
+                    hx-target="#main-content-area"
                     hx-swap="innerHTML"
                   >
                     <div class="text-sm font-semibold">{{ patient.name }}</div>
@@ -150,7 +150,7 @@
       </div>
     </aside>
 
-    <main id="sales-dashboard-panel" class="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50">
+    <main id="main-content-area" class="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50">
       <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8 space-y-8">
         <div>
           <p class="text-sm uppercase tracking-widest text-slate-400">Dashboard</p>

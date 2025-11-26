@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 # users/services/patient.py
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -32,22 +34,43 @@ class PatientService:
 
     def generate_bind_qrcode(self, profile_id: int) -> str:
         """
-        【功能4】生成带参二维码（临时二维码）。
+        【功能4】生成或复用带参二维码（临时二维码）。
         参数值示例：bind_patient_1024
         """
+
+        profile = PatientProfile.objects.filter(id=profile_id).first()
+        if not profile:
+            raise ValidationError("患者不存在")
+
+        now = timezone.now()
+        if (
+            profile.qrcode_url
+            and profile.qrcode_expire_at
+            and profile.qrcode_expire_at - timedelta(minutes=1) > now
+        ):
+            return profile.qrcode_url
+
         # 避免循环引用，这里导入
-        from wx.services.client import wechat_client 
-        
-        # 场景值：bind_patient_{id}
+        from wx.services.client import wechat_client
+
         scene_str = f"bind_patient_{profile_id}"
-        
-        # 生成有效期 7 天的临时二维码
-        res = wechat_client.qrcode.create({
-            'expire_seconds': 604800, 
-            'action_name': 'QR_STR_SCENE',
-            'action_info': {'scene': {'scene_str': scene_str}}
-        })
-        return res['url'] # 返回二维码图片地址，或者 ticket
+        res = wechat_client.qrcode.create(
+            {
+                "expire_seconds": 604800,
+                "action_name": "QR_STR_SCENE",
+                "action_info": {"scene": {"scene_str": scene_str}},
+            }
+        )
+        qrcode_url = res.get("url")
+        expire_seconds = res.get("expire_seconds") or 600
+        if not qrcode_url:
+            raise ValidationError("二维码生成失败，请稍后再试")
+
+        profile.qrcode_url = qrcode_url
+        profile.qrcode_expire_at = now + timedelta(seconds=int(expire_seconds))
+        profile.save(update_fields=["qrcode_url", "qrcode_expire_at", "updated_at"])
+
+        return qrcode_url
 
     def bind_user_to_profile(self, openid: str, profile_id: int) -> bool:
         """

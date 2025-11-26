@@ -1,0 +1,80 @@
+<div class="space-y-6">
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="lg:col-span-2 space-y-6">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-xs uppercase text-slate-400 tracking-widest">基础信息</p>
+            <h2 class="text-xl font-semibold text-slate-900 mt-1">{{ patient.name }}</h2>
+          </div>
+          <span class="inline-flex items-center px-3 py-1 rounded-full bg-sky-100 text-sky-600 text-sm">
+            {{ patient.get_gender_display }}{% if patient.age %} · {{ patient.age }}岁{% endif %}
+          </span>
+        </div>
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-600">
+          <div>
+            <dt class="text-slate-400">出生日期</dt>
+            <dd class="font-medium text-slate-800">{{ patient.birth_date|date:"Y-m-d"|default:"-" }}</dd>
+          </div>
+          <div>
+            <dt class="text-slate-400">联系电话</dt>
+            <dd class="font-medium text-slate-800">{{ patient.phone }}</dd>
+          </div>
+          <div class="md:col-span-2">
+            <dt class="text-slate-400">联系地址</dt>
+            <dd class="font-medium text-slate-800">{{ patient.address|default:"-" }}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-xs uppercase text-slate-400 tracking-widest">紧急联系人</p>
+            <h3 class="text-lg font-semibold text-slate-900">应急联系方案</h3>
+          </div>
+        </div>
+        <dl class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-slate-600">
+          <div>
+            <dt class="text-slate-400">姓名</dt>
+            <dd class="font-medium text-slate-800">{{ patient.ec_name|default:"-" }}</dd>
+          </div>
+          <div>
+            <dt class="text-slate-400">关系</dt>
+            <dd class="font-medium text-slate-800">{{ patient.ec_relation|default:"-" }}</dd>
+          </div>
+          <div>
+            <dt class="text-slate-400">联系电话</dt>
+            <dd class="font-medium text-slate-800">{{ patient.ec_phone|default:"-" }}</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="space-y-6">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 flex flex-col items-center text-center">
+        <h3 class="text-lg font-semibold text-slate-900 mb-2">绑定二维码</h3>
+        <p class="text-sm text-slate-500 mb-6">患者扫码后即可绑定专属档案</p>
+        {% if qrcode_url %}
+        <div class="w-48 h-48 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-center mb-4">
+          <img src="{{ qrcode_url }}" alt="绑定二维码" class="w-44 h-44 object-contain">
+        </div>
+        {% else %}
+        <div class="w-48 h-48 bg-slate-50 border border-dashed border-rose-200 rounded-2xl flex items-center justify-center mb-4 text-rose-500">
+          <span>二维码生成失败</span>
+        </div>
+        <button
+          type="button"
+          class="px-4 py-2 rounded-xl bg-rose-500 text-white text-sm hover:bg-rose-400 transition"
+          hx-get="{% url 'web_sales:patient_detail' patient.id %}"
+          hx-target="#main-content-area"
+          hx-swap="innerHTML"
+        >
+          重新获取
+        </button>
+        {% endif %}
+        <p class="text-xs text-slate-400 mt-4">请患者或家属使用微信扫码绑定档案</p>
+      </div>
+    </div>
+  </div>
+</div>
