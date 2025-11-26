@@ -1,0 +1,28 @@
+{% extends "layouts/base_portal.html" %}
+{% block body %}
+<div class="min-h-screen flex">
+  <aside class="w-64 bg-slate-900 text-white flex flex-col">
+    <div class="p-6 text-xl font-semibold border-b border-slate-700">肺癌院外管理</div>
+    <nav class="flex-1 p-4 space-y-3 text-sm">
+      <a class="block px-3 py-2 rounded bg-slate-800" href="#">工作台</a>
+      <a class="block px-3 py-2 hover:bg-slate-800 rounded" href="#">患者管理</a>
+      <a class="block px-3 py-2 hover:bg-slate-800 rounded" href="#">设置</a>
+    </nav>
+  </aside>
+  <div class="flex-1 flex flex-col">
+    <header class="bg-white shadow px-6 py-4 flex items-center justify-between">
+      <div class="text-lg font-semibold">{% block page_title %}医生工作台{% endblock %}</div>
+      <div class="flex items-center space-x-4">
+        {% if request.user.is_authenticated %}
+        <span>您好，{{ request.user.wx_nickname|default:request.user.username }}</span>
+        <a class="text-blue-600" href="#">修改密码</a>
+        <a class="text-red-500" href="{% url 'web_doctor:logout' %}">退出登录</a>
+        {% endif %}
+      </div>
+    </header>
+    <main class="flex-1 p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}

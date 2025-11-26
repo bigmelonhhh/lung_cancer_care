@@ -1,0 +1,45 @@
+{% extends "layouts/base_portal.html" %}
+{% block body %}
+<div x-data="{ open: false }" class="min-h-screen flex">
+  <aside class="hidden lg:flex w-60 bg-indigo-900 text-white flex-col">
+    <div class="p-6 text-xl font-semibold border-b border-indigo-700">销售工作台</div>
+    <nav class="flex-1 p-4 space-y-3 text-sm">
+      <a class="block px-3 py-2 rounded bg-indigo-800" href="#">概览</a>
+      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">医生拓展</a>
+      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">业绩中心</a>
+    </nav>
+  </aside>
+  <div class="flex-1 flex flex-col">
+    <header class="bg-white shadow px-4 lg:px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <button class="lg:hidden" @click="open = !open">
+          <span class="sr-only">打开菜单</span>
+          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <span class="text-lg font-semibold">{% block page_title %}销售工作台{% endblock %}</span>
+      </div>
+      <div class="flex items-center space-x-4">
+        {% if request.user.is_authenticated %}
+        <span>您好，{{ request.user.wx_nickname|default:request.user.username }}</span>
+        <a class="text-blue-600" href="#">修改密码</a>
+        <a class="text-red-500" href="{% url 'web_doctor:logout' %}">退出登录</a>
+        {% endif %}
+      </div>
+    </header>
+    <main class="flex-1 p-4 lg:p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <div class="lg:hidden fixed inset-0 bg-black bg-opacity-50" x-show="open" @click="open=false"></div>
+  <aside class="lg:hidden fixed inset-y-0 left-0 w-64 bg-indigo-900 text-white p-6" x-show="open" @click.away="open=false">
+    <div class="text-xl font-semibold mb-4">销售工作台</div>
+    <nav class="space-y-3 text-sm">
+      <a class="block px-3 py-2 rounded bg-indigo-800" href="#">概览</a>
+      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">医生拓展</a>
+      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">业绩中心</a>
+    </nav>
+  </aside>
+</div>
+{% endblock %}
