@@ -51,7 +51,7 @@ class AuthService:
         login(request, user)
         return True, user
     
-    def get_or_create_wechat_user(self, openid: str, user_info: dict = None) -> Tuple[CustomUser, bool]:
+    def get_or_create_wechat_user(self, openid: str, user_info: dict|None = None) -> Tuple[CustomUser, bool]:
         """
         【业务说明】根据 OpenID 获取或创建基础账号。
         【使用场景】微信收到 subscribe 事件或 OAuth 登录时。

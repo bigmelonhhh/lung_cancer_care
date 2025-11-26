@@ -48,6 +48,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_extensions',
     'users',
+    'web_doctor',
+    'web_sales',
+    'wx'
 ]
 
 MIDDLEWARE = [
@@ -174,9 +177,9 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.CustomUser'
 
-LOGIN_URL = 'user:login'
-LOGIN_REDIRECT_URL = 'home'
-LOGOUT_REDIRECT_URL = 'user:login'
+LOGIN_URL = 'web_doctor:login'
+LOGIN_REDIRECT_URL = 'web_doctor:doctor_dashboard'
+LOGOUT_REDIRECT_URL = 'web_doctor:login'
 
 LOGGING = {
     "version": 1,
