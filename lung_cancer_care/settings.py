@@ -58,6 +58,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'lung_cancer_care.middleware.RequestLogMiddleware',
     
 ]
 
@@ -119,8 +120,11 @@ EMBED_TOKEN = os.getenv("EMBED_TOKEN", "")
 
 CACHES = {
     "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
+        "BACKEND": "django_redis.cache.RedisCache",  # <--- 改成这个
         "LOCATION": f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        }
     }
 }
 
@@ -192,14 +196,15 @@ LOGGING = {
             "filename": LOG_DIR / "lung_cancer_care.log",
             "when": "midnight",
             "interval": 1,
-            "backupCount": 10,
+            "backupCount": 20,
             "formatter": "json",
+            "encoding": "utf-8", # 建议加上编码
         },
     },
     "loggers": {
         "django": {
             "handlers": ["console", "file"],
-            "level": LOG_LEVEL,
+            "level": "INFO",
             "propagate": False,
         },
         "django.server": {
@@ -214,7 +219,7 @@ LOGGING = {
         },
         "lung_cancer_care": {
             "handlers": ["console", "file"],
-            "level": LOG_LEVEL,
+            "level": "INFO",
             "propagate": False,
         },
         "lung_cancer_care.request": {

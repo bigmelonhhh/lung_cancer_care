@@ -6,3 +6,4 @@ python-dotenv==1.1.1
 segno
 wechatpy
 cryptography
+django-redis
