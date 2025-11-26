@@ -37,40 +37,61 @@ class PatientService:
         【功能4】生成或复用带参二维码（临时二维码）。
         参数值示例：bind_patient_1024
         """
-
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        # 1. 校验档案存在
         profile = PatientProfile.objects.filter(id=profile_id).first()
         if not profile:
-            raise ValidationError("患者不存在")
+            raise ValidationError("患者档案不存在")
 
         now = timezone.now()
+
+        # 2. 检查缓存 (如果有未过期的二维码图片链接，直接返回)
+        # 预留 1 分钟缓冲期，防止临界点失效
         if (
             profile.qrcode_url
             and profile.qrcode_expire_at
-            and profile.qrcode_expire_at - timedelta(minutes=1) > now
+            and profile.qrcode_expire_at > (now + timedelta(minutes=1))
         ):
             return profile.qrcode_url
 
+        # 3. 调用微信接口生成
         # 避免循环引用，这里导入
         from wx.services.client import wechat_client
 
         scene_str = f"bind_patient_{profile_id}"
-        res = wechat_client.qrcode.create(
-            {
-                "expire_seconds": 604800,
-                "action_name": "QR_STR_SCENE",
-                "action_info": {"scene": {"scene_str": scene_str}},
-            }
-        )
-        qrcode_url = res.get("url")
-        expire_seconds = res.get("expire_seconds") or 600
-        if not qrcode_url:
-            raise ValidationError("二维码生成失败，请稍后再试")
+        try:
+            # 创建临时二维码
+            res = wechat_client.qrcode.create(
+                {
+                    "expire_seconds": 604800,  # 7天 (微信最大值)
+                    "action_name": "QR_STR_SCENE",
+                    "action_info": {"scene": {"scene_str": scene_str}},
+                }
+            )
+        except Exception as e:
+            raise ValidationError(f"微信接口调用失败: {str(e)}")
 
-        profile.qrcode_url = qrcode_url
+        # 4. 【核心修复】使用 ticket 换取图片链接
+        ticket = res.get("ticket")
+        if not ticket:
+            raise ValidationError("二维码生成失败(无ticket)，请稍后再试")
+            
+        # get_url 会返回一个 https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket=... 的链接
+        # 这个链接可以直接放入 <img src="..."> 中显示
+        real_qrcode_img_url = wechat_client.qrcode.get_url(ticket)
+        
+        expire_seconds = res.get("expire_seconds") or 604800
+
+        # 5. 更新数据库缓存
+        profile.qrcode_url = real_qrcode_img_url
         profile.qrcode_expire_at = now + timedelta(seconds=int(expire_seconds))
+        
+        # 只更新这就几个字段，提高效率
         profile.save(update_fields=["qrcode_url", "qrcode_expire_at", "updated_at"])
 
-        return qrcode_url
+        return real_qrcode_img_url
 
     def bind_user_to_profile(self, openid: str, profile_id: int) -> bool:
         """
@@ -160,18 +181,22 @@ class PatientService:
         )
 
         with transaction.atomic():
-            profile = PatientProfile.objects.create(
-                name=name,
+            defaults = {
+                "name": name,
+                "gender": data.get("gender", choices.Gender.UNKNOWN),
+                "birth_date": data.get("birth_date"),
+                "address": address,
+                "sales": sales_user.sales_profile,
+                "source": choices.PatientSource.SALES,
+                "claim_status": choices.ClaimStatus.PENDING,
+                "ec_name": data.get("ec_name", ""),
+                "ec_phone": data.get("ec_phone", ""),
+                "ec_relation": data.get("ec_relation", ""),
+            }
+
+            profile, _created = PatientProfile.objects.update_or_create(
                 phone=phone,
-                gender=data.get("gender", choices.Gender.UNKNOWN),
-                birth_date=data.get("birth_date"),
-                address=address,
-                sales=sales_user.sales_profile,
-                source=choices.PatientSource.SALES,
-                claim_status=choices.ClaimStatus.PENDING,
-                ec_name=data.get("ec_name", ""),
-                ec_phone=data.get("ec_phone", ""),
-                ec_relation=data.get("ec_relation", ""),
+                defaults=defaults,
             )
 
             MedicalHistory.objects.create(

@@ -24,6 +24,26 @@
             <dt class="text-slate-400">联系地址</dt>
             <dd class="font-medium text-slate-800">{{ patient.address|default:"-" }}</dd>
           </div>
+          <div class="md:col-span-2">
+            <dt class="text-slate-400">主治医生</dt>
+            <dd class="font-medium text-slate-800 mt-2">
+              <select
+                name="doctor_id"
+                class="w-full md:w-2/3 rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                hx-post="{% url 'web_sales:update_patient_doctor' patient.id %}"
+                hx-trigger="change"
+                hx-target="#doctor-update-toast"
+                hx-swap="innerHTML"
+                hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+              >
+                <option value="">暂未指定</option>
+                {% for doctor in doctors %}
+                <option value="{{ doctor.id }}" {% if patient.doctor_id == doctor.id %}selected{% endif %}>{{ doctor.name }}（{{ doctor.hospital|default:"-" }}）</option>
+                {% endfor %}
+              </select>
+              <div id="doctor-update-toast" class="text-xs text-slate-400 mt-2"></div>
+            </dd>
+          </div>
         </dl>
       </div>
 

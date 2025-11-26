@@ -1,5 +1,9 @@
 {% extends "layouts/base_portal.html" %}
 {% block body %}
+<style>
+  .htmx-indicator { display: none; }
+  .htmx-request .htmx-indicator { display: inline-flex; }
+</style>
 <div class="min-h-screen bg-slate-50 flex flex-col">
   <header class="h-16 bg-white shadow border-b border-slate-200 flex items-center justify-between px-6">
     <div>
@@ -23,11 +27,11 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium text-slate-600">患者姓名 *</label>
-            <input type="text" name="name" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="请输入姓名" required>
+            <input type="text" id="id_name" name="name" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="请输入姓名" required>
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">性别 *</label>
-            <div class="mt-2 flex items-center space-x-6">
+            <div id="id_gender_container" class="mt-2 flex items-center space-x-6">
               {% for value, label in gender_choices %}
               <label class="flex items-center space-x-2 text-sm text-slate-600">
                 <input type="radio" name="gender" value="{{ value }}" class="text-blue-600 border-slate-300 focus:ring-blue-500" {% if forloop.first %}checked{% endif %}>
@@ -39,13 +43,29 @@
           <div>
             <label class="text-sm font-medium text-slate-600">出生年月</label>
             <div class="mt-1 flex items-center space-x-3">
-              <input type="date" name="birth_date" class="flex-1 rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
+              <input type="date" id="id_birth_date" name="birth_date" class="flex-1 rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
               <span class="text-sm text-slate-500">年龄：<span id="age-preview">-</span></span>
             </div>
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">联系电话 *</label>
-            <input type="tel" name="phone" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="11 位手机号" required>
+            <input
+              type="tel"
+              id="id_phone"
+              name="phone"
+              class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              placeholder="11 位手机号"
+              required
+              hx-get="{% url 'web_sales:check_patient_phone' %}"
+              hx-trigger="blur"
+              hx-target="this"
+              hx-swap="none"
+              hx-indicator="#phone-loading"
+            >
+            <div class="flex items-center text-xs text-slate-400 mt-1 space-x-2">
+              <div id="phone-loading" class="htmx-indicator animate-pulse" style="display:none">正在查重...</div>
+              <div id="autofill-message">未进行查重</div>
+            </div>
           </div>
           <div class="md:col-span-2">
             <label class="text-sm font-medium text-slate-600">联系地址</label>
@@ -59,7 +79,7 @@
               <select name="address_city" id="city-select" class="rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
                 <option value="">选择城市</option>
               </select>
-              <input type="text" name="address_detail" class="rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="详细地址（街道/门牌）">
+              <input type="text" id="id_address_detail" name="address_detail" class="rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="详细地址（街道/门牌）">
             </div>
           </div>
         </div>
@@ -74,15 +94,15 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label class="text-sm font-medium text-slate-600">姓名</label>
-            <input type="text" name="ec_name" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="王先生">
+            <input type="text" id="id_ec_name" name="ec_name" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="王先生">
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">关系</label>
-            <input type="text" name="ec_relation" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="配偶/子女">
+            <input type="text" id="id_ec_relation" name="ec_relation" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="配偶/子女">
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">联系电话</label>
-            <input type="tel" name="ec_phone" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="紧急联系方式">
+            <input type="tel" id="id_ec_phone" name="ec_phone" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="紧急联系方式">
           </div>
         </div>
       </section>
@@ -96,29 +116,29 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium text-slate-600">临床诊断</label>
-            <input type="text" name="diagnosis" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="如：肺腺癌">
+            <input type="text" id="id_diagnosis" name="diagnosis" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="如：肺腺癌">
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">病理类型</label>
-            <input type="text" name="pathology" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="如：腺癌">
+            <input type="text" id="id_pathology" name="pathology" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="如：腺癌">
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">TNM 分期</label>
-            <input type="text" name="tnm_stage" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="T2N1M0">
+            <input type="text" id="id_tnm_stage" name="tnm_stage" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="T2N1M0">
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">基因检测</label>
-            <input type="text" name="gene_mutation" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="EGFR/L858R">
+            <input type="text" id="id_gene_mutation" name="gene_mutation" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="EGFR/L858R">
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label class="text-sm font-medium text-slate-600">手术信息</label>
-            <textarea name="surgery_info" rows="3" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="记录手术名称、日期、医生等"></textarea>
+            <textarea id="id_surgery_info" name="surgery_info" rows="3" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="记录手术名称、日期、医生等"></textarea>
           </div>
           <div>
             <label class="text-sm font-medium text-slate-600">既往病史</label>
-            <textarea name="doctor_note" rows="3" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="糖尿病/高血压等"></textarea>
+            <textarea id="id_doctor_note" name="doctor_note" rows="3" class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100" placeholder="糖尿病/高血压等"></textarea>
           </div>
         </div>
       </section>
@@ -129,7 +149,7 @@
           <h2 class="text-lg font-semibold text-slate-800">D. 危险因素</h2>
           <p class="text-xs text-slate-400">选择患者具备的危险因素</p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div id="risk-factors-container" class="grid grid-cols-1 md:grid-cols-3 gap-3">
           {% for label in risk_options %}
           <label class="flex items-center space-x-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 hover:border-blue-400 transition">
             <input type="checkbox" name="risk_factors" value="{{ label }}" class="text-blue-600 border-slate-300 focus:ring-blue-500">

@@ -1,0 +1,167 @@
+{% if has_patient %}
+<div id="autofill-message" hx-swap-oob="true" class="mt-2 text-sm text-amber-600">
+  发现已有档案，将更新基础信息。
+</div>
+<input type="text" id="id_name" name="name" value="{{ patient_data.name }}" hx-swap-oob="true">
+<input type="date" id="id_birth_date" name="birth_date" value="{{ patient_data.birth_date }}" hx-swap-oob="true">
+<input type="tel" id="id_ec_phone" name="ec_phone" value="{{ patient_data.ec_phone }}" hx-swap-oob="true">
+<input type="text" id="id_address_detail" name="address_detail" value="{{ patient_data.address }}" hx-swap-oob="true">
+<input type="text" id="id_ec_name" name="ec_name" value="{{ patient_data.ec_name }}" hx-swap-oob="true">
+<input type="text" id="id_ec_relation" name="ec_relation" value="{{ patient_data.ec_relation }}" hx-swap-oob="true">
+<script hx-swap-oob="true">
+  (function() {
+    var value = "{{ patient_data.gender }}";
+    if (value) {
+      var el = document.querySelector('input[name="gender"][value="' + value + '"]');
+      if (el) el.checked = true;
+    }
+  })();
+</script>
+{% else %}
+<div id="autofill-message" hx-swap-oob="true" class="mt-2 text-sm text-slate-400">
+  未找到历史档案，可继续录入新患者。
+</div>
+{% endif %}
+{% if has_patient %}
+<div id="autofill-message" hx-swap-oob="true" class="mt-2 text-sm text-amber-600">
+  发现已有档案，将更新基础信息。
+</div>
+<input
+  type="text"
+  id="id_name"
+  name="name"
+  value="{{ patient_data.name }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="请输入姓名"
+  required
+  hx-swap-oob="true"
+>
+<div id="id_gender_container" hx-swap-oob="true" class="mt-2 flex items-center space-x-6">
+  {% for value, label in gender_choices %}
+  <label class="flex items-center space-x-2 text-sm text-slate-600">
+    <input
+      type="radio"
+      name="gender"
+      value="{{ value }}"
+      class="text-blue-600 border-slate-300 focus:ring-blue-500"
+      {% if patient_data.gender == value %}checked{% endif %}
+    >
+    <span>{{ label }}</span>
+  </label>
+  {% endfor %}
+</div>
+<input
+  type="date"
+  id="id_birth_date"
+  name="birth_date"
+  value="{{ patient_data.birth_date }}"
+  class="flex-1 rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  hx-swap-oob="true"
+>
+<input
+  type="text"
+  id="id_address_detail"
+  name="address_detail"
+  value="{{ patient_data.address }}"
+  class="rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="详细地址（街道/门牌）"
+  hx-swap-oob="true"
+>
+<input
+  type="text"
+  id="id_diagnosis"
+  name="diagnosis"
+  value="{{ patient_data.diagnosis }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="如：肺腺癌"
+  hx-swap-oob="true"
+>
+<input
+  type="text"
+  id="id_pathology"
+  name="pathology"
+  value="{{ patient_data.pathology }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="如：腺癌"
+  hx-swap-oob="true"
+>
+<input
+  type="text"
+  id="id_tnm_stage"
+  name="tnm_stage"
+  value="{{ patient_data.tnm_stage }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="T2N1M0"
+  hx-swap-oob="true"
+>
+<input
+  type="text"
+  id="id_gene_mutation"
+  name="gene_mutation"
+  value="{{ patient_data.gene_mutation }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="EGFR/L858R"
+  hx-swap-oob="true"
+>
+<textarea
+  id="id_surgery_info"
+  name="surgery_info"
+  rows="3"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="记录手术名称、日期、医生等"
+  hx-swap-oob="true"
+>{{ patient_data.surgery_info }}</textarea>
+<textarea
+  id="id_doctor_note"
+  name="doctor_note"
+  rows="3"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="糖尿病/高血压等"
+  hx-swap-oob="true"
+>{{ patient_data.doctor_note }}</textarea>
+<input
+  type="text"
+  id="id_ec_name"
+  name="ec_name"
+  value="{{ patient_data.ec_name }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="王先生"
+  hx-swap-oob="true"
+>
+<input
+  type="text"
+  id="id_ec_relation"
+  name="ec_relation"
+  value="{{ patient_data.ec_relation }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="配偶/子女"
+  hx-swap-oob="true"
+>
+<input
+  type="tel"
+  id="id_ec_phone"
+  name="ec_phone"
+  value="{{ patient_data.ec_phone }}"
+  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+  placeholder="紧急联系方式"
+  hx-swap-oob="true"
+>
+<div id="risk-factors-container" class="grid grid-cols-1 md:grid-cols-3 gap-3" hx-swap-oob="true">
+  {% for label in risk_options %}
+  <label class="flex items-center space-x-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 hover:border-blue-400 transition">
+    <input
+      type="checkbox"
+      name="risk_factors"
+      value="{{ label }}"
+      class="text-blue-600 border-slate-300 focus:ring-blue-500"
+      {% if label in risk_factors %}checked{% endif %}
+    >
+    <span>{{ label }}</span>
+  </label>
+  {% endfor %}
+</div>
+{% else %}
+<div id="autofill-message" hx-swap-oob="true" class="mt-2 text-sm text-slate-400">
+  未找到历史档案，可继续录入新患者。
+</div>
+{% endif %}
