@@ -7,6 +7,7 @@ from django.db import models
 from users import choices
 from users.managers import CustomUserManager
 from users.models.base import TimeStampedModel
+from typing import Optional
 
 
 def _generate_username() -> str:
