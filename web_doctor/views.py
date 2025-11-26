@@ -3,6 +3,8 @@
 from django.contrib import messages
 from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
+from users.decorators import check_doctor_or_assistant
+from users.decorators import check_sales
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 
@@ -12,7 +14,6 @@ from users.services.auth import AuthService
 
 def login_view(request: HttpRequest) -> HttpResponse:
     """登录入口，依据 user_type 跳转不同 Dashboard。"""
-
     if request.method == "POST":
         phone = request.POST.get("phone", "").strip()
         password = request.POST.get("password", "")
@@ -37,15 +38,15 @@ def logout_view(request: HttpRequest) -> HttpResponse:
     return redirect("web_doctor:login")
 
 
-@login_required
+@check_doctor_or_assistant
 def doctor_dashboard(request: HttpRequest) -> HttpResponse:
     """医生端 Dashboard 占位页。"""
 
     return render(request, "web_doctor/doctor_index.html")
 
 
-@login_required
+@check_sales
 def sales_dashboard(request: HttpRequest) -> HttpResponse:
     """销售端 Dashboard 占位页。"""
 
-    return render(request, "web_doctor/sales_index.html")
+    return render(request, "web_sales/sales_index.html")

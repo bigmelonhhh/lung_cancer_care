@@ -103,8 +103,17 @@ def check_doctor_or_assistant(view_func: ViewFunc) -> ViewFunc:
     【参数】view_func：目标视图。
     【返回值】包装后的视图。
     """
-
     return _build_role_decorator(choices.UserType.DOCTOR, choices.UserType.ASSISTANT)(view_func)
+
+def check_doctor_or_assistant_or_sales(view_func: ViewFunc) -> ViewFunc:
+    """
+    【业务说明】医生与助理可同时访问，例如工作室运营面板。
+    【用法】`@check_doctor_or_assistant`。
+    【参数】view_func：目标视图。
+    【返回值】包装后的视图。
+    """
+
+    return _build_role_decorator(choices.UserType.DOCTOR, choices.UserType.ASSISTANT, choices.UserType.SALES)(view_func)
 
 
 __all__ = [
