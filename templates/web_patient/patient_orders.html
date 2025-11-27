@@ -1,0 +1,76 @@
+{% extends "layouts/base_portal.html" %}
+{% block body %}
+<div class="min-h-screen bg-gray-100 py-10">
+  <div class="max-w-3xl mx-auto px-4 space-y-8">
+    <div>
+      <h1 class="text-3xl font-semibold text-slate-900">我的订单</h1>
+      <p class="text-base text-slate-600 mt-2">查看服务包的支付与有效期状态。</p>
+    </div>
+
+    {% if orders %}
+    <div class="space-y-6">
+      {% for entry in orders %}
+      {% with order=entry.order %}
+      <div class="bg-white rounded-xl shadow-sm p-5 space-y-4">
+        <div>
+          <h2 class="text-xl font-semibold text-slate-900">{{ order.product.name }}</h2>
+          {% if entry.is_paid and entry.valid_start and entry.valid_end %}
+          <p class="text-base text-slate-600 mt-1">
+            有效期：{{ entry.valid_start|date:"Y年n月j日" }} 至 {{ entry.valid_end|date:"Y年n月j日" }}
+          </p>
+          {% else %}
+          <p class="text-base text-slate-600 mt-1">有效期：待支付</p>
+          {% endif %}
+        </div>
+        <div class="h-px bg-slate-200"></div>
+        <div class="space-y-3 text-base text-slate-700">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">订单号</span>
+            <span class="font-medium text-slate-900">{{ order.order_no }}</span>
+          </div>
+          {% if studio_name %}
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">工作室</span>
+            <span class="font-medium text-slate-900">{{ studio_name }}</span>
+          </div>
+          {% endif %}
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">价格</span>
+            <span class="text-2xl font-bold text-slate-900">¥ {{ order.amount|floatformat:2 }}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">付款方式</span>
+            {% if entry.is_paid %}
+            <div class="flex items-center gap-2 text-emerald-600 font-semibold">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25Zm4.443 7.03-4.875 6.75a.75.75 0 0 1-1.182.038l-2.625-3a.75.75 0 1 1 1.128-.988l2 2.286 4.363-6.037a.75.75 0 1 1 1.191.95Z"/>
+              </svg>
+              微信支付
+            </div>
+            {% elif entry.is_pending %}
+            <a href="#" class="px-4 py-2 rounded-lg bg-emerald-500 text-white font-semibold shadow hover:bg-emerald-600 transition">
+              去支付
+            </a>
+            {% else %}
+            <span class="text-slate-500">{{ order.get_status_display }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endwith %}
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl shadow-sm p-10 text-center space-y-4">
+      <div class="w-16 h-16 mx-auto rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
+        <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/>
+        </svg>
+      </div>
+      <p class="text-lg text-slate-800 font-semibold">暂无订单</p>
+      <p class="text-base text-slate-600">购买服务后可在此查看订单进度。</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

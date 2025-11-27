@@ -28,42 +28,48 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         onboarding_url = reverse("web_patient:onboarding")
         return redirect(onboarding_url)
 
+    orders_url = reverse("web_patient:orders")
+
     main_entries = [
         {
             "title": "我的随访",
             "bg": "bg-yellow-100",
             "text": "text-yellow-600",
             "path": "M9 5l7 7-7 7",
+            "url": "#",
         },
         {
             "title": "我的复查",
             "bg": "bg-purple-100",
             "text": "text-purple-600",
             "path": "M5 12h14M12 5l7 7-7 7",
+            "url": "#",
         },
         {
             "title": "我的用药",
             "bg": "bg-blue-100",
             "text": "text-blue-600",
             "path": "M7 5h10v14H7z",
+            "url": "#",
         },
         {
             "title": "健康档案",
             "bg": "bg-teal-100",
             "text": "text-teal-600",
             "path": "M4 6h16v12H4z",
+            "url": "#",
         },
     ]
     service_entries = [
-        ("我的订单", "M6 6h12v12H6z"),
-        ("智能设备", "M10 6v12m4-12v12"),
-        ("工作室", "M12 4l8 8-8 8-8-8z"),
-        ("检查报告", "M6 7h12M6 12h12M6 17h8"),
-        ("提醒设置", "M12 8v4l2 2"),
-        ("亲情账号", "M5 17l4-4 3 3 7-7"),
-        ("健康日历", "M6 10h12M6 14h12"),
-        ("设置", "M12 6l1.5 3H17l-2.5 2 1 3-3.5-2-3.5 2 1-3L7 9h3.5z"),
-        ("意见反馈", "M5 5h14v14H5z"),
+        {"title": "我的订单", "url": orders_url},
+        {"title": "智能设备", "url": "#"},
+        {"title": "工作室", "url": "#"},
+        {"title": "检查报告", "url": "#"},
+        {"title": "提醒设置", "url": "#"},
+        {"title": "亲情账号", "url": "#"},
+        {"title": "健康日历", "url": "#"},
+        {"title": "设置", "url": "#"},
+        {"title": "意见反馈", "url": "#"},
     ]
 
     return render(
