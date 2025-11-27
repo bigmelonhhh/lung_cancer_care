@@ -33,14 +33,6 @@ class ClaimStatus(models.IntegerChoices):
     CLAIMED = 1, "已认领"
 
 
-class ServiceStatus(models.IntegerChoices):
-    """【业务说明】会员等级；【用法】service_status。"""
-
-    BASIC = 1, "免费"
-    MEMBER = 2, "付费会员"
-    EXPIRED = 3, "已过期"
-
-
 class RelationType(models.IntegerChoices):
     """【业务说明】亲情/代理关系类型；【用法】relation_type。"""
 

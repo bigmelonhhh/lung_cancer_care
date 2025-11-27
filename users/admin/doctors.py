@@ -60,6 +60,7 @@ class DoctorCreationForm(forms.ModelForm):
             profile.managed_patient_count = profile.managed_patient_count or 0
             if commit:
                 profile.save()
+                self.save_m2m()
         return profile
 
 
@@ -108,6 +109,7 @@ class DoctorChangeForm(forms.ModelForm):
             user.save(update_fields=update_fields)
             if commit:
                 profile.save()
+                self.save_m2m()
         return profile
 
 
@@ -131,6 +133,7 @@ class DoctorProfileAdmin(admin.ModelAdmin):
         "user_type_display",
         "managed_patient_count",
     )
+    filter_horizontal = ("sales",)
     actions = ["disable_accounts"]
 
     def get_form(self, request, obj=None, **kwargs):
@@ -142,10 +145,10 @@ class DoctorProfileAdmin(admin.ModelAdmin):
             return self.readonly_fields
         return ()
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+    def formfield_for_manytomany(self, db_field, request, **kwargs):
         if db_field.name == "sales":
             kwargs["queryset"] = SalesProfile.objects.select_related("user").filter(user__is_active=True)
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+        return super().formfield_for_manytomany(db_field, request, **kwargs)
 
     def user_phone(self, obj):
         return obj.user.phone
@@ -174,9 +177,10 @@ class DoctorProfileAdmin(admin.ModelAdmin):
     user_type_display.short_description = "用户类型"
 
     def sales_display(self, obj):
-        return obj.sales.name if obj.sales else "-"
+        names = [sale.name for sale in obj.sales.all()]
+        return ", ".join(names) if names else "-"
 
-    sales_display.short_description = "归属销售"
+    sales_display.short_description = "负责销售团队"
 
     def studio_actions(self, obj):
         if not obj.studio:

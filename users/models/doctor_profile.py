@@ -51,14 +51,12 @@ class DoctorProfile(TimeStampedModel):
         verbose_name="所属工作室",
         help_text="【业务说明】该医生所属工作室；【用法】展示二维码等；【示例】Studio#1；【参数】外键；【返回值】DoctorStudio",
     )
-    sales = models.ForeignKey(
+    sales = models.ManyToManyField(
         "users.SalesProfile",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
         related_name="doctors",
-        verbose_name="负责销售",
-        help_text="【业务说明】负责维护该医生的销售；【用法】绩效归属；【示例】SalesProfile#2；【参数】外键；【返回值】SalesProfile",
+        blank=True,
+        verbose_name="负责销售团队",
+        help_text="【业务说明】负责维护该医生的销售团队；【用法】绩效归属；【示例】SalesProfile#2；【参数】多选；【返回值】SalesProfile",
     )
     managed_patient_count = models.PositiveIntegerField(
         "在管患者数",

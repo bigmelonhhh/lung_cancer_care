@@ -1,7 +1,8 @@
-from datetime import date
+from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from users import choices
 from users.models.base import TimeStampedModel
@@ -66,12 +67,6 @@ class PatientProfile(TimeStampedModel):
         choices=choices.ClaimStatus.choices,
         default=choices.ClaimStatus.CLAIMED,
         help_text="【业务说明】标识档案是否有人管理；【用法】认领流程更新；【示例】0=待认领；【参数】枚举；【返回值】int",
-    )
-    service_status = models.PositiveSmallIntegerField(
-        "服务等级",
-        choices=choices.ServiceStatus.choices,
-        default=choices.ServiceStatus.BASIC,
-        help_text="【业务说明】冗余会员态；【用法】结合订单定时刷新；【示例】2=会员；【参数】枚举；【返回值】int",
     )
     sales = models.ForeignKey(
         "users.SalesProfile",
@@ -214,3 +209,50 @@ class PatientProfile(TimeStampedModel):
         if length == 2:
             return f"{name[0]}*"
         return f"{name[0]}{'*' * (length - 2)}{name[-1]}"
+
+    def _compute_membership_state(self) -> str:
+        """
+        返回会员状态：
+        - active：存在未过期的付费订单
+        - expired：曾付费但已过期
+        - none：从未付费
+        """
+
+        from market.models import Order
+
+        today = timezone.localdate()
+        paid_orders = (
+            Order.objects.select_related("product")
+            .filter(patient=self, status=Order.Status.PAID, paid_at__isnull=False)
+            .order_by("-paid_at")
+        )
+
+        had_paid = False
+        for order in paid_orders:
+            had_paid = True
+            duration = order.product.duration_days or 0
+            if duration <= 0:
+                continue
+            start_date = timezone.localtime(order.paid_at).date()
+            end_date = start_date + timedelta(days=duration - 1)
+            if today <= end_date:
+                return "active"
+
+        if had_paid:
+            return "expired"
+        return "none"
+
+    def has_active_membership(self) -> bool:
+        """是否拥有有效会员服务。"""
+
+        return self._compute_membership_state() == "active"
+
+    def get_service_status_display(self) -> str:
+        """兼容旧模板调用，返回当前会员状态文案。"""
+
+        state = self._compute_membership_state()
+        if state == "active":
+            return "付费会员"
+        if state == "expired":
+            return "已过期"
+        return "免费会员"

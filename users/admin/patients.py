@@ -40,7 +40,7 @@ class PatientProfileAdmin(admin.ModelAdmin):
         "birth_date",
         "age_display",
         "created_at",
-        "service_status",
+        "service_status_display",
         "doctor",
         "sales",
     )
@@ -140,6 +140,11 @@ class PatientProfileAdmin(admin.ModelAdmin):
         return obj.age or "-"
 
     age_display.short_description = "年龄"
+
+    def service_status_display(self, obj):
+        return obj.get_service_status_display()
+
+    service_status_display.short_description = "服务等级"
 
 
 admin.site.register(PatientProfile, PatientProfileAdmin)

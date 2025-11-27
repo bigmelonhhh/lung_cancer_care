@@ -15,7 +15,7 @@ from wechatpy import WeChatClient
 class PatientService:
     
     
-    def generate_bind_qrcode(self, profile_id: int) -> str:
+    def generate_bind_qrcode(self, profile_id: int, expire_seconds: int = 604800) -> str:
         """
         【功能4】生成或复用带参二维码（临时二维码）。
         参数值示例：bind_patient_1024
@@ -48,7 +48,7 @@ class PatientService:
             # 创建临时二维码
             res = wechat_client.qrcode.create(
                 {
-                    "expire_seconds": 604800,  # 7天 (微信最大值)
+                    "expire_seconds": expire_seconds,  # 7天 (微信最大值)
                     "action_name": "QR_STR_SCENE",
                     "action_info": {"scene": {"scene_str": scene_str}},
                 }
@@ -64,8 +64,6 @@ class PatientService:
         # get_url 会返回一个 https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket=... 的链接
         # 这个链接可以直接放入 <img src="..."> 中显示
         real_qrcode_img_url = wechat_client.qrcode.get_url(ticket)
-        
-        expire_seconds = res.get("expire_seconds") or 604800
 
         # 5. 更新数据库缓存
         profile.qrcode_url = real_qrcode_img_url
