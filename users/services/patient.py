@@ -1,11 +1,11 @@
 from datetime import timedelta
+from typing import Optional
 
 # users/services/patient.py
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.conf import settings
 from django.utils import timezone
-from users.models import PatientProfile, SalesProfile, CustomUser
+from users.models import PatientProfile, CustomUser
 from users import choices
 from health_data.models import MedicalHistory
 from regions.models import Province, City
@@ -140,20 +140,15 @@ class PatientService:
         if not name or not phone:
             raise ValidationError("姓名与联系电话为必填项")
 
-        risk_factors = data.get("risk_factors") or []
-        if isinstance(risk_factors, str):
-            risk_list = [risk_factors]
-        else:
-            risk_list = list(risk_factors)
-        risk_value = ",".join([item.strip() for item in risk_list if item])
+        risk_value = (data.get("risk_factors") or "").strip()
 
         record_date = data.get("record_date") or timezone.now().date()
         address_detail = (data.get("address_detail") or "").strip()
 
         province_name = ""
         city_name = ""
-        province_id = data.get("province_id")
-        city_id = data.get("city_id")
+        province_id = data.get("address_province")
+        city_id = data.get("address_city")
         try:
             province_obj = (
                 Province.objects.filter(id=int(province_id)).first()
@@ -183,7 +178,7 @@ class PatientService:
         with transaction.atomic():
             defaults = {
                 "name": name,
-                "gender": data.get("gender", choices.Gender.UNKNOWN),
+                "gender": data.get("gender", choices.Gender.MALE),
                 "birth_date": data.get("birth_date"),
                 "address": address,
                 "sales": sales_user.sales_profile,
@@ -212,3 +207,26 @@ class PatientService:
             )
 
         return profile
+
+    def assign_doctor(
+        self,
+        patient: PatientProfile,
+        doctor_id: Optional[int],
+        sales_user: CustomUser,
+    ) -> PatientProfile:
+        """为患者设置主治医生。"""
+
+        if not hasattr(sales_user, "sales_profile"):
+            raise ValidationError("当前账号无销售档案")
+
+        doctor = None
+        if doctor_id:
+            doctor = (
+                sales_user.sales_profile.doctors.filter(pk=doctor_id).first()
+            )
+            if doctor is None:
+                raise ValidationError("医生不存在或无权绑定")
+
+        patient.doctor = doctor
+        patient.save(update_fields=["doctor", "updated_at"])
+        return patient

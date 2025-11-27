@@ -8,13 +8,14 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
-from django.utils.dateparse import parse_date
 
 from users import choices
 from users.decorators import check_sales
 from users.services.patient import PatientService
 from regions.models import Province
 from users.models import PatientProfile
+
+from ..forms import PatientEntryForm
 
 
 @login_required
@@ -23,41 +24,19 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
     """销售端患者档案录入。"""
 
     if request.method == "POST":
-        birth_date = parse_date(request.POST.get("birth_date", ""))
-        try:
-            gender_value = int(request.POST.get("gender", choices.Gender.MALE))
-        except (TypeError, ValueError):
-            gender_value = choices.Gender.MALE
+        form = PatientEntryForm(request.POST)
+        if form.is_valid():
+            try:
+                PatientService().create_full_patient_record(request.user, form.cleaned_data)
+            except ValidationError as exc:
+                messages.error(request, exc.message)
+            else:
+                messages.success(request, "患者档案录入成功")
+                return redirect("web_sales:sales_dashboard")
+    else:
+        form = PatientEntryForm()
 
-        data = {
-            "name": request.POST.get("name", "").strip(),
-            "gender": gender_value,
-            "birth_date": birth_date,
-            "phone": request.POST.get("phone", "").strip(),
-            "address_detail": request.POST.get("address_detail", "").strip(),
-            "province_id": request.POST.get("address_province"),
-            "city_id": request.POST.get("address_city"),
-            "ec_name": request.POST.get("ec_name", "").strip(),
-            "ec_relation": request.POST.get("ec_relation", "").strip(),
-            "ec_phone": request.POST.get("ec_phone", "").strip(),
-            "diagnosis": request.POST.get("diagnosis", "").strip(),
-            "pathology": request.POST.get("pathology", "").strip(),
-            "tnm_stage": request.POST.get("tnm_stage", "").strip(),
-            "gene_mutation": request.POST.get("gene_mutation", "").strip(),
-            "surgery_info": request.POST.get("surgery_info", "").strip(),
-            "doctor_note": request.POST.get("doctor_note", "").strip(),
-            "risk_factors": request.POST.getlist("risk_factors"),
-        }
-
-        try:
-            PatientService().create_full_patient_record(request.user, data)
-        except ValidationError as exc:
-            messages.error(request, exc.message)
-        else:
-            messages.success(request, "患者档案录入成功")
-            return redirect("web_sales:sales_dashboard")
-
-    risk_options = ["家族遗传", "吸烟", "职业暴露", "空气污染", "肺部慢病", "其它"]
+    risk_options = [choice[0] for choice in PatientEntryForm.RISK_FACTOR_CHOICES]
     provinces = Province.objects.all().order_by("name")
 
     return render(
@@ -67,6 +46,7 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
             "gender_choices": choices.Gender.choices,
             "risk_options": risk_options,
             "provinces": provinces,
+            "form": form,
         },
     )
 
@@ -135,14 +115,7 @@ def check_patient_phone(request: HttpRequest) -> HttpResponse:
             "doctor_note": "",
         }
 
-    risk_options = [
-        "家族遗传",
-        "吸烟",
-        "职业暴露",
-        "空气污染",
-        "肺部慢病",
-        "其它",
-    ]
+    risk_options = [choice[0] for choice in PatientEntryForm.RISK_FACTOR_CHOICES]
 
     return render(
         request,

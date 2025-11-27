@@ -72,19 +72,21 @@ def update_patient_doctor(request: HttpRequest, pk: int) -> HttpResponse:
         raise Http404("患者不存在或无权查看")
 
     doctor_id = request.POST.get("doctor_id")
-    doctor = None
-    if doctor_id:
-        doctor = sales_profile.doctors.filter(pk=doctor_id).first()
-        if doctor is None:
-            raise Http404("医生不存在或无权绑定")
-
-    patient.doctor = doctor
-    patient.save(update_fields=["doctor", "updated_at"])
+    try:
+        updated_patient = PatientService().assign_doctor(
+            patient, doctor_id, request.user
+        )
+    except ValidationError as exc:
+        return render(
+            request,
+            "web_sales/partials/doctor_update_toast.html",
+            {"doctor": None, "error": exc.message},
+        )
 
     return render(
         request,
         "web_sales/partials/doctor_update_toast.html",
         {
-            "doctor": doctor,
+            "doctor": updated_patient.doctor,
         },
     )
