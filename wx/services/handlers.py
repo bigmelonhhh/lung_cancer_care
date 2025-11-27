@@ -52,7 +52,7 @@ def handle_message(message):
     """
 
     user_openid = message.source
-    logging.debug(message)
+    logging.info(message)
     
 
     # ---------------------------

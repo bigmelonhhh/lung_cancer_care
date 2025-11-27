@@ -234,7 +234,7 @@ LOGGING = {
         # 【新增】专门打印 SQL 语句的配置
         "django.db.backends": {
             "handlers": ["console"],
-            "level": "DEBUG",
+            "level": "INFO",
             "propagate": False,
         },
     },

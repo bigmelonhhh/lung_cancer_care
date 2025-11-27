@@ -4,21 +4,23 @@
   <div class="max-w-4xl mx-auto px-4 py-10 space-y-8">
     <div class="bg-gradient-to-r from-sky-200 via-sky-100 to-blue-100 rounded-3xl p-6 text-slate-900 relative overflow-hidden shadow-lg">
       <div class="flex items-center gap-4">
-        <div class="w-16 h-16 rounded-full bg-white/70 flex items-center justify-center text-slate-700 text-2xl font-semibold">
+        <!-- <div class="w-16 h-16 rounded-full bg-white/70 flex items-center justify-center text-slate-700 text-2xl font-semibold">
           {{ patient.masked_name|default:"护" | first }}
-        </div>
+        </div> -->
         <div class="flex-1 space-y-2">
           <div class="flex flex-wrap items-center gap-3">
-            <h1 class="text-2xl md:text-3xl font-semibold">{{ patient.masked_name|default:"患者" }}</h1>
-            {% if patient.age %}
-            <span class="inline-flex items-center px-3 py-1 rounded-full bg-white/70 text-slate-700 text-xs">{{ patient.age }}岁</span>
-            {% endif %}
-            {% if is_family %}
-            <span class="inline-flex items-center px-3 py-1 rounded-full bg-rose-50 text-rose-500 text-xs">家属视角</span>
-            {% endif %}
-            <button class="px-3 py-1 rounded-full bg-white/40 text-sm text-slate-700 hover:bg-white/60 transition">个人资料</button>
+            <h1 class="text-2xl md:text-3xl font-semibold">{{ patient.name|default:"患者" }}</h1>
+            <div class="flex flex-wrap items-center gap-2 ml-auto text-right">
+              {% if patient.age %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-white/70 text-slate-700 text-xs">{{ patient.age }}岁</span>
+              {% endif %}
+              {% if is_family %}
+              <span class="inline-flex items-center px-3 py-1 rounded-full bg-rose-50 text-rose-500 text-xs">家属视角</span>
+              {% endif %}
+              <button class="px-3 py-1 rounded-full bg-white/40 text-sm text-slate-700 hover:bg-white/60 transition">个人资料</button>
+            </div>
           </div>
-          <p class="text-sm text-slate-600">愿温柔与专业守护您与家人的每一次呼吸。</p>
+          <p class="text-sm text-slate-600 ">愿温柔与专业守护您与家人每一天。</p>
         </div>
       </div>
       <div class="mt-5 inline-flex items-center px-4 py-2 rounded-2xl bg-amber-100 text-amber-700 text-sm font-medium shadow-sm">
@@ -33,51 +35,32 @@
 
     <div class="-mt-16 relative z-10 px-4">
       <div class="bg-white rounded-3xl shadow-2xl p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-        {% with entries=[
-          ("我的随访","bg-yellow-100","text-yellow-600","M9 5l7 7-7 7"),
-          ("我的复查","bg-purple-100","text-purple-600","M5 12h14M12 5l7 7-7 7"),
-          ("我的用药","bg-blue-100","text-blue-600","M7 5h10v14H7z"),
-          ("健康档案","bg-teal-100","text-teal-600","M4 6h16v12H4z")
-        ] %}
-        {% for title, bg, text, path in entries %}
+        {% for entry in main_entries %}
         <a href="#" class="flex flex-col items-center text-center space-y-2">
-          <div class="w-12 h-12 rounded-full {{ bg }} {{ text }} flex items-center justify-center">
+            <div class="w-12 h-12 rounded-full {{ entry.bg }} {{ entry.text }} flex items-center justify-center">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ path }}" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ entry.path }}" />
             </svg>
           </div>
-          <span class="text-sm font-medium text-slate-700">{{ title }}</span>
+          <span class="text-sm font-medium text-slate-700">{{ entry.title }}</span>
         </a>
         {% endfor %}
-        {% endwith %}
       </div>
     </div>
 
     <div class="bg-white rounded-3xl shadow-lg p-6 space-y-6">
       <h2 class="text-lg font-semibold text-slate-900">关怀服务</h2>
       <div class="grid grid-cols-3 gap-4 text-sm text-slate-600">
-        {% with services=[
-          ("我的订单","M6 6h12v12H6z"),
-          ("智能设备","M10 6v12m4-12v12"),
-          ("工作室","M12 4l8 8-8 8-8-8z"),
-          ("检查报告","M6 7h12M6 12h12M6 17h8"),
-          ("提醒设置","M12 8v4l2 2"),
-          ("亲情账号","M5 17l4-4 3 3 7-7"),
-          ("健康日历","M6 10h12M6 14h12"),
-          ("设置","M12 6l1.5 3H17l-2.5 2 1 3-3.5-2-3.5 2 1-3L7 9h3.5z"),
-          ("意见反馈","M5 5h14v14H5z")
-        ] %}
-        {% for title, path in services %}
-        <a href="#" class="flex flex-col items-center space-y-2 hover:text-slate-900 transition">
-          <div class="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center">
-            <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ path }}" />
-            </svg>
-          </div>
-          <span>{{ title }}</span>
-        </a>
+        {% for title, path in service_entries %}
+          <a href="#" class="flex flex-col items-center space-y-2 hover:text-slate-900 transition">
+            <div class="w-10 h-10 rounded-2xl bg-slate-100 flex items-center justify-center">
+              <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ path }}" />
+              </svg>
+            </div>
+            <span>{{ title }}</span>
+          </a>
         {% endfor %}
-        {% endwith %}
       </div>
     </div>
 
