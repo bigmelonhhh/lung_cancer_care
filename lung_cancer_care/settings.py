@@ -52,7 +52,8 @@ INSTALLED_APPS = [
     'web_sales',
     'wx',
     'health_data',
-    'regions'
+    'regions',
+    'core'
 ]
 
 MIDDLEWARE = [
@@ -106,19 +107,12 @@ REDIS_PORT = os.getenv("REDIS_PORT", "6379")
 REDIS_DB = os.getenv("REDIS_DB", "0")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", "")
 _redis_auth = f":{REDIS_PASSWORD}@" if REDIS_PASSWORD else ""
+
 CELERY_BROKER_URL = f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-
-MILVUS_HOST = os.getenv("MILVUS_HOST", "127.0.0.1")
-MILVUS_PORT = os.getenv("MILVUS_PORT", "19530")
-MILVUS_USER = os.getenv("MILVUS_USER", "root")
-MILVUS_PASSWORD = os.getenv("MILVUS_PASSWORD", "")
-MILVUS_DB_NAME = os.getenv("MILVUS_DB_NAME", "default")
-MILVUS_COLLECTION = os.getenv("MILVUS_COLLECTION", "indicator_vectors")
-MILVUS_EMBED_DIM = int(os.getenv("MILVUS_EMBED_DIM", "1024"))
 
 EMBED_URL = os.getenv("EMBED_URL", "")
 EMBED_TOKEN = os.getenv("EMBED_TOKEN", "")
@@ -241,6 +235,14 @@ LOGGING = {
     },
 }
 
+
+SMS_CONFIG = {
+    'API_URL': os.environ.get('SMS_API_URL', 'http://124.172.234.157:8180/service.asmx/SendMessageStr'),
+    'ORG_ID': os.environ.get('SMS_ORG_ID'),
+    'USERNAME': os.environ.get('SMS_USERNAME'),
+    'PASSWORD': os.environ.get('SMS_PASSWORD'), 
+    'SIGNATURE': '【岱劲健康】', # 建议配置签名，避免被拦截
+}
 
 """
 初始化数据库
