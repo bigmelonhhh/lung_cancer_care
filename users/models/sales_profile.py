@@ -40,6 +40,11 @@ class SalesProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】专属邀请码，用于医生或患者绑定；【用法】可选；【示例】BD2024AB；【参数】str；【返回值】str",
     )
+    qrcode_url = models.URLField(
+        "永久二维码",
+        blank=True,
+        help_text="【业务说明】微信永久二维码链接；【用法】缓存以减少 API 调用",
+    )
     managed_doctor_count = models.PositiveIntegerField(
         "医生数量",
         default=0,

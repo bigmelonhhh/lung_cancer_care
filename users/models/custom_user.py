@@ -102,6 +102,15 @@ class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
         auto_now_add=True,
         help_text="【业务说明】账号注册时间；【用法】统计新增；【示例】2025-01-01 10:00;【参数】无;【返回值】datetime",
     )
+    bound_sales = models.ForeignKey(
+        "users.SalesProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="leads",
+        verbose_name="潜客归属销售",
+        help_text="【业务说明】记录未建档潜客归属；【用法】销售跟进；【示例】SalesProfile#1；【参数】外键；【返回值】SalesProfile",
+    )
 
     objects = CustomUserManager()
 

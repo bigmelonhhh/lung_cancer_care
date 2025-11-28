@@ -8,10 +8,15 @@ from .reply_rules import REPLY_RULES, DEFAULT_REPLY
 from .client import wechat_client, WX_APPID
 from users.services.auth import AuthService
 from users.services.patient import PatientService
+from users.services.sales import SalesService
+from users.models import SalesProfile
+from wx.services.reply_text_template import TextTemplateService
 import logging
+
 
 auth_service = AuthService()
 patient_service = PatientService()
+sales_service = SalesService()
 
 
 def _build_bind_link(profile_id: int) -> str:
@@ -42,6 +47,54 @@ def _get_event_key(message):
         or getattr(message, "scene_id", None)
     )
 
+def _handle_sales_binding(event_key: str, user):
+    """
+    根据扫码事件绑定销售。
+    支持 qrscene_bind_sales_xxx 或 bind_sales_xxx。
+    # TODO 这里需要统一配置话术。
+    """
+
+    try:
+        sales_id = int(event_key.split("_")[-1])
+    except (ValueError, TypeError):
+        return "参数错误，无法识别工作人员信息。"
+
+    sale = SalesProfile.objects.select_related("user").filter(pk=sales_id).first()
+    if not sale:
+        return "未找到对应的顾问人员。"
+
+    sales_name = sale.name or (sale.user.display_name if sale.user else "顾问")
+
+    patient_profile = getattr(user, "patient_profile", None)
+    #已有病历的情况
+    if patient_profile:
+        #有病历，无销售
+        if not patient_profile.sales:    
+            patient_profile.sales = sale
+            patient_profile.save(update_fields=["sales", "updated_at"])
+            
+            return f"绑定成功！您已连接专属服务顾问【{sales_name}】。"
+        #有病历，有销售
+        else:
+            return "感谢关注"
+    
+    # 无病历，无销售
+    if not user.bound_sales:
+        user.bound_sales = sale
+        user.save(update_fields=["bound_sales", "updated_at"])
+    #无病历，有销售
+    else:
+        pass
+
+    onboarding_path = reverse("web_patient:onboarding")
+    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
+    link = f"{base_url}{onboarding_path}" if base_url else onboarding_path
+    return (
+        f"欢迎咨询！您已连接专属服务顾问【{sales_name}】。"
+        f"为了提供更专业的服务，👉 <a href=\"{link}\">点击此处完善康复档案</a>"
+    )
+
+
 def handle_message(message):
     """
     微信消息入口
@@ -68,12 +121,16 @@ def handle_message(message):
         # 处理：关注时可能带有参数（扫码关注）
         # 格式通常是 qrscene_bind_patient_123
         event_key = _get_event_key(message)
-        if event_key and str(event_key).startswith('qrscene_bind_patient_'):
-            try:
-                profile_id = int(str(event_key).split('_')[-1])
-                reply_content += "\n" + _bind_prompt(profile_id)
-            except Exception as e:
-                reply_content += f"\n暂时无法生成绑定链接：{str(e)}"
+        if event_key:
+            event_str = str(event_key)
+            if event_str.startswith('qrscene_bind_patient_'):
+                try:
+                    profile_id = int(event_str.split('_')[-1])
+                    reply_content += "\n" + _bind_prompt(profile_id)
+                except Exception as e:
+                    reply_content += f"\n暂时无法生成绑定链接：{str(e)}"
+            elif event_str.startswith('qrscene_bind_sales_'):
+                reply_content += "\n" + _handle_sales_binding(event_str, user)
 
         return TextReply(content=reply_content, message=message)
 
@@ -82,16 +139,23 @@ def handle_message(message):
     # ---------------------------
     if message.type == 'event' and message.event == 'scan':
         # 确保用户存在（理论上已关注必定存在，但防万一）
-        auth_service.get_or_create_wechat_user(user_openid)
+        user = auth_service.get_or_create_wechat_user(user_openid)[0]
         
         # 格式通常是 bind_patient_123 (没有 qrscene_ 前缀)
         event_key = _get_event_key(message)
-        if event_key and str(event_key).startswith('bind_patient_'):
-            try:
-                profile_id = int(str(event_key).split('_')[-1])
-                return TextReply(content=_bind_prompt(profile_id), message=message)
-            except Exception as e:
-                return TextReply(content=f"暂时无法生成绑定链接：{str(e)}", message=message)
+        if event_key:
+            event_str = str(event_key)
+            #扫描患者二维码进入
+            if event_str.startswith('bind_patient_'):
+                try:
+                    profile_id = int(event_str.split('_')[-1])
+                    return TextReply(content=_bind_prompt(profile_id), message=message)
+                except Exception as e:
+                    return TextReply(content=f"暂时无法生成绑定链接：{str(e)}", message=message)
+            #扫销售二维码进入
+            if event_str.startswith('bind_sales_'):
+                content = _handle_sales_binding(event_str, user)
+                return TextReply(content=content, message=message)
 
     # ---------------------------
     # 3. 取消关注

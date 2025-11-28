@@ -152,6 +152,31 @@ class PatientService:
 
         return profile
 
+    def create_profile_by_self(self, user: CustomUser, data: dict) -> PatientProfile:
+        """
+        H5 自注册创建患者档案。
+        自动继承 bound_sales 作为新档案归属，并清空线索。
+        """
+
+        name = (data.get("name") or "").strip()
+        phone = (data.get("phone") or "").strip()
+        if not name or not phone:
+            raise ValidationError("姓名与电话为必填项")
+
+        with transaction.atomic():
+            profile = PatientProfile.objects.create(
+                user=user,
+                name=name,
+                phone=phone,
+                source=choices.PatientSource.SELF,
+                sales=user.bound_sales,
+                claim_status=choices.ClaimStatus.CLAIMED,
+            )
+            if user.bound_sales_id:
+                user.bound_sales = None
+                user.save(update_fields=["bound_sales", "updated_at"])
+        return profile
+
     def create_full_patient_record(self, sales_user: CustomUser, data: dict) -> PatientProfile:
         """
         销售端完整录入患者档案（含病史）。
