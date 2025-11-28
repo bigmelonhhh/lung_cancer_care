@@ -205,6 +205,10 @@ LOGGING = {
             "encoding": "utf-8", # 建议加上编码
         },
     },
+    "root": {  # 新增
+        "handlers": ["console", "file"],
+        "level": "INFO",
+    },
     "loggers": {
         "django": {
             "handlers": ["console", "file"],

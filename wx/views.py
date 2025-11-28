@@ -40,8 +40,9 @@ def wechat_main(request):
         decrypted_xml = get_crypto().decrypt_message(
             encrypted_xml, msg_signature, timestamp, nonce
         )
-        
+
         msg = parse_message(decrypted_xml)
+        print(msg)
         reply = handle_message(msg)
         if reply:
             reply_xml = reply.render()

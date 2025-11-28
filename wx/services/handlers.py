@@ -106,7 +106,9 @@ def handle_message(message):
     """
 
     user_openid = message.source
-    logging.info(message)
+    print("-----------")
+    print(user_openid)
+    print("-----------")
     
 
     # ---------------------------

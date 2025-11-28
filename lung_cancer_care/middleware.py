@@ -45,18 +45,14 @@ class RequestLogMiddleware:
 
         # 8. 组装日志字典 (完全匹配你的格式要求)
         log_data = {
-            
-            "remote_addr": request.META.get('REMOTE_ADDR', '-'),
-            "real_ip": real_ip,
             "request": f"{request.method} {request.get_full_path()}",
-            "body_bytes_sent": str(body_bytes),
-            "upstream_response_time": duration_str, # 应用处理时间
-            "http_user_agent": request.META.get('HTTP_USER_AGENT', '-'),
-            "request_id": request_id,
+            "real_ip": real_ip,
+            "body_bytes": str(body_bytes),
+            "response_time": duration_str, # 应用处理时间
+            "user_agent": request.META.get('HTTP_USER_AGENT', '-'),
             "user": user_info,
             "status": str(response.status_code),
             "request_time": duration_str,
-            
             # 'level', 'logger', 'time_local' 会由 JsonFormatter 自动补充
         }
 

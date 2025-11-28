@@ -12,6 +12,7 @@ from users.models import CustomUser
 from django.db import transaction
 
 
+
 class AuthService:
     """统一处理多端登录，账号管理（微信/PC），保证 Session 状态一致。"""
 
@@ -22,15 +23,29 @@ class AuthService:
         self.default_backend = backends[0]
 
     def _fetch_wechat_openid(self, code: str) -> str:
-        """TODO: 调用真实的公众号接口换取 openid。"""
+        """通过公众号 OAuth 接口换取 openid。"""
+        if not code:
+            raise ValueError("缺少 code 参数")
+        try:
+            from wx.services.oauth import get_user_info
+            token_data = get_user_info(code)
+        except Exception as exc:  # pragma: no cover - 调用失败兜底
+            raise ValueError(f"微信授权失败，请重试：{exc}") from exc
 
-        return f"mock_{code}"
+        openid = token_data.get("openid")
+        if not openid:
+            raise ValueError("微信授权返回缺少 openid")
+        return openid
 
-    def wechat_login(self, request, code: str) -> Tuple[bool, Optional[CustomUser]]:
+    def wechat_login(self, request, code: str|None) -> Tuple[bool, Optional[CustomUser|str]]:
         if not code:
             return False, "缺少 code 参数"
 
-        openid = self._fetch_wechat_openid(code)
+        try:
+            openid = self._fetch_wechat_openid(code)
+        except ValueError as exc:
+            return False, str(exc)
+
         user = CustomUser.objects.filter(wx_openid=openid).first()
         if not user:
             user = CustomUser.objects.create(
@@ -42,7 +57,7 @@ class AuthService:
         login(request, user, backend=self.default_backend)
         return True, user
 
-    def pc_login(self, request, phone: str, password: str) -> Tuple[bool, Optional[CustomUser]]:
+    def pc_login(self, request, phone: str, password: str) -> Tuple[bool, Optional[CustomUser|str]]:
         """手机号 + 密码登录，内部通过用户名走 Django 认证体系。"""
 
         if not phone or not password:

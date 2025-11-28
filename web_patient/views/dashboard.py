@@ -4,13 +4,25 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from users.models import PatientRelation
+from django.http import HttpResponseBadRequest
 
 
-@login_required
+
+
 def patient_dashboard(request: HttpRequest) -> HttpResponse:
     """患者端首页：根据本人或家属身份展示档案。"""
+    
+    #个人中心， 一定会有code这个字段进来。所以如果没有，直接报错。
+    code =  request.GET.get('code')
+    if not code:
+        return HttpResponseBadRequest('非法请求：缺少必要的认证参数 (code)')
+    
+    from users.services.auth import AuthService
+    auth_service = AuthService()
+    auth_service.wechat_login(request, code)
 
     patient = getattr(request.user, "patient_profile", None)
+    print(f"request.user.id is {request.user.id}")
     is_family = False
 
     if patient is None:
