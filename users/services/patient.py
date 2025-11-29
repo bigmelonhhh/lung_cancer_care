@@ -162,8 +162,10 @@ class PatientService:
             profile.phone = phone
             profile.gender = data.get("gender", profile.gender)
             profile.birth_date = data.get("birth_date", profile.birth_date)
-            profile.address = data.get("address", "")
-            # ... 其他允许修改的字段
+            profile.address = (data.get("address") or "").strip()
+            profile.ec_name = (data.get("ec_name") or "").strip()
+            profile.ec_relation = (data.get("ec_relation") or "").strip()
+            profile.ec_phone = (data.get("ec_phone") or "").strip()
             
             profile.save()
             return profile
@@ -193,7 +195,10 @@ class PatientService:
         profile.gender = data.get("gender", choices.Gender.UNKNOWN)
         profile.birth_date = data.get("birth_date")
         profile.claim_status = choices.ClaimStatus.CLAIMED
-        profile.address = data.get("address", "")
+        profile.address = (data.get("address") or "").strip()
+        profile.ec_name = (data.get("ec_name") or "").strip()
+        profile.ec_relation = (data.get("ec_relation") or "").strip()
+        profile.ec_phone = (data.get("ec_phone") or "").strip()
 
         # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
         if not profile.sales and user.bound_sales:

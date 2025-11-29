@@ -1,0 +1,79 @@
+<div id="profile-card-panel" class="bg-white rounded-3xl shadow-xl p-6 md:p-8 space-y-6">
+  <div class="flex flex-wrap items-start gap-4 justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-[0.4em] text-slate-400">康复档案</p>
+      <h2 class="mt-2 text-2xl font-bold text-slate-900">{{ patient.name|default:"患者" }}</h2>
+      <p class="text-sm text-slate-500 mt-1 tracking-wide">{{ patient.phone|default:"-" }}</p>
+    </div>
+    <button
+      type="button"
+      class="inline-flex items-center px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-semibold shadow hover:bg-slate-800 transition"
+      hx-get="{% url 'web_patient:profile_edit' patient.id %}"
+      hx-target="#profile-card-panel"
+      hx-swap="outerHTML"
+    >
+      编辑
+    </button>
+  </div>
+
+  <div class="bg-slate-50 rounded-2xl p-5 space-y-5">
+    <div class="space-y-1">
+      <p class="text-sm font-semibold text-slate-500">姓名</p>
+      <p class="text-lg font-bold text-slate-900">{{ patient.name|default:"-" }}</p>
+    </div>
+    <div class="space-y-1">
+      <p class="text-sm font-semibold text-slate-500">性别</p>
+      {% with gender=patient.get_gender_display %}
+        {% if gender and gender != "未知" %}
+          <p class="text-lg font-bold text-slate-900">{{ gender }}</p>
+        {% else %}
+          <p class="text-lg font-bold text-slate-900">-</p>
+        {% endif %}
+      {% endwith %}
+    </div>
+    <div class="space-y-1">
+      <p class="text-sm font-semibold text-slate-500">出生日期</p>
+      <p class="text-lg font-bold text-slate-900">
+        {% if patient.birth_date %}
+          {{ patient.birth_date|date:"Y年n月j日" }}
+        {% else %}
+          -
+        {% endif %}
+      </p>
+    </div>
+    <div class="space-y-1">
+      <p class="text-sm font-semibold text-slate-500">联系地址</p>
+      <p class="text-lg font-bold text-slate-900">{{ patient.address|default:"-" }}</p>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-2xl border border-slate-100 p-5 space-y-5">
+    <div class="space-y-1">
+      <p class="text-sm font-semibold text-slate-500">紧急联系人</p>
+      {% if patient.ec_name %}
+        <p class="text-lg font-bold text-slate-900">{{ patient.ec_name }} <span class="text-base font-medium text-slate-500">（{{ patient.ec_relation|default:"关系不详" }}）</span></p>
+      {% else %}
+        <p class="text-lg font-bold text-slate-900">-</p>
+      {% endif %}
+    </div>
+    <div class="space-y-1">
+      <p class="text-sm font-semibold text-slate-500">紧急联系电话</p>
+      <p class="text-lg font-bold text-slate-900">{{ patient.ec_phone|default:"-" }}</p>
+    </div>
+  </div>
+</div>
+{% if is_hx_request %}
+  <div id="profile-toast" hx-swap-oob="true">
+    {% for message in messages %}
+      <div class="mt-4 max-w-sm mx-auto px-4 py-3 rounded-2xl shadow-lg flex items-center gap-2 text-sm
+        {% if 'success' in message.tags %}bg-emerald-50 text-emerald-700{% else %}bg-amber-50 text-amber-700{% endif %}">
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7" />
+        </svg>
+        <span>{{ message }}</span>
+      </div>
+    {% empty %}
+      <div></div>
+    {% endfor %}
+  </div>
+{% endif %}

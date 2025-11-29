@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 
 from core.service.sms import SMSService
 from users.services.patient import PatientService
-from web_patient.forms import PatientSelfEntryForm
+from web_patient.forms import PatientEntryVerificationForm
 
 patient_service = PatientService()
 
@@ -19,10 +19,10 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
     """
 
     if request.method == "POST":
-        form = PatientSelfEntryForm(request.POST)
+        form = PatientEntryVerificationForm(request.POST)
         if form.is_valid():
             try:
-                patient_service.create_profile_by_self(request.user, form.cleaned_data)
+                patient_service.save_profile_by_self(request.user, form.cleaned_data)
             except ValidationError as exc:
                 form.add_error(None, exc.message)
             else:
@@ -32,7 +32,7 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
         phone = getattr(request.user, "phone", "")
         if phone:
             initial["phone"] = phone
-        form = PatientSelfEntryForm(initial=initial)
+        form = PatientEntryVerificationForm(initial=initial)
 
     return render(
         request,

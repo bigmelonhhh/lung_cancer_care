@@ -1,0 +1,17 @@
+{% extends "layouts/base_portal.html" %}
+{% block body %}
+<div class="min-h-screen bg-[#F5F7FA] flex flex-col">
+  <div class="bg-white px-4 py-4 shadow-sm sticky top-0 z-10 flex items-center justify-center">
+    <h1 class="text-lg font-bold text-slate-900">个人资料</h1>
+  </div>
+  <div id="profile-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none"></div>
+  <div class="flex-1 px-4 py-6 w-full max-w-2xl mx-auto">
+    <p class="text-sm text-slate-600 font-medium mb-6 leading-relaxed">
+      请核对并完善以下信息，确保医生和关怀团队能够准确了解您的情况。
+    </p>
+    <div id="profile-card-panel">
+      {% include "web_patient/partials/profile_card.html" with patient=patient is_hx_request=False %}
+    </div>
+  </div>
+</div>
+{% endblock %}

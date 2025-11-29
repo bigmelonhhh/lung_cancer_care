@@ -1,0 +1,192 @@
+<form
+  id="profile-card-panel"
+  method="post"
+  action="{% url 'web_patient:profile_update' patient.id %}"
+  class="bg-white rounded-3xl shadow-xl p-6 md:p-8 space-y-8"
+  hx-post="{% url 'web_patient:profile_update' patient.id %}"
+  hx-target="#profile-card-panel"
+  hx-swap="outerHTML"
+>
+  {% csrf_token %}
+  <div class="flex items-center justify-between">
+    <div>
+      <p class="text-xs uppercase tracking-[0.4em] text-slate-400">编辑资料</p>
+      <h2 class="mt-2 text-2xl font-bold text-slate-900">{{ patient.name|default:"患者" }}</h2>
+      <p class="text-xs text-slate-400 mt-1">手机号仅展示，如需修改请联系顾问</p>
+    </div>
+    <button
+      type="button"
+      class="inline-flex items-center px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:border-slate-400"
+      hx-get="{% url 'web_patient:profile_card' patient.id %}"
+      hx-target="#profile-card-panel"
+      hx-swap="outerHTML"
+    >
+      取消
+    </button>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="p-3 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 text-sm font-medium">
+      {% for error in form.non_field_errors %}
+        <p>{{ error }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="space-y-5">
+    <div class="space-y-2">
+      <label for="{{ form.name.id_for_label }}" class="block text-base font-bold text-slate-900">真实姓名</label>
+      <input
+        type="text"
+        name="{{ form.name.name }}"
+        id="{{ form.name.id_for_label }}"
+        value="{{ form.name.value|default:'' }}"
+        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-slate-400"
+        placeholder="请输入姓名"
+      >
+      {% if form.name.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.name.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div class="space-y-2">
+      <label class="block text-base font-bold text-slate-900">性别</label>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="relative cursor-pointer">
+          <input type="radio" name="{{ form.gender.name }}" value="1" class="peer sr-only" {% if gender_value|stringformat:'s' == '1' %}checked{% endif %}>
+          <div class="h-12 flex items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base font-bold text-slate-600 transition-all peer-checked:border-blue-600 peer-checked:bg-blue-50 peer-checked:text-blue-700">
+            男士
+          </div>
+        </label>
+        <label class="relative cursor-pointer">
+          <input type="radio" name="{{ form.gender.name }}" value="2" class="peer sr-only" {% if gender_value|stringformat:'s' == '2' %}checked{% endif %}>
+          <div class="h-12 flex items-center justify-center rounded-lg border-2 border-slate-300 bg-white text-base font-bold text-slate-600 transition-all peer-checked:border-rose-500 peer-checked:bg-rose-50 peer-checked:text-rose-600">
+            女士
+          </div>
+        </label>
+      </div>
+      {% if form.gender.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.gender.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div class="space-y-2">
+      <label for="{{ form.birth_date.id_for_label }}" class="block text-base font-bold text-slate-900">出生日期</label>
+      <input
+        type="date"
+        name="{{ form.birth_date.name }}"
+        id="{{ form.birth_date.id_for_label }}"
+        value="{{ form.birth_date.value|default:'' }}"
+        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none"
+      >
+      {% if form.birth_date.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.birth_date.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div class="space-y-2">
+      <label for="{{ form.phone.id_for_label }}" class="block text-base font-bold text-slate-900">手机号</label>
+      <input
+        type="tel"
+        name="{{ form.phone.name }}"
+        id="{{ form.phone.id_for_label }}"
+        value="{{ form.phone.value|default:'' }}"
+        readonly
+        class="w-full h-12 rounded-lg border-2 border-slate-200 bg-slate-50 px-4 text-lg text-slate-500 cursor-not-allowed"
+      >
+    </div>
+
+    <div class="space-y-2">
+      <label for="{{ form.address.id_for_label }}" class="block text-base font-bold text-slate-900">联系地址</label>
+      <input
+        type="text"
+        name="{{ form.address.name }}"
+        id="{{ form.address.id_for_label }}"
+        value="{{ form.address.value|default:'' }}"
+        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-slate-400"
+        placeholder="如：上海市浦东新区..."
+      >
+      {% if form.address.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.address.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <hr class="border-slate-200">
+
+    <div class="space-y-2">
+      <label for="{{ form.ec_name.id_for_label }}" class="block text-base font-bold text-slate-900">紧急联系人姓名</label>
+      <input
+        type="text"
+        name="{{ form.ec_name.name }}"
+        id="{{ form.ec_name.id_for_label }}"
+        value="{{ form.ec_name.value|default:'' }}"
+        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-slate-400"
+        placeholder="请输入姓名"
+      >
+      {% if form.ec_name.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.ec_name.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div class="space-y-2">
+      <label for="{{ form.ec_relation.id_for_label }}" class="block text-base font-bold text-slate-900">与您的关系</label>
+      <input
+        type="text"
+        name="{{ form.ec_relation.name }}"
+        id="{{ form.ec_relation.id_for_label }}"
+        value="{{ form.ec_relation.value|default:'' }}"
+        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-slate-400"
+        placeholder="如：丈夫、女儿"
+      >
+      {% if form.ec_relation.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.ec_relation.errors.0 }}</p>
+      {% endif %}
+    </div>
+
+    <div class="space-y-2">
+      <label for="{{ form.ec_phone.id_for_label }}" class="block text-base font-bold text-slate-900">紧急联系电话</label>
+      <input
+        type="tel"
+        name="{{ form.ec_phone.name }}"
+        id="{{ form.ec_phone.id_for_label }}"
+        value="{{ form.ec_phone.value|default:'' }}"
+        class="w-full h-12 rounded-lg border-2 border-slate-300 px-4 text-lg text-slate-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-100 outline-none placeholder:text-slate-400"
+        placeholder="11位手机号"
+      >
+      {% if form.ec_phone.errors %}
+        <p class="text-red-600 text-sm font-medium">{{ form.ec_phone.errors.0 }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center justify-end gap-3">
+    <button
+      type="button"
+      class="inline-flex items-center px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:border-slate-400"
+      hx-get="{% url 'web_patient:profile_card' patient.id %}"
+      hx-target="#profile-card-panel"
+      hx-swap="outerHTML"
+    >
+      取消
+    </button>
+    <button type="submit" class="inline-flex items-center px-6 py-2.5 rounded-full bg-blue-600 text-white text-base font-bold shadow-blue-200 hover:bg-blue-500">
+      保存
+    </button>
+  </div>
+
+  {% if is_hx_request %}
+    <div id="profile-toast" hx-swap-oob="true">
+      {% for message in messages %}
+        <div class="mt-4 max-w-sm mx-auto px-4 py-3 rounded-2xl shadow-lg flex items-center gap-2 text-sm
+          {% if 'success' in message.tags %}bg-emerald-50 text-emerald-700{% else %}bg-amber-50 text-amber-700{% endif %}">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 13l4 4L19 7" />
+          </svg>
+          <span>{{ message }}</span>
+        </div>
+      {% empty %}
+        <div></div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</form>

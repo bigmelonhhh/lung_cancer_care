@@ -2,15 +2,19 @@ from django import forms
 
 from core.service.sms import SMSService
 from users import choices
+from users.models import PatientProfile
 
 
 BASE_INPUT_CLASS = (
     "w-full px-4 py-3 rounded-2xl border border-slate-200 "
     "focus:ring-2 focus:ring-sky-500 focus:border-sky-500 text-base text-slate-900"
 )
+INLINE_INPUT_CLASS = (
+    "text-right placeholder-slate-400 focus:outline-none bg-transparent w-full text-slate-900"
+)
 
 
-class PatientSelfEntryForm(forms.Form):
+class PatientEntryVerificationForm(forms.Form):
     name = forms.CharField(
         label="患者姓名",
         max_length=50,
@@ -89,3 +93,72 @@ class PatientSelfEntryForm(forms.Form):
         if not success:
             raise forms.ValidationError(message or "验证码无效")
         return code
+
+
+class PatientSelfEntryForm(forms.ModelForm):
+    class Meta:
+        model = PatientProfile
+        fields = [
+            "name",
+            "gender",
+            "birth_date",
+            "phone",
+            "address",
+            "ec_name",
+            "ec_relation",
+            "ec_phone",
+        ]
+        widgets = {
+            "name": forms.TextInput(
+                attrs={
+                    "placeholder": "请输入姓名",
+                    "class": INLINE_INPUT_CLASS,
+                }
+            ),
+            "birth_date": forms.DateInput(
+                attrs={
+                    "type": "date",
+                    "class": INLINE_INPUT_CLASS,
+                }
+            ),
+            "phone": forms.TextInput(
+                attrs={
+                    "readonly": "readonly",
+                    "class": f"{INLINE_INPUT_CLASS} cursor-not-allowed",
+                }
+            ),
+            "address": forms.TextInput(
+                attrs={
+                    "placeholder": "请输入联系地址",
+                    "class": INLINE_INPUT_CLASS,
+                }
+            ),
+            "ec_name": forms.TextInput(
+                attrs={
+                    "placeholder": "请输入紧急联系人姓名",
+                    "class": INLINE_INPUT_CLASS,
+                }
+            ),
+            "ec_relation": forms.TextInput(
+                attrs={
+                    "placeholder": "请输入与患者关系",
+                    "class": INLINE_INPUT_CLASS,
+                }
+            ),
+            "ec_phone": forms.TextInput(
+                attrs={
+                    "placeholder": "请输入紧急联系人电话",
+                    "class": INLINE_INPUT_CLASS,
+                }
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["gender"].widget = forms.RadioSelect(attrs={"class": "sr-only"})
+        for name, field in self.fields.items():
+            if name == "gender":
+                continue
+            css = field.widget.attrs.get("class", "")
+            if INLINE_INPUT_CLASS not in css:
+                field.widget.attrs["class"] = f"{INLINE_INPUT_CLASS} {css}".strip()

@@ -1,6 +1,7 @@
 {% extends "layouts/base_portal.html" %}
 {% block body %}
 <div class="min-h-screen bg-slate-50">
+  <div id="profile-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none"></div>
   <div class="max-w-4xl mx-auto px-4 py-10 space-y-10">
     <div class="bg-gradient-to-r from-sky-200 via-sky-100 to-blue-100 rounded-3xl p-8 text-slate-900 relative overflow-hidden shadow-lg">
       <div class="flex items-center gap-4">
@@ -17,9 +18,9 @@
               {% if is_family %}
               <span class="inline-flex items-center px-4 py-1.5 rounded-full bg-rose-100 text-rose-600 text-base font-semibold">家属视角</span>
               {% endif %}
-              <button class="inline-flex items-center px-5 py-2.5 rounded-2xl bg-white text-base font-semibold text-slate-900 shadow-md hover:shadow-lg transition">
+              <a href="{% url 'web_patient:profile_page' %}" class="inline-flex items-center px-5 py-2.5 rounded-2xl bg-white text-base font-semibold text-slate-900 shadow-md hover:shadow-lg transition">
                 个人资料
-              </button>
+              </a>
             </div>
           </div>
           <p class="text-lg text-slate-700 font-medium leading-relaxed">愿温柔与专业守护您与家人每一天。</p>
