@@ -1,0 +1,71 @@
+{% extends "layouts/base_portal.html" %}
+{% block title %}{{ document.title }}{% endblock %}
+{% block body %}
+<div class="min-h-screen bg-slate-50 pb-10">
+  <div class="sticky top-0 z-20 bg-slate-50/95 backdrop-blur border-b border-slate-200">
+    <div class="max-w-3xl mx-auto flex items-center gap-4 px-4 py-4">
+      <a href="javascript:history.back();" class="w-11 h-11 flex items-center justify-center rounded-full bg-white shadow text-slate-600">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6"/>
+        </svg>
+      </a>
+      <div>
+        <p class="text-sm text-slate-500">系统文档</p>
+        <h1 class="text-2xl font-semibold text-slate-900">{{ document.title }}</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-3xl mx-auto px-4 pt-6 pb-8">
+    <article class="bg-white rounded-3xl shadow-sm px-5 py-6 text-[16px] md:text-[18px] leading-relaxed text-slate-900">
+      <div class="prose prose-slate max-w-none">
+        {{ html_content|safe }}
+      </div>
+      {% if document.version %}
+      <p class="mt-8 text-sm text-slate-400 text-right">版本：{{ document.version }}</p>
+      {% endif %}
+    </article>
+  </div>
+</div>
+<style>
+  .prose h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .prose h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 1.25rem;
+    margin-bottom: 0.5rem;
+  }
+  .prose h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .prose p {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+  .prose ul,
+  .prose ol {
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    padding-left: 1.5rem;
+  }
+  .prose ul {
+    list-style-type: disc;
+  }
+  .prose ol {
+    list-style-type: decimal;
+  }
+  .prose a {
+    color: rgb(37 99 235);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+</style>
+{% endblock %}

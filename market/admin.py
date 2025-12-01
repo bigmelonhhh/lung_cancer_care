@@ -9,6 +9,34 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ("is_active",)
     search_fields = ("name",)
     readonly_fields = ("created_at", "updated_at")
+    fieldsets = (
+        (
+            "基础信息",
+            {
+                "fields": (
+                    "name",
+                    "price",
+                    "duration_days",
+                    "service_content",
+                )
+            },
+        ),
+        (
+            "状态控制",
+            {
+                "fields": ("is_active",),
+            },
+        ),
+        (
+            "系统信息",
+            {
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
 
     def has_delete_permission(self, request, obj=None):
         return False

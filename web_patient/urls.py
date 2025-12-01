@@ -35,4 +35,5 @@ urlpatterns = [
     path("devices/unbind/", views.api_unbind_device, name="api_unbind_device"),
     path("studio/", views.my_studio, name="my_studio"),
     path("feedback/", views.feedback_view, name="feedback"),
+    path("docs/<str:key>/", views.document_detail, name="document_detail"),
 ]

@@ -23,6 +23,11 @@ class Product(TimeStampedModel):
         decimal_places=2,
         help_text="【说明】标注售价；【示例】199.00",
     )
+    service_content = models.TextField(
+        "服务包内容",
+        blank=True,
+        help_text="【说明】服务包具体内容及权益说明；可填写几百字的描述。",
+    )
     duration_days = models.PositiveIntegerField(
         "服务有效期（天）",
         help_text="【说明】服务有效天数；【示例】30",

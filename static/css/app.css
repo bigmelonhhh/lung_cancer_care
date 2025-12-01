@@ -804,6 +804,10 @@ video {
   margin-top: 0.125rem;
 }
 
+.mt-8 {
+  margin-top: 2rem;
+}
+
 .block {
   display: block;
 }
@@ -1030,6 +1034,10 @@ video {
 
 .max-w-\[65\%\] {
   max-width: 65%;
+}
+
+.max-w-none {
+  max-width: none;
 }
 
 .flex-1 {
@@ -1972,6 +1980,10 @@ video {
   line-height: 1rem;
 }
 
+.text-\[16px\] {
+  font-size: 16px;
+}
+
 .font-bold {
   font-weight: 700;
 }
@@ -2650,6 +2662,10 @@ video {
   .md\:text-4xl {
     font-size: 2.25rem;
     line-height: 2.5rem;
+  }
+
+  .md\:text-\[18px\] {
+    font-size: 18px;
   }
 }
 

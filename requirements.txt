@@ -9,3 +9,4 @@ cryptography
 django-redis
 xpinyin
 Pillow==10.4.0
+markdown==3.7
