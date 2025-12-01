@@ -8,3 +8,4 @@ wechatpy
 cryptography
 django-redis
 xpinyin
+Pillow==10.4.0

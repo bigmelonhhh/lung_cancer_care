@@ -34,4 +34,5 @@ urlpatterns = [
     path("devices/bind/", views.api_bind_device, name="api_bind_device"),
     path("devices/unbind/", views.api_unbind_device, name="api_unbind_device"),
     path("studio/", views.my_studio, name="my_studio"),
+    path("feedback/", views.feedback_view, name="feedback"),
 ]

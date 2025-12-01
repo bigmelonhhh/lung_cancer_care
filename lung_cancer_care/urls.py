@@ -15,11 +15,12 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import include, path
 from django.contrib.auth.views import LogoutView
-from devices.views.callback import smartwatch_data_callback
 from django.http import HttpResponse
+from django.urls import include, path
 from django.conf import settings
+from django.conf.urls.static import static
+from devices.views.callback import smartwatch_data_callback
 import os
 
 def wechat_verify_view(request):
@@ -57,3 +58,6 @@ urlpatterns = [
     path('p/', include('web_patient.urls', namespace='web_patient')),
     path('deviceupload/', smartwatch_data_callback, name='device_upload_root'),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -697,6 +697,14 @@ video {
   top: 1rem;
 }
 
+.-right-2 {
+  right: -0.5rem;
+}
+
+.-top-2 {
+  top: -0.5rem;
+}
+
 .z-10 {
   z-index: 10;
 }
@@ -886,6 +894,10 @@ video {
 
 .h-32 {
   height: 8rem;
+}
+
+.h-28 {
+  height: 7rem;
 }
 
 .max-h-72 {
@@ -1617,6 +1629,10 @@ video {
   background-color: rgb(255 255 255 / 0.9);
 }
 
+.bg-white\/95 {
+  background-color: rgb(255 255 255 / 0.95);
+}
+
 .bg-opacity-50 {
   --tw-bg-opacity: 0.5;
 }
@@ -1894,6 +1910,10 @@ video {
 
 .pb-20 {
   padding-bottom: 5rem;
+}
+
+.pb-24 {
+  padding-bottom: 6rem;
 }
 
 .text-left {

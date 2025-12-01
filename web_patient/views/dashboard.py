@@ -74,7 +74,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         {"title": "亲情账号", "url": generate_menu_auth_url("web_patient:family_management")},
         {"title": "健康日历", "url": "#"},
         {"title": "设置", "url": "#"},
-        {"title": "意见反馈", "url": "#"},
+        {"title": "意见反馈", "url": generate_menu_auth_url("web_patient:feedback")},
     ]
 
     return render(

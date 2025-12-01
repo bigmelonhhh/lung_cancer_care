@@ -1,6 +1,7 @@
 from django import forms
 
 from core.service.sms import SMSService
+from core.models import Feedback
 from users import choices
 from users.models import PatientProfile
 
@@ -162,3 +163,41 @@ class PatientSelfEntryForm(forms.ModelForm):
             css = field.widget.attrs.get("class", "")
             if INLINE_INPUT_CLASS not in css:
                 field.widget.attrs["class"] = f"{INLINE_INPUT_CLASS} {css}".strip()
+
+
+class FeedbackForm(forms.ModelForm):
+    class Meta:
+        model = Feedback
+        fields = ["feedback_type", "content", "contact_phone"]
+        widgets = {
+            "feedback_type": forms.HiddenInput(),
+            "content": forms.Textarea(
+                attrs={
+                    "rows": 5,
+                    "maxlength": 140,
+                    "placeholder": "请描述遇到的问题或建议，我们会尽快跟进~",
+                    "class": "w-full rounded-3xl border border-slate-200 px-5 py-4 text-base text-slate-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500",
+                }
+            ),
+            "contact_phone": forms.TextInput(
+                attrs={
+                    "placeholder": "便于联系您（选填）",
+                    "inputmode": "tel",
+                    "class": "w-full rounded-2xl border border-slate-200 px-4 py-3 text-base text-slate-900 focus:ring-2 focus:ring-sky-500 focus:border-sky-500",
+                }
+            ),
+        }
+
+    def clean_content(self):
+        content = (self.cleaned_data.get("content") or "").strip()
+        if not content:
+            raise forms.ValidationError("请填写反馈内容")
+        if len(content) > 140:
+            raise forms.ValidationError("反馈内容不能超过 140 字")
+        return content
+
+    def clean_contact_phone(self):
+        phone = (self.cleaned_data.get("contact_phone") or "").strip()
+        if phone and len(phone) > 20:
+            raise forms.ValidationError("联系方式长度过长")
+        return phone
