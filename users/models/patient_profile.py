@@ -98,12 +98,6 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】判断流失；【用法】ETL 更新；【示例】2025-01-10；【参数】datetime；【返回值】datetime",
     )
-    device_sn = models.CharField(
-        "设备 SN",
-        max_length=50,
-        blank=True,
-        help_text="【业务说明】绑定硬件 SN；【用法】体征自动同步；【示例】POX-2024-8899；【参数】str；【返回值】str",
-    )
     ec_name = models.CharField(
         "紧急联系人姓名",
         max_length=50,
