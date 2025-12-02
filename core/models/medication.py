@@ -75,11 +75,11 @@ class Medication(models.Model):
         blank=True,
         help_text="【说明】推荐给药频次，例如“每日 1 次”。",
     )
-    default_cycle = models.CharField(
-        "默认周期",
-        max_length=50,
+    schedule_days_template = models.JSONField(
+        "推荐执行天(周期内)",
+        default=list,
         blank=True,
-        help_text="【说明】给药周期描述，例如“21 天/周期”。",
+        help_text="【说明】周期天数模板，例如 [1, 8, 15]；留空表示由医生自定义。",
     )
     description = models.TextField(
         "备注说明",

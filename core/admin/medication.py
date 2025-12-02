@@ -57,7 +57,7 @@ class MedicationAdmin(admin.ModelAdmin):
                     "target_gene",
                     "default_dosage",
                     "default_frequency",
-                    "default_cycle",
+                    "schedule_days_template",
                 )
             },
         ),

@@ -4,16 +4,16 @@ from typing import Optional
 # users/services/patient.py
 from django.core.exceptions import ValidationError
 from django.utils import timezone
-from users.models import PatientProfile, CustomUser, PatientRelation
-from users import choices
+from django.db import transaction, models
+
+from core.models import MonitoringConfig
 from health_data.models import MedicalHistory
 from regions.models import Province, City
-# 引用 wx 的 client 来获取二维码，注意避免循环引用，可以在方法内引用或使用 lazy import
-from wechatpy import WeChatClient 
-from django.core.exceptions import ValidationError
-from django.db import transaction, models
-from users.models import PatientProfile, CustomUser
 from users import choices
+from users.models import PatientProfile, CustomUser, PatientRelation
+
+# 引用 wx 的 client 来获取二维码，注意避免循环引用，可以在方法内引用或使用 lazy import
+from wechatpy import WeChatClient
 
 class PatientService:
     
@@ -146,13 +146,20 @@ class PatientService:
 
 
 
-    def save_profile_by_self(self, user: CustomUser, data: dict, profile_id: int = None) -> PatientProfile:
-        """
-        患者自助保存档案（支持新建、认领、编辑）。
-        
-        :param user: 当前登录用户
-        :param data: 表单数据 (name, gender, birth_date, phone, ...)
-        :param profile_id:如果存在，则为编辑模式；否则为建档/认领模式
+    def save_profile_by_self(self, user: CustomUser, data: dict, profile_id: int | None = None) -> PatientProfile:
+        """患者自助保存档案（支持新建、认领、编辑）。
+
+        【功能说明】
+        - 支持患者本人创建新档案、认领已有档案、编辑已有档案。
+        - 在建档/认领场景下，自动初始化或补全该患者的监测配置 MonitoringConfig。
+
+        【参数说明】
+        - user: 当前登录的 CustomUser 实例，用于绑定患者档案。
+        - data: 表单数据字典，包含 name、gender、birth_date、phone 等字段。
+        - profile_id: 可选，存在时表示编辑指定患者档案；为空表示建档或认领模式。
+
+        【返回参数说明】
+        - 返回更新后的 PatientProfile 实例；在建档/认领场景中，保证已关联一条 MonitoringConfig 记录。
         """
         phone = (data.get("phone") or "").strip()
         name = (data.get("name") or "").strip()
@@ -197,41 +204,46 @@ class PatientService:
         # -------------------------------------------------------
         # 场景 B: 建档/认领模式 (未知 ID，以手机号为锚点)
         # -------------------------------------------------------
-        
-        # 1. 查重
-        existing_profile = PatientProfile.objects.filter(phone=phone).first()
 
-        if existing_profile:
-            # 如果档案存在，且已被别人绑定
-            if existing_profile.user and existing_profile.user != user:
-                raise ValidationError("该手机号已被其他微信账号绑定，请联系顾问处理。")
-            
-            # 认领/更新逻辑(这里实际上就是一个孤立的patient)
-            profile = existing_profile
-        else:
-            # 纯新建逻辑
-            profile = PatientProfile(phone=phone)
-            profile.source = choices.PatientSource.SELF
+        with transaction.atomic():
+            # 1. 查重
+            existing_profile = PatientProfile.objects.filter(phone=phone).first()
 
-        # 2. 赋值/覆盖属性
-        profile.user = user
-        profile.name = name
-        profile.gender = data.get("gender", choices.Gender.UNKNOWN)
-        profile.birth_date = data.get("birth_date")
-        profile.claim_status = choices.ClaimStatus.CLAIMED
-        profile.address = (data.get("address") or "").strip()
-        profile.ec_name = (data.get("ec_name") or "").strip()
-        profile.ec_relation = (data.get("ec_relation") or "").strip()
-        profile.ec_phone = (data.get("ec_phone") or "").strip()
+            if existing_profile:
+                # 如果档案存在，且已被别人绑定
+                if existing_profile.user and existing_profile.user != user:
+                    raise ValidationError("该手机号已被其他微信账号绑定，请联系顾问处理。")
 
-        # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
-        if not profile.sales and user.bound_sales:
-            profile.sales = user.bound_sales
-            # 归属转移后，清空潜客标记
-            user.bound_sales = None 
-            user.save(update_fields=["bound_sales"])
+                # 认领/更新逻辑(这里实际上就是一个孤立的 patient)
+                profile = existing_profile
+            else:
+                # 纯新建逻辑
+                profile = PatientProfile(phone=phone)
+                profile.source = choices.PatientSource.SELF
 
-        profile.save()
+            # 2. 赋值/覆盖属性
+            profile.user = user
+            profile.name = name
+            profile.gender = data.get("gender", choices.Gender.UNKNOWN)
+            profile.birth_date = data.get("birth_date")
+            profile.claim_status = choices.ClaimStatus.CLAIMED
+            profile.address = (data.get("address") or "").strip()
+            profile.ec_name = (data.get("ec_name") or "").strip()
+            profile.ec_relation = (data.get("ec_relation") or "").strip()
+            profile.ec_phone = (data.get("ec_phone") or "").strip()
+
+            # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
+            if not profile.sales and getattr(user, "bound_sales", None):
+                profile.sales = user.bound_sales
+                # 归属转移后，清空潜客标记
+                user.bound_sales = None
+                user.save(update_fields=["bound_sales"])
+
+            profile.save()
+
+            # 4. 初始化或补全监测配置（保证患者始终拥有一条 MonitoringConfig）
+            MonitoringConfig.objects.get_or_create(patient=profile,  defaults={"enable_temp": True,"enable_bp": True})
+
         return profile
 
     
