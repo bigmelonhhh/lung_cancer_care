@@ -1,138 +1,166 @@
 {% extends "layouts/base_portal.html" %}
 {% block body %}
-<div class="min-h-screen bg-slate-50">
+<div class="min-h-screen bg-[#F5F7FA] pb-28">
   <div id="profile-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-md px-4 pointer-events-none"></div>
-  <div class="max-w-4xl mx-auto px-4 py-10 space-y-10">
-    <div class="bg-gradient-to-r from-sky-200 via-sky-100 to-blue-100 rounded-3xl p-8 text-slate-900 relative overflow-hidden shadow-lg">
-      <div class="flex items-center gap-4">
-        <!-- <div class="w-16 h-16 rounded-full bg-white/70 flex items-center justify-center text-slate-700 text-2xl font-semibold">
-          {{ patient.masked_name|default:"护" | first }}
-        </div> -->
-        <div class="flex-1 space-y-4">
-          <div class="flex flex-wrap items-center gap-4">
-            <h1 class="text-3xl md:text-4xl font-semibold">{{ patient.name|default:"患者" }}</h1>
-            <div class="flex flex-wrap items-center gap-2 ml-auto text-right">
-              {% if patient.age %}
-              <span class="inline-flex items-center px-4 py-1.5 rounded-full bg-white/80 text-slate-800 text-base font-semibold tracking-wide">{{ patient.age }}岁</span>
-              {% endif %}
-              {% if is_family %}
-              <span class="inline-flex items-center px-4 py-1.5 rounded-full bg-rose-100 text-rose-600 text-base font-semibold">家属视角</span>
-              {% endif %}
-              <a href="{% url 'web_patient:profile_page' %}" class="inline-flex items-center px-5 py-2.5 rounded-2xl bg-white text-base font-semibold text-slate-900 shadow-md hover:shadow-lg transition">
-                个人资料
-              </a>
-            </div>
+
+  <div class="bg-gradient-to-b from-[#E0F2FE] to-[#F5F7FA] pt-8 px-5 pb-6">
+    <div class="max-w-4xl mx-auto">
+      <div class="flex items-start justify-between mb-6">
+        <div>
+           <div class="flex items-center gap-3">
+             <h1 class="text-3xl font-extrabold text-slate-900 tracking-tight">
+               {{ patient.name|default:"患者" }}
+             </h1>
+             {% if patient.age %}
+             <span class="px-2.5 py-1 rounded-lg bg-white/70 border border-slate-200 text-slate-700 text-sm font-semibold shadow-sm">
+               {{ patient.age }}岁
+             </span>
+             {% endif %}
+           </div>
+           <p class="text-base text-slate-600 mt-2 font-medium">
+             {% if is_family %}当前为家属代管模式{% else %}愿温柔与专业守护每一天{% endif %}
+           </p>
+        </div>
+        
+        <a href="{% url 'web_patient:profile_page' %}" class="flex flex-col items-center justify-center w-12 h-12 bg-white rounded-full shadow-sm text-slate-600 active:scale-95 transition border border-slate-100">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </a>
+      </div>
+
+      {% if patient.is_member and patient.membership_expire_date %}
+      <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#FFF7ED] to-[#FFEDD5] border border-orange-100 p-5 shadow-sm">
+        <div class="flex items-center justify-between relative z-10">
+          <div class="flex items-center gap-3">
+             <!-- <div class="w-11 h-11 shrink-0 rounded-full bg-orange-200/50 flex items-center justify-center text-orange-700">
+               <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
+             </div> -->
+             <div>
+               <p class="text-lg font-bold text-orange-900">VIP 会员服务中</p>
+               <p class="text-sm text-orange-800/80 mt-0.5 font-medium">有效期至 {{ patient.membership_expire_date|date:"Y年n月j日" }}</p>
+             </div>
           </div>
-          <p class="text-lg text-slate-700 font-medium leading-relaxed">愿温柔与专业守护您与家人每一天。</p>
+          <a href="{{ buy_url }}" class="shrink-0 px-3 py-2 rounded-xl bg-white text-orange-700 text-sm font-bold shadow-sm border border-orange-100 active:bg-orange-50">
+            续费
+          </a>
+        </div>
+        <div class="absolute -right-4 -bottom-8 text-orange-200/40 transform rotate-12 pointer-events-none">
+           <svg class="w-36 h-36" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
         </div>
       </div>
-      <div class="mt-6 inline-flex flex-wrap gap-2 items-center px-5 py-3 rounded-2xl bg-orange-100 text-orange-800 text-base font-semibold shadow">
-        {% if patient.is_member and patient.membership_expire_date %}
-        <span class="inline-flex items-center gap-2">
-          <span class="inline-flex items-center px-3 py-1 rounded-full bg-white/80 text-orange-700 text-sm font-semibold">
-            VIP
-          </span>
-          <span>有效期至：{{ patient.membership_expire_date|date:"Y年n月j日" }}</span>
-        </span>
-        {% else %}
-        <span>未开通会员，<a href="{{ buy_url }}" class="underline underline-offset-2">点击了解权益</a></span>
-        {% endif %}
-      </div>
+      {% else %}
+      <a href="{{ buy_url }}" class="block relative overflow-hidden rounded-2xl bg-white border border-slate-200 p-5 shadow-sm active:bg-slate-50 transition group">
+         <div class="flex items-center justify-between">
+           <div class="flex items-center gap-4">
+             <div class="w-11 h-11 shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:bg-slate-200 transition">
+               <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7"/></svg>
+             </div>
+             <div>
+               <p class="text-lg font-bold text-slate-900">开通会员权益</p>
+               <p class="text-sm text-slate-500 mt-1">解锁专家随访、用药管理等专属服务</p>
+             </div>
+           </div>
+           <span class="text-sky-600 text-base font-bold flex items-center shrink-0">
+             去开通 
+             <svg class="w-5 h-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+           </span>
+         </div>
+      </a>
+      {% endif %}
     </div>
+  </div>
 
-    <div class="-mt-16 relative z-10 px-4">
-      <div class="bg-white rounded-3xl shadow-2xl p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
+  <div class="max-w-4xl mx-auto px-4 space-y-8 mt-4">
+    
+    <div>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 px-1 flex items-center gap-2">
+        <span class="w-1.5 h-5 rounded-full bg-sky-500"></span>
+        核心管理
+      </h2>
+      <div class="grid grid-cols-2 gap-3">
         {% for entry in main_entries %}
-        <a href="{{ entry.url }}" class="flex flex-col items-center text-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition">
-          <div class="w-20 h-20 rounded-2xl flex items-center justify-center text-white shadow-inner">
-            {% if entry.title == "我的随访" %}
-            <div class="w-full h-full rounded-2xl bg-sky-500 flex items-center justify-center">
-              <svg class="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
-                <path fill-rule="evenodd" d="M7.502 6h7.128A3.375 3.375 0 0 1 18 9.375v9.375a3 3 0 0 0 3-3V6.108c0-1.505-1.125-2.811-2.664-2.94a48.972 48.972 0 0 0-.673-.05A3 3 0 0 0 15 1.5h-1.5a3 3 0 0 0-2.663 1.618c-.225.015-.45.032-.673.05C8.662 3.295 7.554 4.542 7.502 6ZM13.5 3A1.5 1.5 0 0 0 12 4.5h4.5A1.5 1.5 0 0 0 15 3h-1.5Z" clip-rule="evenodd"/>
-                <path fill-rule="evenodd" d="M3 9.375C3 8.339 3.84 7.5 4.875 7.5h9.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-9.75A1.875 1.875 0 0 1 3 20.625V9.375ZM6 12a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H6.75a.75.75 0 0 1-.75-.75V12Zm2.25 0a.75.75 0 0 1 .75-.75h3.75a.75.75 0 0 1 0 1.5H9a.75.75 0 0 1-.75-.75ZM6 15a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H6.75a.75.75 0 0 1-.75-.75V15Zm2.25 0a.75.75 0 0 1 .75-.75h3.75a.75.75 0 0 1 0 1.5H9a.75.75 0 0 1-.75-.75ZM6 18a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75H6.75a.75.75 0 0 1-.75-.75V18Zm2.25 0a.75.75 0 0 1 .75-.75h3.75a.75.75 0 0 1 0 1.5H9a.75.75 0 0 1-.75-.75Z" clip-rule="evenodd"/>
-              </svg>
+        <a href="{{ entry.url }}" class="flex flex-col justify-between p-4 rounded-2xl bg-white shadow-sm border border-slate-100 active:scale-[0.98] transition h-36 relative overflow-hidden group">
+          <div class="flex justify-between items-start z-10">
+            <span class="text-lg font-extrabold text-slate-800 leading-tight tracking-tight">{{ entry.title }}</span>
+            
+            <div class="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center 
+              {% if entry.title == '我的随访' %}bg-sky-50 text-sky-600
+              {% elif entry.title == '我的复查' %}bg-indigo-50 text-indigo-600
+              {% elif entry.title == '我的用药' %}bg-emerald-50 text-emerald-600
+              {% else %}bg-amber-50 text-amber-600{% endif %}">
+              
+              {% if entry.title == "我的随访" %}
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>
+              {% elif entry.title == "我的复查" %}
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              {% elif entry.title == "我的用药" %}
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+              {% else %}
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+              {% endif %}
             </div>
-            {% elif entry.title == "我的复查" %}
-            <div class="w-full h-full rounded-2xl bg-indigo-500 flex items-center justify-center">
-              <svg class="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12.75 12.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM7.5 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM8.25 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM9.75 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM10.5 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM12 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM12.75 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM14.25 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM15 17.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM16.5 15.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5ZM15 12.75a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0ZM16.5 13.5a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z"/>
-                <path fill-rule="evenodd" d="M6.75 2.25A.75.75 0 0 1 7.5 3v1.5h9V3A.75.75 0 0 1 18 3v1.5h.75a3 3 0 0 1 3 3v11.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V7.5a3 3 0 0 1 3-3H6V3a.75.75 0 0 1 .75-.75Zm13.5 9a1.5 1.5 0 0 0-1.5-1.5H5.25a1.5 1.5 0 0 0-1.5 1.5v7.5a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5v-7.5Z" clip-rule="evenodd"/>
-              </svg>
-            </div>
-            {% elif entry.title == "我的用药" %}
-            <div class="w-full h-full rounded-2xl bg-emerald-500 flex items-center justify-center">
-              <svg class="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
-                <path fill-rule="evenodd" d="M10.5 3.798v5.02a3 3 0 0 1-.879 2.121l-2.377 2.377a9.845 9.845 0 0 1 5.091 1.013 8.315 8.315 0 0 0 5.713.636l.285-.071-3.954-3.955a3 3 0 0 1-.879-2.121v-5.02a23.614 23.614 0 0 0-3 0Zm4.5.138a.75.75 0 0 0 .093-1.495A24.837 24.837 0 0 0 12 2.25a25.048 25.048 0 0 0-3.093.191A.75.75 0 0 0 9 3.936v4.882a1.5 1.5 0 0 1-.44 1.06l-6.293 6.294c-1.62 1.621-.903 4.475 1.471 4.88 2.686.46 5.447.698 8.262.698 2.816 0 5.576-.239 8.262-.697 2.373-.406 3.092-3.26 1.47-4.881L15.44 9.879A1.5 1.5 0 0 1 15 8.818V3.936Z" clip-rule="evenodd"/>
-              </svg>
-            </div>
-            {% else %}
-            <div class="w-full h-full rounded-2xl bg-amber-500 flex items-center justify-center">
-              <svg class="w-10 h-10" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19.5 21a3 3 0 0 0 3-3v-4.5a3 3 0 0 0-3-3h-15a3 3 0 0 0-3 3V18a3 3 0 0 0 3 3h15ZM1.5 10.146V6a3 3 0 0 1 3-3h5.379a2.25 2.25 0 0 1 1.59.659l2.122 2.121c.14.141.331.22.53.22H19.5a3 3 0 0 1 3 3v1.146A4.483 4.483 0 0 0 19.5 9h-15a4.483 4.483 0 0 0-3 1.146Z"/>
-              </svg>
-            </div>
-            {% endif %}
           </div>
-          <span class="text-base font-semibold text-slate-800 mt-1">{{ entry.title }}</span>
+          
+          <div class="text-sm text-slate-500 font-medium z-10 flex items-center">
+            {% if entry.title == "我的随访" %}今日无待办
+            {% elif entry.title == "我的复查" %}查看计划
+            {% elif entry.title == "我的用药" %}按时服药
+            {% else %}查看详情{% endif %}
+            <svg class="w-4 h-4 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+          
+          <div class="absolute -right-6 -bottom-6 w-32 h-32 rounded-full opacity-[0.08] 
+            {% if entry.title == '我的随访' %}bg-sky-600
+            {% elif entry.title == '我的复查' %}bg-indigo-600
+            {% elif entry.title == '我的用药' %}bg-emerald-600
+            {% else %}bg-amber-600{% endif %}"></div>
         </a>
         {% endfor %}
       </div>
     </div>
 
-    <div class="bg-white rounded-3xl shadow-lg p-8 space-y-8">
-      <h2 class="text-2xl font-semibold text-slate-900">关怀服务</h2>
-      <div class="grid grid-cols-2 md:grid-cols-3 gap-6 text-base text-slate-700">
-        {% for entry in service_entries %}
-          <a href="{{ entry.url }}" class="flex flex-col items-center gap-3 p-4 rounded-2xl hover:bg-slate-50 transition text-center">
-            <div class="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
-              {% if entry.title == "我的订单" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/>
-              </svg>
-              {% elif entry.title == "智能设备" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 0 0 6 3.75v16.5a2.25 2.25 0 0 0 2.25 2.25h7.5A2.25 2.25 0 0 0 18 20.25V3.75a2.25 2.25 0 0 0-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3"/>
-              </svg>
-              {% elif entry.title == "工作室" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z"/>
-              </svg>
-              {% elif entry.title == "检查报告" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/>
-              </svg>
-              {% elif entry.title == "提醒设置" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0"/>
-              </svg>
-              {% elif entry.title == "亲情账号" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"/>
-              </svg>
-              {% elif entry.title == "健康日历" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/>
-              </svg>
-              {% elif entry.title == "设置" %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z"/>
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
-              </svg>
-              {% else %}
-              <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 0 1-.825-.242m9.345-8.334a2.126 2.126 0 0 0-.476-.095 48.64 48.64 0 0 0-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0 0 11.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155"/>
-              </svg>
-              {% endif %}
-            </div>
-            <span class="mt-1 font-semibold text-slate-800">{{ entry.title }}</span>
+    <div>
+      <h2 class="text-xl font-bold text-slate-900 mb-4 px-1 flex items-center gap-2">
+        <span class="w-1.5 h-5 rounded-full bg-emerald-400"></span>
+        关怀服务
+      </h2>
+      <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-6">
+        <div class="grid grid-cols-4 gap-y-8">
+          {% for entry in service_entries %}
+          <a href="{{ entry.url }}" class="flex flex-col items-center gap-3 active:opacity-60 transition group">
+             <div class="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-slate-100 group-hover:text-sky-600 transition">
+                {% if entry.title == "我的订单" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                {% elif entry.title == "智能设备" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                {% elif entry.title == "工作室" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                {% elif entry.title == "检查报告" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                {% elif entry.title == "提醒设置" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                {% elif entry.title == "亲情账号" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                {% elif entry.title == "健康日历" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                {% elif entry.title == "设置" %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                {% else %}
+                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                {% endif %}
+             </div>
+             <span class="text-sm font-semibold text-slate-700 whitespace-nowrap">{{ entry.title }}</span>
           </a>
-        {% endfor %}
+          {% endfor %}
+        </div>
       </div>
     </div>
-
-    <div class="text-center text-base text-slate-600 py-6">
-      关于我们 · 用科技与关怀守护呼吸健康
+    
+    <div class="text-center pb-6">
+       <p class="text-xs text-slate-400">岱劲健康 · 专为肺癌康复设计</p>
     </div>
+
   </div>
 </div>
 
@@ -145,19 +173,21 @@
     (function () {
       var div = document.createElement('div');
       var type = '{{ message.tags|default:"info" }}';
-      var base = 'pointer-events-auto rounded-2xl px-4 py-3 mb-2 text-base font-medium shadow-lg transition transform';
+      var base = 'pointer-events-auto rounded-2xl px-5 py-4 mb-3 text-base font-semibold shadow-xl transition transform border-l-4';
       if (type.indexOf('success') !== -1) {
-        div.className = base + ' bg-emerald-600 text-white';
+        div.className = base + ' bg-white border-emerald-500 text-slate-800';
+        div.innerHTML = `<div class="flex items-center gap-3"><svg class="w-6 h-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg><span>{{ message|escapejs }}</span></div>`;
       } else if (type.indexOf('error') !== -1) {
-        div.className = base + ' bg-rose-600 text-white';
+        div.className = base + ' bg-white border-rose-500 text-slate-800';
+        div.innerHTML = `<div class="flex items-center gap-3"><svg class="w-6 h-6 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg><span>{{ message|escapejs }}</span></div>`;
       } else {
-        div.className = base + ' bg-slate-800 text-white';
+        div.className = base + ' bg-slate-800 text-white border-slate-600';
+        div.textContent = '{{ message|escapejs }}';
       }
-      div.textContent = '{{ message|escapejs }}';
       container.appendChild(div);
       setTimeout(function () {
         div.style.opacity = '0';
-        div.style.transform = 'translateY(-4px)';
+        div.style.transform = 'translateY(-8px)';
       }, 2500);
       setTimeout(function () {
         if (div.parentNode) div.parentNode.removeChild(div);
