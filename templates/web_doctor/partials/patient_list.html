@@ -1,0 +1,21 @@
+{% if patients %}
+    {% for patient in patients %}
+        <li>
+            <button
+                type="button"
+                class="w-full text-left px-4 py-3 hover:bg-indigo-50 focus:bg-indigo-100 focus:outline-none transition"
+                hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+            >
+                <p class="text-sm font-medium text-gray-900">{{ patient.name }}</p>
+                <p class="text-xs text-gray-500">
+                    性别：{{ patient.get_gender_display }} · 年龄：{{ patient.age|default:"-" }}
+                </p>
+                <p class="text-xs text-gray-400 mt-0.5">{{ patient.phone }}</p>
+            </button>
+        </li>
+    {% endfor %}
+{% else %}
+    <li class="px-4 py-3 text-sm text-gray-400">暂无患者</li>
+{% endif %}

@@ -1,45 +1,41 @@
-{% extends "layouts/base_portal.html" %}
-{% block body %}
-<div x-data="{ open: false }" class="min-h-screen flex">
-  <aside class="hidden lg:flex w-60 bg-indigo-900 text-white flex-col">
-    <div class="p-6 text-xl font-semibold border-b border-indigo-700">销售工作台</div>
-    <nav class="flex-1 p-4 space-y-3 text-sm">
-      <a class="block px-3 py-2 rounded bg-indigo-800" href="#">概览</a>
-      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">医生拓展</a>
-      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">业绩中心</a>
-    </nav>
-  </aside>
-  <div class="flex-1 flex flex-col">
-    <header class="bg-white shadow px-4 lg:px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <button class="lg:hidden" @click="open = !open">
-          <span class="sr-only">打开菜单</span>
-          <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <span class="text-lg font-semibold">{% block page_title %}销售工作台{% endblock %}</span>
-      </div>
-      <div class="flex items-center space-x-4">
-        {% if request.user.is_authenticated %}
-        <span>您好，{{ request.user.wx_nickname|default:request.user.username }}</span>
-        <a class="text-blue-600" href="#">修改密码</a>
-        <a class="text-red-500" href="{% url 'web_doctor:logout' %}">退出登录</a>
-        {% endif %}
-      </div>
-    </header>
-    <main class="flex-1 p-4 lg:p-6">
-      {% block content %}{% endblock %}
-    </main>
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-Hans">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}肺部康复管理系统{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/app.css' %}?v={% now 'U' %}" />
+    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+  </head>
+  <body class="min-h-screen bg-gray-100 text-gray-800">
+    <style>
+  [x-cloak] { display: none !important; }
+</style>
+<div x-data="{ sidebarOpen: false }" class="min-h-screen flex flex-col bg-gray-50 text-slate-900">
+  <header class="h-16 bg-white border-b border-slate-200 shadow-sm px-4 md:px-8 flex items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <button class="md:hidden text-slate-600 focus:outline-none" @click="sidebarOpen = true" aria-label="打开导航">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <a href="{% url 'web_sales:sales_dashboard' %}" class="flex items-center space-x-3 hover:opacity-90 transition">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center text-sky-700 font-semibold">
+          LCC
+        </div>
+        <div class="text-lg font-semibold tracking-wide text-slate-800">肺部康复管理系统-销售端</div>
+      </a>
+    </div>
+    <div class="flex items-center space-x-4 text-sm">
+      <a href="{% url 'web_sales:sales_change_password' %}" class="text-slate-500 hover:text-slate-700">修改密码</a>
+      <span class="hidden sm:block text-slate-600">你好，{{ sales.name }}</span>
+      <a href="{% url 'web_doctor:logout' %}" class="text-rose-500 hover:text-rose-400 font-medium">退出</a>
+    </div>
+  </header>
+    {% block body %}{% endblock %}
+
+  </body>
   </div>
-  <div class="lg:hidden fixed inset-0 bg-black bg-opacity-50" x-show="open" @click="open=false"></div>
-  <aside class="lg:hidden fixed inset-y-0 left-0 w-64 bg-indigo-900 text-white p-6" x-show="open" @click.away="open=false">
-    <div class="text-xl font-semibold mb-4">销售工作台</div>
-    <nav class="space-y-3 text-sm">
-      <a class="block px-3 py-2 rounded bg-indigo-800" href="#">概览</a>
-      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">医生拓展</a>
-      <a class="block px-3 py-2 hover:bg-indigo-800 rounded" href="#">业绩中心</a>
-    </nav>
-  </aside>
-</div>
-{% endblock %}
+<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</html>

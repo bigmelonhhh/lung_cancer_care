@@ -1,28 +1,26 @@
 {% extends "layouts/base_portal.html" %}
 {% block body %}
-<div class="min-h-screen flex">
-  <aside class="w-64 bg-slate-900 text-white flex flex-col">
-    <div class="p-6 text-xl font-semibold border-b border-slate-700">肺部康复管理系统</div>
-    <nav class="flex-1 p-4 space-y-3 text-sm">
-      <a class="block px-3 py-2 rounded bg-slate-800" href="#">工作台</a>
-      <a class="block px-3 py-2 hover:bg-slate-800 rounded" href="#">患者管理</a>
-      <a class="block px-3 py-2 hover:bg-slate-800 rounded" href="#">设置</a>
-    </nav>
-  </aside>
-  <div class="flex-1 flex flex-col">
-    <header class="bg-white shadow px-6 py-4 flex items-center justify-between">
-      <div class="text-lg font-semibold">{% block page_title %}医生工作台{% endblock %}</div>
-      <div class="flex items-center space-x-4">
-        {% if request.user.is_authenticated %}
-        <span>您好，{{ request.user.wx_nickname|default:request.user.username }}</span>
-        <a class="text-blue-600" href="#">修改密码</a>
-        <a class="text-red-500" href="{% url 'web_doctor:logout' %}">退出登录</a>
-        {% endif %}
-      </div>
-    </header>
-    <main class="flex-1 p-6">
-      {% block content %}{% endblock %}
-    </main>
-  </div>
+<div class="min-h-screen flex flex-col bg-gray-50 text-slate-900">
+  <header class="h-16 bg-white border-b border-slate-200 shadow-sm px-4 md:px-8 flex items-center justify-between">
+    <div class="flex items-center space-x-4">
+      <a href="{% url 'web_doctor:doctor_workspace' %}" class="flex items-center space-x-3 hover:opacity-90 transition">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center text-sky-700 font-semibold">
+          LCC
+        </div>
+        <div class="text-lg font-semibold tracking-wide text-slate-800">
+          肺部康复管理系统-医生端
+        </div>
+      </a>
+    </div>
+    <div class="flex items-center space-x-4 text-sm">
+      <a href="{% url 'web_doctor:doctor_change_password' %}" class="text-slate-500 hover:text-slate-700">修改密码</a>
+      <span class="hidden sm:block text-slate-600">你好，{{ workspace_display_name }}</span>
+      <a href="{% url 'web_doctor:logout' %}" class="text-rose-500 hover:text-rose-400 font-medium">退出</a>
+    </div>
+  </header>
+
+  <main class="flex-1">
+    {% block content %}{% endblock %}
+  </main>
 </div>
 {% endblock %}

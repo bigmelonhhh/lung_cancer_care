@@ -1,0 +1,159 @@
+<div class="space-y-6 max-w-5xl mx-auto pb-10">
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                <svg class="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                一般监测
+            </h3>
+            <div class="text-sm text-slate-500 flex items-center gap-2">
+                <span>监测频率：</span>
+                <select class="bg-slate-50 border-none text-sm font-medium text-slate-700 py-1 pl-2 pr-8 rounded-md focus:ring-1 focus:ring-indigo-500">
+                    <option value="1">每天</option>
+                    <option value="2">每2天</option>
+                    <option value="7">每周</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="flex flex-wrap gap-6">
+            {% for item in monitoring_items %}
+            <label class="flex items-center gap-3 cursor-pointer group">
+                <span class="text-sm font-medium text-slate-700">{{ item.label }}</span>
+                <div class="relative inline-flex items-center h-6 rounded-full w-11 transition-colors duration-200 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:ring-offset-2
+                    {% if item.is_checked %}bg-emerald-500{% else %}bg-slate-200{% endif %}">
+                    <input 
+                        type="checkbox" 
+                        class="sr-only peer" 
+                        {% if item.is_checked %}checked{% endif %}
+                        hx-post="#" 
+                        hx-vals='{"field": "{{ item.field_name }}"}'
+                    >
+                    <span class="inline-block w-4 h-4 transform bg-white rounded-full transition-transform duration-200 translate-x-1 peer-checked:translate-x-6"></span>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <div class="flex items-center gap-4">
+                <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">医院计划设置</h3>
+                {% if active_cycle %}
+                <span class="text-sm text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-md shadow-sm">
+                    当前疗程：<span class="font-bold text-slate-900">{{ active_cycle.name }}</span>
+                </span>
+                <span class="text-xs text-slate-400">
+                    {{ active_cycle.start_date }} 开始
+                </span>
+                {% else %}
+                <span class="text-sm text-slate-400 italic">当前无进行中疗程</span>
+                {% endif %}
+            </div>
+            <button class="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
+                <span>+ 新增/调整疗程</span>
+            </button>
+        </div>
+
+        {% if not active_cycle %}
+        <div class="p-10 text-center">
+            <p class="text-slate-500 mb-4">请先创建一个治疗疗程，才能配置详细的用药与检查计划。</p>
+            <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">创建新疗程</button>
+        </div>
+        {% else %}
+        
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+                        <th class="px-4 py-3 font-semibold w-48">项目名称</th>
+                        <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
+                        <th class="px-2 py-3 font-semibold w-24">频次</th>
+                        {% for i in "x"|rjust:"21" %}
+                        <th class="px-1 py-3 font-medium text-center text-[10px] text-slate-400 w-8">D{{ forloop.counter }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                
+                <tbody class="divide-y divide-slate-100 group-section">
+                    <tr class="bg-slate-50/30">
+                        <td colspan="24" class="px-4 py-2 text-xs font-bold text-indigo-600 bg-indigo-50/30">
+                            💊 用药计划
+                        </td>
+                    </tr>
+                    
+                    {% for med in plan_view.medications %}
+                    <tr class="hover:bg-slate-50 transition-colors {% if not med.is_active %}opacity-60 grayscale{% endif %}">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="sr-only peer" {% if med.is_active %}checked{% endif %}>
+                                    <div class="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600"></div>
+                                </label>
+                                <div>
+                                    <div class="text-sm font-medium text-slate-900">{{ med.name }}</div>
+                                    <div class="text-[10px] text-slate-400">{{ med.type|default:"化疗" }}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-2 py-3">
+                            <input 
+                                type="text" 
+                                value="{{ med.dosage }}" 
+                                class="w-full text-xs border-b border-dashed border-slate-300 bg-transparent focus:border-indigo-500 focus:outline-none py-1 text-slate-700"
+                                {% if not med.is_active %}disabled{% endif %}
+                            >
+                        </td>
+                        <td class="px-2 py-3 text-xs text-slate-500">
+                            自定义
+                        </td>
+                        {% for i in "x"|rjust:"21" %}
+                        <td class="px-0.5 py-3 text-center">
+                            <input 
+                                type="checkbox" 
+                                class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                                {% if forloop.counter in med.schedule %}checked{% endif %}
+                                {% if not med.is_active %}disabled{% endif %}
+                            >
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+                <tbody class="divide-y divide-slate-100 border-t border-slate-200">
+                    <tr class="bg-slate-50/30">
+                        <td colspan="24" class="px-4 py-2 text-xs font-bold text-sky-600 bg-sky-50/30">
+                            📄 复查计划
+                        </td>
+                    </tr>
+                    {% for check in plan_view.checkups %}
+                    <tr class="hover:bg-slate-50 transition-colors {% if not check.is_active %}opacity-60{% endif %}">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="sr-only peer" {% if check.is_active %}checked{% endif %}>
+                                    <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+                                </label>
+                                <span class="text-sm font-medium text-slate-900">{{ check.name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-2 py-3 text-xs text-slate-400">-</td>
+                        <td class="px-2 py-3 text-xs text-slate-500">自定义</td>
+                        {% for i in "x"|rjust:"21" %}
+                        <td class="px-0.5 py-3 text-center">
+                            <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" 
+                                {% if forloop.counter in check.schedule %}checked{% endif %}
+                                {% if not check.is_active %}disabled{% endif %}
+                            >
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>

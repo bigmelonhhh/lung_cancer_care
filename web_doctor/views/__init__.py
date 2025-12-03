@@ -1,0 +1,25 @@
+"""
+web_doctor 视图模块聚合。
+
+按功能拆分为多个子模块（如 auth、workspace），
+对外仍通过 `web_doctor.views` 暴露统一接口，方便 urls 使用。
+"""
+
+from .auth import login_view, logout_view, doctor_change_password
+from .workspace import (
+    doctor_workspace,
+    doctor_workspace_patient_list,
+    patient_workspace,
+    patient_workspace_section,
+)
+
+__all__ = [
+    "login_view",
+    "logout_view",
+    "doctor_change_password",
+    "doctor_workspace",
+    "doctor_workspace_patient_list",
+    "patient_workspace",
+    "patient_workspace_section",
+]
+
