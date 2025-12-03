@@ -69,28 +69,142 @@
             <div class="flex items-center gap-4">
                 <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">医院计划设置</h3>
                 {% if active_cycle %}
-                <span class="text-sm text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-md shadow-sm">
-                    当前疗程：<span class="font-bold text-slate-900">{{ active_cycle.name }}</span>
-                </span>
-                <span class="text-xs text-slate-400">
-                    {{ active_cycle.start_date }} 开始
-                </span>
+                    <span class="text-sm text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-md shadow-sm">
+                        当前疗程：<span class="font-bold text-slate-900">{{ active_cycle.name }}</span>
+                    </span>
+                    <span class="text-xs text-slate-400">
+                        {{ active_cycle.start_date }} 开始
+                    </span>
                 {% else %}
-                <span class="text-sm text-slate-400 italic">当前无进行中疗程</span>
+                    <span class="text-sm text-slate-400 italic">当前无进行中疗程</span>
                 {% endif %}
             </div>
-            <button class="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                <span>+ 新增/调整疗程</span>
-            </button>
+            <div class="text-sm text-indigo-600 flex items-center gap-3">
+                {% if cycle_form_errors %}
+                    <span class="text-xs text-rose-500">
+                        {{ cycle_form_errors.0 }}
+                    </span>
+                {% endif %}
+                <span class="text-xs text-slate-400">疗程按结束时间倒序展示，最多 10 条</span>
+            </div>
         </div>
 
-        {% if not active_cycle %}
-        <div class="p-10 text-center">
-            <p class="text-slate-500 mb-4">请先创建一个治疗疗程，才能配置详细的用药与检查计划。</p>
-            <button class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">创建新疗程</button>
+        <div class="px-5 py-4 border-b border-slate-100">
+            {% if cycle_page.paginator.count == 0 %}
+                <div class="p-6 text-center text-sm text-slate-500">
+                    <p class="mb-4">当前患者尚未创建任何治疗疗程，请先创建首个疗程。</p>
+                </div>
+            {% else %}
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="text-sm font-semibold text-slate-700">历史疗程</h4>
+                        <span class="text-xs text-slate-400">
+                            共 {{ cycle_page.paginator.count }} 个疗程，当前第 {{ cycle_page.number }}/{{ cycle_page.paginator.num_pages }} 页
+                        </span>
+                    </div>
+                    <ul class="divide-y divide-slate-100 text-sm">
+                        {% for cycle in cycle_page %}
+                            <li class="py-2 flex items-center justify-between">
+                                <div>
+                                    <div class="font-medium text-slate-800">{{ cycle.name }}</div>
+                                    <div class="text-xs text-slate-500">
+                                        {{ cycle.start_date }} ~ {{ cycle.end_date }} · 状态：{{ cycle.get_status_display }}
+                                    </div>
+                                </div>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                    {% if cycle_page.has_previous or cycle_page.has_next %}
+                    <div class="flex justify-end gap-2 text-xs text-slate-500 pt-1">
+                        {% if cycle_page.has_previous %}
+                            <button
+                                type="button"
+                                class="px-2 py-1 border border-slate-200 rounded hover:bg-slate-50"
+                                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'settings' %}?tc_page={{ cycle_page.previous_page_number }}"
+                                hx-target="#patient-content"
+                                hx-swap="innerHTML"
+                            >
+                                上一页
+                            </button>
+                        {% endif %}
+                        {% if cycle_page.has_next %}
+                            <button
+                                type="button"
+                                class="px-2 py-1 border border-slate-200 rounded hover:bg-slate-50"
+                                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'settings' %}?tc_page={{ cycle_page.next_page_number }}"
+                                hx-target="#patient-content"
+                                hx-swap="innerHTML"
+                            >
+                                下一页
+                            </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <div class="mt-6 border-t border-dashed border-slate-200 pt-4">
+                <h4 class="text-sm font-semibold text-slate-700 mb-3">创建新疗程</h4>
+                <form
+                    id="treatment-cycle-form"
+                    method="post"
+                    hx-post="{% url 'web_doctor:patient_treatment_cycle_create' patient.id %}"
+                    hx-target="#patient-content"
+                    hx-swap="innerHTML"
+                    class="flex flex-wrap items-end gap-4 text-sm"
+                >
+                    {% csrf_token %}
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs text-slate-500">疗程名称</label>
+                        <input
+                            type="text"
+                            name="name"
+                            value="{{ cycle_form_initial.name|default:'' }}"
+                            placeholder="例如：术后辅助治疗第1阶段"
+                            class="border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 min-w-[220px]"
+                            required
+                        >
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs text-slate-500">开始日期</label>
+                        <input
+                            type="date"
+                            name="start_date"
+                            value="{{ cycle_form_initial.start_date|default:'' }}"
+                            data-cycle-start
+                            class="border border-slate-200 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs text-slate-500">周期天数</label>
+                        <select
+                            name="cycle_days"
+                            data-cycle-days
+                            class="w-28 border border-slate-200 rounded px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                            {% with selected_days=cycle_form_initial.cycle_days|default:'21' %}
+                            <option value="21" {% if selected_days != '28' %}selected{% endif %}>21 天</option>
+                            <option value="28" {% if selected_days == '28' %}selected{% endif %}>28 天</option>
+                            {% endwith %}
+                        </select>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <label class="text-xs text-slate-500">预计结束日期（自动计算）</label>
+                        <div class="h-9 flex items-center px-2 rounded border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+                            <span data-cycle-end-display class="tabular-nums"></span>
+                        </div>
+                    </div>
+                    <button
+                        type="submit"
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm"
+                    >
+                        创建疗程
+                    </button>
+                </form>
+            </div>
         </div>
-        {% else %}
-        
+
+        {% if active_cycle %}
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse">
                 <thead>
@@ -157,11 +271,16 @@
                         </td>
                     </tr>
                     {% for check in plan_view.checkups %}
-                    <tr class="hover:bg-slate-50 transition-colors {% if not check.is_active %}opacity-60{% endif %}">
+                    <tr class="hover:bg-slate-50 transition-colors" data-checkup-row>
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
                                 <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" class="sr-only peer" {% if check.is_active %}checked{% endif %}>
+                                    <input
+                                        type="checkbox"
+                                        class="sr-only peer"
+                                        data-checkup-toggle
+                                        {% if check.is_active %}checked{% endif %}
+                                    >
                                     <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
                                 </label>
                                 <span class="text-sm font-medium text-slate-900">{{ check.name }}</span>
@@ -171,9 +290,43 @@
                         <td class="px-2 py-3 text-xs text-slate-500">自定义</td>
                         {% for i in "x"|rjust:"21" %}
                         <td class="px-0.5 py-3 text-center">
-                            <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500" 
+                            <input
+                                type="checkbox"
+                                class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                data-checkup-slot
                                 {% if forloop.counter in check.schedule %}checked{% endif %}
-                                {% if not check.is_active %}disabled{% endif %}
+                            >
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+                <tbody class="divide-y divide-slate-100 border-t border-slate-200">
+                    <tr class="bg-slate-50/30">
+                        <td colspan="24" class="px-4 py-2 text-xs font-bold text-emerald-600 bg-emerald-50/30">
+                            🧾 随访计划
+                        </td>
+                    </tr>
+                    {% for follow in plan_view.followups %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-4 py-3">
+                            <div class="flex items-center gap-3">
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="sr-only peer" checked>
+                                    <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
+                                </label>
+                                <span class="text-sm font-medium text-slate-900">{{ follow.name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-2 py-3 text-xs text-slate-400">-</td>
+                        <td class="px-2 py-3 text-xs text-slate-500">自定义</td>
+                        {% for i in "x"|rjust:"21" %}
+                        <td class="px-0.5 py-3 text-center">
+                            <input
+                                type="checkbox"
+                                class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                                {% if forloop.counter in follow.schedule %}checked{% endif %}
                             >
                         </td>
                         {% endfor %}
@@ -185,3 +338,69 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+// 在创建疗程表单中，根据开始日期与周期天数自动计算结束日期，仅展示不可编辑
+(function () {
+  const form = document.getElementById("treatment-cycle-form");
+  if (!form) return;
+
+  const startInput = form.querySelector("[data-cycle-start]");
+  const daysSelect = form.querySelector("[data-cycle-days]");
+  const endDisplay = form.querySelector("[data-cycle-end-display]");
+
+  if (!startInput || !daysSelect || !endDisplay) return;
+
+  function formatDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
+
+  function updateEndDate() {
+    const startValue = startInput.value;
+    const days = parseInt(daysSelect.value || "21", 10);
+    if (!startValue || Number.isNaN(days) || days <= 0) {
+      endDisplay.textContent = "";
+      return;
+    }
+    const start = new Date(startValue + "T00:00:00");
+    if (Number.isNaN(start.getTime())) {
+      endDisplay.textContent = "";
+      return;
+    }
+    const end = new Date(start);
+    end.setDate(end.getDate() + days - 1);
+    endDisplay.textContent = formatDate(end);
+  }
+
+  startInput.addEventListener("change", updateEndDate);
+  daysSelect.addEventListener("change", updateEndDate);
+  // 初次渲染时计算一次
+  updateEndDate();
+})();
+
+// 复查计划：左侧开关控制后续日期选择是否可编辑（仅前端视觉与交互）
+(function () {
+  const rows = document.querySelectorAll("[data-checkup-row]");
+  rows.forEach((row) => {
+    const toggle = row.querySelector("[data-checkup-toggle]");
+    const slots = row.querySelectorAll("[data-checkup-slot]");
+    if (!toggle || !slots.length) return;
+
+    function sync() {
+      const enabled = toggle.checked;
+      slots.forEach((input) => {
+        input.disabled = !enabled;
+        input.classList.toggle("opacity-50", !enabled);
+        input.classList.toggle("cursor-not-allowed", !enabled);
+      });
+      row.classList.toggle("opacity-60", !enabled);
+    }
+
+    toggle.addEventListener("change", sync);
+    sync();
+  });
+})();
+</script>

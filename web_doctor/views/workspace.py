@@ -11,13 +11,18 @@ from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
+from django.core.paginator import Paginator
+from django.core.exceptions import ValidationError
 
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
-from core.service.treatment_cycle import get_active_treatment_cycle
+from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle
 from core.models import MonitoringConfig
 from core.service.monitoring import MonitoringService
+from core.service.medication import get_active_medication_library
+from core.service.followup import get_active_followup_library
+from core.service.checkup import get_active_checkup_library
 from web_doctor.services.current_user import get_user_display_name
 
 
@@ -116,7 +121,7 @@ def patient_workspace(request: HttpRequest, patient_id: int) -> HttpResponse:
     context = {"patient": patient, "active_tab": "settings"}
 
     # 默认加载“管理设置”内容，保证初次点击患者时中间区域完整
-    context.update(_build_settings_context(patient))
+    context.update(_build_settings_context(patient, tc_page=None))
 
     return render(
         request,
@@ -145,12 +150,12 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
 
     if section == "settings":
         template_name = "web_doctor/partials/settings/main.html"
-        context.update(_build_settings_context(patient))
+        context.update(_build_settings_context(patient, tc_page=request.GET.get("tc_page")))
 
     return render(request, template_name, context)
 
 
-def _build_settings_context(patient: PatientProfile) -> dict:
+def _build_settings_context(patient: PatientProfile, tc_page: str | None = None) -> dict:
     """
     构建“管理设置（settings）”Tab 所需的上下文数据：
     - 当前进行中的疗程（active_cycle）
@@ -161,6 +166,15 @@ def _build_settings_context(patient: PatientProfile) -> dict:
     active_cycle = get_active_treatment_cycle(patient)
     monitoring_config, _ = MonitoringConfig.objects.get_or_create(patient=patient)
 
+    # 患者全部疗程列表，按结束日期倒序排列（结束时间最新的在前）
+    cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
+    paginator = Paginator(cycles_qs, 10)
+    try:
+        page_number = int(tc_page) if tc_page else 1
+    except (TypeError, ValueError):
+        page_number = 1
+    cycle_page = paginator.get_page(page_number)
+
     monitoring_items = [
         {"label": "体温", "field_name": "enable_temp", "is_checked": monitoring_config.enable_temp},
         {"label": "血氧", "field_name": "enable_spo2", "is_checked": monitoring_config.enable_spo2},
@@ -169,40 +183,23 @@ def _build_settings_context(patient: PatientProfile) -> dict:
         {"label": "步数", "field_name": "enable_step", "is_checked": monitoring_config.enable_step},
     ]
 
-    # TODO: 后续替换为 PlanItemService.get_cycle_plan_view(active_cycle.id)
-    plan_view = {"medications": [], "checkups": []}
-    if active_cycle:
-        plan_view = {
-            "medications": [
-                {
-                    "lib_id": 1,
-                    "name": "卡铂",
-                    "type": "化疗",
-                    "item_id": 101,
-                    "is_active": True,
-                    "dosage": "300ml",
-                    "schedule": [1, 8, 15],
-                },
-                {
-                    "lib_id": 2,
-                    "name": "培美曲塞",
-                    "type": "化疗",
-                    "item_id": None,
-                    "is_active": False,
-                    "dosage": "1000ml",
-                    "schedule": [],
-                },
-            ],
-            "checkups": [
-                {"lib_id": 1, "name": "血常规", "is_active": True, "schedule": [1, 8, 15]},
-                {"lib_id": 2, "name": "胸部CT", "is_active": False, "schedule": []},
-            ],
-        }
+    # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
+    # 当前阶段仅用于前端展示计划模板，后续可与具体疗程计划绑定
+    medications = get_active_medication_library()
+    checkups = get_active_checkup_library()
+    followups = get_active_followup_library()
+
+    plan_view = {
+        "medications": medications,
+        "checkups": checkups,
+        "followups": followups,
+    }
 
     return {
         "active_cycle": active_cycle,
         "monitoring_config": monitoring_config,
         "monitoring_items": monitoring_items,
+        "cycle_page": cycle_page,
         "plan_view": plan_view,
     }
 
@@ -248,3 +245,75 @@ def patient_monitoring_update(request: HttpRequest, patient_id: int) -> HttpResp
 
     # 不返回新 HTML，204 即表示“静默成功”，前端只负责视觉切换
     return HttpResponse(status=204)
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    为指定患者创建新的治疗疗程：
+    - 使用 core.service.treatment_cycle.create_treatment_cycle 完成业务校验与创建；
+    - 创建成功或失败后，均重新渲染“管理设置”Tab（包含疗程列表），由前端替换中间区域。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    name = (request.POST.get("name") or "").strip()
+    start_date_raw = request.POST.get("start_date") or ""
+    cycle_days_raw = request.POST.get("cycle_days") or ""
+
+    errors: list[str] = []
+
+    # 简单字段校验与解析
+    if not name:
+        errors.append("请填写疗程名称。")
+
+    from datetime import date
+
+    try:
+        start_date = date.fromisoformat(start_date_raw) if start_date_raw else date.today()
+    except ValueError:
+        errors.append("开始日期格式不正确，应为 YYYY-MM-DD。")
+        start_date = None  # type: ignore[assignment]
+
+    try:
+        cycle_days = int(cycle_days_raw) if cycle_days_raw else 21
+    except ValueError:
+        errors.append("周期天数必须为整数。")
+        cycle_days = 21
+
+    if cycle_days <= 0:
+        errors.append("周期天数必须大于 0。")
+
+    if not errors and start_date:
+        try:
+            create_treatment_cycle(
+                patient=patient,
+                name=name,
+                start_date=start_date,
+                cycle_days=cycle_days,
+            )
+        except ValidationError as exc:
+            errors.append(str(exc))
+
+    # 重新构建设置页面上下文，包含疗程列表与可能的错误提示
+    context: dict = {
+        "patient": patient,
+        "active_tab": "settings",
+        "cycle_form_errors": errors,
+        "cycle_form_initial": {
+            "name": name or "",
+            "start_date": start_date_raw or "",
+            "cycle_days": cycle_days_raw or "",
+        },
+    }
+    context.update(_build_settings_context(patient, tc_page=request.GET.get("tc_page")))
+
+    return render(
+        request,
+        "web_doctor/partials/settings/main.html",
+        context,
+    )

@@ -12,6 +12,7 @@ from .workspace import (
     patient_workspace,
     patient_workspace_section,
     patient_monitoring_update,
+    patient_treatment_cycle_create,
 )
 
 __all__ = [
@@ -23,5 +24,5 @@ __all__ = [
     "patient_workspace",
     "patient_workspace_section",
     "patient_monitoring_update",
+    "patient_treatment_cycle_create",
 ]
-
