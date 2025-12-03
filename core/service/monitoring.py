@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Any, Dict
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -20,6 +20,7 @@ class MonitoringService:
         cls,
         patient: PatientProfile,
         *,
+        check_freq_days: int | None = None,
         enable_temp: bool,
         enable_spo2: bool,
         enable_weight: bool,
@@ -28,11 +29,12 @@ class MonitoringService:
     ) -> MonitoringConfig:
         """
         【功能说明】
-        - 更新患者监测配置中的体温/血氧/体重/血压/步数开关，保持“厚 service、薄视图”。
-        - 5个参数一次全量更新
+        - 更新患者监测配置中的体温/血氧/体重/血压/步数开关，以及监测频率，保持“厚 service、薄视图”。
+        - 以“全量更新”的方式写入当前配置（视图层应每次提交完整状态）。
 
         【参数说明】
         - patient: 目标患者档案对象，不能为空。
+        - check_freq_days: 监测频率，单位为“天”，例如 1=每日、2=每2天。
         - enable_temp: 是否启用体温监测。
         - enable_spo2: 是否启用血氧监测。
         - enable_weight: 是否启用体重监测。
@@ -47,13 +49,19 @@ class MonitoringService:
             raise ValidationError("患者不能为空。")
 
         config, _ = MonitoringConfig.objects.get_or_create(patient=patient)
-        update_map: Dict[str, bool] = {
+
+        # 开关字段统一组织在字典中，便于后续扩展
+        update_map: Dict[str, Any] = {
             "enable_temp": enable_temp,
             "enable_spo2": enable_spo2,
             "enable_weight": enable_weight,
             "enable_bp": enable_bp,
             "enable_step": enable_step,
         }
+
+        # 若显式传入监测频率，则一并纳入更新
+        if check_freq_days is not None:
+            update_map["check_freq_days"] = check_freq_days
 
         dirty_fields = [
             field for field, value in update_map.items() if getattr(config, field) != value

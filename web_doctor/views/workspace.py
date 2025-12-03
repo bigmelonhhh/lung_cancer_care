@@ -10,12 +10,14 @@ from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.http import require_POST
 
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
 from core.service.treatment_cycle import get_active_treatment_cycle
 from core.models import MonitoringConfig
+from core.service.monitoring import MonitoringService
 from web_doctor.services.current_user import get_user_display_name
 
 
@@ -203,3 +205,46 @@ def _build_settings_context(patient: PatientProfile) -> dict:
         "monitoring_items": monitoring_items,
         "plan_view": plan_view,
     }
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_monitoring_update(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    更新患者监测配置（频率 + 开关）：
+    - 前端以表单形式一次性提交监测频率 + 5 个开关（体温/血氧/体重/血压/步数）
+    - 每次任意字段变更时，都会提交当前整套状态
+    """
+    # 权限校验：确保当前登录账号可以管理该患者
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    # 当前监测配置，用于在未提交频率或数据异常时兜底
+    monitoring_config, _ = MonitoringConfig.objects.get_or_create(patient=patient)
+
+    # 解析表单中的五个监测开关，未勾选的不会出现在 POST 中
+    field_names = ["enable_temp", "enable_spo2", "enable_weight", "enable_bp", "enable_step"]
+    switches = {field: field in request.POST for field in field_names}
+
+    # 解析监测频率（天），若未提交或非法则回退到当前配置值
+    freq_raw = request.POST.get("check_freq_days")
+    try:
+        check_freq_days = int(freq_raw) if freq_raw is not None else monitoring_config.check_freq_days
+    except (TypeError, ValueError):
+        check_freq_days = monitoring_config.check_freq_days
+
+    MonitoringService.update_switches(
+        patient,
+        check_freq_days=check_freq_days,
+        enable_temp=switches["enable_temp"],
+        enable_spo2=switches["enable_spo2"],
+        enable_weight=switches["enable_weight"],
+        enable_bp=switches["enable_bp"],
+        enable_step=switches["enable_step"],
+    )
+
+    # 不返回新 HTML，204 即表示“静默成功”，前端只负责视觉切换
+    return HttpResponse(status=204)

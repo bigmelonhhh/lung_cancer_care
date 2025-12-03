@@ -20,6 +20,11 @@ urlpatterns = [
         name="patient_workspace",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/monitoring/",
+        views.patient_monitoring_update,
+        name="patient_monitoring_update",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",
         views.patient_workspace_section,
         name="patient_workspace_section",
