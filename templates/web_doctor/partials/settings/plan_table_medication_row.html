@@ -7,11 +7,13 @@
           {% csrf_token %}
           <input type="hidden" name="category" value="medication">
           <input type="hidden" name="library_id" value="{{ med.lib_id }}">
-          <input
-            type="checkbox"
-            class="sr-only peer"
-            name="enable"
-            value="1"
+      <input
+        type="checkbox"
+        class="sr-only peer"
+        name="enable"
+        value="1"
+        data-atomic-checkbox="1"
+        data-atomic-checkbox="1"
             checked
             hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
             hx-target="closest tr"
@@ -76,6 +78,8 @@
       <input
         type="checkbox"
         class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
+        data-atomic-checkbox="1"
+        data-atomic-checkbox="1"
         {% if day in med.schedule %}checked{% endif %}
         {% if not current_day or day >= current_day %}
         hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id med.plan_item_id day %}"

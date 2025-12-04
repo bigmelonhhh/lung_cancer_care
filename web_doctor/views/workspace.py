@@ -555,16 +555,44 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         except ValidationError as exc:
             errors.append(str(exc))
 
-    # 复查计划：只需更新状态，不重绘 DOM，由前端脚本控制视觉效果
+    # 复查计划：开关变化后需重新渲染该行，保证 D 日勾选与数据库状态一致
     if category == core_choices.PlanItemCategory.CHECKUP:
         if errors:
-            # 通过 HX-Trigger 向前端抛出统一的错误事件，便于在界面展示
             response = HttpResponse("\n".join(errors) or "计划开关更新失败。", status=400)
             response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace(
                 '"', '\\"'
             )
             return response
-        return HttpResponse(status=204)
+
+        # 重新构建当前疗程的复查视图，仅返回目标项目的单行 HTML
+        settings_ctx = _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=cycle.id,
+        )
+        plan_view = settings_ctx.get("plan_view") or {}
+        checkups = plan_view.get("checkups") or []
+        target_check: dict | None = None
+        for chk in checkups:
+            if chk.get("lib_id") == library_id:
+                target_check = chk
+                break
+
+        if target_check is None:
+            return HttpResponse("", status=204)
+
+        current_day = settings_ctx.get("current_day_index") or plan_view.get("current_day_index") or 1
+        row_ctx = {
+            "patient": patient,
+            "cycle": cycle,
+            "check": target_check,
+            "current_day": current_day,
+        }
+        return render(
+            request,
+            "web_doctor/partials/settings/plan_table_checkup_row.html",
+            row_ctx,
+        )
 
     # 随访计划：开关变化后需要重新渲染整个计划表，以便携带最新的 plan_item_id 与问卷配置
     if category == core_choices.PlanItemCategory.FOLLOW_UP:
@@ -574,6 +602,24 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
                 '"', '\\"'
             )
             return response
+
+        # 重建当前患者 + 疗程的计划视图，仅返回 plan_table 部分
+        settings_ctx = _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=cycle.id,
+        )
+        selected_cycle = settings_ctx.get("selected_cycle")
+        table_context: dict = {
+            "patient": patient,
+            "cycle": selected_cycle,
+            "plan_view": settings_ctx.get("plan_view"),
+        }
+        return render(
+            request,
+            "web_doctor/partials/settings/plan_table.html",
+            table_context,
+        )
 
         # 重建当前患者 + 疗程的计划视图，仅返回 plan_table 部分
         settings_ctx = _build_settings_context(

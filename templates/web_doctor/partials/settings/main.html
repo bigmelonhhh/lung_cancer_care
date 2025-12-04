@@ -486,6 +486,11 @@
       });
       details.forEach((el) => {
         el.classList.toggle("opacity-60", !enabled);
+        const input = el.querySelector("input[type='checkbox']");
+        if (input) {
+          input.disabled = !enabled;
+          input.classList.toggle("cursor-not-allowed", !enabled);
+        }
       });
       row.classList.toggle("opacity-70", !enabled);
     }
@@ -540,6 +545,62 @@
       input.classList.remove("plan-field-saved");
     }, 600);
   });
+})();
+
+// 计划表：统一处理勾选类控件的“请求中锁定 / 成功高亮 / 失败回滚”
+(function () {
+  if (window.__planAtomicCheckboxHooksInstalled) return;
+  window.__planAtomicCheckboxHooksInstalled = true;
+
+  function getAtomicCheckbox(event) {
+    const detail = event.detail || {};
+    const elt = detail.elt || event.target;
+    if (!elt) return null;
+    if (elt.matches && elt.matches("input[type='checkbox'][data-atomic-checkbox]")) {
+      return elt;
+    }
+    return null;
+  }
+
+  document.body.addEventListener("htmx:beforeRequest", function (event) {
+    const checkbox = getAtomicCheckbox(event);
+    if (!checkbox) return;
+    checkbox.dataset.prevChecked = checkbox.checked ? "1" : "0";
+    checkbox.disabled = true;
+    checkbox.classList.add("opacity-50", "cursor-wait");
+  });
+
+  document.body.addEventListener("htmx:afterRequest", function (event) {
+    const checkbox = getAtomicCheckbox(event);
+    if (!checkbox) return;
+    checkbox.disabled = false;
+    checkbox.classList.remove("cursor-wait");
+    checkbox.classList.remove("opacity-50");
+    checkbox.classList.add("ring-2", "ring-emerald-400");
+    setTimeout(function () {
+      checkbox.classList.remove("ring-2", "ring-emerald-400");
+    }, 500);
+    delete checkbox.dataset.prevChecked;
+  });
+
+  function handleError(event) {
+    const checkbox = getAtomicCheckbox(event);
+    if (!checkbox) return;
+    checkbox.disabled = false;
+    checkbox.classList.remove("cursor-wait");
+    checkbox.classList.remove("opacity-50");
+    const prev = checkbox.dataset.prevChecked;
+    if (prev !== undefined) {
+      checkbox.checked = prev === "1";
+    }
+    checkbox.classList.add("ring-2", "ring-rose-400");
+    setTimeout(function () {
+      checkbox.classList.remove("ring-2", "ring-rose-400");
+    }, 700);
+  }
+
+  document.body.addEventListener("htmx:responseError", handleError);
+  document.body.addEventListener("htmx:sendError", handleError);
 })();
 
 // 计划表通用错误提示：监听 HX-Trigger 触发的 plan-error 事件

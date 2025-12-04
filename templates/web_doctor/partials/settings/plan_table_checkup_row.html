@@ -1,0 +1,61 @@
+{# 单条复查计划行（与当前疗程绑定） #}
+<tr class="hover:bg-slate-50 transition-colors" data-checkup-row>
+  <td class="px-4 py-3">
+    <div class="flex items-center gap-3">
+      <label class="relative inline-flex items-center cursor-pointer">
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="category" value="checkup">
+          <input type="hidden" name="library_id" value="{{ check.lib_id }}">
+          <input
+            type="checkbox"
+            class="sr-only peer"
+            name="enable"
+            value="1"
+            data-checkup-toggle
+            data-atomic-checkbox="1"
+            {% if check.is_active %}checked{% endif %}
+            hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
+            hx-include="closest form"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-trigger="change"
+          >
+          <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+        </form>
+      </label>
+      <span class="text-sm font-medium text-slate-900">{{ check.name }}</span>
+    </div>
+  </td>
+  <td class="px-2 py-3 text-xs text-slate-400">-</td>
+  <td class="px-2 py-3 text-xs text-slate-400">-</td>
+
+  {% for i in "x"|rjust:"21" %}
+  {% with day=forloop.counter %}
+  <td class="px-0.5 py-3 text-center">
+    <form method="post">
+      {% csrf_token %}
+      <input
+        type="checkbox"
+        class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
+        data-checkup-slot
+        data-atomic-checkbox="1"
+        {% if day in check.schedule %}checked{% endif %}
+        {% if current_day and day < current_day %}
+        data-readonly="1"
+        disabled
+        {% elif check.plan_item_id and day >= current_day %}
+        hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id check.plan_item_id day %}"
+        hx-swap="none"
+        hx-include="closest form"
+        hx-trigger="change"
+        {% else %}
+        disabled
+        {% endif %}
+      >
+    </form>
+  </td>
+  {% endwith %}
+  {% endfor %}
+</tr>
+
