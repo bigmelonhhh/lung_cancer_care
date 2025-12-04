@@ -69,19 +69,25 @@
     </form>
   </td>
   {% for i in "x"|rjust:"21" %}
+  {% with day=forloop.counter %}
   <td class="px-0.5 py-3 text-center">
     <form method="post">
       {% csrf_token %}
       <input
         type="checkbox"
-        class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
-        {% if forloop.counter in med.schedule %}checked{% endif %}
-        hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id med.plan_item_id forloop.counter %}"
+        class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
+        {% if day in med.schedule %}checked{% endif %}
+        {% if not current_day or day >= current_day %}
+        hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id med.plan_item_id day %}"
         hx-swap="none"
         hx-include="closest form"
         hx-trigger="change"
+        {% else %}
+        disabled
+        {% endif %}
       >
     </form>
   </td>
+  {% endwith %}
   {% endfor %}
 </tr>

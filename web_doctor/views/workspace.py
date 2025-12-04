@@ -6,6 +6,8 @@
 - 各 Tab（section）局部内容渲染
 """
 
+from datetime import date
+
 from django.contrib.auth.decorators import login_required
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
@@ -22,7 +24,6 @@ from core.models import MonitoringConfig, TreatmentCycle, PlanItem, choices as c
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
 from core.service.followup import get_active_followup_library, get_followup_detail_items
-from core.service.checkup import get_active_checkup_library
 from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
 
@@ -210,10 +211,19 @@ def _build_settings_context(
     ]
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
-    # 用药计划：若存在选中的疗程，则基于 PlanItemService 仅展示该疗程已选中的药品
-    medications = []
+    # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
+    current_day_index: int | None = None
+    medications: list[dict] = []
+    checkups: list[dict] = []
+
     if selected_cycle:
+        # 计算当前日期在疗程中的 DayIndex（最小为 1）
+        delta_days = (date.today() - selected_cycle.start_date).days + 1
+        current_day_index = 1 if delta_days < 1 else delta_days
+
         cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+
+        # 用药计划：仅展示当前疗程已选中的药品
         for med in cycle_plan.get("medications", []):
             if not med.get("is_active"):
                 continue
@@ -228,9 +238,23 @@ def _build_settings_context(
                     "plan_item_id": med.get("plan_item_id"),
                 }
             )
-    # 其它库仍使用简单的“可用列表”
+
+        # 复查计划：展示所有启用中的复查项目，与当前疗程下的计划状态融合
+        for chk in cycle_plan.get("checkups", []):
+            checkups.append(
+                {
+                    "lib_id": chk["library_id"],
+                    "name": chk["name"],
+                    "category": chk.get("related_report_type") or "",
+                    "is_active": bool(chk.get("is_active")),
+                    "schedule": list(chk.get("schedule_days") or []),
+                    "plan_item_id": chk.get("plan_item_id"),
+                }
+            )
+
+    # 其它库仍使用简单的“可用列表”供前端搜索等使用
     med_library = get_active_medication_library()
-    checkups = get_active_checkup_library()
+    # 随访仍暂时使用库模板，后续可与 PlanItem 对齐
     followups = get_active_followup_library()
     followup_details = get_followup_detail_items()
 
@@ -239,6 +263,7 @@ def _build_settings_context(
         "checkups": checkups,
         "followups": followups,
         "med_library": med_library,
+        "current_day_index": current_day_index,
         # 随访计划：当前版本使用统一的问卷内容选项，默认仅 KS(咳嗽/痰色) 选中
         "followup_schedule": followups[0]["schedule"] if followups else [],
         "followup_details": followup_details,
@@ -252,6 +277,7 @@ def _build_settings_context(
         "cycle_page": cycle_page,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
+        "current_day_index": current_day_index,
     }
 
 
@@ -461,6 +487,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
 
     category_raw = (request.POST.get("category") or "").strip().lower()
     library_id_raw = request.POST.get("library_id")
+    
 
     errors: list[str] = []
     if not library_id_raw:
@@ -471,15 +498,22 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         library_id = 0
         errors.append("标准库条目 ID 无效。")
 
-    # 目前仅支持药物开关；后续可扩展到复查/随访
+    # 支持药物 / 复查两类计划开关
     if category_raw in ("medication", "medicine"):
         category = core_choices.PlanItemCategory.MEDICATION
+    elif category_raw in ("checkup", "check", "exam"):
+        category = core_choices.PlanItemCategory.CHECKUP
     else:
         category = None
         errors.append("不支持的计划类别。")
 
+    print(library_id)
+    print(category)
+    print(request.POST.items)
+
     if not errors and category is not None and library_id:
         enable_flag = "enable" in request.POST
+        print(enable_flag)
         try:
             PlanItemService.toggle_item_status(
                 cycle_id=cycle.id,
@@ -489,6 +523,15 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             )
         except ValidationError as exc:
             errors.append(str(exc))
+
+    # 复查计划：只需更新状态，不重绘 DOM，由前端脚本控制视觉效果
+    if category == core_choices.PlanItemCategory.CHECKUP:
+        if errors:
+            # 前端 hx-swap="none"，简单返回 400 错误文本即可
+            return HttpResponse("\n".join(errors) or "复查计划更新失败。", status=400)
+        return HttpResponse(status=204)
+
+    # 以下逻辑仅适用于“用药计划”行首开关
 
     # 若只是关闭（enable=False），前端通过 hx-swap="outerHTML" 清除该行即可，
     # 不再返回任何内容，避免整个设置区域大范围重绘导致滚动跳动。

@@ -66,9 +66,11 @@
           </div>
         </td>
       </tr>
-      {% for med in plan_view.medications %}
-        {% include "web_doctor/partials/settings/plan_table_medication_row.html" with med=med patient=patient cycle=cycle %}
-      {% endfor %}
+      {% with current_day=plan_view.current_day_index|default:1 %}
+        {% for med in plan_view.medications %}
+          {% include "web_doctor/partials/settings/plan_table_medication_row.html" with med=med patient=patient cycle=cycle current_day=current_day %}
+        {% endfor %}
+      {% endwith %}
     </tbody>
 
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
@@ -77,18 +79,30 @@
           📄 复查计划
         </td>
       </tr>
+      {% with current_day=plan_view.current_day_index|default:1 %}
       {% for check in plan_view.checkups %}
       <tr class="hover:bg-slate-50 transition-colors" data-checkup-row>
         <td class="px-4 py-3">
           <div class="flex items-center gap-3">
             <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                class="sr-only peer"
-                data-checkup-toggle
-                checked
-              >
-              <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="category" value="checkup">
+                <input type="hidden" name="library_id" value="{{ check.lib_id }}">
+                <input
+                  type="checkbox"
+                  class="sr-only peer"
+                  name="enable"
+                  value="1"
+                  data-checkup-toggle
+                  {% if check.is_active %}checked{% endif %}
+                  hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
+                  hx-include="closest form"
+                  hx-swap="none"
+                  hx-trigger="change"
+                >
+                <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+              </form>
             </label>
             <span class="text-sm font-medium text-slate-900">{{ check.name }}</span>
           </div>
@@ -98,16 +112,33 @@
         
         {% for i in "x"|rjust:"21" %}
         <td class="px-0.5 py-3 text-center">
-          <input
-            type="checkbox"
-            class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-            data-checkup-slot
-            {% if forloop.counter in check.schedule %}checked{% endif %}
-          >
+          {% with day=forloop.counter %}
+          <form method="post">
+            {% csrf_token %}
+            <input
+              type="checkbox"
+              class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
+              data-checkup-slot
+              {% if day in check.schedule %}checked{% endif %}
+              {% if current_day and day < current_day %}
+              data-readonly="1"
+              disabled
+              {% elif check.plan_item_id and day >= current_day %}
+              hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id check.plan_item_id day %}"
+              hx-swap="none"
+              hx-include="closest form"
+              hx-trigger="change"
+              {% else %}
+              disabled
+              {% endif %}
+            >
+          </form>
+          {% endwith %}
         </td>
         {% endfor %}
       </tr>
       {% endfor %}
+      {% endwith %}
     </tbody>
 
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">

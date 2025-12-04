@@ -281,24 +281,48 @@
 
 // 复查计划：左侧开关控制后续日期选择是否可编辑（仅前端视觉与交互）
 (function () {
-  const rows = document.querySelectorAll("[data-checkup-row]");
-  rows.forEach((row) => {
-    const toggle = row.querySelector("[data-checkup-toggle]");
-    const slots = row.querySelectorAll("[data-checkup-slot]");
-    if (!toggle || !slots.length) return;
+  function initCheckupRows(root) {
+    const scope = root || document;
+    const rows = scope.querySelectorAll("[data-checkup-row]");
+    rows.forEach((row) => {
+      if (row.dataset.checkupInitialized === "1") return;
+      const toggle = row.querySelector("[data-checkup-toggle]");
+      const slots = row.querySelectorAll("[data-checkup-slot]");
+      if (!toggle || !slots.length) return;
 
-    function sync() {
-      const enabled = toggle.checked;
-      slots.forEach((input) => {
-        input.disabled = !enabled;
-        input.classList.toggle("opacity-50", !enabled);
-        input.classList.toggle("cursor-not-allowed", !enabled);
-      });
-      row.classList.toggle("opacity-60", !enabled);
+      function sync() {
+        const enabled = toggle.checked;
+        slots.forEach((input) => {
+          const isReadonly = input.hasAttribute("data-readonly");
+          if (isReadonly) {
+            // 历史执行日：始终禁用，仅保持灰色展示
+            input.disabled = true;
+            input.classList.add("opacity-50", "cursor-not-allowed");
+            return;
+          }
+          input.disabled = !enabled;
+          input.classList.toggle("opacity-50", !enabled);
+          input.classList.toggle("cursor-not-allowed", !enabled);
+        });
+        row.classList.toggle("opacity-60", !enabled);
+      }
+
+      toggle.addEventListener("change", sync);
+      sync();
+      row.dataset.checkupInitialized = "1";
+    });
+  }
+
+  // 初次渲染时处理一次
+  initCheckupRows(document);
+
+  // 每次 plan 表格通过 HTMX 局部刷新后，重新初始化新插入的行
+  document.body.addEventListener("htmx:afterSwap", function (event) {
+    const target = event.target;
+    if (!target) return;
+    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
+      initCheckupRows(target);
     }
-
-    toggle.addEventListener("change", sync);
-    sync();
   });
 })();
 

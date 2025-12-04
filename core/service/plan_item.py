@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.core.exceptions import ValidationError
@@ -78,7 +79,7 @@ class PlanItemService:
         category: int,
         library_id: int,
         enable: bool,
-    ) -> PlanItem:
+    ) -> PlanItem | None:
         """
         【功能说明】
         - 切换某个标准库条目在指定疗程下的启用/停用状态，并在必要时创建或同步 PlanItem。
@@ -100,6 +101,9 @@ class PlanItemService:
         if enable:
             library_obj = cls._get_library_instance(library_model, library_id)
             schedule_template = list(library_obj.schedule_days_template or [])
+            # 仅保留“今天及之后”的执行日，历史执行日不会出现在新建计划中
+            current_day = cls._get_current_day_index_for_cycle(cycle)
+            schedule_template = [d for d in schedule_template if d >= current_day]
             if plan is None:
                 plan = PlanItem.objects.create(
                     cycle=cycle,
@@ -114,14 +118,20 @@ class PlanItemService:
             else:
                 updates = {"status": choices.PlanItemStatus.ACTIVE}
                 if not plan.schedule_days:
+                    # 重新开启且当前计划尚无执行日时，同样只使用“今天及之后”的模板
                     updates["schedule_days"] = schedule_template
                 for field, value in updates.items():
                     setattr(plan, field, value)
                 plan.save(update_fields=list(updates.keys()))
         else:
             if plan:
+                # 关闭计划时，仅清除“今天及之后”的 schedule，历史保留
+                current_day = cls._get_current_day_index_for_cycle(plan.cycle)
+                schedule = list(plan.schedule_days or [])
+                if schedule:
+                    schedule = [d for d in schedule if d < current_day]
                 plan.status = choices.PlanItemStatus.DISABLED
-                plan.schedule_days = []
+                plan.schedule_days = schedule
                 plan.save(update_fields=["status", "schedule_days"])
         return plan
 
@@ -143,6 +153,11 @@ class PlanItemService:
 
         plan = cls._get_plan_by_id(plan_item_id)
         cls._validate_day(plan, day)
+
+        # 已经过了的执行日不可再修改（历史只读）
+        current_day = cls._get_current_day_index_for_cycle(plan.cycle)
+        if day < current_day:
+            return plan
         schedule = list(plan.schedule_days or [])
         if checked:
             if day not in schedule:
@@ -321,3 +336,16 @@ class PlanItemService:
         cycle_days = plan.cycle.cycle_days
         if day < 1 or day > cycle_days:
             raise ValidationError(f"执行日需在 1~{cycle_days} 范围内。")
+
+    @staticmethod
+    def _get_current_day_index_for_cycle(cycle: TreatmentCycle) -> int:
+        """
+        计算当前日期在疗程中的 DayIndex：
+        - 若今天早于开始日期，则视为第 1 天（尚未开始，无历史）；
+        - 若已超过疗程天数，则返回大于 cycle_days 的值，此时所有天数都视作历史。
+        """
+        today = date.today()
+        delta = (today - cycle.start_date).days + 1
+        if delta < 1:
+            return 1
+        return delta
