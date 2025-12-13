@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from business_support.service.device import SmartWatchService
+from health_data.services.health_metric import HealthMetricService
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +29,8 @@ def smartwatch_data_callback(request):
 
         # 3. 业务处理
         # eventType: 1 代表手表数据
-        if event_type == 1:
-            device_no = payload.get("deviceNo")
-            record_time = payload.get("recordTime")
-
-            # 这里可以根据 type 字段判断是哪种数据
-            data_type = payload.get("type")  # WATCH, BPG, PO, WS
-
-            if data_type == "BPG":  # 血压
-                bpg_data = payload.get("bpgData", {})
-                sbp = bpg_data.get("sbp")  # 收缩压
-                dbp = bpg_data.get("dbp")  # 舒张压
-                # TODO: 保存到你的数据库
-                logger.info(
-                    "设备%s 上传血压: %s/%s at %s", device_no, sbp, dbp, record_time
-                )
-
-            elif data_type == "WATCH":  # 心率/计步
-                watch_data = payload.get("watchData", {})
-                logger.info("设备%s 上传 WATCH 数据: %s", device_no, watch_data)
+        if event_type == 1 and isinstance(payload, dict):
+            HealthMetricService.handle_payload(payload)
 
         # 4. 返回成功响应
         return JsonResponse({"errorCode": 0, "msg": "success"})
