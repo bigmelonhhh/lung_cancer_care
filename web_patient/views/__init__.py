@@ -13,6 +13,7 @@ from .device import device_list, api_bind_device, api_unbind_device
 from .studio import my_studio
 from .feedback import feedback_view
 from .document import document_detail
+from .home import patient_home
 
 __all__ = [
     "bind_landing",
@@ -34,4 +35,5 @@ __all__ = [
     "my_studio",
     "feedback_view",
     "document_detail",
+    "patient_home",
 ]
