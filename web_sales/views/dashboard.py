@@ -29,7 +29,10 @@ def sales_dashboard(request: HttpRequest) -> HttpResponse:
         "patient_total": len(patients),
     }
 
-    qrcode_url = SalesService.get_sales_qrcode_url(sales_profile)
+    try:
+        qrcode_url = SalesService.get_sales_qrcode_url(sales_profile)
+    except Exception:
+        qrcode_url = ""
 
     context = {
         "sales": sales_profile,
