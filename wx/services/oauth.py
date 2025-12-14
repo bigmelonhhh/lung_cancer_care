@@ -4,6 +4,7 @@ from django.conf import settings
 from django.urls import reverse
 from .client import wechat_client, WX_APPID, WX_APPSECRET
 from wechatpy.oauth import WeChatOAuth
+from django.conf import settings
 
 
 # def get_oauth_url(redirect_uri, scope="snsapi_base", state="STATE"):
@@ -69,6 +70,11 @@ def generate_menu_auth_url(view_name: str, state: str = "menu", **kwargs) -> str
 
     # 3. 拼接完整回调地址
     full_redirect_uri = f"{base_url}{path}"
+
+    #兼容测试模式，如果是测试模式，不走微信授权，走普通session。
+    test_patient_id = getattr(settings, "TEST_PATIENT_ID", None)
+    if (settings.DEBUG  and test_patient_id):
+        return full_redirect_uri
 
     # 4. 生成最终链接 (菜单点击一般用静默授权 snsapi_base)
     # 注意：wechatpy 会自动处理 urlencode
