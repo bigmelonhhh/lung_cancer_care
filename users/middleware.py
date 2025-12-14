@@ -1,5 +1,4 @@
-# users/middleware.py
-
+from django.conf import settings
 from django.utils.functional import SimpleLazyObject
 from users.models import PatientProfile, PatientRelation
 from users import choices
@@ -53,9 +52,33 @@ class PatientContextMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # 本地调试辅助：在 DEBUG 模式下，如果配置了 TEST_PATIENT_ID，
+        # 且当前为匿名用户访问患者端路径 (/p/ 开头)，则自动挂载指定患者对应的用户。
+        test_patient_id = getattr(settings, "TEST_PATIENT_ID", None)
+        if (
+            settings.DEBUG
+            and test_patient_id
+            and request.path.startswith("/p/")
+            and getattr(request, "user", None) is not None
+            and not request.user.is_authenticated
+        ):
+            patient = (
+                PatientProfile.objects.select_related("user")
+                .filter(pk=test_patient_id)
+                .first()
+            )
+            if patient and patient.user:
+                user = patient.user
+                # 为兼容部分依赖 backend 的逻辑，补充 backend 属性
+                if not hasattr(user, "backend"):
+                    user.backend = "django.contrib.auth.backends.ModelBackend"
+                request.user = user
+                # 保持与家属/多患者逻辑一致，种下 active_patient_id
+                request.session["active_patient_id"] = patient.id
+
         # 使用 SimpleLazyObject 懒加载，避免不必要的数据库查询
         # 只有在代码里真正访问 request.patient 时才会去查库
         request.patient = SimpleLazyObject(lambda: get_actual_patient(request))
-        
+
         response = self.get_response(request)
         return response
