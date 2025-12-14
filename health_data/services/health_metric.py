@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from business_support.models import Device
 from health_data.models import METRIC_SCALES, HealthMetric, MetricSource, MetricType
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -298,8 +299,18 @@ class HealthMetricService:
             source=MetricSource.DEVICE,
         )
 
+    
     @classmethod
-    def query_metrics_by_type(cls, patient_id: int, metric_type: str, limit: int = 30) -> dict:
+    def query_metrics_by_type(
+        cls,
+        patient_id: int,
+        metric_type: str,
+        limit: int = 30,
+        *,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
+        sort_order: str = "desc",
+    ) -> dict:
         """
         查询指定患者、指定类型的历史健康指标数据。
 
@@ -316,6 +327,12 @@ class HealthMetricService:
         :param limit: int (默认 30)
             返回记录的最大条数。
             注意：为了性能考虑，后端强制限制最大返回 100 条。即使传入 > 100，也只返回 100 条。
+        :param start_date: datetime | None
+            开始时间（包含），前闭。
+        :param end_date: datetime | None
+            结束时间（不包含），后开。
+        :param sort_order: str (默认 "desc")
+            排序方式。只接受 "asc" 或 "desc"。按 measured_at 字段排序。
 
         【返回值】
         返回一个字典，包含总数、当前返回数量和数据列表。
@@ -339,10 +356,18 @@ class HealthMetricService:
         # 1. 强制限制最大返回条数，防止数据量过大
         real_limit = min(limit, 100)
 
+        if sort_order not in ("asc", "desc"):
+            raise ValueError('sort_order must be "asc" or "desc"')
+
         # 2. 查询数据库
         qs = HealthMetric.objects.filter(
             patient_id=patient_id, metric_type=metric_type
         )
+
+        if start_date:
+            qs = qs.filter(measured_at__gte=start_date)
+        if end_date:
+            qs = qs.filter(measured_at__lt=end_date)
 
         # 获取总数
         total_count = qs.count()
@@ -350,7 +375,8 @@ class HealthMetricService:
         # 获取分页数据
         # 使用 select_related/values 优化查询，或者直接取对象
         # 这里为了复用 _format_display_value，直接取对象
-        metrics = qs.order_by("-measured_at")[:real_limit]
+        order_field = "measured_at" if sort_order == "asc" else "-measured_at"
+        metrics = qs.order_by(order_field)[:real_limit]
 
         # 3. 组装返回数据
         data_list = []
