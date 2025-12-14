@@ -640,6 +640,9 @@ class HealthMetricService:
         if m_type == MetricType.WEIGHT:
             return f"{float(val_main):g} kg"  # :g 去除多余的0
 
+        if m_type == MetricType.BODY_TEMPERATURE:
+            return f"{float(val_main):g} °C"
+
         if m_type == MetricType.BLOOD_OXYGEN:
             return f"{int(val_main)}%"
 

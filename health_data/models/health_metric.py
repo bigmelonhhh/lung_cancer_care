@@ -7,6 +7,7 @@ class MetricType(models.TextChoices):
     HEART_RATE = "heart_rate", "心率"
     STEPS = "steps", "步数"
     WEIGHT = "weight", "体重"
+    BODY_TEMPERATURE = "body_temperature", "体温"
     PHYSICAL_PERFORMANCE = "physical_performance", "体能评分 (ECOG)"
     SLEEP_QUALITY = "sleep_quality", "睡眠质量"
     APPETITE = "appetite", "食欲评分"
