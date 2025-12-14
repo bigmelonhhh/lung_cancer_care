@@ -1,7 +1,7 @@
 from .medical_history import MedicalHistory
 from .clinical_event import ClinicalEvent
 from .test_report import TestReport
-from .health_metric import HealthMetric, MetricType
+from .health_metric import HealthMetric, MetricType, MetricSource, METRIC_SCALES
 from .symptom_log import SymptomLog
 
 __all__ = [
@@ -11,4 +11,6 @@ __all__ = [
     "HealthMetric",
     "SymptomLog",
     "MetricType",
+    "MetricSource",
+    "METRIC_SCALES",
 ]
