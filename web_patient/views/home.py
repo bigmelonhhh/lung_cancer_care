@@ -8,7 +8,7 @@ from users.decorators import auto_wechat_login, check_patient
 from health_data.services.health_metric import HealthMetricService
 import os
 from decimal import Decimal
-import datetime
+from users.services.patient import PatientService
 
 TEST_PATIENT_ID = os.getenv("TEST_PATIENT_ID") or None
 
@@ -93,6 +93,12 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     # 确定患者ID（测试ID或实际患者ID）
     patient_id = TEST_PATIENT_ID if TEST_PATIENT_ID else (patient.id if patient else None)
     
+    #获取守护天数
+    service_days = "0"
+    if patient_id:  # 获取守护天数
+        service_days = PatientService().get_guard_days(patient_id)
+    else:
+        service_days = "0"
     # 模拟每日计划数据（默认全部未完成）
     daily_plans = [
         {
@@ -280,16 +286,11 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "checkup": reverse("web_patient:record_checkup"),
     }
     
-    # 为每个计划生成授权URL
-    # for plan in daily_plans:
-    #     task_type = plan["type"]
-    #     base_url = generate_menu_auth_url(task_url_mapping.get(task_type, "#"))
-    #     plan["auth_url"] = base_url
 
     context = {
         "patient": patient,
         "is_family": is_family,
-        "service_days": 135,
+        "service_days": service_days,
         "is_member": True,
         "daily_plans": daily_plans,
         "buy_url": generate_menu_auth_url("market:product_buy"),
