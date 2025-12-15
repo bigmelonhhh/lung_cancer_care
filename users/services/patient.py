@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, date
 from typing import Optional
 
 # users/services/patient.py
@@ -13,9 +13,85 @@ from users import choices
 from users.models import PatientProfile, CustomUser, PatientRelation
 
 # 引用 wx 的 client 来获取二维码，注意避免循环引用，可以在方法内引用或使用 lazy import
-from wechatpy import WeChatClient
+
 
 class PatientService:
+
+    #生成一个方法， 获取守护时间。
+    #即用户所有的订单已过去的天数
+    def get_guard_days(self, patient: PatientProfile) -> int:
+        """
+        【业务说明】按自然日统计患者已享受的“守护时间”总天数。
+
+        【计算规则】
+        - 仅统计已支付且有支付时间的订单（status=PAID, paid_at 非空）。
+        - 每个订单贡献一个服务区间：
+          - start_date = paid_at 对应的本地日期；
+          - end_date = min(start_date + duration_days - 1, 今天前一天)；
+          - 若 end_date < start_date，则该订单贡献 0 天。
+        - 多个订单的服务区间按自然日合并去重（重叠或相邻的日期只算一次）。
+        - 结果为所有合并区间长度之和（单位：天），按自然日计数。
+        """
+        from market.models import Order  # 避免在模块顶层引入引起不必要耦合
+
+        today: date = timezone.localdate()
+        end_limit: date = today - timedelta(days=1)
+        if end_limit < today - timedelta(days=1):
+            # 理论上不会发生，仅为类型检查和防御性
+            end_limit = today - timedelta(days=1)
+
+        # 无历史可统计
+        if end_limit < today - timedelta(days=36500):
+            # 占位防御，后面过滤仍会处理
+            pass
+
+        paid_orders = (
+            Order.objects.select_related("product")
+            .filter(patient=patient, status=Order.Status.PAID, paid_at__isnull=False)
+            .order_by("paid_at")
+        )
+
+        ranges: list[tuple[date, date]] = []
+        for order in paid_orders:
+            duration = getattr(order.product, "duration_days", 0) or 0
+            if duration <= 0:
+                continue
+
+            start_date = timezone.localtime(order.paid_at).date()
+            theoretical_end = start_date + timedelta(days=duration - 1)
+            end_date = min(theoretical_end, end_limit)
+
+            # 该订单尚未对“过去天数”产生贡献
+            if end_date < start_date:
+                continue
+
+            ranges.append((start_date, end_date))
+
+        if not ranges:
+            return 0
+
+        # 按开始日期排序后进行区间合并（自然日去重）
+        ranges.sort(key=lambda r: r[0])
+        merged: list[tuple[date, date]] = []
+        cur_start, cur_end = ranges[0]
+
+        for start, end in ranges[1:]:
+            # 若与当前区间相连或重叠（例如 cur_end=10, start=11），合并为单一连续段
+            if start <= cur_end + timedelta(days=1):
+                if end > cur_end:
+                    cur_end = end
+            else:
+                merged.append((cur_start, cur_end))
+                cur_start, cur_end = start, end
+
+        merged.append((cur_start, cur_end))
+
+        total_days = 0
+        for s, e in merged:
+            total_days += (e - s).days + 1
+
+        return total_days
+    
     
     
     def generate_bind_qrcode(self, profile_id: int, expire_seconds: int = 604800) -> str:

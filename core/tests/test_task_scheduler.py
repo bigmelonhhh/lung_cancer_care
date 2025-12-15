@@ -11,7 +11,7 @@ from core.models import (
     TreatmentCycle,
     choices,
 )
-from core.services.task_scheduler import generate_daily_tasks_for_date
+from core.service.task_scheduler import generate_daily_tasks_for_date
 from users.models import PatientProfile
 
 
