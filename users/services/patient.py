@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import transaction, models
 
-from core.models import MonitoringConfig
+from core.service.monitoring import MonitoringService
 from health_data.models import MedicalHistory
 from regions.models import Province, City
 from users import choices
@@ -242,7 +242,7 @@ class PatientService:
             profile.save()
 
             # 4. 初始化或补全监测配置（保证患者始终拥有一条 MonitoringConfig）
-            MonitoringConfig.objects.get_or_create(patient=profile,  defaults={"enable_temp": True,"enable_bp": True})
+            MonitoringService.init_patient_config(profile)
 
         return profile
 

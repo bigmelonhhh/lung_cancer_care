@@ -24,12 +24,9 @@ class PlanItemCategory(models.IntegerChoices):
     MEDICATION = 1, "用药"
     CHECKUP = 2, "检查"
     FOLLOW_UP = 3, "随访"
+    MONITORING = 4, "监测"
 
 
-class ScheduleType(models.TextChoices):
-    DAILY = "DAILY", "按天"
-    WEEKLY = "WEEKLY", "按周"
-    CUSTOM = "CUSTOM", "自定义"
 
 
 class PlanItemStatus(models.IntegerChoices):

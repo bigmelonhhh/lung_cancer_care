@@ -90,7 +90,6 @@ def terminate_treatment_cycle(cycle_id: int) -> TreatmentCycle:
     cycle.status = choices.TreatmentCycleStatus.TERMINATED
     cycle.save(update_fields=["status"])
 
-    # todo 终止后续，还需要处理这个疗程的计划。
     return cycle
 
 

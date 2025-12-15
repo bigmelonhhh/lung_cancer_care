@@ -15,6 +15,21 @@ class MonitoringService:
     """Fat service managing MonitoringConfig operations."""
 
     @classmethod
+    def init_patient_config(cls, patient: PatientProfile) -> MonitoringConfig:
+        """
+        初始化患者的监测配置。
+
+        【业务规则】
+        - 默认开启：体温 (enable_temp)、血压 (enable_bp)。
+        - 默认关闭：体重、血氧、步数（由模型默认值决定）。
+        """
+        config, _ = MonitoringConfig.objects.get_or_create(
+            patient=patient,
+            defaults={"enable_temp": True, "enable_bp": True},
+        )
+        return config
+
+    @classmethod
     @transaction.atomic
     def update_switches(
         cls,
