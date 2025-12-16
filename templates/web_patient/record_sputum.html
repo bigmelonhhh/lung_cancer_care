@@ -1,0 +1,345 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}咳嗽与痰色情况自测{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans">
+  <!-- Top Header -->
+  <div class="bg-white sticky top-0 z-30 shadow-sm">
+    <div class="pt-safe-top">
+      <div class="flex items-center h-12 px-4 relative">
+        <a
+          href="javascript:history.back()"
+          class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10"
+        >
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </a>
+        <h1 class="w-full pl-8 text-lg font-bold text-slate-800">
+          咳嗽与痰色情况自测
+        </h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 pt-6">
+    <!-- Main Form Card -->
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <!-- 1. Measurement Time -->
+      <div class="mb-5">
+        <label class="block text-slate-700 font-bold mb-2">测量时间</label>
+        <div
+          class="flex items-center justify-between border-b border-slate-200 pb-3 cursor-pointer"
+          onclick="document.getElementById('date-picker').showPicker()"
+        >
+          <input
+            type="datetime-local"
+            id="date-picker"
+            class="absolute opacity-0 w-0 h-0"
+          />
+          <span class="text-slate-500 text-lg font-medium" id="time-display"
+            >{{ default_time }}</span
+          >
+          <svg
+            class="w-5 h-5 text-slate-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 5l7 7-7 7"
+            />
+          </svg>
+        </div>
+      </div>
+
+      <!-- 2. Cough Status (Multiple Choice) -->
+      <div class="mb-6">
+        <h3 class="text-slate-700 font-bold mb-4">今日咳嗽情况</h3>
+        <div class="space-y-4" id="cough-options-container">
+          {% for option in cough_options %}
+          <label
+            class="flex items-center gap-3 cursor-pointer pb-4 border-b border-slate-200 select-none"
+          >
+            <input
+              type="checkbox"
+              name="cough_status"
+              value="{{ option.value }}"
+              class="w-0 h-0 opacity-0 absolute"
+            />
+            <span
+              class="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center transition-all shrink-0"
+            >
+              <svg
+                class="w-3 h-3 text-slate-900 opacity-0 transition-opacity"
+                fill="none"
+                viewBox="0 0 14 10"
+              >
+                <path
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M1 5l4 4 8-8"
+                />
+              </svg>
+            </span>
+            <span class="text-slate-600 font-medium transition-colors"
+              >{{ option.label }}</span
+            >
+          </label>
+          {% endfor %}
+        </div>
+        <p id="cough-error" class="text-red-500 text-sm mt-2 hidden">
+          请至少选择一项
+        </p>
+      </div>
+
+      <div class="mb-4">
+        <h3 class="text-slate-700 font-bold mb-4">今日痰色情况</h3>
+        <input type="hidden" id="selected-sputum" value="" />
+
+        <div class="grid grid-cols-3 gap-3" id="sputum-grid">
+          {% for color in sputum_colors %}
+          <div class="cursor-pointer" data-value="{{ color.value }}">
+            <div class="flex flex-col items-center">
+              <div
+                class="sputum-box w-full h-10 rounded-md border border-slate-300 bg-white flex items-center justify-center gap-1.5 transition-all relative overflow-hidden"
+              >
+                <div
+                  class="check-icon w-4 h-4 bg-slate-900 rounded-full hidden items-center justify-center"
+                >
+                  <svg
+                    class="w-2.5 h-2.5 text-white"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="3"
+                      d="M5 13l4 4L19 7"
+                    />
+                  </svg>
+                </div>
+                <span class="text-sm font-bold text-slate-700 z-10"
+                  >{{ color.label }}</span
+                >
+                <div
+                  class="sputum-color-indicator w-3 h-3 rounded-full border border-slate-200"
+                  style="background-color: {{ color.color_hex }};"
+                ></div>
+              </div>
+              <span class="text-base text-slate-400 mt-1 text-center"
+                >{{ color.desc }}</span
+              >
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <p id="sputum-error" class="text-red-500 text-sm mt-2 hidden">
+          请选择痰色情况
+        </p>
+      </div>
+
+      <!-- Alert -->
+      <div class="flex items-center gap-2 mt-6">
+        <div
+          class="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+        >
+          <svg
+            class="w-4 h-4"
+            t="1765614347617"
+            class="icon"
+            viewBox="0 0 1024 1024"
+            version="1.1"
+            xmlns="http://www.w3.org/2000/svg"
+            p-id="1591"
+            width="200"
+            height="200"
+          >
+            <path
+              d="M512 0C229.23 0 0 229.23 0 512s229.23 512 512 512 512-229.23 512-512S794.77 0 512 0z m44 256v339.492c0 24.301-19.7 44-44 44s-44-19.699-44-44V256c0-24.3 19.7-44 44-44s44 19.7 44 44z m-44 428c35.346 0 64 28.654 64 64 0 35.346-28.654 64-64 64-35.346 0-64-28.654-64-64 0-35.346 28.654-64 64-64z"
+              fill="#DC2626"
+              p-id="1592"
+            ></path>
+          </svg>
+        </div>
+        <span class="text-red-600 font-bold text-sm"
+          >如有咯血，务必紧急就医！</span
+        >
+      </div>
+    </div>
+
+    <!-- 4. Submit Button -->
+    <button
+      onclick="submitSputum()"
+      class="w-full mt-8 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-200 active:scale-[0.98] transition hover:bg-blue-700"
+    >
+      确定
+    </button>
+  </div>
+</div>
+
+<style>
+  /* 咳嗽选项样式（保留） */
+  input[name="cough_status"]:checked + span {
+    border-color: #1e293b;
+    background-color: #f8fafc;
+  }
+  input[name="cough_status"]:checked + span > svg {
+    opacity: 1;
+  }
+  input[name="cough_status"]:checked ~ span {
+    color: #1e293b;
+    font-weight: bold;
+  }
+  label:hover span:first-of-type {
+    border-color: #64748b;
+  }
+</style>
+
+<script>
+  // ========== 痰色选择核心逻辑（极简版，必生效） ==========
+  const sputumGrid = document.getElementById("sputum-grid");
+  const selectedSputum = document.getElementById("selected-sputum");
+  const sputumError = document.getElementById("sputum-error");
+  // 所有痰色项
+  const allSputumBoxes = sputumGrid.querySelectorAll(".sputum-box");
+
+  // 初始化：所有项默认灰色边框，无高亮
+  allSputumBoxes.forEach((box) => {
+    box.classList.add("border-slate-300");
+    box.classList.remove("border-blue-500", "ring-2", "ring-blue-500");
+    box.querySelector(".check-icon").classList.remove("flex");
+    box.querySelector(".check-icon").classList.add("hidden");
+  });
+
+  // 绑定点击事件
+  sputumGrid.querySelectorAll("[data-value]").forEach((item) => {
+    item.addEventListener("click", function () {
+      // 1. 清空所有项的高亮样式
+      allSputumBoxes.forEach((box) => {
+        box.classList.remove("border-blue-500", "ring-2", "ring-blue-500");
+        box.classList.add("border-slate-300");
+        box.querySelector(".check-icon").classList.remove("flex");
+        box.querySelector(".check-icon").classList.add("hidden");
+      });
+
+      // 2. 给当前项添加高亮样式（蓝色边框+外阴影）
+      const currentBox = this.querySelector(".sputum-box");
+      currentBox.classList.remove("border-slate-300");
+      currentBox.classList.add("border-blue-500", "ring-2", "ring-blue-500");
+      // 显示对勾
+      currentBox.querySelector(".check-icon").classList.remove("hidden");
+      currentBox.querySelector(".check-icon").classList.add("flex");
+
+      // 3. 记录选中值
+      selectedSputum.value = this.dataset.value;
+      // 隐藏错误提示
+      sputumError.classList.add("hidden");
+    });
+  });
+
+  // ========== 咳嗽多选逻辑 ==========
+  document
+    .querySelectorAll('input[name="cough_status"]')
+    .forEach((checkbox) => {
+      checkbox.addEventListener("change", function () {
+        const label = this.closest("label");
+        const circle = label.querySelector("span:first-of-type");
+        const checkIcon = circle.querySelector("svg");
+        const text = label.querySelector("span:last-of-type");
+
+        if (this.checked) {
+          circle.classList.remove("border-slate-400");
+          circle.classList.add("border-slate-900");
+          checkIcon.style.opacity = "1";
+          text.classList.remove("text-slate-600", "font-medium");
+          text.classList.add("text-slate-900", "font-bold");
+        } else {
+          circle.classList.add("border-slate-400");
+          circle.classList.remove("border-slate-900");
+          checkIcon.style.opacity = "0";
+          text.classList.add("text-slate-600", "font-medium");
+          text.classList.remove("text-slate-900", "font-bold");
+        }
+      });
+    });
+
+  // ========== 提交逻辑 ==========
+  function submitSputum() {
+    const coughCheckboxes = document.querySelectorAll(
+      'input[name="cough_status"]:checked'
+    );
+    const coughError = document.getElementById("cough-error");
+    let isValid = true;
+
+    // 校验咳嗽
+    if (coughCheckboxes.length === 0) {
+      coughError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      coughError.classList.add("hidden");
+    }
+
+    // 校验痰色
+    if (!selectedSputum.value) {
+      sputumError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      sputumError.classList.add("hidden");
+    }
+
+    if (!isValid) return;
+
+    // 组装数据并跳转
+    const coughVals = Array.from(coughCheckboxes)
+      .map((cb) => cb.value)
+      .join(",");
+    const openid = "{{ openid }}";
+    window.location.href =
+      "{% url 'web_patient:patient_home' %}?openid=" +
+      openid +
+      "&cough_val=" +
+      coughVals +
+      "&sputum_val=" +
+      selectedSputum.value;
+  }
+
+  // ========== 时间选择器逻辑 ==========
+  document
+    .getElementById("date-picker")
+    .addEventListener("change", function (e) {
+      if (this.value) {
+        const date = new Date(this.value);
+        const formatted =
+          date.getFullYear() +
+          "/" +
+          String(date.getMonth() + 1).padStart(2, "0") +
+          "/" +
+          String(date.getDate()).padStart(2, "0") +
+          " " +
+          String(date.getHours()).padStart(2, "0") +
+          ":" +
+          String(date.getMinutes()).padStart(2, "0");
+        document.getElementById("time-display").innerText = formatted;
+      }
+    });
+</script>
+{% endblock %}

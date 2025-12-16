@@ -10,10 +10,10 @@
                 data-patient-item
             >
                 <p class="text-sm font-medium text-gray-900">{{ patient.name }}</p>
-                <p class="text-xs text-gray-500">
+                <p class="text-sm text-gray-500">
                     性别：{{ patient.get_gender_display }} · 年龄：{{ patient.age|default:"-" }}
                 </p>
-                <p class="text-xs text-gray-400 mt-0.5">{{ patient.phone }}</p>
+                <p class="text-sm text-gray-400 mt-0.5">{{ patient.phone }}</p>
             </button>
         </li>
     {% endfor %}

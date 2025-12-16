@@ -1,0 +1,120 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}呼吸情况自测{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans">
+    <!-- 头部 -->
+    <div class="bg-white sticky top-0 z-30 shadow-sm">
+        <div class="pt-safe-top">
+            <div class="flex items-center h-12 px-4 relative">
+                <a href="javascript:history.back()" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="w-full pl-8 text-lg font-bold text-slate-800">呼吸情况自测</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="px-4 pt-6">
+        <!-- 表单卡片 -->
+        <div class="bg-white rounded-xl shadow-sm p-5">
+            <!-- 测量时间 -->
+            <div class="mb-5">
+                <label class="block text-slate-700 font-bold mb-2">测量时间</label>
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3 cursor-pointer" onclick="document.getElementById('date-picker').showPicker()">
+                    <input type="datetime-local" id="date-picker" class="absolute opacity-0 w-0 h-0">
+                    <span class="text-slate-500 text-lg font-medium" id="time-display">{{ default_time }}</span>
+                    <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- 呼吸情况多选（核心：圆圈+对勾） -->
+            <div class="mb-2">
+                <h3 class="text-slate-700 font-bold mb-4">您感觉今日呼吸情况：</h3>
+                <div class="space-y-4" id="breath-options-container">
+                    {% for option in breath_options %}
+                    <label class="flex items-center gap-3 cursor-pointer pb-4 border-b border-slate-200 select-none">
+                        <input type="checkbox" name="breath_status" value="{{ option.label }}" 
+                               class="w-0 h-0 opacity-0 absolute">
+                        <span class="w-5 h-5 rounded-full border-2 border-slate-400 flex items-center justify-center transition-all shrink-0">
+                            <svg class="w-3 h-3 text-slate-900 opacity-0 transition-opacity" fill="none" viewBox="0 0 14 10">
+                                <path stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M1 5l4 4 8-8" />
+                            </svg>
+                        </span>
+                        <span class="text-slate-600 font-medium transition-colors">{{ option.label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <p id="error-msg" class="text-red-500 text-sm mt-2 hidden">请至少选择一项</p>
+            </div>
+        </div>
+
+        <!-- 提交按钮 -->
+        <button onclick="submitBreath()" class="w-full mt-8 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-200 active:scale-[0.98] transition hover:bg-blue-700">
+            确定
+        </button>
+    </div>
+</div>
+
+<!-- 核心CSS：控制对勾显隐+选中样式 -->
+<style>
+    /* 选中状态：圆圈边框变色 + 对勾显示 + 文字加粗 */
+    input[name="breath_status"]:checked + span {
+        border-color: #1e293b; /* slate-900 */
+        background-color: #f8fafc; /* 可选：选中后圆圈浅背景，更突出对勾 */
+    }
+    /* 显示对勾 */
+    input[name="breath_status"]:checked + span > svg {
+        opacity: 1;
+    }
+    /* 文字样式 */
+    input[name="breath_status"]:checked ~ span {
+        color: #1e293b; /* slate-900 */
+        font-weight: bold;
+    }
+    /* 鼠标悬浮效果 */
+    label:hover span:first-of-type {
+        border-color: #64748b; /* slate-500 */
+    }
+    /* 可选：选中后圆圈高亮（如蓝色边框） */
+    /* input[name="breath_status"]:checked + span {
+        border-color: #2563eb; /* blue-600 */
+        /* box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2); */
+    /* } */
+</style>
+
+<script>
+    // 仅保留提交校验逻辑
+    function submitBreath() {
+        const checkboxes = document.querySelectorAll('input[name="breath_status"]:checked');
+        const errorMsg = document.getElementById('error-msg');
+        
+        if (checkboxes.length === 0) {
+            errorMsg.classList.remove('hidden');
+            return;
+        }
+        errorMsg.classList.add('hidden');
+        
+        // 获取选中值并跳转
+        const values = Array.from(checkboxes).map(cb => cb.value).join(',');
+    }
+
+    // 时间选择器逻辑（不变）
+    document.getElementById('date-picker').addEventListener('change', function(e) {
+        if(this.value) {
+            const date = new Date(this.value);
+            const formatted = date.getFullYear() + '/' + 
+                             String(date.getMonth() + 1).padStart(2, '0') + '/' + 
+                             String(date.getDate()).padStart(2, '0') + ' ' + 
+                             String(date.getHours()).padStart(2, '0') + ':' + 
+                             String(date.getMinutes()).padStart(2, '0');
+            document.getElementById('time-display').innerText = formatted;
+        }
+    });
+</script>
+{% endblock %}

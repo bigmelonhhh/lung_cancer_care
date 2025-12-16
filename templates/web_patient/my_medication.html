@@ -1,0 +1,123 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}我的用药{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans pb-10">
+    
+    <!-- Top Header -->
+    <div class="bg-white sticky top-0 z-30 shadow-sm">
+        <div class="pt-safe-top">
+            <div class="flex items-center h-12 px-4 relative">
+                <a href="javascript:history.back()" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="w-full text-center text-lg font-bold text-slate-800">我的用药</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="px-4 pt-6 space-y-8">
+        
+        <!-- Section 1: Current Medication -->
+        {% if current_medications %}
+        <div>
+            <h2 class="text-base font-bold text-slate-800 mb-3 px-1">当前用药</h2>
+            {% for course in current_medications %}
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+                <div class="flex items-center gap-2 p-4 border-b border-slate-100">
+                     <div class="w-1 h-4 bg-blue-600 rounded-full"></div>
+                     <h3 class="font-bold text-slate-800">{{ course.course_name }}</h3>
+                </div>
+                
+                <div class="p-4">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="text-slate-700 font-bold border-b border-slate-100">
+                                <th class="pb-3 w-1/4">药品名称</th>
+                                <th class="pb-3 w-1/3">频次</th>
+                                <th class="pb-3 w-1/6">用量</th>
+                                <th class="pb-3 w-1/6 text-right">用法</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            {% for drug in course.drugs %}
+                            <tr>
+                                <td class="py-3 text-slate-800 font-medium">{{ drug.name }}</td>
+                                <td class="py-3 text-slate-600">{{ drug.frequency }}</td>
+                                <td class="py-3 text-slate-800">{{ drug.dosage }}</td>
+                                <td class="py-3 text-slate-800 text-right">{{ drug.usage }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    
+                    <div class="mt-4 pt-3 border-t border-slate-50 flex justify-end">
+                        <span class="text-sm text-slate-400">开始日期：{{ course.start_date }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Section 2: History Medication -->
+        {% if history_medications %}
+        <div>
+            <h2 class="text-base font-bold text-slate-800 mb-3 px-1">历史用药</h2>
+            {% for course in history_medications %}
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4">
+                 <div class="flex items-center gap-2 p-4 border-b border-slate-100">
+                     <div class="w-1 h-4 bg-blue-600 rounded-full"></div>
+                     <h3 class="font-bold text-slate-800">{{ course.course_name }}</h3>
+                </div>
+                
+                <div class="p-4">
+                    <table class="w-full text-left text-sm">
+                        <thead>
+                            <tr class="text-slate-700 font-bold border-b border-slate-100">
+                                <th class="pb-3 w-1/4">药品名称</th>
+                                <th class="pb-3 w-1/3">频次</th>
+                                <th class="pb-3 w-1/6">用量</th>
+                                <th class="pb-3 w-1/6 text-right">用法</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            {% for drug in course.drugs %}
+                            <tr>
+                                <td class="py-3 text-slate-800 font-medium">{{ drug.name }}</td>
+                                <td class="py-3 text-slate-600">{{ drug.frequency }}</td>
+                                <td class="py-3 text-slate-800">{{ drug.dosage }}</td>
+                                <td class="py-3 text-slate-800 text-right">{{ drug.usage }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    
+                    <div class="mt-4 pt-3 border-t border-slate-50 flex justify-between">
+                         <span class="text-sm text-slate-400">开始日期：{{ course.start_date }}</span>
+                         <span class="text-sm text-slate-400">结束日期：{{ course.end_date }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Empty State -->
+        {% if not current_medications and not history_medications %}
+         <div class="flex flex-col items-center justify-center py-10">
+                <div class="flex items-center justify-center mb-3 ">
+               <svg  class="w-[140px] h-[140px]" height="1291" node-id="1" sillyvg="true" template-height="1291" template-width="1430" version="1.1" viewBox="0 0 1430 1291" width="1430" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs node-id="47"><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_10" node-id="5" spreadMethod="pad" x1="714.93" x2="714.93" y1="1290.92" y2="995.69"><stop offset="0" stop-color="#f7fbff" stop-opacity="0.5"/><stop offset="1" stop-color="#ecf5ff"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_14" node-id="8" spreadMethod="pad" x1="754.65" x2="950.36" y1="1394.38" y2="1394.38"><stop offset="0" stop-color="#dcedff"/><stop offset="1" stop-color="#4095e6"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_15" node-id="11" spreadMethod="pad" x1="1227.25" x2="1007.27" y1="66.57" y2="66.57"><stop offset="0" stop-color="#f7fbff"/><stop offset="1" stop-color="#ecf5ff"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_14-2" node-id="14" spreadMethod="pad" x1="754.19" x2="754.19" y1="998.75" y2="475.29"><stop offset="0" stop-color="#dcedff"/><stop offset="1" stop-color="#4095e6"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_51" node-id="15" spreadMethod="pad" x1="755.45" x2="755.45" y1="503.63" y2="451.53"><stop offset="0" stop-color="#64aaec"/><stop offset="1" stop-color="#4095e6"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_14-3" node-id="18" spreadMethod="pad" x1="752.01" x2="752.01" y1="802.5" y2="608.5"><stop offset="0" stop-color="#dcedff"/><stop offset="1" stop-color="#4095e6"/></linearGradient></defs><g node-id="146"><path d="M 1429.86 1143.31 C 1429.86 1182.46 1354.54 1220.01 1220.46 1247.69 C 1086.39 1275.38 904.54 1290.93 714.93 1290.93 C 525.32 1290.93 343.47 1275.38 209.40 1247.69 C 75.32 1220.01 0.00 1182.46 0.00 1143.31 C 0.00 1104.16 75.32 1066.61 209.40 1038.93 C 343.47 1011.24 525.32 995.69 714.93 995.69 C 904.54 995.69 1086.39 1011.24 1220.46 1038.93 C 1354.54 1066.61 1429.86 1104.16 1429.86 1143.31 Z" fill="url(#_未命名的渐变_10)" fill-rule="nonzero" group-id="1" node-id="89" stroke="none" target-height="295.24" target-width="1429.86" target-x="0" target-y="995.69006"/><g node-id="147"><path d="M 1162.16 989.30 L 1176.10 989.30 C 1178.02 989.30 1179.58 990.86 1179.58 992.78 L 1179.58 992.78 L 1179.58 1055.50 C 1179.58 1059.35 1176.46 1062.47 1172.61 1062.47 L 1165.64 1062.47 C 1161.79 1062.47 1158.67 1059.35 1158.67 1055.50 L 1158.67 1055.50 L 1158.67 992.78 C 1158.67 990.86 1160.23 989.30 1162.15 989.30 L 1162.15 989.30 Z" fill="#e9f0f4" fill-rule="nonzero" group-id="1,2" node-id="93" stroke="none" target-height="73.16998" target-width="20.909912" target-x="1158.67" target-y="989.3"/><path d="M 1169.13 846.43 L 1169.13 1020.66 L 1099.44 989.30 L 1169.13 846.43 Z" fill="#e1eaef" fill-rule="nonzero" group-id="1,2" node-id="95" stroke="none" target-height="174.22998" target-width="69.69006" target-x="1099.44" target-y="846.43"/><path d="M 1169.13 846.43 L 1169.13 1020.66 L 1238.82 989.30 L 1169.13 846.43 Z" fill="#f5f7fa" fill-rule="nonzero" group-id="1,2" node-id="97" stroke="none" target-height="174.22998" target-width="69.68994" target-x="1169.13" target-y="846.43"/></g><g node-id="148"><path d="M 1263.74 988.50 L 1282.24 988.50 C 1284.79 988.50 1286.87 990.57 1286.87 993.13 L 1286.87 993.13 L 1286.87 1076.38 C 1286.87 1081.49 1282.73 1085.63 1277.62 1085.63 L 1268.37 1085.63 C 1263.26 1085.63 1259.12 1081.49 1259.12 1076.38 L 1259.12 1076.38 L 1259.12 993.13 C 1259.12 990.58 1261.19 988.50 1263.75 988.50 L 1263.75 988.50 Z" fill="#e9f0f4" fill-rule="nonzero" group-id="1,3" node-id="102" stroke="none" target-height="97.130066" target-width="27.75" target-x="1259.12" target-y="988.49994"/><path d="M 1272.99 798.87 L 1272.99 1030.13 L 1180.49 988.50 L 1272.99 798.87 Z" fill="#e1eaef" fill-rule="nonzero" group-id="1,3" node-id="104" stroke="none" target-height="231.26001" target-width="92.5" target-x="1180.49" target-y="798.87"/><path d="M 1272.99 798.87 L 1272.99 1030.13 L 1365.49 988.50 L 1272.99 798.87 Z" fill="#f5f7fa" fill-rule="nonzero" group-id="1,3" node-id="106" stroke="none" target-height="231.26001" target-width="92.5" target-x="1272.99" target-y="798.87"/></g><g node-id="149"><path d="M 244.89 976.92 L 263.39 976.92 C 265.94 976.92 268.02 978.99 268.02 981.55 L 268.02 981.55 L 268.02 1064.80 C 268.02 1069.91 263.88 1074.05 258.77 1074.05 L 249.52 1074.05 C 244.41 1074.05 240.27 1069.91 240.27 1064.80 L 240.27 1064.80 L 240.27 981.55 C 240.27 979.00 242.34 976.92 244.90 976.92 L 244.90 976.92 Z" fill="#e9f0f4" fill-rule="nonzero" group-id="1,4" node-id="111" stroke="none" target-height="97.130066" target-width="27.749985" target-x="240.27" target-y="976.92"/><path d="M 254.14 787.29 L 254.14 1018.55 L 161.64 976.92 L 254.14 787.29 Z" fill="#e1eaef" fill-rule="nonzero" group-id="1,4" node-id="113" stroke="none" target-height="231.26007" target-width="92.5" target-x="161.64" target-y="787.29"/><path d="M 254.14 787.29 L 254.14 1018.55 L 346.64 976.92 L 254.14 787.29 Z" fill="#f5f7fa" fill-rule="nonzero" group-id="1,4" node-id="115" stroke="none" target-height="231.26007" target-width="92.500015" target-x="254.14" target-y="787.29"/></g><path d="M 549.95 231.56 C 597.69 231.56 648.46 213.77 700.46 225.77 C 775.72 243.14 845.74 294.53 955.17 382.07 C 1013.06 428.38 1136.90 413.70 1198.30 434.17 C 1267.77 457.33 1337.23 544.16 1337.23 544.16" fill="none" group-id="1" node-id="118" stroke="#f1f2f4" stroke-linecap="butt" stroke-width="1" target-height="330.38998" target-width="787.27997" target-x="549.95" target-y="213.76999"/><path d="M 532.25 223.35 L 496.62 216.48 L 508.12 197.37 L 532.26 223.35 L 532.26 223.35 Z M 540.79 121.34 L 508.75 176.29 L 410.49 180.69 L 499.74 191.37 L 465.74 250.41 L 353.46 178.83 L 540.80 121.34 L 540.80 121.34 Z" fill="url(#_未命名的渐变_14)" fill-rule="nonzero" group-id="1" node-id="120" stroke="none" target-height="129.07" target-width="187.34" target-x="353.46" target-y="121.34"/><path d="M 1204.13 65.71 C 1204.05 65.68 1203.99 65.60 1203.99 65.52 C 1204.02 28.87 1175.53 0.00 1140.41 0.00 C 1119.72 0.00 1101.40 9.91 1089.77 25.19 C 1089.72 25.26 1089.63 25.29 1089.55 25.26 C 1085.52 23.92 1081.22 23.16 1076.74 23.16 C 1054.36 23.16 1036.22 41.30 1036.22 63.68 C 1036.22 63.85 1036.24 64.02 1036.25 64.20 C 1019.35 67.03 1006.57 82.02 1007.31 99.88 C 1008.09 118.79 1024.84 133.15 1043.76 133.15 L 1191.12 133.15 C 1209.06 133.15 1225.09 120.16 1227.05 102.33 C 1228.88 85.56 1218.76 70.91 1204.14 65.71 Z" fill="url(#_未命名的渐变_15)" fill-rule="nonzero" group-id="1" node-id="122" stroke="none" target-height="133.15" target-width="222.30994" target-x="1006.57007" target-y="0"/><g node-id="150"><path d="M 431.32 1169.86 C 431.32 1182.86 557.98 1193.49 714.93 1193.49 C 871.88 1193.49 998.54 1182.85 998.54 1169.86 C 998.54 1156.87 871.86 1146.21 714.93 1146.21 C 557.98 1146.12 431.32 1156.25 431.32 1169.84" fill="#ced6dd" fill-opacity="0.3" fill-rule="nonzero" group-id="1,5" node-id="126" stroke="none" target-height="47.369995" target-width="567.22" target-x="431.32004" target-y="1146.12"/></g><g node-id="151"><g node-id="152"><path d="M 937.40 475.29 L 839.57 475.29 C 839.62 476.05 839.69 476.81 839.69 477.59 C 839.69 498.37 822.84 515.22 802.06 515.22 L 706.32 515.22 C 685.54 515.22 668.69 498.37 668.69 477.59 C 668.69 476.81 668.76 476.06 668.81 475.29 L 570.98 475.29 C 553.53 475.29 544.81 484.02 544.81 501.46 L 544.81 972.57 C 544.81 990.02 553.54 998.74 570.98 998.74 L 937.40 998.74 C 954.85 998.74 963.57 990.01 963.57 972.57 L 963.57 501.46 C 963.57 484.01 954.85 475.29 937.40 475.29 Z" fill="url(#_未命名的渐变_14-2)" fill-rule="nonzero" group-id="1,6,7" node-id="133" stroke="none" target-height="523.44995" target-width="418.76" target-x="544.81" target-y="475.29"/><path d="M 687.59 451.53 L 823.31 451.53 C 825.80 451.53 827.81 453.54 827.81 456.03 L 827.81 499.13 C 827.81 501.62 825.80 503.63 823.31 503.63 L 687.59 503.63 C 685.10 503.63 683.09 501.62 683.09 499.13 L 683.09 456.03 C 683.09 453.54 685.10 451.53 687.59 451.53 Z" fill="url(#_未命名的渐变_51)" fill-rule="nonzero" group-id="1,6,7" node-id="135" stroke="none" target-height="52.099945" target-width="144.72003" target-x="683.09" target-y="451.53003"/></g><path d="M 933.49 661.03 L 933.49 986.08 C 966.13 986.08 992.59 959.62 992.59 926.98 L 992.59 690.58 L 963.04 690.58 L 963.04 661.03 L 992.59 661.03 C 1008.91 661.03 1022.14 674.26 1022.14 690.58 L 1022.14 690.58 L 1022.14 926.98 C 1022.14 970.24 990.92 1007.18 948.26 1014.40 L 948.26 1015.63 L 650.93 1015.63 C 611.14 1015.63 578.88 983.37 578.88 943.58 L 578.88 550.59 C 578.88 543.44 584.68 537.64 591.83 537.64 L 920.54 537.64 C 927.69 537.64 933.49 543.44 933.49 550.59 L 933.49 567.19 C 933.49 567.19 933.49 661.02 933.49 661.02 Z" fill="#ffffff" fill-rule="nonzero" group-id="1,6" node-id="138" stroke="none" target-height="477.99" target-width="443.26" target-x="578.88" target-y="537.64"/><path d="M 663.36 847.31 C 655.20 847.31 648.59 853.93 648.59 862.09 C 648.59 870.24 655.20 876.85 663.36 876.86 L 840.66 876.86 C 848.82 876.86 855.43 870.24 855.43 862.08 C 855.43 853.93 848.82 847.32 840.66 847.31 L 663.36 847.31 Z" fill="#edf0f2" fill-rule="nonzero" group-id="1,6" node-id="140" stroke="none" target-height="29.549927" target-width="206.83997" target-x="648.59" target-y="847.31006"/><path d="M 663.36 908.10 C 655.20 908.10 648.58 914.72 648.58 922.88 C 648.58 931.04 655.20 937.66 663.36 937.66 L 840.66 937.66 C 848.82 937.66 855.44 931.04 855.44 922.88 C 855.44 914.72 848.82 908.10 840.66 908.10 L 663.36 908.10 Z" fill="#edf0f2" fill-rule="nonzero" group-id="1,6" node-id="142" stroke="none" target-height="29.560059" target-width="206.85999" target-x="648.58" target-y="908.1"/><path d="M 752.01 608.50 C 698.66 608.50 655.01 652.15 655.01 705.50 C 655.01 717.63 657.44 729.27 661.32 739.94 L 705.94 699.20 C 708.85 696.29 713.70 696.29 716.61 699.20 L 743.28 723.45 L 788.87 677.86 L 776.26 677.86 C 771.90 677.86 768.01 674.46 768.01 669.62 C 768.01 665.25 771.40 661.38 776.26 661.38 L 808.76 661.38 C 813.12 661.38 817.01 664.78 817.01 669.62 L 817.01 702.11 C 817.01 706.47 813.62 710.36 808.76 710.36 C 804.40 710.36 800.51 706.97 800.51 702.12 L 800.51 689.51 L 749.59 740.92 C 746.68 743.83 741.83 744.31 738.43 741.40 L 711.76 716.66 L 669.08 755.46 C 685.57 783.59 716.61 802.51 752.01 802.51 C 805.36 802.51 849.01 758.86 849.01 705.51 C 849.01 652.16 805.36 608.51 752.01 608.51 Z" fill="url(#_未命名的渐变_14-3)" fill-rule="nonzero" group-id="1,6" node-id="144" stroke="none" target-height="194.01001" target-width="194" target-x="655.01" target-y="608.5"/></g></g></svg>
+            </div>
+                <p class="text-slate-500 font-medium text-sm">暂无用药记录</p>
+                <p class="text-slate-400 text-sm mt-0.5">请联系医生为您制定康复计划</p>
+            </div>
+        
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

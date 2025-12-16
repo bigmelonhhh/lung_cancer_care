@@ -1,0 +1,167 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-50 pb-safe-bottom font-sans">
+    <!-- Top Bar -->
+    <div class="bg-gray-200 text-center py-2 text-sm text-gray-600 sticky top-0 z-10">
+        完成问卷后将会同步给您的医生
+    </div>
+
+    <!-- Survey Form -->
+    <form id="survey-form" class="p-4" onsubmit="return false;">
+        {% csrf_token %}
+        
+        <!-- Step 1: Sleep -->
+        <div id="step-1" class="survey-step">
+            {% include "web_patient/followup/partials/step1_sleep.html" %}
+        </div>
+        
+        <!-- Step 2: Pain -->
+        <div id="step-2" class="survey-step hidden">
+            {% include "web_patient/followup/partials/step2_pain.html" %}
+        </div>
+
+        <!-- Step 3: Cough -->
+        <div id="step-3" class="survey-step hidden">
+             {% include "web_patient/followup/partials/step3_cough.html" %}
+        </div>
+
+        <!-- Step 4: Appetite -->
+        <div id="step-4" class="survey-step hidden">
+             {% include "web_patient/followup/partials/step4_appetite.html" %}
+        </div>
+
+        <!-- Step 5: Emotion -->
+        <div id="step-5" class="survey-step hidden">
+             {% include "web_patient/followup/partials/step5_emotion.html" %}
+        </div>
+
+        <!-- Step 6: Physical -->
+        <div id="step-6" class="survey-step hidden">
+             {% include "web_patient/followup/partials/step6_physical.html" %}
+        </div>
+
+        <!-- Step Finish -->
+        <div id="step-finish" class="survey-step hidden">
+             <div class="bg-white rounded-xl p-8 shadow-sm mt-10 text-left">
+                <h2 class="text-xl font-bold text-slate-800 mb-6">您的问卷已完成，将同步给医生</h2>
+                <p class="text-slate-600 mb-8 leading-relaxed">建议：继续按医嘱服药，密切关注相关指标，如有不适，请联系医生</p>
+                
+                <!-- Watermark placeholder -->
+                <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-5 pointer-events-none">
+                    <span class="text-6xl font-bold text-slate-400">W盟门</span>
+                </div>
+             </div>
+             
+             <div class="mt-8 px-4">
+                <a href="{% url 'web_patient:patient_home' %}" class="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-bold shadow-md hover:bg-blue-700 transition">返回</a>
+             </div>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        // Helper: Validate current step
+        function validateCurrentStep(stepIndex) {
+            const stepDiv = document.getElementById('step-' + stepIndex);
+            
+            // Find all questions in this step
+            // We assume questions are wrapped in <div> inside .space-y-8 container
+            // A simple way is to look for named inputs.
+            const inputs = stepDiv.querySelectorAll('input, select');
+            const names = new Set();
+            inputs.forEach(input => {
+                if(input.name) names.add(input.name);
+            });
+            
+            for (let name of names) {
+                const fieldInputs = stepDiv.querySelectorAll(`[name="${name}"]`);
+                let isFilled = false;
+                
+                if (fieldInputs[0].tagName === 'SELECT') {
+                    if (fieldInputs[0].value && fieldInputs[0].value !== "") {
+                        isFilled = true;
+                    }
+                } else if (fieldInputs[0].type === 'radio' || fieldInputs[0].type === 'checkbox') {
+                    for (let input of fieldInputs) {
+                        if (input.checked) {
+                            isFilled = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (!isFilled) {
+                    // Try to find the label text for better error message
+                    alert("请完成本页所有题目后再继续");
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        window.nextStep = function(currentStepIndex) {
+            if (!validateCurrentStep(currentStepIndex)) {
+                return;
+            }
+
+            // Hide current
+            document.getElementById('step-' + currentStepIndex).classList.add('hidden');
+            
+            // Show next
+            const nextIndex = currentStepIndex + 1;
+            const nextStepDiv = document.getElementById('step-' + nextIndex);
+            
+            if (nextStepDiv) {
+                nextStepDiv.classList.remove('hidden');
+                window.scrollTo(0, 0);
+            } else {
+                // Should not happen via nextStep button for last step, 
+                // but if so, treat as submit
+                submitSurvey();
+            }
+        };
+
+        window.submitSurvey = function() {
+            // Validate step 6
+            if (!validateCurrentStep(6)) {
+                return;
+            }
+
+            // Collect Data
+            const formData = new FormData(document.getElementById('survey-form'));
+            const data = {};
+            formData.forEach((value, key) => {
+                if (data[key]) {
+                    if (!Array.isArray(data[key])) {
+                        data[key] = [data[key]];
+                    }
+                    data[key].push(value);
+                } else {
+                    data[key] = value;
+                }
+            });
+            
+            console.log("== 提交问卷数据 ==", data);
+            
+            // Simulate API Call & Show Finish
+            document.getElementById('step-6').classList.add('hidden');
+            document.getElementById('step-finish').classList.remove('hidden');
+            window.scrollTo(0, 0);
+
+            // Redirect logic is handled by the "返回" button in step-finish, 
+            // but user asked to "back to home" automatically? 
+            // "并且模拟接口提交，然后把提交得数据打印出来，并回到首页"
+            // The UI design shows a finish screen with a "Back" button.
+            // I will simulate the "API submission" here, print data, show the finish screen.
+            // The "Back" button in finish screen already links to home.
+            // If automatic redirect is needed after printing, I would do:
+             setTimeout(() => {
+                 window.location.href = "{% url 'web_patient:patient_home' %}?followup=true";
+             }, 1500);
+        };
+    });
+</script>
+{% endblock %}

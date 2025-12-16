@@ -3,7 +3,7 @@
 <div id="plan-table-container" class="overflow-x-auto mt-3">
   <table class="w-full text-left border-collapse">
     <thead>
-      <tr class="bg-slate-50 text-xs uppercase text-slate-500 border-b border-slate-200">
+      <tr class="bg-slate-50 text-sm uppercase text-slate-500 border-b border-slate-200">
         <th class="px-4 py-3 font-semibold w-48">项目名称</th>
         <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
         <th class="px-2 py-3 font-semibold w-24">默认频次</th>
@@ -15,11 +15,11 @@
 
     <tbody class="divide-y divide-slate-100 group-section">
       <tr class="bg-slate-50/30">
-        <td colspan="24" class="px-4 py-2 text-xs font-bold text-indigo-600 bg-indigo-50/30">
+        <td colspan="24" class="px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50/30">
           <div class="flex items-center justify-between">
             <span>💊 用药计划</span>
             {% if cycle and patient %}
-            <div class="relative text-xs" data-med-search-container>
+            <div class="relative text-sm" data-med-search-container>
               <form
                 method="post"
                 hx-post="{% url 'web_doctor:patient_cycle_medication_add' patient.id cycle.id %}"
@@ -45,7 +45,7 @@
                 {% for med in plan_view.med_library %}
                 <button
                   type="button"
-                  class="w-full px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-indigo-50 flex justify-between items-center hidden"
+                  class="w-full px-3 py-1.5 text-left text-sm text-slate-700 hover:bg-indigo-50 flex justify-between items-center hidden"
                   data-med-option
                   data-med-id="{{ med.lib_id }}"
                   data-med-label="{{ med.name }}"
@@ -75,7 +75,7 @@
 
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
-        <td colspan="24" class="px-4 py-2 text-xs font-bold text-sky-600 bg-sky-50/30">
+        <td colspan="24" class="px-4 py-2 text-sm font-bold text-sky-600 bg-sky-50/30">
           📄 复查计划
         </td>
       </tr>
@@ -88,7 +88,7 @@
 
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
-        <td colspan="24" class="px-4 py-2 text-xs font-bold text-emerald-600 bg-emerald-50/30">
+        <td colspan="24" class="px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50/30">
           🧾 随访计划
         </td>
       </tr>
@@ -124,8 +124,8 @@
             </div>
           </div>
         </td>
-        <td class="px-2 py-3 text-xs text-slate-400 align-top">-</td>
-        <td class="px-2 py-3 text-xs text-slate-400 align-top">-</td>
+        <td class="px-2 py-3 text-sm text-slate-400 align-top">-</td>
+        <td class="px-2 py-3 text-sm text-slate-400 align-top">-</td>
         {% for i in "x"|rjust:"21" %}
         <td class="px-0.5 py-3 text-center align-top">
           {% with day=forloop.counter %}
@@ -155,11 +155,11 @@
         {% endfor %}
       </tr>
       <tr class="bg-emerald-50/20">
-        <td colspan="3" class="px-4 py-2 text-xs text-slate-500">
+        <td colspan="3" class="px-4 py-2 text-sm text-slate-500">
           选择问卷内容
         </td>
         <td colspan="24" class="px-4 py-3">
-          <div class="flex flex-wrap gap-3 text-xs" data-followup-detail-container>
+          <div class="flex flex-wrap gap-3 text-sm" data-followup-detail-container>
             {% for item in plan_view.followup_details %}
             <form method="post" class="inline-flex items-center gap-1.5 mr-3 mb-2" data-followup-detail>
               {% csrf_token %}

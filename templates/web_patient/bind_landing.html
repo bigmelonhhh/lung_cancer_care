@@ -2,8 +2,8 @@
 {% block body %}
 <div class="min-h-screen bg-gradient-to-b from-sky-50 to-white py-10 px-4">
   <div class="max-w-3xl mx-auto space-y-6">
-    <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-8">
-      <p class="text-xs uppercase tracking-[0.3em] text-slate-400">康复守护计划</p>
+    <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8">
+      <p class="text-sm uppercase tracking-[0.3em] text-slate-400">康复守护计划</p>
       <div class="flex flex-wrap items-center gap-3 mt-3">
         <h1 class="text-2xl md:text-3xl font-semibold text-slate-900">为 <span class="text-sky-600">{{ patient.masked_name|default:"患者" }}</span> 开启服务</h1>
         {% if patient.age %}
@@ -23,14 +23,14 @@
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="p-6 rounded-3xl border border-sky-100 bg-sky-50/60 text-left flex flex-col gap-3">
-        <p class="text-xs uppercase tracking-[0.3em] text-sky-500">亲友守护</p>
+        <p class="text-sm uppercase tracking-[0.3em] text-sky-500">亲友守护</p>
         <h2 class="text-xl font-semibold text-slate-900">我是家属/监护人</h2>
         <p class="text-sm text-slate-600">记录与患者的关系，随时接收康复提醒与温馨提示。</p>
       </div>
     </div>
 
     {% if can_add_family %}
-    <form method="post" action="{% url 'web_patient:bind_submit' patient.id %}" class="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-5">
+    <form method="post" action="{% url 'web_patient:bind_submit' patient.id %}" class="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 space-y-5">
       {% csrf_token %}
       <p class="text-sm text-slate-500">
         请填写以下信息，让我们更好地认识您。
@@ -76,7 +76,7 @@
       </div>
     </form>
     {% else %}
-    <div class="bg-white rounded-3xl border border-slate-100 shadow-lg p-6 space-y-3">
+    <div class="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 space-y-3">
       <p class="text-sm font-medium text-slate-900">当前亲情账号数量已达上限</p>
       <p class="text-sm text-slate-500">
         出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。

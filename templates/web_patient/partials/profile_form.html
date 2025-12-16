@@ -10,9 +10,9 @@
   {% csrf_token %}
   <div class="flex items-center justify-between">
     <div>
-      <p class="text-xs uppercase tracking-[0.4em] text-slate-400">编辑资料</p>
+      <p class="text-sm uppercase tracking-[0.4em] text-slate-400">编辑资料</p>
       <h2 class="mt-2 text-2xl font-bold text-slate-900">{{ patient.name|default:"患者" }}</h2>
-      <p class="text-xs text-slate-400 mt-1">手机号仅展示，如需修改请联系顾问</p>
+      <p class="text-sm text-slate-400 mt-1">手机号仅展示，如需修改请联系顾问</p>
     </div>
     <button
       type="button"

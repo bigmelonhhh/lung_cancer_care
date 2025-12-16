@@ -1,0 +1,177 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}管理计划{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans pb-10">
+    
+    <!-- Top Header -->
+    <div class="bg-white sticky top-0 z-30 shadow-sm">
+        <div class="pt-safe-top">
+            <div class="flex items-center h-12 px-4 relative">
+                <a href="javascript:history.back()" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="w-full text-center text-lg font-bold text-slate-800">我的管理计划</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="px-4 pt-6 space-y-6">
+        
+        <!-- Section 1: Medication Plan -->
+        {% if medication_plan %}
+        <div>
+            <div class="flex items-center justify-between mb-3 px-1">
+                <h2 class="text-base font-bold text-slate-700">医嘱用药计划</h2>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
+                {% for task in medication_plan %}
+                <div class="flex items-center justify-between p-4 active:bg-slate-50 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 flex items-center justify-center text-blue-600">
+                             <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                        </div>
+                        <span class="text-base font-medium text-slate-700">{{ task.title }}</span>
+                    </div>
+                    {% if task.status == 'completed' %}
+                    <span class="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                        {{ task.status_text }}
+                    </span>
+                    {% elif task.status == 'incomplete' %}
+                    <span class="text-sm font-medium text-red-500 bg-red-50 px-3 py-1 rounded-full">
+                        {{ task.status_text }}
+                    </span>
+                    {% else %}
+                    <span class="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        {{ task.status_text }}
+                    </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Section 2: Monitoring Plan -->
+        {% if monitoring_plan %}
+        <div>
+            <div class="flex items-center justify-between mb-3 px-1">
+                <h2 class="text-base font-bold text-slate-700">每日体征监测计划</h2>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
+                {% for task in monitoring_plan %}
+                <div class="flex items-center justify-between p-4 active:bg-slate-50 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 flex items-center justify-center text-blue-600">
+                            {% if task.icon == 'thermometer' %}
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                            {% elif task.icon == 'spo2' %}
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+                            {% elif task.icon == 'bp' %}
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                            {% elif task.icon == 'weight' %}
+                            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3" /></svg>
+                            {% endif %}
+                        </div>
+                        <span class="text-base font-medium text-slate-700">{{ task.title }}</span>
+                    </div>
+                    {% if task.status == 'completed' %}
+                    <span class="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                        {{ task.status_text }}
+                    </span>
+                    {% elif task.status == 'incomplete' %}
+                    <span class="text-sm font-medium text-red-500 bg-red-50 px-3 py-1 rounded-full">
+                        {{ task.status_text }}
+                    </span>
+                    {% else %}
+                    <span class="text-sm font-medium text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+                        {{ task.status_text }}
+                    </span>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Section 3: Treatment Courses -->
+        {% if treatment_courses %}
+        <div>
+            <div class="flex items-center justify-between mb-3 px-1 mt-8">
+                <h2 class="text-base font-bold text-slate-700">随访问卷与复查计划</h2>
+            </div>
+            
+            {% for course in treatment_courses %}
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-4 p-4">
+                <div class="flex items-center gap-2 mb-4">
+                    <h3 class="text-base font-bold text-slate-700">{{ course.name }}</h3>
+                    {% if course.is_current %}
+                    <span class="text-sm font-medium text-slate-500">（当前疗程）</span>
+                    {% endif %}
+                </div>
+                
+                <div class="space-y-3">
+                    {% for item in course.items %}
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-3">
+                            <div class="w-6 h-6 flex items-center justify-center text-blue-600">
+                                {% if item.type == 'questionnaire' %}
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                {% else %}
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
+                                {% endif %}
+                            </div>
+                            <span class="text-base font-medium text-slate-700">{{ item.title }}</span>
+                        </div>
+                        
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-slate-500">日期：{{ item.date }}</span>
+                            
+                            {% if item.status == 'completed' %}
+                            <span class="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                                {{ item.status_text }}
+                            </span>
+                            {% elif item.status == 'incomplete' %}
+                            <span class="text-xs font-medium text-red-500 bg-red-50 px-2 py-1 rounded">
+                                {{ item.status_text }}
+                            </span>
+                            {% else %}
+                            <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                {{ item.status_text }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if not forloop.last %}
+                    <div class="border-b border-slate-100 my-2"></div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Empty State -->
+        {% if not medication_plan and not monitoring_plan and not treatment_courses %}
+         <div class="flex flex-col items-center justify-center py-10">
+                <div class="flex items-center justify-center mb-3 ">
+               <svg  class="w-[140px] h-[140px]" height="1291" node-id="1" sillyvg="true" template-height="1291" template-width="1430" version="1.1" viewBox="0 0 1430 1291" width="1430" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs node-id="47"><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_10" node-id="5" spreadMethod="pad" x1="714.93" x2="714.93" y1="1290.92" y2="995.69"><stop offset="0" stop-color="#f7fbff" stop-opacity="0.5"/><stop offset="1" stop-color="#ecf5ff"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_14" node-id="8" spreadMethod="pad" x1="754.65" x2="950.36" y1="1394.38" y2="1394.38"><stop offset="0" stop-color="#dcedff"/><stop offset="1" stop-color="#4095e6"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_15" node-id="11" spreadMethod="pad" x1="1227.25" x2="1007.27" y1="66.57" y2="66.57"><stop offset="0" stop-color="#f7fbff"/><stop offset="1" stop-color="#ecf5ff"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_14-2" node-id="14" spreadMethod="pad" x1="754.19" x2="754.19" y1="998.75" y2="475.29"><stop offset="0" stop-color="#dcedff"/><stop offset="1" stop-color="#4095e6"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_51" node-id="15" spreadMethod="pad" x1="755.45" x2="755.45" y1="503.63" y2="451.53"><stop offset="0" stop-color="#64aaec"/><stop offset="1" stop-color="#4095e6"/></linearGradient><linearGradient gradientUnits="objectBoundingBox" id="_未命名的渐变_14-3" node-id="18" spreadMethod="pad" x1="752.01" x2="752.01" y1="802.5" y2="608.5"><stop offset="0" stop-color="#dcedff"/><stop offset="1" stop-color="#4095e6"/></linearGradient></defs><g node-id="146"><path d="M 1429.86 1143.31 C 1429.86 1182.46 1354.54 1220.01 1220.46 1247.69 C 1086.39 1275.38 904.54 1290.93 714.93 1290.93 C 525.32 1290.93 343.47 1275.38 209.40 1247.69 C 75.32 1220.01 0.00 1182.46 0.00 1143.31 C 0.00 1104[... 8825 chars omitted ...]
+            </div>
+                <p class="text-slate-500 font-medium text-sm">今日暂无计划</p>
+                <p class="text-slate-400 text-sm mt-0.5">请联系医生为您制定康复计划</p>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+
+<script>
+function handleTaskClick(title, type) {
+    // 移除之前的跳转逻辑，保持默认展示
+}
+</script>
+{% endblock %}

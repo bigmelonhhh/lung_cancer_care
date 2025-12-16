@@ -1,0 +1,268 @@
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+
+{% block body %}
+<div class="min-h-screen bg-gray-50 pb-24 relative">
+    <!-- Header -->
+    <div class="bg-white sticky top-0 z-40 border-b border-gray-100">
+        <div class="flex items-center px-4 h-12">
+            <a href="javascript:history.back()" class="p-2 -ml-2 text-gray-600">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <h1 class="flex-1 text-center text-lg font-bold text-gray-800 pr-8">复查上报</h1>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="p-5">
+        <!-- Card -->
+        <div class="bg-white rounded-xl shadow-sm p-6 mb-4">
+            <!-- Date -->
+            <div class="mb-6">
+                <h2 class="text-base font-bold text-gray-800 mb-1">本次复查日期</h2>
+                <p class="text-2xl font-medium text-gray-500">{{ checkup_date }}</p>
+            </div>
+
+            <!-- Items -->
+            <div>
+                <h2 class="text-base font-bold text-gray-800 mb-4">本次复查项目：</h2>
+                
+                <div class="space-y-8">
+                    {% for item in checkup_items %}
+                    <div class="checkup-item" data-id="{{ item.id }}" data-name="{{ item.name }}">
+                        <h3 class="text-base font-normal text-gray-800 mb-3">{{ forloop.counter }}、{{ item.name }}</h3>
+                        
+                        <!-- Upload Area -->
+                        <div class="flex flex-wrap gap-3" id="preview-container-{{ item.id }}">
+                            <!-- Previews will be inserted here -->
+                            
+                            <!-- Upload Button -->
+                            <div onclick="triggerUpload('{{ item.id }}')" class="flex flex-col w-24 h-24 bg-gray-50 border border-gray-200 rounded-lg  items-center justify-center cursor-pointer active:bg-gray-100 transition shrink-0">
+                                <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                                </svg>
+                                 <p class="text-sm text-slate-400 mt-1">添加图片</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Hidden Input -->
+                        <input type="file" id="file-input-{{ item.id }}" hidden accept="image/*" onchange="handleFileChange(event, '{{ item.id }}')">
+                        
+                        <!-- Error Message -->
+                        <p id="error-{{ item.id }}" class="text-red-500 text-xs mt-2 hidden">请上传{{ item.name }}的检查报告照片</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Submit Button -->
+    <div class="fixed bottom-8 left-0 right-0 px-6 z-30">
+        <button onclick="submitCheckup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-full shadow-lg shadow-blue-200 active:scale-95 transition">
+            提交
+        </button>
+    </div>
+
+    <!-- Upload Instructions Modal -->
+    <div id="instructions-modal" class="fixed inset-0 z-50 flex items-center justify-center px-4" style="display: flex;">
+        <!-- Overlay -->
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm"></div>
+        
+        <!-- Modal Content -->
+        <div class="relative bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl animate-fade-in-up max-h-[60vh] flex flex-col">
+            <!-- 滚动容器：添加ID用于监听 -->
+            <div id="modal-content" class="p-6 overflow-y-auto">
+                <h3 class="text-lg font-bold text-center text-gray-800 mb-5">图片上传示例</h3>
+                
+                <!-- Example Area -->
+                <div class="flex flex-col gap-4 mb-6">
+                    <!-- Image -->
+                    <div class="w-full bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
+                         <img src="{% static 'review_upload_tip.jpg' %}" alt="示例" class="w-full h-auto object-contain">
+                    </div>
+                    
+                    <!-- Checklist -->
+                    <div class="w-full grid grid-cols-2 gap-2 text-xs font-bold text-slate-700">
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>光线明亮</div>
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>角度端正</div>
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>文字清晰</div>
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-green-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>报告完整</div>
+                        
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>照片太暗</div>
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>角度偏移</div>
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>文字模糊</div>
+                        <div class="flex items-center gap-1.5"><svg class="w-4 h-4 text-red-500 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>报告残缺</div>
+                    </div>
+                </div>
+                
+                <!-- Instructions Text -->
+                <div>
+                    <h4 class="font-bold text-gray-800 mb-2">复查注意事项：</h4>
+                    <ul class="text-sm text-gray-600 space-y-2 leading-relaxed">
+                        <li>1、请在复查周期内完成复查要求的所有检查项目，并分类拍照上传；</li>
+                        <li>2、图片提交后不允许继续操作，请一次性上传所有的检查报告照片，如需继续上传，可通过在线咨询与医生取得联系；</li>
+                        <li>3、拍照请按照上面的示例，务必确保报告照片清晰明亮。</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Modal Footer：移除倒计时相关元素 -->
+            <div class="p-6 pt-2 pb-6">
+                <button id="modal-confirm-btn" onclick="closeModal()" 
+                        class="w-full font-bold text-base py-3 rounded-xl transition active:scale-95 
+                               bg-gray-200 text-gray-500 cursor-not-allowed"
+                        disabled>
+                    <span id="btn-text">请先阅读并滑动至底部</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// State to store uploaded files per item
+const uploads = {};
+
+// ========== 核心：滚动到底部直接启用按钮 ==========
+let isScrolledToBottom = false; // 是否滚动到底部
+const modalContent = document.getElementById('modal-content');
+const btnTextEl = document.getElementById('btn-text');
+const confirmBtn = document.getElementById('modal-confirm-btn');
+
+// 监听模态框内容滚动事件
+modalContent.addEventListener('scroll', function() {
+    // 判断是否滚动到底部（容差10px，避免精度问题）
+    const isBottom = (this.scrollTop + this.clientHeight) >= (this.scrollHeight - 10);
+    if (isBottom && !isScrolledToBottom) {
+        isScrolledToBottom = true;
+        // 直接启用按钮
+        confirmBtn.disabled = false;
+        // 切换按钮样式（恢复可点击状态）
+        confirmBtn.classList.remove('bg-gray-200', 'text-gray-500', 'cursor-not-allowed');
+        confirmBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
+        // 切换按钮文本
+        btnTextEl.textContent = '我已知晓，立即上传';
+    }
+});
+
+function triggerUpload(itemId) {
+    document.getElementById(`file-input-${itemId}`).click();
+}
+
+function handleFileChange(event, itemId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Reset input value so same file can be selected again
+    event.target.value = '';
+
+    // Initialize array for this item if not exists
+    if (!uploads[itemId]) {
+        uploads[itemId] = [];
+    }
+    
+    // Generate unique ID
+    const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    
+    // Add file to state
+    uploads[itemId].push({ id: fileId, file: file });
+    
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const previewUrl = e.target.result;
+        addPreviewElement(itemId, previewUrl, fileId);
+        
+        // Clear error if exists
+        document.getElementById(`error-${itemId}`).classList.add('hidden');
+    };
+    reader.readAsDataURL(file);
+}
+
+function addPreviewElement(itemId, url, fileId) {
+    const container = document.getElementById(`preview-container-${itemId}`);
+    // Create preview wrapper
+    const wrapper = document.createElement('div');
+    wrapper.id = `preview-${fileId}`;
+    wrapper.className = 'w-24 h-24 rounded-lg overflow-hidden border border-gray-200 relative group shrink-0';
+    
+    // Image
+    const img = document.createElement('img');
+    img.src = url;
+    img.className = 'w-full h-full object-cover';
+    wrapper.appendChild(img);
+    
+    // Delete Button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl-lg opacity-80 hover:opacity-100 transition';
+    deleteBtn.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
+    deleteBtn.onclick = function(e) {
+        e.stopPropagation(); // Prevent bubbling
+        removeFile(itemId, fileId);
+    };
+    wrapper.appendChild(deleteBtn);
+    
+    // Insert before the last element (which is the add button)
+    container.insertBefore(wrapper, container.lastElementChild);
+}
+
+function removeFile(itemId, fileId) {
+    // Remove from state
+    if (uploads[itemId]) {
+        uploads[itemId] = uploads[itemId].filter(item => item.id !== fileId);
+    }
+    
+    // Remove from DOM
+    const wrapper = document.getElementById(`preview-${fileId}`);
+    if (wrapper) {
+        wrapper.remove();
+    }
+}
+
+function closeModal() {
+    const modal = document.getElementById('instructions-modal');
+    modal.style.display = 'none';
+}
+
+function submitCheckup() {
+    const items = document.querySelectorAll('.checkup-item');
+    let isValid = true;
+    
+    items.forEach(item => {
+        const itemId = item.getAttribute('data-id');
+        const itemUploads = uploads[itemId];
+        
+        if (!itemUploads || itemUploads.length === 0) {
+            document.getElementById(`error-${itemId}`).classList.remove('hidden');
+            isValid = false;
+        }
+    });
+    
+    if (!isValid) {
+        // Optional: Scroll to top or show toast
+        return;
+    }
+    
+    // Simulate submission: Log files
+    console.log('Submitting Checkup Data:');
+    items.forEach(item => {
+        const itemId = item.getAttribute('data-id');
+        const itemName = item.getAttribute('data-name');
+        const fileCount = uploads[itemId] ? uploads[itemId].length : 0;
+        console.log(`Item: ${itemName} (ID: ${itemId}), Files: ${fileCount}`);
+        // Log details if needed
+        if(uploads[itemId]) {
+             uploads[itemId].forEach(u => console.log(`  - File: ${u.file.name} (${u.file.size} bytes)`));
+        }
+    });
+    
+    // Redirect
+    const openid = "{{ openid }}";
+    window.location.href = "{% url 'web_patient:patient_home' %}?openid=" + openid + "&checkup_completed=true";
+}
+</script>
+{% endblock %}

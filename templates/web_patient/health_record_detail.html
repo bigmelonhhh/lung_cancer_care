@@ -1,0 +1,468 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans flex flex-col">
+
+    <!-- Fixed Header Section -->
+    <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
+        <!-- 1. Title Bar -->
+        <div class="pt-safe-top">
+             <div class="flex items-center h-12 px-4 relative">
+                <a href="javascript:void(0)" onclick="goListReplace()" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="w-full text-center text-lg font-bold text-slate-800">{{ title }}</h1>
+            </div>
+        </div>
+
+        <!-- 2. Date & Chart Switch -->
+        <div class="flex items-center border-t border-slate-100 h-12">
+            <!-- Date Picker -->
+            <div class="flex-1 flex items-center justify-center border-r border-slate-100 active:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('month-picker').showPicker()">
+                 <input type="month" id="month-picker" class="absolute inset-0 opacity-0 cursor-pointer" onchange="updateMonthDisplay(this)" value="{{ current_month }}">
+                 <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                 </svg>
+                 <span id="month-display" class="text-slate-800 font-medium ml-1">{{ current_month }}</span>
+                 <svg class="w-4 h-4 text-slate-500 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                 </svg>
+            </div>
+            <!-- Chart Switch -->
+            <div onclick="showChartToast()" class="flex-1 flex items-center justify-center transition cursor-pointer">
+                <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                </svg>
+                <span class="text-slate-800 font-medium ml-1">切换图表</span>
+            </div>
+        </div>
+        
+        <!-- 3. Add Data Button -->
+        {% if record_type == 'temperature' or record_type == 'weight' or record_type == 'spo2' or record_type == 'bp' or record_type == 'bp_hr' %}
+        <a href="javascript:void(0)" onclick="handleAdd()" class="h-12 flex items-center justify-center border-t border-slate-100 active:bg-slate-50 transition cursor-pointer">
+            <svg class="w-5 h-5 text-blue-600 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            <span class="text-blue-600 font-bold ml-1">新增数据</span>
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Scrollable List Area -->
+      {% if records %}
+    <div id="record-list" class="flex-1 overflow-y-auto p-4 space-y-3 pb-20" onscroll="handleScroll(this)">
+        {% for record in records %}
+        <div class="bg-white rounded-xl shadow-sm p-4 relative group record-item" data-id="{{ record.id }}">
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-4 border-b border-slate-50 pb-2">
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="font-bold text-slate-800 text-base">{{ record.date }}</span>
+                    <span class="text-slate-500 font-medium">{{ record.weekday }}</span>
+                    <span class="text-slate-400">{{ record.time }}</span>
+                </div>
+                <div class="flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                     {% if record.is_manual %}
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    {% else %}
+                    <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                    {% endif %}
+                    {{ record.source_display }}
+                </div>
+            </div>
+
+            <!-- Body -->
+            <div class="{% if record.data|length > 2 %}grid grid-cols-3 gap-4 text-center{% else %}space-y-2{% endif %} mb-4 p-4" style="background: #f3f4f6;">
+                {% for item in record.data %}
+                    {% if record.data|length > 2 %}
+                        <!-- 3 Columns Layout (BP/HR) -->
+                        <div class="flex flex-col items-center">
+                            <span class="text-xs text-slate-400 mb-1">{{ item.label }}</span>
+                            <span class="text-xl font-bold text-slate-900">{{ item.value }}</span>
+                        </div>
+                    {% else %}
+                        <!-- Standard Layout -->
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-slate-500 font-medium min-w-[3em]">{{ item.label }}{% if item.label|length > 0 %}:{% endif %}</span>
+                            <span class="{% if item.is_large %}text-xl{% else %}text-base{% endif %} font-bold text-slate-900">{{ item.value }}</span>
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
+                <div>
+                    <button onclick="handleDelete('{{ record.id }}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
+                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        删除
+                    </button>
+                </div>
+
+                {% if record.can_edit %}
+                <button onclick="openEditModal('{{ record.id }}')" class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">
+                    编辑
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        
+        <!-- Loading State -->
+        <div id="loading-spinner" class="hidden py-4 text-center">
+             <svg class="animate-spin h-6 w-6 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+        
+        <!-- No More Data State -->
+        <div id="no-more-data" class="hidden py-4 text-center text-slate-400 text-sm">
+            没有更多数据了
+        </div>
+    </div>
+      {% else %}
+        <!-- Empty State -->
+        <div class="flex flex-col items-center justify-center py-10 pt-10" style="margin-top: 100px;">
+                <div class="flex items-center justify-center mb-3 ">
+                    <svg t="1765808670850" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="8014" width="64" height="64"><path d="M35.698301 77.721345h59.476898c4.135408 0 7.419408 3.284 7.419408 7.419408s-3.284 7.419408-7.419408 7.419409H35.698301c-4.135408 0-7.419408-3.284-7.419408-7.419409s3.284-7.419408 7.419408-7.419408z m0 0" fill="#F4C15B" p-id="8015"></path><path d="M65.497565 47.922081c4.135408 0 7.419408 3.284 7.419409 7.419408v59.476898c0 4.135408-3.284 7.419408-7.419409 7.419408-4.135408 0-7.419408-3.284-7.419408-7.419408V55.341489c0-4.135408 3.284-7.419408 7.419408-7.419408z m0 0" fill="#F4C15B" p-id="8016"></path><path d="M362.030645 116.277943l28.704597 7.662668c4.013778 1.094667 6.324742 5.108445 5.230075 9.122223-1.094667 4.013778-5.108445 6.324742-9.122224 5.230075l-28.704597-7.662668c-4.013778-1.094667-6.324742-5.108445-5.230075-9.122223 1.216296-3.892149 5.108445-6.324742 9.122224-5.230075z m0 0" fill="#4680E8" p-id="8017"></path><path d="M414.939542 74.558974l7.662667 28.704596c1.094667 4.013778-1.216296 8.027557-5.230075 9.122224-4.013778 1.094667-8.027557-1.216296-9.122223-5.230075L400.587243 78.329493c-1.094667-4.013778 1.216296-8.027557 5.230075-9.122224 4.013778-0.973037 8.149186 1.337926 9.122224 5.351705z m0 0" fill="#8FB3FF" p-id="8018"></path><path d="M477.57881 99.493051L456.536881 120.53498c-2.919112 2.919112-7.541038 2.919112-10.46015 0-2.919112-2.919112-2.919112-7.541038 0-10.460149l21.041929-21.041929c2.919112-2.919112 7.541038-2.919112 10.46015 0 2.919112 2.797482 2.919112 7.541038 0 10.460149z m0 0" fill="#ABC3EF" p-id="8019"></path><path d="M927.000356 113.358831c-24.569189 0-44.516451 19.947262-44.516451 44.638081 0 24.569189 19.947262 44.516451 44.516451 44.516451 24.569189 0 44.638081-19.947262 44.638081-44.516451-0.12163-24.690818-20.068892-44.638081-44.638081-44.638081z m0 74.315715c-16.420002 0-29.799264-13.379261-29.799263-29.799264s13.379261-29.799264 29.799263-29.799263 29.799264 13.379261 29.799264 29.799263c-0.12163 16.541632-13.500891 29.799264-29.799264 29.799264z m0 0" fill="#F4C15B" p-id="8020"></path><path d="M905.715168 374.984202l-446.137546-59.476897v235.718256l446.137546 46.827414V374.984202z m0 0" fill="#4680E8" p-id="8021"></path><path d="M102.594607 392.742131l356.861385-77.113196v267.706853L102.594607 660.448984V392.742131z m0 0" fill="#8FB3FF" p-id="8022"></path><path d="M519.05452 482.018292l386.660648-106.91246V880.598646l-386.660648 106.91246V482.018292z m0 0" fill="#4680E8" p-id="8023"></path><path d="M102.594607 392.742131l416.338283 89.276161v502.816962L102.594607 883.517757V392.742131z m0 0" fill="#8FB3FF" p-id="8024"></path><path d="M519.05452 481.166884L102.594607 392.742131l-89.276161 178.430692 431.298729 101.317497 74.437345-191.323436z m0 0" fill="#ABC3EF" p-id="8025"></path><path d="M756.597221 28.461337L711.95914 46.584155v59.476897l44.638081-18.122817V28.461337z m0 0" fill="#F4C15B" p-id="8026"></path><path d="M659.780021 87.938235l44.638081 18.122817V46.584155l-44.638081-18.122818v59.476898z m96.8172-65.43675L708.796769 3.648889l-48.895118 16.906521 48.773489 20.67704 47.922081-18.730965z m0 0" fill="#E5CF6E" p-id="8027"></path><path d="M519.05452 482.018292l386.660648-106.91246 104.114978 178.430693-371.821831 121.751276-118.953795-193.269509z m0 0" fill="#8FB3FF" p-id="8028"></path><path d="M728.257513 388.241834S744.799145 283.883597 831.156194 231.947737c0 0 7.541038 8.514075 22.623115 27.853189 0 0-39.408006-6.203112-125.521796 128.440908z m0 0" fill="#ABC3EF" p-id="8029"></path><path d="M519.05452 383.984796s1.702815-57.165934 43.543413-186.09336c0 0 7.541038 8.514075 22.623115 27.853189-0.12163 0-15.933484 13.74415-66.166528 158.240171z m0 0" fill="#8FB3FF" p-id="8030"></path><path d="M373.585461 373.646276S326.514788 235.231738 211.209882 172.835729c0 0-19.217484 27.001782-40.381042 35.515857-0.12163 0 132.697945 46.219266 202.756621 165.29469z m0 0" fill="#E5CF6E" p-id="8031"></path></svg>
+            </div>
+            <p class="text-slate-500 font-medium text-sm">暂无记录</p>
+        </div>
+    {% endif %}
+</div>
+
+{% include "components/confirm_modal.html" %}
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="fixed inset-0 z-50 hidden" style="background: rgba(0,0,0,0.5)">
+    <div class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-fade-in-up">
+            <h3 class="text-lg font-bold text-slate-800 mb-4 text-center">编辑记录</h3>
+            <div id="edit-fields" class="space-y-4 mb-6">
+                <!-- Fields injected by JS -->
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeEditModal()" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold active:bg-slate-50">取消</button>
+                <button onclick="submitEdit()" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold shadow-lg shadow-blue-200 active:scale-95">确定</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="device-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 pointer-events-none"></div>
+
+<script>
+    // Scroll & Pagination
+    let isLoading = false;
+    let hasMore = {{ has_more|yesno:"true,false" }};
+    let nextPage = {{ next_page|default:"null" }};
+    const currentType = "{{ record_type }}";
+    const currentTitle = "{{ title }}";
+    const patientId = "{{ patient_id }}";
+    const currentMonth = "{{ current_month }}";
+    const detailBaseUrl = "{% url 'web_patient:health_record_detail' %}";
+    const recordUrls = {
+        temperature: "{% url 'web_patient:record_temperature' %}",
+        weight: "{% url 'web_patient:record_weight' %}",
+        spo2: "{% url 'web_patient:record_spo2' %}",
+        bp: "{% url 'web_patient:record_bp' %}",
+        bp_hr: "{% url 'web_patient:record_bp' %}"
+    };
+    const submittedFlag = new URLSearchParams(window.location.search).get('submitted');
+    if (submittedFlag) { showToast('提交成功', 'success'); }
+
+    function handleScroll(el) {
+        if (isLoading || !hasMore) return;
+        
+        // Check if near bottom
+        if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
+            loadMoreData();
+        }
+    }
+
+    function handleAdd() {
+        let typeKey = currentType;
+        if (!(typeKey in recordUrls)) {
+            typeKey = typeKey === 'bp' ? 'bp' : (typeKey === 'bp_hr' ? 'bp_hr' : '');
+        }
+        const base = recordUrls[typeKey];
+        if (!base || !patientId) return;
+        const back = `${detailBaseUrl}?type=${encodeURIComponent(currentType)}&title=${encodeURIComponent(currentTitle)}&patient_id=${encodeURIComponent(patientId)}&submitted=1`;
+        const target = `${base}?patient_id=${encodeURIComponent(patientId)}&next=${encodeURIComponent(back)}`;
+        window.location.href = target;
+    }
+    
+    function goListReplace() {
+        var url = "{% url 'web_patient:health_records' %}?patient_id={{ patient_id }}";
+        window.location.replace(url);
+    }
+    function loadMoreData() {
+        if (isLoading || !hasMore) return;
+        isLoading = true;
+        
+        document.getElementById('loading-spinner').classList.remove('hidden');
+        
+        const url = `?type=${currentType}&title=${currentTitle}&patient_id=${patientId}&month=${currentMonth}&page=${nextPage}`;
+        
+        fetch(url, {
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.records.length > 0) {
+                appendRecords(data.records);
+                hasMore = data.has_more;
+                nextPage = data.next_page;
+            } else {
+                hasMore = false;
+            }
+            
+            if (!hasMore) {
+                 document.getElementById('no-more-data').classList.remove('hidden');
+            }
+        })
+        .catch(err => {
+            console.error('Failed to load more data:', err);
+            showToast('加载失败，请重试', 'error');
+        })
+        .finally(() => {
+            isLoading = false;
+            document.getElementById('loading-spinner').classList.add('hidden');
+        });
+    }
+
+    function appendRecords(records) {
+        const container = document.getElementById('record-list');
+        const spinner = document.getElementById('loading-spinner'); // Insert before spinner
+        
+        records.forEach(record => {
+            const div = document.createElement('div');
+            div.className = 'bg-white rounded-xl shadow-sm p-4 relative group record-item mb-3';
+            div.setAttribute('data-id', record.id);
+            
+            // Build Data HTML
+            let dataHtml = '';
+            if (record.data.length > 2) {
+                // 3 Columns
+                dataHtml = `<div class="grid grid-cols-3 gap-4 text-center mb-4 p-4" style="background: #f3f4f6;">
+                    ${record.data.map(item => `
+                        <div class="flex flex-col items-center">
+                            <span class="text-xs text-slate-400 mb-1">${item.label}</span>
+                            <span class="text-xl font-bold text-slate-900">${item.value}</span>
+                        </div>
+                    `).join('')}
+                </div>`;
+            } else {
+                // Standard
+                dataHtml = `<div class="space-y-2 mb-4 p-4" style="background: #f3f4f6;">
+                    ${record.data.map(item => `
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-slate-500 font-medium min-w-[3em]">${item.label}${item.label ? ':' : ''}</span>
+                            <span class="${item.is_large ? 'text-xl' : 'text-base'} font-bold text-slate-900">${item.value}</span>
+                        </div>
+                    `).join('')}
+                </div>`;
+            }
+
+            // Build Source Icon
+            const sourceIcon = record.is_manual 
+                ? `<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>`
+                : `<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>`;
+
+            div.innerHTML = `
+                <div class="flex items-center justify-between mb-4 border-b border-slate-50 pb-2">
+                    <div class="flex items-center gap-3 text-sm">
+                        <span class="font-bold text-slate-800 text-base">${record.date}</span>
+                        <span class="text-slate-500 font-medium">${record.weekday}</span>
+                        <span class="text-slate-400">${record.time}</span>
+                    </div>
+                    <div class="flex items-center gap-1 text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                        ${sourceIcon}
+                        ${record.source_display}
+                    </div>
+                </div>
+                ${dataHtml}
+                <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
+                    <div>
+                         <button onclick="handleDelete('${record.id}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
+                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            删除
+                        </button>
+                    </div>
+                    ${record.can_edit ? `
+                    <button onclick="openEditModal('${record.id}')" class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">
+                        编辑
+                    </button>` : ''}
+                </div>
+            `;
+            
+            // Add to recordsData for edit functionality
+            recordsData.push({
+                id: record.id.toString(),
+                data: record.data
+            });
+            
+            container.insertBefore(div, spinner);
+        });
+    }
+
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('device-toast');
+        if (!container) return;
+        const colors = {
+          info: 'bg-slate-900 text-white',
+          success: 'bg-emerald-600 text-white',
+          error: 'bg-rose-600 text-white'
+        };
+        const div = document.createElement('div');
+        div.className = `${colors[type] || colors.info} rounded-2xl px-4 py-3 shadow-lg text-base text-center pointer-events-auto`;
+        div.textContent = message;
+        container.appendChild(div);
+        setTimeout(() => {
+          div.classList.add('opacity-0', '-translate-y-2', 'transition');
+          div.addEventListener('transitionend', () => div.remove());
+        }, 2200);
+      }
+
+    // 删除逻辑
+    function handleDelete(id) {
+        showConfirmModal({
+            title: '删除此记录?',
+            content: '记录删除后将无法找回，确认要删除吗？',
+            onConfirm: () => {
+                // 1. 模拟调用 API 删除
+                console.log(`Deleting record ${id}...`);
+                
+                // 2. 从 DOM 中移除
+                const card = document.querySelector(`div[data-id="${id}"]`);
+                if(card) {
+                    card.style.transition = 'all 0.3s';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.9)';
+                    setTimeout(() => {
+                        card.remove();
+                        // 如果列表为空，显示空状态（可选）
+                        if(document.querySelectorAll('div[data-id]').length === 0) {
+                            location.reload(); 
+                        }
+                    }, 300);
+                }
+                
+                // 3. 提示成功
+                showToast('删除成功', 'success');
+            }
+        });
+    }
+
+    // 切换图表提示
+    function showChartToast() {
+        showToast('即将上线，敬请期待');
+    }
+    
+    // 更新月份显示并刷新数据
+    function updateMonthDisplay(input) {
+        if (!input.value) return;
+        document.getElementById('month-display').innerText = input.value;
+        const newUrl = `?type=${currentType}&title=${encodeURIComponent(currentTitle)}&patient_id=${patientId}&month=${input.value}`;
+        window.location.replace(newUrl);
+    }
+
+    // Popover Logic
+    function togglePopover(btn, event) {
+        // Stop event from bubbling to document click listener
+        if(event) event.stopPropagation();
+
+        // Find the popover relative to the button
+        const popover = btn.nextElementSibling;
+        
+        // Close all other open popovers first
+        document.querySelectorAll('.popover-open').forEach(el => {
+            if(el !== popover) {
+                el.classList.add('hidden');
+                el.classList.remove('popover-open');
+            }
+        });
+        
+        // Toggle current
+        popover.classList.toggle('hidden');
+        popover.classList.toggle('popover-open');
+    }
+    
+    // Close popovers when clicking anywhere else
+    document.addEventListener('click', function(e) {
+        // If click is inside a popover, don't close it
+        if(e.target.closest('.popover-open')) return;
+        
+        document.querySelectorAll('.popover-open').forEach(el => {
+            el.classList.add('hidden');
+            el.classList.remove('popover-open');
+        });
+    });
+
+    // Edit Modal Logic
+    const recordsData = [
+        {% for record in records %}
+        {
+            id: "{{ record.id }}",
+            data: [
+                {% for field in record.data %}
+                { label: "{{ field.label }}", value: "{{ field.value }}", key: "{{ field.key }}" },
+                {% endfor %}
+            ]
+        },
+        {% endfor %}
+    ];
+
+    function openEditModal(id) {
+        const record = recordsData.find(r => r.id == id);
+        if(!record) return;
+
+        const container = document.getElementById('edit-fields');
+        container.innerHTML = ''; // Clear
+
+        record.data.forEach(field => {
+            const div = document.createElement('div');
+            // Extract numeric value if possible for input
+            let val = field.value.replace(/[^\d.]/g, ''); 
+            // Handle special cases like cough/sputum which are strings
+            if(field.key === 'cough' || field.key === 'sputum') val = ''; 
+            
+            let inputHtml = '';
+            if(field.key === 'temperature' || field.key === 'ssy' || field.key === 'szy' || field.key === 'heart' || field.key === 'weight' || field.key === 'spo2') {
+                 inputHtml = `<input type="number" step="0.1" value="${val}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+            } else {
+                 inputHtml = `<input type="text" value="${field.value}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+            }
+
+            div.innerHTML = `
+                <label class="block text-sm font-bold text-slate-600 mb-1">${field.label}</label>
+                ${inputHtml}
+            `;
+            container.appendChild(div);
+        });
+
+        document.getElementById('edit-modal').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').classList.add('hidden');
+    }
+
+    function submitEdit() {
+        // Here you would submit the data to backend
+        alert('修改已提交（演示）');
+        closeEditModal();
+        location.reload(); // Mock reload
+    }
+</script>
+{% endblock %}

@@ -23,7 +23,7 @@
                         <svg class="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         一般监测
                     </span>
-                    <span class="monitoring-loading inline-flex items-center gap-2 text-xs text-slate-400">
+                    <span class="monitoring-loading inline-flex items-center gap-2 text-sm text-slate-400">
                         <span class="w-3 h-3 border-2 border-slate-300 border-t-transparent rounded-full animate-spin"></span>
                         <span>保存中...</span>
                     </span>
@@ -65,14 +65,14 @@
     </div>
 
     <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
             <div class="flex items-center gap-4">
                 <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">医院计划设置</h3>
                 {% if active_cycle %}
                     <span class="text-sm text-slate-600 bg-white border border-slate-200 px-3 py-1 rounded-md shadow-sm">
                         当前疗程：<span class="font-bold text-slate-900">{{ active_cycle.name }}</span>
                     </span>
-                    <span class="text-xs text-slate-400">
+                    <span class="text-sm text-slate-400">
                         {{ active_cycle.start_date }} 开始
                     </span>
                 {% else %}
@@ -81,15 +81,15 @@
             </div>
             <div class="text-sm text-indigo-600 flex items-center gap-3">
                 {% if cycle_form_errors %}
-                    <span class="text-xs text-rose-500">
+                    <span class="text-sm text-rose-500">
                         {{ cycle_form_errors.0 }}
                     </span>
                 {% endif %}
-                <span class="text-xs text-slate-400">疗程按结束时间倒序展示，最多 10 条</span>
+                <span class="text-sm text-slate-400">疗程按结束时间倒序展示，最多 10 条</span>
             </div>
         </div>
 
-        <div class="px-5 py-4 border-b border-slate-100">
+        <div class="px-5 py-4 border-b border-slate-200">
             {% if cycle_page.paginator.count == 0 %}
                 <div class="p-6 text-center text-sm text-slate-500">
                     <p class="mb-4">当前患者尚未创建任何治疗疗程，请先创建首个疗程。</p>
@@ -98,7 +98,7 @@
                 <div class="space-y-3">
                     <div class="flex items-center justify-between">
                         <h4 class="text-sm font-semibold text-slate-700">疗程列表</h4>
-                        <span class="text-xs text-slate-400">
+                        <span class="text-sm text-slate-400">
                             共 {{ cycle_page.paginator.count }} 个疗程，当前第 {{ cycle_page.number }}/{{ cycle_page.paginator.num_pages }} 页
                         </span>
                     </div>
@@ -116,10 +116,10 @@
                                     <span class="font-medium text-slate-800">
                                         {{ cycle.name }}
                                         {% if selected_cycle and cycle.id == selected_cycle.id %}
-                                            <span class="ml-2 text-xs text-emerald-600 border border-emerald-200 rounded-full px-2 py-0.5">当前疗程</span>
+                                            <span class="ml-2 text-sm text-emerald-600 border border-emerald-200 rounded-full px-2 py-0.5">当前疗程</span>
                                         {% endif %}
                                     </span>
-                                    <span class="text-xs text-slate-500">
+                                    <span class="text-sm text-slate-500">
                                         {{ cycle.start_date }} ~ {{ cycle.end_date }} · 状态：{{ cycle.get_status_display }}
                                     </span>
                                 </div>
@@ -128,7 +128,7 @@
                         {% endfor %}
                     </div>
                     {% if cycle_page.has_previous or cycle_page.has_next %}
-                    <div class="flex justify-end gap-2 text-xs text-slate-500 pt-1">
+                    <div class="flex justify-end gap-2 text-sm text-slate-500 pt-1">
                         {% if cycle_page.has_previous %}
                             <button
                                 type="button"
@@ -175,7 +175,7 @@
             >
                 {% csrf_token %}
                 <div class="flex flex-col gap-1">
-                    <label class="text-xs text-slate-500">疗程名称</label>
+                    <label class="text-sm text-slate-500">疗程名称</label>
                     <input
                         type="text"
                         name="name"
@@ -186,7 +186,7 @@
                     >
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label class="text-xs text-slate-500">开始日期</label>
+                    <label class="text-sm text-slate-500">开始日期</label>
                     <input
                         type="date"
                         name="start_date"
@@ -196,7 +196,7 @@
                     >
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label class="text-xs text-slate-500">周期天数</label>
+                    <label class="text-sm text-slate-500">周期天数</label>
                     <select
                         name="cycle_days"
                         data-cycle-days
@@ -209,8 +209,8 @@
                     </select>
                 </div>
                 <div class="flex flex-col gap-1">
-                    <label class="text-xs text-slate-500">预计结束日期（自动计算）</label>
-                    <div class="h-9 flex items-center px-2 rounded border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+                    <label class="text-sm text-slate-500">预计结束日期（自动计算）</label>
+                    <div class="h-9 flex items-center px-2 rounded border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">
                         <span data-cycle-end-display class="tabular-nums"></span>
                     </div>
                 </div>
@@ -615,7 +615,7 @@
       container = document.createElement("div");
       container.id = "plan-error-toast";
       container.className =
-        "fixed bottom-4 right-4 max-w-sm bg-rose-600 text-white text-xs px-3 py-2 rounded shadow-lg z-50";
+        "fixed bottom-4 right-4 max-w-sm bg-rose-600 text-white text-sm px-3 py-2 rounded shadow-lg z-50";
       document.body.appendChild(container);
     }
     container.textContent = message;

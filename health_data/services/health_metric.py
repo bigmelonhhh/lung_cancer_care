@@ -80,7 +80,9 @@ class HealthMetricService:
         elif metric_type == "WS":
             cls.save_weight(payload)
         else:
-            logger.info("收到未知 type=%s 的数据，暂不处理。payload=%s", metric_type, payload)
+            logger.info(
+                "收到未知 type=%s 的数据，暂不处理。payload=%s", metric_type, payload
+            )
 
     # ============
     # 5 类指标保存
@@ -468,7 +470,6 @@ class HealthMetricService:
             }
 
         return result
-
 
     # ============
     # 客观指标数据手动录入接口

@@ -1,10 +1,10 @@
 <div class="space-y-6">
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2 space-y-6">
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <p class="text-xs uppercase text-slate-400 tracking-widest">基础信息</p>
+            <p class="text-sm uppercase text-slate-400 tracking-widest">基础信息</p>
             <h2 class="text-xl font-semibold text-slate-900 mt-1">{{ patient.name }}</h2>
           </div>
           <span class="inline-flex items-center px-3 py-1 rounded-full bg-sky-100 text-sky-600 text-sm">
@@ -41,16 +41,16 @@
                 <option value="{{ doctor.id }}" {% if patient.doctor_id == doctor.id %}selected{% endif %}>{{ doctor.name }}（{{ doctor.hospital|default:"-" }}）</option>
                 {% endfor %}
               </select>
-              <div id="doctor-update-toast" class="text-xs text-slate-400 mt-2"></div>
+              <div id="doctor-update-toast" class="text-sm text-slate-400 mt-2"></div>
             </dd>
           </div>
         </dl>
       </div>
 
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
-            <p class="text-xs uppercase text-slate-400 tracking-widest">紧急联系人</p>
+            <p class="text-sm uppercase text-slate-400 tracking-widest">紧急联系人</p>
             <h3 class="text-lg font-semibold text-slate-900">应急联系方案</h3>
           </div>
         </div>
@@ -72,7 +72,7 @@
     </div>
 
     <div class="space-y-6">
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 flex flex-col items-center text-center">
+      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 flex flex-col items-center text-center">
         <h3 class="text-lg font-semibold text-slate-900 mb-2">绑定二维码</h3>
         <p class="text-sm text-slate-500 mb-6">患者扫码后即可绑定专属档案</p>
         {% if qrcode_url %}
@@ -93,7 +93,7 @@
           重新获取
         </button>
         {% endif %}
-        <p class="text-xs text-slate-400 mt-4">请患者或家属使用微信扫码绑定档案</p>
+        <p class="text-sm text-slate-400 mt-4">请患者或家属使用微信扫码绑定档案</p>
       </div>
     </div>
   </div>

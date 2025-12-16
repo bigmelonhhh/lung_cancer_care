@@ -1,0 +1,260 @@
+{% extends "layouts/base_portal.html" %}
+{% block title %}当前血压与心率
+{%endblock %}
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans">
+  <!-- Top Header -->
+  <div class="bg-white sticky top-0 z-30 shadow-sm">
+    <div class="pt-safe-top">
+      <div class="flex items-center h-12 px-4 relative">
+        <a
+          href="javascript:history.back()"
+          class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10"
+        >
+          <svg
+            class="w-6 h-6"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+        </a>
+        <h1 class="w-full pl-8 text-lg font-bold text-slate-800">
+          当前血压与心率
+        </h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 pt-6">
+    <!-- Main Form Card -->
+    <form
+      method="POST"
+      action="{% url 'web_patient:record_bp' %}?patient_id={{ patient_id }}"
+      id="bp-form"
+      class="bg-white rounded-xl shadow-sm p-5"
+    >
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.GET.next }}">
+
+      <div class="bg-white rounded-xl shadow-sm p-5">
+        <!-- 1. Measurement Time -->
+        <div class="mb-5">
+                <label class="block text-slate-700 font-bold mb-2">测量时间</label>
+                <div class="flex items-center justify-between border-b border-slate-200 pb-3 active:opacity-60 transition cursor-pointer" onclick="document.getElementById('date-picker').showPicker()">
+                     <!-- 关键修改：用 now_obj（原生datetime）生成input的value，default_time直接显示 -->
+                    <input type="datetime-local" id="date-picker" name="record_time" 
+                        class="absolute opacity-0 w-0 h-0"
+                        {% if now_obj %}value="{{ now_obj|date:'Y-m-d\TH:i' }}"{% endif %}>
+                    <!-- 显示给用户的友好格式：直接用后端传的 default_time，无需过滤 -->
+                    <span class="text-slate-500 text-lg font-medium" id="time-display">
+                        {{ default_time }}
+                    </span>
+                    <svg class="w-5 h-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </div>
+            </div>
+        <!-- 2. Systolic Pressure (High) -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <svg
+              class="w-5 h-5 text-orange-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <label class="text-slate-800 font-bold text-lg"
+              >收缩压（高压）</label
+            >
+          </div>
+
+          <div class="flex items-end gap-2 border-b border-slate-200 pb-2">
+            <input
+              type="number"
+              id="systolic-input"
+              name="ssy"
+              class="w-full text-xl font-medium text-slate-800 placeholder-slate-300 outline-none bg-transparent"
+              placeholder="点此录入"
+              oninput="validateInput(this, 'sys-error')"
+            />
+            <span class="text-slate-500 font-medium mb-1">mmHg</span>
+          </div>
+          <p id="sys-error" class="text-red-500 text-sm mt-1 hidden">
+            请输入50-250之间的数值
+          </p>
+        </div>
+
+        <!-- 3. Diastolic Pressure (Low) -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <svg
+              class="w-5 h-5 text-orange-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <label class="text-slate-800 font-bold text-lg"
+              >舒张压（低压）</label
+            >
+          </div>
+
+          <div class="flex items-end gap-2 border-b border-slate-200 pb-2">
+            <input
+              type="number"
+              id="diastolic-input"
+              name="szy"
+              class="w-full text-xl font-medium text-slate-800 placeholder-slate-300 outline-none bg-transparent"
+              placeholder="点此录入"
+              oninput="validateInput(this, 'dia-error')"
+            />
+            <span class="text-slate-500 font-medium mb-1">mmHg</span>
+          </div>
+          <p id="dia-error" class="text-red-500 text-sm mt-1 hidden">
+            请输入30-150之间的数值
+          </p>
+        </div>
+
+        <!-- 4. Heart Rate -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <svg
+              class="w-5 h-5 text-orange-500"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z"
+                clip-rule="evenodd"
+              />
+            </svg>
+            <label class="text-slate-800 font-bold text-lg">心率</label>
+          </div>
+
+          <div class="flex items-end gap-2 border-b border-slate-200 pb-2">
+            <input
+              type="number"
+              id="hr-input"
+              name="heart"
+              class="w-full text-xl font-medium text-slate-800 placeholder-slate-300 outline-none bg-transparent"
+              placeholder="点此录入"
+              oninput="validateInput(this, 'hr-error')"
+            />
+            <span
+              class="w-[100px] flex justify-end text-slate-500 font-medium mb-1"
+              >次/分钟</span
+            >
+          </div>
+          <p id="hr-error" class="text-red-500 text-sm mt-1 hidden">
+            请输入30-200之间的数值
+          </p>
+        </div>
+
+        <!-- 5. Instructions -->
+        <div class="mt-6 mb-2">
+          <h3 class="text-slate-700 font-bold mb-2 text-sm">注意事项：</h3>
+          <ul class="text-slate-500 text-sm space-y-1.5 leading-relaxed">
+            <li>1、坐位休息 5 分钟，上臂式；</li>
+            <li>2、袖带与心脏同高，间隔 1 分钟测 2 次取平均。</li>
+          </ul>
+        </div>
+      </div>
+    </form>
+    <!-- 6. Submit Button -->
+    <button
+      onclick="submitBP()"
+      class="w-full mt-8 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-200 active:scale-[0.98] transition hover:bg-blue-700"
+    >
+      确定
+    </button>
+  </div>
+</div>
+
+<script>
+  function validateInput(input, errorId) {
+    const errorEl = document.getElementById(errorId);
+    errorEl.classList.add("hidden"); // Clear error on input
+  }
+
+  function submitBP() {
+    const sysInput = document.getElementById("systolic-input");
+    const diaInput = document.getElementById("diastolic-input");
+    const hrInput = document.getElementById("hr-input");
+
+    const sysError = document.getElementById("sys-error");
+    const diaError = document.getElementById("dia-error");
+    const hrError = document.getElementById("hr-error");
+
+    const sys = parseInt(sysInput.value);
+    const dia = parseInt(diaInput.value);
+    const hr = parseInt(hrInput.value);
+
+    let isValid = true;
+
+    // Validate Systolic
+    if (!sys || sys < 50 || sys > 250) {
+      sysError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      sysError.classList.add("hidden");
+    }
+
+    // Validate Diastolic
+    if (!dia || dia < 30 || dia > 150) {
+      diaError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      diaError.classList.add("hidden");
+    }
+
+    // Validate Heart Rate
+    if (!hr || hr < 30 || hr > 200) {
+      hrError.classList.remove("hidden");
+      isValid = false;
+    } else {
+      hrError.classList.add("hidden");
+    }
+
+    if (!isValid) return;
+
+    document.getElementById("bp-form").submit();
+  }
+
+  // Simple date picker handler to update display (Mock)
+  document
+    .getElementById("date-picker")
+    .addEventListener("change", function (e) {
+      if (this.value) {
+        const date = new Date(this.value);
+        const formatted =
+          date.getFullYear() +
+          "/" +
+          String(date.getMonth() + 1).padStart(2, "0") +
+          "/" +
+          String(date.getDate()).padStart(2, "0") +
+          " " +
+          String(date.getHours()).padStart(2, "0") +
+          ":" +
+          String(date.getMinutes()).padStart(2, "0");
+        document.getElementById("time-display").innerText = formatted;
+      }
+    });
+</script>
+{% endblock %}
