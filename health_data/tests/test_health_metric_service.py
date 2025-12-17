@@ -231,3 +231,73 @@ class HealthMetricServiceTest(TestCase):
         mock_filter.assert_called_with(
             patient_id=self.patient_id, metric_type=MetricType.WEIGHT
         )
+
+    @patch("health_data.models.HealthMetric.objects.get")
+    def test_update_manual_metric_success_partial_fields(self, mock_get):
+        """
+        测试 update_manual_metric 只更新部分字段：
+        - 仅更新 value_main，不修改 value_sub 和 measured_at。
+        - 仅允许修改 source=MANUAL 的记录。
+        """
+        # 模拟一条手动录入的 HealthMetric
+        mock_metric = MagicMock(spec=HealthMetric)
+        mock_metric.id = 1
+        mock_metric.source = MetricSource.MANUAL
+        mock_metric.value_main = Decimal("36.5")
+        mock_metric.value_sub = Decimal("0")
+        original_measured_at = self.measured_at
+        mock_metric.measured_at = original_measured_at
+        mock_get.return_value = mock_metric
+
+        # 仅更新 value_main
+        new_value_main = Decimal("37.5")
+        result = HealthMetricService.update_manual_metric(
+            metric_id=1,
+            value_main=new_value_main,
+        )
+
+        # 返回值就是被更新的 metric
+        self.assertIs(result, mock_metric)
+
+        # 只更新了 value_main，且调用了 save(update_fields=["value_main"])
+        self.assertEqual(mock_metric.value_main, new_value_main)
+        self.assertEqual(mock_metric.value_sub, Decimal("0"))
+        self.assertEqual(mock_metric.measured_at, original_measured_at)
+        mock_metric.save.assert_called_once_with(update_fields=["value_main"])
+
+    @patch("health_data.models.HealthMetric.objects.get")
+    def test_update_manual_metric_device_source_raises(self, mock_get):
+        """
+        测试 update_manual_metric 遇到设备数据时抛出 ValueError。
+        """
+        mock_metric = MagicMock(spec=HealthMetric)
+        mock_metric.id = 2
+        mock_metric.source = MetricSource.DEVICE
+        mock_get.return_value = mock_metric
+
+        with self.assertRaises(ValueError):
+            HealthMetricService.update_manual_metric(
+                metric_id=2,
+                value_main=Decimal("37.0"),
+            )
+
+        # 设备数据不应被保存
+        mock_metric.save.assert_not_called()
+
+    @patch("health_data.models.HealthMetric.objects.get")
+    def test_delete_metric_soft_delete(self, mock_get):
+        """
+        测试 delete_metric 软删除行为：
+        - 只标记 is_active=False。
+        - 使用 update_fields=["is_active"] 保存。
+        """
+        mock_metric = MagicMock(spec=HealthMetric)
+        mock_metric.id = 3
+        mock_metric.is_active = True
+        mock_get.return_value = mock_metric
+
+        result = HealthMetricService.delete_metric(metric_id=3)
+
+        self.assertIs(result, mock_metric)
+        self.assertFalse(mock_metric.is_active)
+        mock_metric.save.assert_called_once_with(update_fields=["is_active"])

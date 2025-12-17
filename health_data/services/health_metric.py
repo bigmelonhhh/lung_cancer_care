@@ -24,6 +24,7 @@ from django.core.paginator import Paginator, Page
 
 from business_support.models import Device
 from health_data.models import METRIC_SCALES, HealthMetric, MetricSource, MetricType
+from core.utils.sentinel import UNSET
 import datetime
 
 logger = logging.getLogger(__name__)
@@ -528,6 +529,97 @@ class HealthMetricService:
             measured_at=measured_at,
             source=MetricSource.MANUAL,
         )
+
+    # ============
+    # 客观指标数据更新 / 删除接口（主要面向手动录入数据）
+    # ============
+    @classmethod
+    def update_manual_metric(
+        cls,
+        metric_id: int,
+        *,
+        value_main=UNSET,
+        value_sub=UNSET,
+        measured_at=UNSET,
+    ) -> HealthMetric:
+        """
+        更新一条“手动录入”的健康指标记录。
+
+        【功能说明】
+        - 仅允许修改来源为 MANUAL 的记录（source = MetricSource.MANUAL）。
+        - 参数为可选更新：
+          - 不传某个参数：表示“不修改该字段”；
+          - 显式传 None：表示将该字段更新为 NULL。
+        - 只会对 is_active=True 的有效记录生效（软删除的数据不会被更新）。
+
+        【参数说明】
+        :param metric_id: 待更新的 HealthMetric 记录 ID。
+        :param value_main: (可选) 新的主数值；不传则不更新。
+        :param value_sub: (可选) 新的副数值；不传则不更新。
+        :param measured_at: (可选) 新的测量时间；不传则不更新。
+
+        【返回值】
+        :return: 更新后的 HealthMetric 实例。
+
+        【错误情况】
+        - 若记录不存在（或已被软删除）：会抛出 HealthMetric.DoesNotExist 异常。
+        - 若记录来源为设备数据（source != MANUAL）：抛出 ValueError。
+
+        【使用示例】
+        >>> metric = HealthMetricService.update_manual_metric(
+        ...     metric_id=1,
+        ...     value_main=Decimal("37.5"),
+        ... )
+        >>> metric.display_value
+        '37.5 °C'
+        """
+        metric = HealthMetric.objects.get(id=metric_id)
+
+        if metric.source != MetricSource.MANUAL:
+            raise ValueError("只能修改手动录入的健康指标记录")
+
+        fields_to_update: list[str] = []
+
+        if value_main is not UNSET:
+            metric.value_main = value_main
+            fields_to_update.append("value_main")
+
+        if value_sub is not UNSET:
+            metric.value_sub = value_sub
+            fields_to_update.append("value_sub")
+
+        if measured_at is not UNSET:
+            metric.measured_at = measured_at
+            fields_to_update.append("measured_at")
+
+        if fields_to_update:
+            metric.save(update_fields=fields_to_update)
+
+        return metric
+
+    @classmethod
+    def delete_metric(cls, metric_id: int) -> HealthMetric:
+        """
+        软删除一条健康指标记录：仅将 is_active 标记为 False，不做物理删除。
+
+        【功能说明】
+        - 只对当前仍为有效状态的记录生效（is_active=True）。
+        - 删除后，通过默认的 HealthMetric.objects 将无法再查询到该记录；
+          如需包含软删除记录，请使用 HealthMetric.all_objects。
+
+        【参数说明】
+        :param metric_id: 待删除的 HealthMetric 记录 ID。
+
+        【返回值】
+        :return: 刚被标记为无效的 HealthMetric 实例。
+
+        【错误情况】
+        - 若记录不存在（或已被软删除）：会抛出 HealthMetric.DoesNotExist 异常。
+        """
+        metric = HealthMetric.objects.get(id=metric_id)
+        metric.is_active = False
+        metric.save(update_fields=["is_active"])
+        return metric
 
     # ============
     # 内部持久化

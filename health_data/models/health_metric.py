@@ -26,6 +26,19 @@ class MetricSource(models.TextChoices):
     MANUAL = "manual", "手动"
 
 
+class ActiveHealthMetricManager(models.Manager):
+    """
+    默认只返回 is_active=True 的健康指标记录。
+
+    - 业务读取场景（Service / View）通常通过 HealthMetric.objects 访问，
+      因此天然只会看到“有效记录”，被软删除的数据会自动排除。
+    - 如需查询包含软删除在内的所有记录，可以显式使用 HealthMetric.all_objects。
+    """
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
+
+
 class HealthMetric(models.Model):
     """体征指标记录表。"""
 
@@ -47,6 +60,12 @@ class HealthMetric(models.Model):
         "副数值", max_digits=10, decimal_places=2, null=True, blank=True
     )
     measured_at = models.DateTimeField("测量时间")
+    is_active = models.BooleanField("是否有效", default=True, db_index=True)
+
+    # 默认 Manager：只返回 is_active=True 的记录
+    objects = ActiveHealthMetricManager()
+    # all_objects：返回所有记录（包括已软删除）
+    all_objects = models.Manager()
 
     class Meta:
         db_table = "health_metrics"
