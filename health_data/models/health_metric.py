@@ -2,12 +2,12 @@ from django.db import models
 
 
 class MetricType(models.TextChoices):
-    BLOOD_PRESSURE = "blood_pressure", "血压"
-    BLOOD_OXYGEN = "blood_oxygen", "血氧"
-    HEART_RATE = "heart_rate", "心率"
-    STEPS = "steps", "步数"
-    WEIGHT = "weight", "体重"
-    BODY_TEMPERATURE = "body_temperature", "体温"
+    BLOOD_PRESSURE = "M_BP", "血压"
+    BLOOD_OXYGEN = "M_SPO2", "血氧"
+    HEART_RATE = "M_HR", "心率"
+    STEPS = "M_STEPS", "步数"
+    WEIGHT = "M_WEIGHT", "体重"
+    BODY_TEMPERATURE = "M_TEMP", "体温"
    
 
 
