@@ -1,23 +1,23 @@
-{# 单条复查计划行（与当前疗程绑定） #}
+{# 单条一般监测计划行（基于 MONITORING 类 PlanItem） #}
 <tr
-  class="hover:bg-slate-50 transition-colors {% if not check.is_active %}opacity-60{% endif %}"
-  data-checkup-row
+  class="hover:bg-slate-50 transition-colors {% if not monitoring.is_active %}opacity-60{% endif %}"
+  data-monitoring-row
 >
   <td class="px-4 py-3">
     <div class="flex items-center gap-3">
       <label class="relative inline-flex items-center cursor-pointer">
         <form method="post">
           {% csrf_token %}
-          <input type="hidden" name="category" value="checkup">
-          <input type="hidden" name="library_id" value="{{ check.lib_id }}">
+          <input type="hidden" name="category" value="monitoring">
+          <input type="hidden" name="library_id" value="{{ monitoring.lib_id }}">
           <input
             type="checkbox"
             class="sr-only peer"
             name="enable"
             value="1"
-            data-checkup-toggle
+            data-monitoring-toggle
             data-atomic-checkbox="1"
-            {% if check.is_active %}checked{% endif %}
+            {% if monitoring.is_active %}checked{% endif %}
             hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
             hx-include="closest form"
             hx-target="closest tr"
@@ -27,7 +27,7 @@
           <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
         </form>
       </label>
-      <span class="text-sm font-medium text-slate-900">{{ check.name }}</span>
+      <span class="text-sm font-medium text-slate-900">{{ monitoring.name }}</span>
     </div>
   </td>
   <td class="px-2 py-3 text-sm text-slate-400">-</td>
@@ -40,15 +40,15 @@
       {% csrf_token %}
       <input
         type="checkbox"
-        class="w-4 h-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 cursor-pointer {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
-        data-checkup-slot
+        class="w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
+        data-monitoring-slot
         data-atomic-checkbox="1"
-        {% if day in check.schedule %}checked{% endif %}
+        {% if day in monitoring.schedule %}checked{% endif %}
         {% if current_day and day < current_day %}
         data-readonly="1"
         disabled
-        {% elif check.is_active and check.plan_item_id and day >= current_day %}
-        hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id check.plan_item_id day %}"
+        {% elif monitoring.is_active and monitoring.plan_item_id and day >= current_day %}
+        hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id monitoring.plan_item_id day %}"
         hx-swap="none"
         hx-include="closest form"
         hx-trigger="change"

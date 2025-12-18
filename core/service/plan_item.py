@@ -12,6 +12,7 @@ from core.models import (
     CheckupLibrary,
     Questionnaire,
     Medication,
+    MonitoringTemplate,
     PlanItem,
     TreatmentCycle,
     choices,
@@ -43,6 +44,18 @@ class PlanItemService:
         checkup_map = {pi.checkup_id: pi for pi in plan_items if pi.checkup_id}
         questionnaire_map = {pi.questionnaire_id: pi for pi in plan_items if pi.questionnaire_id}
 
+        # MONITORING 类型的 PlanItem：通过 interaction_config 中的 monitoring_template_id 关联到模板
+        monitoring_plan_map: Dict[int, PlanItem] = {}
+        for pi in plan_items:
+            if pi.category != choices.PlanItemCategory.MONITORING:
+                continue
+            config = pi.interaction_config or {}
+            tpl_id = None
+            if isinstance(config, dict):
+                tpl_id = config.get("monitoring_template_id")
+            if tpl_id:
+                monitoring_plan_map[int(tpl_id)] = pi
+
         medications = [
             cls._build_med_payload(med, med_map.get(med.id))
             for med in Medication.objects.filter(is_active=True).order_by("name")
@@ -54,6 +67,10 @@ class PlanItemService:
         questionnaires = [
             cls._build_questionnaire_payload(q, questionnaire_map.get(q.id))
             for q in Questionnaire.objects.filter(is_active=True).order_by("sort_order", "name")
+        ]
+        monitorings = [
+            cls._build_monitoring_payload(tpl, monitoring_plan_map.get(tpl.id))
+            for tpl in MonitoringTemplate.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
 
         return {
@@ -69,6 +86,7 @@ class PlanItemService:
             "medications": medications,
             "checkups": checkups,
             "questionnaires": questionnaires,
+            "monitorings": monitorings,
         }
 
     @classmethod
@@ -95,6 +113,49 @@ class PlanItemService:
         """
 
         cycle = cls._get_cycle(cycle_id)
+
+        # MONITORING 类别：不依赖 PlanItem 外键字段，通过 interaction_config 绑定 MonitoringTemplate
+        if category == choices.PlanItemCategory.MONITORING:
+            # 这里使用 MonitoringTemplate 作为“标准库”，library_id 即模板 ID
+            library_obj = cls._get_library_instance(MonitoringTemplate, library_id)
+            plan = PlanItem.objects.filter(
+                cycle=cycle,
+                category=choices.PlanItemCategory.MONITORING,
+                interaction_config__monitoring_template_id=library_id,
+            ).first()
+
+            if enable:
+                schedule_template = list(getattr(library_obj, "schedule_days_template", []) or [])
+                current_day = cls._get_current_day_index_for_cycle(cycle)
+                schedule_template = [d for d in schedule_template if d >= current_day]
+                if plan is None:
+                    plan = PlanItem.objects.create(
+                        cycle=cycle,
+                        category=choices.PlanItemCategory.MONITORING,
+                        item_name=library_obj.name,
+                        status=choices.PlanItemStatus.ACTIVE,
+                        schedule_days=schedule_template,
+                        interaction_config={"monitoring_template_id": library_id},
+                    )
+                else:
+                    updates = {"status": choices.PlanItemStatus.ACTIVE}
+                    if not plan.schedule_days:
+                        updates["schedule_days"] = schedule_template
+                    for field, value in updates.items():
+                        setattr(plan, field, value)
+                    plan.save(update_fields=list(updates.keys()))
+            else:
+                if plan:
+                    current_day = cls._get_current_day_index_for_cycle(plan.cycle)
+                    schedule = list(plan.schedule_days or [])
+                    if schedule:
+                        schedule = [d for d in schedule if d < current_day]
+                    plan.status = choices.PlanItemStatus.DISABLED
+                    plan.schedule_days = schedule
+                    plan.save(update_fields=["status", "schedule_days"])
+            return plan
+
+        # 其它类别：沿用原有基于库外键的逻辑
         library_field, library_model = cls._get_library_binding(category)
         plan = cls._get_plan_item(cycle_id, category, library_field, library_id)
 
@@ -346,6 +407,24 @@ class PlanItemService:
         return {
             "library_id": q.id,
             "name": q.name,
+            "schedule_days_template": schedule_template,
+            "plan_item_id": plan.id if plan else None,
+            "status": plan.status if plan else choices.PlanItemStatus.DISABLED,
+            "is_active": bool(plan and plan.status == choices.PlanItemStatus.ACTIVE),
+            "schedule_days": schedule_days,
+            "interaction_config": plan.interaction_config if plan else {},
+        }
+
+    @staticmethod
+    def _build_monitoring_payload(tpl: MonitoringTemplate, plan: Optional[PlanItem]) -> Dict[str, Any]:
+        """
+        将 MonitoringTemplate + 可选 PlanItem 映射为前端监测计划视图结构。
+        """
+        schedule_template = list(getattr(tpl, "schedule_days_template", []) or [])
+        schedule_days = list(plan.schedule_days) if plan and plan.schedule_days else schedule_template
+        return {
+            "library_id": tpl.id,
+            "name": tpl.name,
             "schedule_days_template": schedule_template,
             "plan_item_id": plan.id if plan else None,
             "status": plan.status if plan else choices.PlanItemStatus.DISABLED,

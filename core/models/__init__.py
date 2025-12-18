@@ -1,5 +1,5 @@
 from .medication import Medication
-from .monitoring import MonitoringConfig
+from .monitoring import MonitoringTemplate
 from .checkup import CheckupLibrary
 from .questionnaire import Questionnaire
 from .questionnaire_question import QuestionnaireQuestion
@@ -11,7 +11,7 @@ from . import choices
 
 __all__ = [
     "Medication",
-    "MonitoringConfig",
+    "MonitoringTemplate",
     "CheckupLibrary",
     "Questionnaire",
     "QuestionnaireQuestion",

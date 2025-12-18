@@ -6,7 +6,6 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.db import transaction, models
 
-from core.service.monitoring import MonitoringService
 from health_data.models import MedicalHistory
 from regions.models import Province, City
 from users import choices
@@ -317,12 +316,8 @@ class PatientService:
 
             profile.save()
 
-            # 4. 初始化或补全监测配置（保证患者始终拥有一条 MonitoringConfig）
-            MonitoringService.init_patient_config(profile)
-
         return profile
 
-    
     def assign_doctor(
         self,
         patient: PatientProfile,

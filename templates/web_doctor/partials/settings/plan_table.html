@@ -15,6 +15,19 @@
 
     <tbody class="divide-y divide-slate-100 group-section">
       <tr class="bg-slate-50/30">
+        <td colspan="24" class="px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50/40">
+          📈 一般监测计划
+        </td>
+      </tr>
+      {% with current_day=plan_view.current_day_index|default:1 %}
+      {% for monitoring in plan_view.monitorings %}
+        {% include "web_doctor/partials/settings/plan_table_monitoring_row.html" with monitoring=monitoring patient=patient cycle=cycle current_day=current_day %}
+      {% endfor %}
+      {% endwith %}
+    </tbody>
+
+    <tbody class="divide-y divide-slate-100 border-t border-slate-200">
+      <tr class="bg-slate-50/30">
         <td colspan="24" class="px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50/30">
           <div class="flex items-center justify-between">
             <span>💊 用药计划</span>

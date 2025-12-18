@@ -20,7 +20,7 @@ from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
 from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle
-from core.models import MonitoringConfig, TreatmentCycle, PlanItem, choices as core_choices
+from core.models import TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
 from core.service.questionnaire import QuestionnaireService
@@ -180,7 +180,6 @@ def _build_settings_context(
     """
 
     active_cycle = get_active_treatment_cycle(patient)
-    monitoring_config, _ = MonitoringConfig.objects.get_or_create(patient=patient)
 
     # 患者全部疗程列表，按结束日期倒序排列（结束时间最新的在前）
     cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
@@ -203,19 +202,12 @@ def _build_settings_context(
     # 默认展开选中的疗程；若不存在则不展开任何卡片
     expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
 
-    monitoring_items = [
-        {"label": "体温", "field_name": "enable_temp", "is_checked": monitoring_config.enable_temp},
-        {"label": "血氧", "field_name": "enable_spo2", "is_checked": monitoring_config.enable_spo2},
-        {"label": "体重", "field_name": "enable_weight", "is_checked": monitoring_config.enable_weight},
-        {"label": "血压/心率", "field_name": "enable_bp", "is_checked": monitoring_config.enable_bp},
-        {"label": "步数", "field_name": "enable_step", "is_checked": monitoring_config.enable_step},
-    ]
-
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
     current_day_index: int | None = None
     medications: list[dict] = []
     checkups: list[dict] = []
+    monitorings: list[dict] = []
     questionnaires: list[dict] = []
     active_questionnaire: dict | None = None
 
@@ -267,6 +259,18 @@ def _build_settings_context(
             }
             questionnaires.append(item)
 
+        # 一般监测计划：与复查/问卷类似，从 PlanItem 视图中获取（以 MonitoringTemplate 为库）
+        for m in cycle_plan.get("monitorings", []):
+            monitorings.append(
+                {
+                    "lib_id": m["library_id"],
+                    "name": m["name"],
+                    "is_active": bool(m.get("is_active")),
+                    "schedule": list(m.get("schedule_days") or []),
+                    "plan_item_id": m.get("plan_item_id"),
+                }
+            )
+
         # 选出当前“活动”的问卷计划，用于渲染问卷内容：
         # 优先选 is_active 且已存在 PlanItem 的条目；否则选任意有 PlanItem 的条目；
         # 若仍不存在，则退回到库中的第一条随访模板，至少保证界面上有一行可以开关。
@@ -289,6 +293,7 @@ def _build_settings_context(
         "medications": medications,
         "checkups": checkups,
         "questionnaires": questionnaires,
+        "monitorings": monitorings,
         "active_questionnaire": active_questionnaire,
         "med_library": med_library,
         "current_day_index": current_day_index,
@@ -299,56 +304,11 @@ def _build_settings_context(
     return {
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,
-        "monitoring_config": monitoring_config,
-        "monitoring_items": monitoring_items,
         "cycle_page": cycle_page,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
         "current_day_index": current_day_index,
     }
-
-
-@login_required
-@check_doctor_or_assistant
-@require_POST
-def patient_monitoring_update(request: HttpRequest, patient_id: int) -> HttpResponse:
-    """
-    更新患者监测配置（频率 + 开关）：
-    - 前端以表单形式一次性提交监测频率 + 5 个开关（体温/血氧/体重/血压/步数）
-    - 每次任意字段变更时，都会提交当前整套状态
-    """
-    # 权限校验：确保当前登录账号可以管理该患者
-    patients_qs = _get_workspace_patients(request.user, query=None)
-    patient = patients_qs.filter(pk=patient_id).first()
-    if patient is None:
-        raise Http404("未找到患者")
-
-    # 当前监测配置，用于在未提交频率或数据异常时兜底
-    monitoring_config, _ = MonitoringConfig.objects.get_or_create(patient=patient)
-
-    # 解析表单中的五个监测开关，未勾选的不会出现在 POST 中
-    field_names = ["enable_temp", "enable_spo2", "enable_weight", "enable_bp", "enable_step"]
-    switches = {field: field in request.POST for field in field_names}
-
-    # 解析监测频率（天），若未提交或非法则回退到当前配置值
-    freq_raw = request.POST.get("check_freq_days")
-    try:
-        check_freq_days = int(freq_raw) if freq_raw is not None else monitoring_config.check_freq_days
-    except (TypeError, ValueError):
-        check_freq_days = monitoring_config.check_freq_days
-
-    MonitoringService.update_switches(
-        patient,
-        check_freq_days=check_freq_days,
-        enable_temp=switches["enable_temp"],
-        enable_spo2=switches["enable_spo2"],
-        enable_weight=switches["enable_weight"],
-        enable_bp=switches["enable_bp"],
-        enable_step=switches["enable_step"],
-    )
-
-    # 不返回新 HTML，204 即表示“静默成功”，前端只负责视觉切换
-    return HttpResponse(status=204)
 
 
 @login_required
@@ -532,6 +492,8 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         category = core_choices.PlanItemCategory.CHECKUP
     elif category_raw in ("questionnaire", "question", "q"):
         category = core_choices.PlanItemCategory.QUESTIONNAIRE
+    elif category_raw in ("monitoring", "monitor", "mon"):
+        category = core_choices.PlanItemCategory.MONITORING
     else:
         category = None
         errors.append("不支持的计划类别。")
@@ -587,7 +549,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             row_ctx,
         )
 
-    # 问卷计划：开关变化后需要重新渲染整个计划表，以便携带最新的 plan_item_id 与问卷配置
+    # 问卷计划：开关变化后需要重新渲染该行，以便携带最新的 plan_item_id 与问卷配置
     if category == core_choices.PlanItemCategory.QUESTIONNAIRE:
         if errors:
             response = HttpResponse("\n".join(errors) or "计划开关更新失败。", status=400)
@@ -624,6 +586,44 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         return render(
             request,
             "web_doctor/partials/settings/plan_table_questionnaire_row.html",
+            row_ctx,
+        )
+
+    # 一般监测计划：开关变化后，重新渲染对应监测行
+    if category == core_choices.PlanItemCategory.MONITORING:
+        if errors:
+            response = HttpResponse("\n".join(errors) or "计划开关更新失败。", status=400)
+            response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace(
+                '"', '\\"'
+            )
+            return response
+
+        settings_ctx = _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=cycle.id,
+        )
+        plan_view = settings_ctx.get("plan_view") or {}
+        monitorings = plan_view.get("monitorings") or []
+        target_m: dict | None = None
+        for m in monitorings:
+            if m.get("lib_id") == library_id:
+                target_m = m
+                break
+
+        if target_m is None:
+            return HttpResponse("", status=204)
+
+        current_day = settings_ctx.get("current_day_index") or plan_view.get("current_day_index") or 1
+        row_ctx = {
+            "patient": patient,
+            "cycle": cycle,
+            "monitoring": target_m,
+            "current_day": current_day,
+        }
+        return render(
+            request,
+            "web_doctor/partials/settings/plan_table_monitoring_row.html",
             row_ctx,
         )
 

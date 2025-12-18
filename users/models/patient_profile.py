@@ -133,6 +133,52 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】记录二维码失效时间，避免频繁请求微信；【用法】每次生成更新；【示例】2025-01-01 10:00；【参数】datetime；【返回值】datetime",
     )
+    baseline_body_temperature = models.DecimalField(
+        "体温基线(°C)",
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者个体的体温参考基线，用于后续偏离判断；【用法】由医生在管理端配置；【示例】36.5；【参数】decimal；【返回值】decimal",
+    )
+    baseline_blood_oxygen = models.PositiveSmallIntegerField(
+        "血氧基线(%)",
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者静息状态下的血氧参考水平；【用法】由医生在管理端配置；【示例】98；【参数】int；【返回值】int",
+    )
+    baseline_weight = models.DecimalField(
+        "体重基线(kg)",
+        max_digits=5,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者目标或稳定体重，用于监测体重波动；【用法】由医生在管理端配置；【示例】68.5；【参数】decimal；【返回值】decimal",
+    )
+    baseline_blood_pressure_sbp = models.PositiveSmallIntegerField(
+        "血压基线-收缩压",
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者平稳期收缩压参考值；【用法】由医生在管理端配置；【示例】120；【参数】int；【返回值】int",
+    )
+    baseline_blood_pressure_dbp = models.PositiveSmallIntegerField(
+        "血压基线-舒张压",
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者平稳期舒张压参考值；【用法】由医生在管理端配置；【示例】80；【参数】int；【返回值】int",
+    )
+    baseline_heart_rate = models.PositiveSmallIntegerField(
+        "心率基线(bpm)",
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者静息状态下心率参考值；【用法】由医生在管理端配置；【示例】72；【参数】int；【返回值】int",
+    )
+    baseline_steps = models.PositiveIntegerField(
+        "步数基线(步)",
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者日常活动步数参考值；【用法】由医生在管理端配置；【示例】6000；【参数】int；【返回值】int",
+    )
     is_active = models.BooleanField(
         "是否有效",
         default=True,
