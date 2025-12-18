@@ -15,17 +15,17 @@ class HealthMetricServiceTest(TestCase):
         self.measured_at = timezone.now()
 
     @patch("health_data.models.HealthMetric.objects.create")
-    def test_save_manual_sputum_color(self, mock_create):
+    def test_save_manual_temperature(self, mock_create):
         """
-        测试手动保存痰色指标。
+        测试手动保存体温指标。
         验证重点：
         1. source 是否自动被标记为 MANUAL。
         2. value_main 是否正确传入。
         3. value_sub 是否默认为 None。
         """
-        # 准备数据：痰色为 3 (黄绿色/脓性)
-        metric_type = MetricType.SPUTUM_COLOR
-        value = Decimal("3")
+        # 准备数据：体温为 36.5℃
+        metric_type = MetricType.BODY_TEMPERATURE
+        value = Decimal("36.5")
 
         # 调用服务方法
         HealthMetricService.save_manual_metric(
@@ -46,13 +46,13 @@ class HealthMetricServiceTest(TestCase):
         )
 
     @patch("health_data.models.HealthMetric.objects.create")
-    def test_save_manual_pain_score(self, mock_create):
+    def test_save_manual_weight_metric(self, mock_create):
         """
-        测试手动保存疼痛评分。
+        测试手动保存体重指标。
         """
-        # 准备数据：头部疼痛 7 分
-        metric_type = MetricType.PAIN_HEAD
-        value = Decimal("7")
+        # 准备数据：体重 65.5 kg
+        metric_type = MetricType.WEIGHT
+        value = Decimal("65.5")
 
         HealthMetricService.save_manual_metric(
             patient_id=self.patient_id,
@@ -102,14 +102,14 @@ class HealthMetricServiceTest(TestCase):
                 mock_metric.source = MetricSource.DEVICE
                 mock_metric.display_value = "118/78"
                 mock_qs.order_by.return_value.first.return_value = mock_metric
-            elif m_type == MetricType.SPUTUM_COLOR:
-                # B. 痰色 (枚举型) - 3: 黄绿色/脓性
-                mock_metric.metric_type = MetricType.SPUTUM_COLOR
-                mock_metric.value_main = Decimal("3")
+            elif m_type == MetricType.BODY_TEMPERATURE:
+                # B. 体温 (数值型，带单位)
+                mock_metric.metric_type = MetricType.BODY_TEMPERATURE
+                mock_metric.value_main = Decimal("36.50")
                 mock_metric.value_sub = None
                 mock_metric.measured_at = timezone.now()
                 mock_metric.source = MetricSource.MANUAL
-                mock_metric.display_value = "黄绿色/脓性（提示细菌感染，需警惕）"
+                mock_metric.display_value = "36.5 °C"
                 mock_qs.order_by.return_value.first.return_value = mock_metric
             elif m_type == MetricType.WEIGHT:
                 # C. 体重 (数值型，带单位)
@@ -137,10 +137,10 @@ class HealthMetricServiceTest(TestCase):
         self.assertEqual(bp_data["value_display"], "118/78")
         self.assertEqual(bp_data["name"], "血压")
 
-        # 验证痰色翻译
-        sputum_data = result_all[MetricType.SPUTUM_COLOR]
-        self.assertIsNotNone(sputum_data)
-        self.assertIn("黄绿色/脓性", sputum_data["value_display"])
+        # 验证体温展示
+        temp_data = result_all[MetricType.BODY_TEMPERATURE]
+        self.assertIsNotNone(temp_data)
+        self.assertIn("36.5", temp_data["value_display"])
 
         # 验证体重单位
         weight_data = result_all[MetricType.WEIGHT]
@@ -154,7 +154,7 @@ class HealthMetricServiceTest(TestCase):
             self.patient_id, metric_type=MetricType.BLOOD_PRESSURE
         )
         self.assertIn(MetricType.BLOOD_PRESSURE, result_single)
-        self.assertNotIn(MetricType.SPUTUM_COLOR, result_single)
+        self.assertNotIn(MetricType.BODY_TEMPERATURE, result_single)
 
         # --- 测试场景 3: 患者不存在 ---
         mock_patient_model.objects.filter.return_value.exists.return_value = False

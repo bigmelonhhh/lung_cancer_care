@@ -1,7 +1,9 @@
 from .medication import Medication
 from .monitoring import MonitoringConfig
 from .checkup import CheckupLibrary
-from .followup import FollowupLibrary
+from .questionnaire import Questionnaire
+from .questionnaire_question import QuestionnaireQuestion
+from .questionnaire_option import QuestionnaireOption
 from .treatment_cycle import TreatmentCycle
 from .plan_item import PlanItem
 from .tasks import DailyTask
@@ -11,7 +13,9 @@ __all__ = [
     "Medication",
     "MonitoringConfig",
     "CheckupLibrary",
-    "FollowupLibrary",
+    "Questionnaire",
+    "QuestionnaireQuestion",
+    "QuestionnaireOption",
     "TreatmentCycle",
     "PlanItem",
     "DailyTask",

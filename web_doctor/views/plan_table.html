@@ -1,0 +1,50 @@
+{% load i18n %}
+
+<div class="overflow-x-auto">
+    <table class="w-full text-sm text-left text-gray-500">
+        <thead class="text-xs text-gray-700 uppercase bg-gray-50">
+            <tr>
+                <th scope="col" class="px-4 py-3 min-w-[200px]">项目名称</th>
+                <th scope="col" class="px-4 py-3">执行计划 (D-Day)</th>
+                <th scope="col" class="px-4 py-3 text-right">操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- 1. 用药计划 -->
+            <tr class="bg-gray-100 border-b">
+                <td colspan="3" class="px-4 py-2 font-semibold text-gray-700 flex items-center gap-2">
+                    <span>💊</span> 用药计划
+                </td>
+            </tr>
+            {% for med in plan_view.medications %}
+                {% include "web_doctor/partials/settings/plan_table_medication_row.html" with med=med cycle=cycle patient=patient current_day=plan_view.current_day_index %}
+            {% empty %}
+                <tr>
+                    <td colspan="3" class="px-4 py-4 text-center text-gray-400 italic">
+                        暂无用药计划，请在上方添加。
+                    </td>
+                </tr>
+            {% endfor %}
+
+            <!-- 2. 复查计划 -->
+            <tr class="bg-gray-100 border-b border-t">
+                <td colspan="3" class="px-4 py-2 font-semibold text-gray-700 flex items-center gap-2">
+                    <span>🔬</span> 复查计划
+                </td>
+            </tr>
+            {% for check in plan_view.checkups %}
+                {% include "web_doctor/partials/settings/plan_table_checkup_row.html" with check=check cycle=cycle patient=patient current_day=plan_view.current_day_index %}
+            {% endfor %}
+
+            <!-- 3. 问卷计划 -->
+            <tr class="bg-gray-100 border-b border-t">
+                <td colspan="3" class="px-4 py-2 font-semibold text-gray-700 flex items-center gap-2">
+                    <span>📝</span> 问卷计划
+                </td>
+            </tr>
+            {% for questionnaire in plan_view.questionnaires %}
+                {% include "web_doctor/partials/settings/plan_table_questionnaire_row.html" with questionnaire=questionnaire cycle=cycle patient=patient current_day=plan_view.current_day_index %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

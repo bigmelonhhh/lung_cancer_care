@@ -326,6 +326,52 @@
   });
 })();
 
+// 问卷计划：左侧开关控制后续日期选择是否可编辑（与复查计划交互一致）
+(function () {
+  function initQuestionnaireRows(root) {
+    const scope = root || document;
+    const rows = scope.querySelectorAll("[data-questionnaire-row]");
+    rows.forEach((row) => {
+      if (row.dataset.questionnaireInitialized === "1") return;
+      const toggle = row.querySelector("[data-questionnaire-toggle]");
+      const slots = row.querySelectorAll("[data-questionnaire-slot]");
+      if (!toggle || !slots.length) return;
+
+      function sync() {
+        const enabled = toggle.checked;
+        slots.forEach((input) => {
+          const isReadonly = input.hasAttribute("data-readonly");
+          if (isReadonly) {
+            input.disabled = true;
+            input.classList.add("opacity-50", "cursor-not-allowed");
+            return;
+          }
+          input.disabled = !enabled;
+          input.classList.toggle("opacity-50", !enabled);
+          input.classList.toggle("cursor-not-allowed", !enabled);
+        });
+        row.classList.toggle("opacity-60", !enabled);
+      }
+
+      toggle.addEventListener("change", sync);
+      sync();
+      row.dataset.questionnaireInitialized = "1";
+    });
+  }
+
+  // 初次渲染时处理一次
+  initQuestionnaireRows(document);
+
+  // 每次 plan 表格通过 HTMX 局部刷新后，重新初始化新插入的问卷行
+  document.body.addEventListener("htmx:afterSwap", function (event) {
+    const target = event.target;
+    if (!target) return;
+    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
+      initQuestionnaireRows(target);
+    }
+  });
+})();
+
 // 用药计划：本地过滤药品库并通过下拉选择加入当前疗程（事件委托，兼容 htmx 局部刷新）
 (function () {
   if (window.__medSearchDelegated) return;
@@ -454,62 +500,6 @@
     const btn = event.target && event.target.closest && event.target.closest("[data-med-option]");
     if (!btn) return;
     chooseOption(btn);
-  });
-})();
-
-// 随访计划：总开关控制日期勾选和问卷内容开关可用性
-(function () {
-  function initFollowupRow(root) {
-    const scope = root || document;
-    const row = scope.querySelector("[data-followup-row]");
-    if (!row || row.dataset.followupInitialized === "1") return;
-
-    const toggle = row.querySelector("[data-followup-toggle]");
-    const slots = row.querySelectorAll("[data-followup-slot]");
-    const detailsContainer = scope.querySelector("[data-followup-detail-container]");
-    const details = detailsContainer ? detailsContainer.querySelectorAll("[data-followup-detail]") : [];
-
-    if (!toggle || !slots.length) return;
-
-    function sync() {
-      const enabled = toggle.checked;
-      slots.forEach((input) => {
-        const isReadonly = input.hasAttribute("data-readonly");
-        if (isReadonly) {
-          input.disabled = true;
-          input.classList.add("opacity-50", "cursor-not-allowed");
-          return;
-        }
-        input.disabled = !enabled;
-        input.classList.toggle("opacity-50", !enabled);
-        input.classList.toggle("cursor-not-allowed", !enabled);
-      });
-      details.forEach((el) => {
-        el.classList.toggle("opacity-60", !enabled);
-        const input = el.querySelector("input[type='checkbox']");
-        if (input) {
-          input.disabled = !enabled;
-          input.classList.toggle("cursor-not-allowed", !enabled);
-        }
-      });
-      row.classList.toggle("opacity-70", !enabled);
-    }
-
-    toggle.addEventListener("change", sync);
-    sync();
-    row.dataset.followupInitialized = "1";
-  }
-
-  // 初次渲染
-  initFollowupRow(document);
-
-  // plan 表格通过 HTMX 局部刷新后，重新处理随访行
-  document.body.addEventListener("htmx:afterSwap", function (event) {
-    const target = event.target;
-    if (!target) return;
-    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
-      initFollowupRow(target);
-    }
   });
 })();
 

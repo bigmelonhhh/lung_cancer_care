@@ -1,0 +1,59 @@
+{% load i18n %}
+<!-- 
+  Context:
+  - patient: PatientProfile
+  - cycle: TreatmentCycle
+  - questionnaire: dict (from plan_view.questionnaires)
+  - current_day: int
+-->
+<tr class="hover:bg-gray-50 transition-colors">
+    <!-- 1. 开关与名称 -->
+    <td class="px-4 py-3 whitespace-nowrap">
+        <div class="flex items-center">
+            <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="sr-only peer"
+                       name="enable"
+                       {% if questionnaire.is_active %}checked{% endif %}
+                       hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
+                       hx-vals='{"category": "questionnaire", "library_id": "{{ questionnaire.lib_id }}"}'
+                       hx-target="closest tr"
+                       hx-swap="outerHTML">
+                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+            </label>
+            <span class="ml-3 text-sm font-medium text-gray-900">{{ questionnaire.name }}</span>
+        </div>
+    </td>
+
+    <!-- 2. 调度日 (D1...Dn) -->
+    <td class="px-4 py-3">
+        <div class="flex flex-wrap gap-1">
+            {# 使用 center 过滤器生成长度为 cycle_days 的字符串用于循环 #}
+            {% with ''|center:cycle.cycle_days as range %}
+            {% for _ in range %}
+                {% with day=forloop.counter %}
+                <div class="flex flex-col items-center" style="width: 20px;">
+                    <span class="text-[10px] text-gray-400 mb-0.5 leading-none">D{{ day }}</span>
+                    {% if questionnaire.plan_item_id %}
+                        <input type="checkbox"
+                               class="w-3.5 h-3.5 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                               {% if day in questionnaire.schedule %}checked{% endif %}
+                               {% if day < current_day %}disabled{% endif %}
+                               hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id questionnaire.plan_item_id day %}"
+                               {# 注意：toggle_day 目前返回整个 settings 页面，这里暂时使用 none 避免替换错误，或者需调整后端返回 #}
+                               hx-target="#patient-workspace-section"
+                               hx-trigger="change">
+                    {% else %}
+                        <!-- 未启用时显示禁用状态的 checkbox -->
+                        <input type="checkbox" disabled class="w-3.5 h-3.5 text-gray-300 bg-gray-50 border-gray-200 rounded cursor-not-allowed">
+                    {% endif %}
+                </div>
+                {% endwith %}
+            {% endfor %}
+            {% endwith %}
+        </div>
+    </td>
+    
+    <!-- 3. 占位/操作列 -->
+    <td class="px-4 py-3 text-right">
+    </td>
+</tr>

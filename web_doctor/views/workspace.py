@@ -23,7 +23,8 @@ from core.service.treatment_cycle import get_active_treatment_cycle, create_trea
 from core.models import MonitoringConfig, TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
-from core.service.followup import get_active_followup_library, get_followup_detail_items
+from core.service.questionnaire import QuestionnaireService
+
 from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
 
@@ -215,8 +216,8 @@ def _build_settings_context(
     current_day_index: int | None = None
     medications: list[dict] = []
     checkups: list[dict] = []
-    followups: list[dict] = []
-    active_followup: dict | None = None
+    questionnaires: list[dict] = []
+    active_questionnaire: dict | None = None
 
     if selected_cycle:
         # 计算当前日期在疗程中的 DayIndex（最小为 1）
@@ -254,53 +255,45 @@ def _build_settings_context(
                 }
             )
 
-        # 随访计划：同样从 PlanItem 视图中获取
-        for fu in cycle_plan.get("followups", []):
+        # 问卷计划：同样从 PlanItem 视图中获取
+        for q in cycle_plan.get("questionnaires", []):
             item = {
-                "lib_id": fu["library_id"],
-                "name": fu["name"],
-                "is_active": bool(fu.get("is_active")),
-                "schedule": list(fu.get("schedule_days") or []),
-                "plan_item_id": fu.get("plan_item_id"),
-                "detail_config": (fu.get("interaction_config") or {}).get("details", {}),
+                "lib_id": q["library_id"],
+                "name": q["name"],
+                "is_active": bool(q.get("is_active")),
+                "schedule": list(q.get("schedule_days") or []),
+                "plan_item_id": q.get("plan_item_id"),
+                "detail_config": (q.get("interaction_config") or {}).get("details", {}),
             }
-            followups.append(item)
+            questionnaires.append(item)
 
-        # 选出当前“活动”的随访计划，用于渲染问卷内容：
+        # 选出当前“活动”的问卷计划，用于渲染问卷内容：
         # 优先选 is_active 且已存在 PlanItem 的条目；否则选任意有 PlanItem 的条目；
         # 若仍不存在，则退回到库中的第一条随访模板，至少保证界面上有一行可以开关。
-        for fu in followups:
-            if fu.get("is_active") and fu.get("plan_item_id"):
-                active_followup = fu
+        for q in questionnaires:
+            if q.get("is_active") and q.get("plan_item_id"):
+                active_questionnaire = q
                 break
-        if active_followup is None:
-            for fu in followups:
-                if fu.get("plan_item_id"):
-                    active_followup = fu
+        if active_questionnaire is None:
+            for q in questionnaires:
+                if q.get("plan_item_id"):
+                    active_questionnaire = q
                     break
-        if active_followup is None and followups:
-            active_followup = followups[0]
+        if active_questionnaire is None and questionnaires:
+            active_questionnaire = questionnaires[0]
 
     # 其它库仍使用简单的“可用列表”供前端搜索等使用
     med_library = get_active_medication_library()
-    # 随访问卷问卷内容选项：基于当前活动随访 PlanItem 的 detail_config 计算选中状态
-    if active_followup:
-        detail_cfg = active_followup.get("detail_config") or {}
-        selected_codes = [code for code, flag in detail_cfg.items() if flag]
-        followup_details = get_followup_detail_items(selected_codes)
-    else:
-        followup_details = get_followup_detail_items()
 
     plan_view = {
         "medications": medications,
         "checkups": checkups,
-        "followups": followups,
-        "active_followup": active_followup,
+        "questionnaires": questionnaires,
+        "active_questionnaire": active_questionnaire,
         "med_library": med_library,
         "current_day_index": current_day_index,
-        # 随访计划：当前仅展示活动随访问卷的计划与问卷内容
-        "followup_schedule": active_followup["schedule"] if active_followup else [],
-        "followup_details": followup_details,
+        # 问卷计划：当前仅展示问卷排期，不再保留旧随访模块配置
+        "questionnaire_schedule": active_questionnaire["schedule"] if active_questionnaire else [],
     }
 
     return {
@@ -537,8 +530,8 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
         category = core_choices.PlanItemCategory.MEDICATION
     elif category_raw in ("checkup", "check", "exam"):
         category = core_choices.PlanItemCategory.CHECKUP
-    elif category_raw in ("followup", "follow_up", "fu"):
-        category = core_choices.PlanItemCategory.FOLLOW_UP
+    elif category_raw in ("questionnaire", "question", "q"):
+        category = core_choices.PlanItemCategory.QUESTIONNAIRE
     else:
         category = None
         errors.append("不支持的计划类别。")
@@ -594,8 +587,8 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             row_ctx,
         )
 
-    # 随访计划：开关变化后需要重新渲染整个计划表，以便携带最新的 plan_item_id 与问卷配置
-    if category == core_choices.PlanItemCategory.FOLLOW_UP:
+    # 问卷计划：开关变化后需要重新渲染整个计划表，以便携带最新的 plan_item_id 与问卷配置
+    if category == core_choices.PlanItemCategory.QUESTIONNAIRE:
         if errors:
             response = HttpResponse("\n".join(errors) or "计划开关更新失败。", status=400)
             response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % "\\n".join(errors).replace(
@@ -603,40 +596,35 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             )
             return response
 
-        # 重建当前患者 + 疗程的计划视图，仅返回 plan_table 部分
+        # 问卷计划：开关变化后，仅重新渲染该行（与 Checkup 逻辑保持一致）
         settings_ctx = _build_settings_context(
             patient,
             tc_page=request.GET.get("tc_page"),
             selected_cycle_id=cycle.id,
         )
-        selected_cycle = settings_ctx.get("selected_cycle")
-        table_context: dict = {
-            "patient": patient,
-            "cycle": selected_cycle,
-            "plan_view": settings_ctx.get("plan_view"),
-        }
-        return render(
-            request,
-            "web_doctor/partials/settings/plan_table.html",
-            table_context,
-        )
+        plan_view = settings_ctx.get("plan_view") or {}
+        questionnaires = plan_view.get("questionnaires") or []
+        
+        target_q = None
+        for q in questionnaires:
+            if q.get("lib_id") == library_id:
+                target_q = q
+                break
+        
+        if target_q is None:
+            return HttpResponse("", status=204)
 
-        # 重建当前患者 + 疗程的计划视图，仅返回 plan_table 部分
-        settings_ctx = _build_settings_context(
-            patient,
-            tc_page=request.GET.get("tc_page"),
-            selected_cycle_id=cycle.id,
-        )
-        selected_cycle = settings_ctx.get("selected_cycle")
-        table_context: dict = {
+        current_day = settings_ctx.get("current_day_index") or plan_view.get("current_day_index") or 1
+        row_ctx = {
             "patient": patient,
-            "cycle": selected_cycle,
-            "plan_view": settings_ctx.get("plan_view"),
+            "cycle": cycle,
+            "questionnaire": target_q,
+            "current_day": current_day,
         }
         return render(
             request,
-            "web_doctor/partials/settings/plan_table.html",
-            table_context,
+            "web_doctor/partials/settings/plan_table_questionnaire_row.html",
+            row_ctx,
         )
 
     # 以下逻辑仅适用于“用药计划”行首开关
@@ -774,11 +762,11 @@ def patient_plan_item_update_field(request: HttpRequest, patient_id: int, plan_i
 @login_required
 @check_doctor_or_assistant
 @require_POST
-def patient_followup_detail_toggle(
+def patient_questionnaire_detail_toggle(
     request: HttpRequest, patient_id: int, plan_item_id: int, code: str
 ) -> HttpResponse:
     """
-    切换随访问卷 PlanItem 的单个问卷模块开关状态（interaction_config.details[code]）。
+    切换问卷 PlanItem 的单个问卷模块开关状态（interaction_config.details[code]）。
     - 由前端问卷内容区域的 checkbox 以 HTMX 方式调用，保持每次点击原子更新。
     """
     patients_qs = _get_workspace_patients(request.user, query=None)
@@ -789,7 +777,7 @@ def patient_followup_detail_toggle(
     try:
         plan = PlanItem.objects.select_related("cycle__patient").get(pk=plan_item_id)
     except PlanItem.DoesNotExist:
-        raise Http404("随访计划条目不存在")
+        raise Http404("问卷计划条目不存在")
 
     if plan.cycle.patient_id != patient.id:
         raise Http404("计划条目与患者不匹配")
@@ -797,9 +785,9 @@ def patient_followup_detail_toggle(
     enabled = "enabled" in request.POST
 
     try:
-        PlanItemService.toggle_followup_detail(plan_item_id, code, enabled)
+        PlanItemService.toggle_questionnaire_detail(plan_item_id, code, enabled)
     except ValidationError as exc:
-        message = str(exc) or "随访问卷内容更新失败。"
+        message = str(exc) or "问卷内容更新失败。"
         response = HttpResponse(message, status=400)
         response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
         return response

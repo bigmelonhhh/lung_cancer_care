@@ -23,7 +23,7 @@ from django.utils import timezone
 from django.core.paginator import Paginator, Page
 
 from business_support.models import Device
-from health_data.models import METRIC_SCALES, HealthMetric, MetricSource, MetricType
+from health_data.models import HealthMetric, MetricSource, MetricType
 from core.utils.sentinel import UNSET
 import datetime
 
@@ -432,7 +432,7 @@ class HealthMetricService:
                 "measured_at": datetime(...),
                 "source": "device"
             },
-            "sputum_color": None,  # 该指标无数据
+            "steps": None,  # 该指标无数据
             ...
         }
         """
@@ -481,13 +481,14 @@ class HealthMetricService:
         measured_at: datetime,
         value_main: Optional[Decimal] = None,
         value_sub: Optional[Decimal] = None,
+        questionnaire_submission_id: int | None = None,
     ) -> HealthMetric:
         """
         手动录入健康指标数据的通用入口。
 
         【功能说明】
-        该方法供 View 层调用，用于保存用户手动填写的各类健康数据（如体能评分、疼痛评分、痰色等）。
-        与设备自动上传不同，手动录入的数据不做“每日条数限制”，每次调用都会生成一条新记录。
+        该方法供 View 层调用，用于保存用户手动填写的各类客观健康数据（如体温、血压、血氧、体重、步数等）。
+        与设备自动上传不同，手动录入的数据默认不做“每日条数限制”，每次调用都会生成一条新记录。
         数据来源（source）会自动标记为 MANUAL。
 
         【参数解释】
@@ -496,19 +497,23 @@ class HealthMetricService:
         :param metric_type: str
             指标类型枚举值。
             必须使用 health_data.models.MetricType 中的常量，例如：
-            - MetricType.PHYSICAL_PERFORMANCE ("physical_performance")
-            - MetricType.SPUTUM_COLOR ("sputum_color")
-            - MetricType.PAIN_HEAD ("pain_head")
+            - MetricType.BLOOD_PRESSURE ("blood_pressure")
+            - MetricType.BLOOD_OXYGEN ("blood_oxygen")
+            - MetricType.BODY_TEMPERATURE ("body_temperature")
+            - MetricType.WEIGHT ("weight")
+            - MetricType.STEPS ("steps")
         :param measured_at: datetime
             测量时间（带时区）。通常由前端传入用户选择的时间。
         :param value_main: Optional[Decimal]
             主数值。
             - 对于数值型指标（如体重），直接存入。
-            - 对于评分/枚举型指标（如痰色、疼痛等级），存入对应的分值（整数转 Decimal）。
-              具体分值定义请参考 health_data.models.METRIC_SCALES 字典。
+            - 当前版本仅处理数值型指标，不涉及主观评分/量表枚举映射。
         :param value_sub: Optional[Decimal]
             副数值。
             - 目前主要用于血压（舒张压），其他指标通常留空（None）。
+        :param questionnaire_submission_id: Optional[int]
+            若该指标来源于某次问卷提交，可传入 QuestionnaireSubmission.id 以建立关联；
+            默认为 None 表示无关联。
 
         【返回值】
         :return: HealthMetric
@@ -528,6 +533,7 @@ class HealthMetricService:
             value_sub=value_sub,
             measured_at=measured_at,
             source=MetricSource.MANUAL,
+            questionnaire_submission_id=questionnaire_submission_id,
         )
 
     # ============
@@ -632,15 +638,19 @@ class HealthMetricService:
         source: str,
         value_main: Optional[Decimal] = None,
         value_sub: Optional[Decimal] = None,
+        questionnaire_submission_id: int | None = None,
     ) -> HealthMetric:
-        return HealthMetric.objects.create(
-            patient_id=patient_id,
-            metric_type=metric_type,
-            source=source,
-            value_main=value_main,
-            value_sub=value_sub,
-            measured_at=measured_at,
-        )
+        data = {
+            "patient_id": patient_id,
+            "metric_type": metric_type,
+            "source": source,
+            "value_main": value_main,
+            "value_sub": value_sub,
+            "measured_at": measured_at,
+        }
+        if questionnaire_submission_id is not None:
+            data["questionnaire_submission_id"] = questionnaire_submission_id
+        return HealthMetric.objects.create(**data)
 
     # ============
     # 工具方法

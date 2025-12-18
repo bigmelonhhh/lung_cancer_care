@@ -32,13 +32,13 @@ class PlanItem(models.Model):
         related_name="plan_items",
         verbose_name="复查模板",
     )
-    followup = models.ForeignKey(
-        "core.FollowupLibrary",
+    questionnaire = models.ForeignKey(
+        "core.Questionnaire",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="plan_items",
-        verbose_name="随访模板",
+        verbose_name="问卷模板",
     )
     item_name = models.CharField("项目名称", max_length=100)
     drug_dosage = models.CharField("单次用量", max_length=50, blank=True)

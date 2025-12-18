@@ -10,7 +10,7 @@ from django.db import transaction
 
 from core.models import (
     CheckupLibrary,
-    FollowupLibrary,
+    Questionnaire,
     Medication,
     PlanItem,
     TreatmentCycle,
@@ -25,23 +25,23 @@ class PlanItemService:
     def get_cycle_plan_view(cls, cycle_id: int) -> Dict[str, Any]:
         """
         【功能说明】
-        - 聚合同一疗程下的药物/检查/随访标准库与既有计划条目，生成前端可直接渲染的配置视图。
+        - 聚合同一疗程下的药物/检查/问卷标准库与既有计划条目，生成前端可直接渲染的配置视图。
 
         【参数说明】
         - cycle_id: TreatmentCycle 主键 ID。
 
         【返回参数说明】
-        - dict，包含 cycle 基本信息以及 medications/checkups/followups 三个列表。
+        - dict，包含 cycle 基本信息以及 medications/checkups/questionnaires 三个列表。
           每个列表元素兼具标准库信息和对应 PlanItem 状态（plan_item_id、is_active、schedule_days 等）。
         """
 
         cycle = cls._get_cycle(cycle_id)
         plan_items = list(
-            PlanItem.objects.filter(cycle=cycle).select_related("medicine", "checkup", "followup")
+            PlanItem.objects.filter(cycle=cycle).select_related("medicine", "checkup", "questionnaire")
         )
         med_map = {pi.medicine_id: pi for pi in plan_items if pi.medicine_id}
         checkup_map = {pi.checkup_id: pi for pi in plan_items if pi.checkup_id}
-        followup_map = {pi.followup_id: pi for pi in plan_items if pi.followup_id}
+        questionnaire_map = {pi.questionnaire_id: pi for pi in plan_items if pi.questionnaire_id}
 
         medications = [
             cls._build_med_payload(med, med_map.get(med.id))
@@ -51,9 +51,9 @@ class PlanItemService:
             cls._build_checkup_payload(chk, checkup_map.get(chk.id))
             for chk in CheckupLibrary.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
-        followups = [
-            cls._build_followup_payload(fu, followup_map.get(fu.id))
-            for fu in FollowupLibrary.objects.filter(is_active=True).order_by("sort_order", "name")
+        questionnaires = [
+            cls._build_questionnaire_payload(q, questionnaire_map.get(q.id))
+            for q in Questionnaire.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
 
         return {
@@ -68,7 +68,7 @@ class PlanItemService:
             },
             "medications": medications,
             "checkups": checkups,
-            "followups": followups,
+            "questionnaires": questionnaires,
         }
 
     @classmethod
@@ -87,7 +87,7 @@ class PlanItemService:
         【参数说明】
         - cycle_id: 所属疗程 ID。
         - category: 计划类型（PlanItemCategory 枚举值）。
-        - library_id: 标准库记录 ID（药物/检查/随访）。
+        - library_id: 标准库记录 ID（药物/检查/问卷）。
         - enable: True 表示开启，False 表示关闭。
 
         【返回参数说明】
@@ -174,36 +174,6 @@ class PlanItemService:
         return plan
 
     @classmethod
-    @transaction.atomic
-    def toggle_followup_detail(cls, plan_item_id: int, code: str, enabled: bool) -> PlanItem:
-        """
-        【功能说明】
-        - 切换随访问卷 PlanItem.interaction_config 中某个问卷模块的开关状态。
-
-        【参数说明】
-        - plan_item_id: 随访计划条目 ID（category = FOLLOW_UP）。
-        - code: 问卷内容编码（来自 FollowupLibrary.FOLLOWUP_DETAILS 的 key）。
-        - enabled: True=选中该模块，False=取消。
-        """
-
-        plan = cls._get_plan_by_id(plan_item_id)
-        if plan.category != choices.PlanItemCategory.FOLLOW_UP:
-            raise ValidationError("仅随访问卷计划支持问卷内容配置。")
-
-        code = (code or "").strip()
-        if not code:
-            raise ValidationError("问卷内容编码不能为空。")
-
-        config = dict(plan.interaction_config or {})
-        details = dict(config.get("details") or {})
-        details[code] = bool(enabled)
-        config["details"] = details
-        plan.interaction_config = config
-        plan.save(update_fields=["interaction_config"])
-        return plan
-
-    @classmethod
-    @transaction.atomic
     def update_item_field(cls, plan_item_id: int, field_name: str, value: Any) -> PlanItem:
         """
         【功能说明】
@@ -224,6 +194,30 @@ class PlanItemService:
         plan = cls._get_plan_by_id(plan_item_id)
         setattr(plan, field_name, value)
         plan.save(update_fields=[field_name])
+        return plan
+
+    @classmethod
+    def toggle_questionnaire_detail(cls, plan_item_id: int, code: str, enabled: bool) -> PlanItem:
+        """
+        【功能说明】
+        - 更新问卷计划条目的 interaction_config 中的 details 配置。
+        - 用于控制问卷中特定模块/问题的开启状态。
+        """
+        plan = cls._get_plan_by_id(plan_item_id)
+
+        # 确保 interaction_config 及其 details 字典存在
+        config = plan.interaction_config or {}
+        details = config.get("details", {})
+
+        # 更新状态
+        if enabled:
+            details[code] = True
+        else:
+            details[code] = False
+
+        config["details"] = details
+        plan.interaction_config = config
+        plan.save(update_fields=["interaction_config"])
         return plan
 
     # ------------------------------------------------------------------
@@ -264,8 +258,8 @@ class PlanItemService:
             return "medicine_id", Medication
         if category == choices.PlanItemCategory.CHECKUP:
             return "checkup_id", CheckupLibrary
-        if category == choices.PlanItemCategory.FOLLOW_UP:
-            return "followup_id", FollowupLibrary
+        if category == choices.PlanItemCategory.QUESTIONNAIRE:
+            return "questionnaire_id", Questionnaire
         raise ValidationError("无效的计划类型。")
 
     @staticmethod
@@ -284,8 +278,8 @@ class PlanItemService:
             return {"medicine": library_obj}
         if category == choices.PlanItemCategory.CHECKUP:
             return {"checkup": library_obj}
-        if category == choices.PlanItemCategory.FOLLOW_UP:
-            return {"followup": library_obj}
+        if category == choices.PlanItemCategory.QUESTIONNAIRE:
+            return {"questionnaire": library_obj}
         return {}
 
     @staticmethod
@@ -301,13 +295,6 @@ class PlanItemService:
     def _build_interaction_config(category: int, library_obj) -> Dict[str, Any]:
         if category == choices.PlanItemCategory.CHECKUP and getattr(library_obj, "related_report_type", None):
             return {"related_report_type": library_obj.related_report_type}
-        if category == choices.PlanItemCategory.FOLLOW_UP:
-            # 默认问卷内容：基于 FOLLOWUP_DETAILS 全量构建 details 配置，KS 默认为选中
-            from core.models import FollowupLibrary  # 局部导入，避免循环依赖
-
-            detail_map = getattr(FollowupLibrary, "FOLLOWUP_DETAILS", {}) or {}
-            details = {code: (code == "KS") for code in detail_map.keys()}
-            return {"details": details}
         return {}
 
     @staticmethod
@@ -351,14 +338,14 @@ class PlanItemService:
         }
 
     @staticmethod
-    def _build_followup_payload(fu: FollowupLibrary, plan: Optional[PlanItem]) -> Dict[str, Any]:
-        schedule_template = list(fu.schedule_days_template or [])
+    def _build_questionnaire_payload(q: Questionnaire, plan: Optional[PlanItem]) -> Dict[str, Any]:
+        schedule_template = list(q.schedule_days_template or [])
         schedule_days = (
             list(plan.schedule_days) if plan and plan.schedule_days else schedule_template
         )
         return {
-            "library_id": fu.id,
-            "name": fu.name,
+            "library_id": q.id,
+            "name": q.name,
             "schedule_days_template": schedule_template,
             "plan_item_id": plan.id if plan else None,
             "status": plan.status if plan else choices.PlanItemStatus.DISABLED,

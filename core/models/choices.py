@@ -23,7 +23,7 @@ class TreatmentCycleStatus(models.IntegerChoices):
 class PlanItemCategory(models.IntegerChoices):
     MEDICATION = 1, "用药"
     CHECKUP = 2, "检查"
-    FOLLOW_UP = 3, "随访"
+    QUESTIONNAIRE = 3, "问卷"
     MONITORING = 4, "监测"
 
 
@@ -50,3 +50,9 @@ class TaskStatus(models.IntegerChoices):
     PENDING = 0, "未做"
     COMPLETED = 1, "已完成"
     IGNORED = 2, "已忽略"
+
+
+class QuestionType(models.TextChoices):
+    SINGLE = "SINGLE", "单选题"
+    MULTIPLE = "MULTIPLE", "多选题"
+    TEXT = "TEXT", "问答/填空"

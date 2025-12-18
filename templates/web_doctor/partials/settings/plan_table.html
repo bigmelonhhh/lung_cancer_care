@@ -89,104 +89,13 @@
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
         <td colspan="24" class="px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50/30">
-          🧾 随访计划
+          🧾 问卷计划
         </td>
       </tr>
-      {% with follow=plan_view.active_followup current_day=plan_view.current_day_index|default:1 %}
-      {% if follow %}
-      <tr class="hover:bg-slate-50 transition-colors" data-followup-row>
-        <td class="px-4 py-3 align-top">
-          <div class="flex flex-col gap-2">
-            <div class="flex items-center gap-3">
-               <label class="relative inline-flex items-center cursor-pointer">
-                <form method="post">
-                  {% csrf_token %}
-                  <input type="hidden" name="category" value="followup">
-                  <input type="hidden" name="library_id" value="{{ follow.lib_id }}">
-                  <input
-                    type="checkbox"
-                    class="sr-only peer"
-                    name="enable"
-                    value="1"
-                    data-followup-toggle
-                    data-atomic-checkbox="1"
-                    {% if follow.is_active %}checked{% endif %}
-                    hx-post="{% url 'web_doctor:patient_cycle_plan_toggle' patient.id cycle.id %}"
-                    hx-include="closest form"
-                    hx-target="#plan-table-container"
-                    hx-swap="outerHTML"
-                    hx-trigger="change"
-                  >
-                  <div class="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-                </form>
-              </label>
-              <span class="text-sm font-medium text-slate-900">{{ follow.name }}</span>
-            </div>
-          </div>
-        </td>
-        <td class="px-2 py-3 text-sm text-slate-400 align-top">-</td>
-        <td class="px-2 py-3 text-sm text-slate-400 align-top">-</td>
-        {% for i in "x"|rjust:"21" %}
-        <td class="px-0.5 py-3 text-center align-top">
-          {% with day=forloop.counter %}
-          <form method="post">
-            {% csrf_token %}
-            <input
-              type="checkbox"
-              class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer {% if current_day and day < current_day %}opacity-50 cursor-not-allowed{% endif %}"
-              data-followup-slot
-              data-atomic-checkbox="1"
-              {% if day in follow.schedule %}checked{% endif %}
-              {% if current_day and day < current_day %}
-              data-readonly="1"
-              disabled
-              {% elif follow.plan_item_id and day >= current_day %}
-              hx-post="{% url 'web_doctor:patient_plan_item_toggle_day' patient.id follow.plan_item_id day %}"
-              hx-swap="none"
-              hx-include="closest form"
-              hx-trigger="change"
-              {% else %}
-              disabled
-              {% endif %}
-            >
-          </form>
-          {% endwith %}
-        </td>
-        {% endfor %}
-      </tr>
-      <tr class="bg-emerald-50/20">
-        <td colspan="3" class="px-4 py-2 text-sm text-slate-500">
-          选择问卷内容
-        </td>
-        <td colspan="24" class="px-4 py-3">
-          <div class="flex flex-wrap gap-3 text-sm" data-followup-detail-container>
-            {% for item in plan_view.followup_details %}
-            <form method="post" class="inline-flex items-center gap-1.5 mr-3 mb-2" data-followup-detail>
-              {% csrf_token %}
-              <input type="hidden" name="code" value="{{ item.code }}">
-              <input
-                type="checkbox"
-                name="enabled"
-                value="1"
-                class="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                data-atomic-checkbox="1"
-                {% if item.is_checked %}checked{% endif %}
-                {% if follow and follow.plan_item_id %}
-                hx-post="{% url 'web_doctor:patient_followup_detail_toggle' patient.id follow.plan_item_id item.code %}"
-                hx-include="closest form"
-                hx-swap="none"
-                hx-trigger="change"
-                {% else %}
-                disabled
-                {% endif %}
-              >
-              <span class="text-slate-700">{{ item.label }}</span>
-            </form>
-            {% endfor %}
-          </div>
-        </td>
-      </tr>
-      {% endif %}
+      {% with current_day=plan_view.current_day_index|default:1 %}
+      {% for questionnaire in plan_view.questionnaires %}
+        {% include "web_doctor/partials/settings/plan_table_questionnaire_row.html" with questionnaire=questionnaire patient=patient cycle=cycle current_day=current_day %}
+      {% endfor %}
       {% endwith %}
     </tbody>
   </table>
