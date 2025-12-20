@@ -169,7 +169,42 @@ class PatientService:
         relation_type: int,
         **kwargs,
     ) -> PatientProfile:
-        """处理患者本人或家属绑定逻辑。"""
+        """
+        【业务说明】处理患者本人或家属扫描二维码后的绑定逻辑。
+        该函数会根据传入的 `relation_type` 区分是患者本人认领档案，还是家属建立亲情关系。
+
+        【使用示例】
+        # 家属绑定
+        patient_service.process_binding(
+            user=request.user,
+            patient_id=123,
+            relation_type=choices.RelationType.CHILD,
+            relation_name="女儿",
+            phone="13800138001",
+            receive_alert_msg=True
+        )
+        # 患者本人认领
+        patient_service.process_binding(
+            user=request.user,
+            patient_id=123,
+            relation_type=choices.RelationType.SELF
+        )
+
+        【参数】
+        - `user` (CustomUser): 当前发起绑定操作的已登录用户实例。
+        - `patient_id` (int): 被绑定的患者档案的 ID。
+        - `relation_type` (int): 关系类型，参考 `users.choices.RelationType` 枚举。
+        - `**kwargs`:
+            - `relation_name` (str, optional): 自定义的家属关系称呼，例如“大女儿”。
+            - `phone` (str, optional): 家属的手机号。
+            - `receive_alert_msg` (bool, optional): 家属是否愿意接收提醒通知。
+
+        【返回值】
+        - `PatientProfile`: 操作成功后返回对应的患者档案实例。
+
+        【异常】
+        - `ValidationError`: 如果患者档案不存在，或绑定关系不符合业务规则（如重复认领），则会抛出此异常。
+        """
 
         profile = self.get_profile_for_bind(patient_id)
 
@@ -185,6 +220,8 @@ class PatientService:
 
         relation_name = kwargs.get("relation_name", "")
         receive_alert_msg = kwargs.get("receive_alert_msg", False)
+        phone = kwargs.get("phone", None)
+        name = kwargs.get("name", "")
 
         PatientRelation.objects.update_or_create(
             patient=profile,
@@ -192,6 +229,8 @@ class PatientService:
             defaults={
                 "relation_type": relation_type,
                 "relation_name": relation_name,
+                "phone": phone,
+                "name": name,
                 "receive_alert_msg": receive_alert_msg,
                 "is_active": True,
             },
@@ -219,22 +258,32 @@ class PatientService:
         relation.save(update_fields=["is_active", "updated_at"])
         return relation
 
+    def get_patient_family_members(self, patient: PatientProfile) -> models.QuerySet[PatientRelation]:
+        """
+        【业务说明】获取指定患者档案的所有有效家属关系列表。
+        【使用示例】 `family_list = patient_service.get_patient_family_members(patient_profile)`
+        【参数】
+        - `patient` (PatientProfile): 患者档案实例。
+        【返回值】
+        - `QuerySet[PatientRelation]`: 一个包含所有有效家属关系（非本人、is_active=True）的查询集。
+        """
+        return patient.relations.filter(is_active=True).exclude(
+            relation_type=choices.RelationType.SELF
+        )
 
-
-    def save_profile_by_self(self, user: CustomUser, data: dict, profile_id: int | None = None) -> PatientProfile:
-        """患者自助保存档案（支持新建、认领、编辑）。
-
-        【功能说明】
-        - 支持患者本人创建新档案、认领已有档案、编辑已有档案。
-        - 在建档/认领场景下，自动初始化或补全该患者的监测配置 MonitoringConfig。
+    def save_patient_profile(self, user: CustomUser, data: dict, profile_id: int | None = None) -> PatientProfile:
+        """
+        【业务说明】通用方法：创建、认领或更新患者档案（支持患者、家属、医生、管理员等多种角色）。
+        - 编辑模式 (profile_id 已知): 根据传入的 `user` 角色（患者/家属、医生、管理员）进行权限校验，通过后更新档案。
+        - 建档/认领模式 (profile_id 未知): 患者本人基于手机号进行操作，可认领未绑定微信的档案，或创建全新档案。
 
         【参数说明】
-        - user: 当前登录的 CustomUser 实例，用于绑定患者档案。
-        - data: 表单数据字典，包含 name、gender、birth_date、phone 等字段。
-        - profile_id: 可选，存在时表示编辑指定患者档案；为空表示建档或认领模式。
+        - `user`: 当前进行操作的登录用户 (CustomUser)，用于权限判断。
+        - `data`: 包含档案信息的字典，必须包含 `name` 和 `phone`。
+        - `profile_id`: 可选，存在时表示编辑模式。
 
-        【返回参数说明】
-        - 返回更新后的 PatientProfile 实例；在建档/认领场景中，保证已关联一条 MonitoringConfig 记录。
+        【返回值】
+        - `PatientProfile`: 创建或更新成功后的患者档案实例。
         """
         phone = (data.get("phone") or "").strip()
         name = (data.get("name") or "").strip()
@@ -251,11 +300,25 @@ class PatientService:
             if not profile:
                 raise ValidationError("档案不存在")
             
-            # 权限校验：只能改属于自己的档案
-            is_owner = (profile.user_id == user.id)
-            is_relation = profile.relations.filter(user_id=user.id, is_active=True).exists()
-            if not is_owner and not is_relation:
-                raise ValidationError("无权修改此档案")
+            # --- 扩展后的权限校验 ---
+            can_edit = False
+            # 场景一：操作者是患者本人或家属
+            if user.user_type == choices.UserType.PATIENT:
+                if profile.user_id == user.id or profile.relations.filter(user_id=user.id, is_active=True).exists():
+                    can_edit = True
+            
+            # 场景二：操作者是医生
+            elif user.user_type == choices.UserType.DOCTOR:
+                # 检查该医生是否是此患者的主治医生
+                if profile.doctor and profile.doctor.user_id == user.id:
+                    can_edit = True
+
+            # 场景三：操作者是平台管理员
+            elif user.is_staff:
+                can_edit = True
+            
+            if not can_edit:
+                raise ValidationError("您没有权限修改此患者的档案。")
             
             # 手机号变更检查
             if profile.phone != phone:

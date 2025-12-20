@@ -40,6 +40,19 @@ class PatientRelation(TimeStampedModel):
         blank=True,
         help_text="【业务说明】自定义关系说明；【用法】前端展示例如“女儿”；【示例】女儿；【参数】str；【返回值】str",
     )
+    name = models.CharField(
+        "家属姓名",
+        max_length=50,
+        blank=True,
+        help_text="【业务说明】家属的真实姓名；【用法】可选填写；【示例】张三；【参数】str；【返回值】str",
+    )
+    phone = models.CharField(
+        "手机号",
+        max_length=15,
+        blank=True,
+        null=True,
+        help_text="【业务说明】家属的手机号；【用法】可选填写；【示例】13800138000；【参数】str；【返回值】str",
+    )
     
     receive_alert_msg = models.BooleanField(
         "是否接收通知",
