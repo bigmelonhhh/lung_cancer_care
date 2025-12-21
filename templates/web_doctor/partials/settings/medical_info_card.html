@@ -66,27 +66,27 @@
             <div class="space-y-4">
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">肿瘤诊断 <span class="text-rose-500">*</span></label>
-                    <input type="text" name="diagnosis" value="{{ medical_info.diagnosis }}" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">
+                    <input type="text" name="diagnosis" placeholder="请输入肿瘤诊断" value="{{ medical_info.diagnosis }}" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">危险因素 <span class="text-rose-500">*</span></label>
-                    <input type="text" name="risk_factors" value="{{ medical_info.risk_factors }}" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">
+                    <input type="text" name="risk_factors" placeholder="请输入危险因素" value="{{ medical_info.risk_factors }}" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">临床诊断 <span class="text-rose-500">*</span></label>
-                    <textarea name="clinical_diagnosis" rows="2" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.clinical_diagnosis }}</textarea>
+                    <textarea name="clinical_diagnosis" placeholder="请输入临床诊断" rows="2" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.clinical_diagnosis }}</textarea>
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">基因检测 <span class="text-rose-500">*</span></label>
-                    <textarea  name="gene_test"  required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.gene_test }}</textarea>
+                    <textarea  name="gene_test" placeholder="请输入基因检测"  required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.gene_test }}</textarea>
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">既往病史 <span class="text-rose-500">*</span></label>
-                    <textarea name="history" rows="2" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.history }}</textarea>
+                    <textarea name="history"  placeholder="请输入既往病史" rows="2" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.history }}</textarea>
                 </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">手术信息 <span class="text-rose-500">*</span></label>
-                    <textarea  name="surgery" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.surgery }}</textarea>
+                    <textarea  name="surgery"  placeholder="请输入既手术信息" required class="border border-[#999999] p-2 w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none">{{ medical_info.surgery }}</textarea>
                 </div>
             </div>
             

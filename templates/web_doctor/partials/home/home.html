@@ -1,0 +1,9 @@
+<div class="space-y-6">
+    {# 概况板块 #}
+    {% include "web_doctor/partials/home/overview.html" %}
+    {# 预留其他三个板块 #}
+    {# <div class="grid grid-cols-1 md:grid-cols-2 gap-6">...</div> #}
+</div>
+
+{# OOB 更新 Tab 栏状态 #}
+{% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True %}

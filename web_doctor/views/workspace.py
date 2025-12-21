@@ -30,6 +30,7 @@ from health_data.services.medical_history_service import MedicalHistoryService
 from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
 from users.services.patient import PatientService
+from web_doctor.views.home import build_home_context
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,10 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
     if patient.id not in allowed_patients:
         raise Http404("未找到患者")
 
-    context = {"patient": patient}
+    context = {
+        "patient": patient,
+        "active_tab": section,  # 确保 Tab 高亮正确
+    }
     template_name = "web_doctor/partials/sections/placeholder.html"
 
     if section == "settings":
@@ -182,6 +186,9 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
             "history_page": history_page,
             "patient": patient
         })
+    elif section == "home":
+        template_name = "web_doctor/partials/home/home.html"
+        context.update(build_home_context(patient))
 
     return render(request, template_name, context)
 
@@ -348,7 +355,7 @@ def _build_settings_context(
         "gender": patient.get_gender_display(),
         "phone": patient.phone,
         "birth_date": str(patient.birth_date) if getattr(patient, "birth_date", None) else "请填写出生日期",
-        "address": getattr(patient, "address", "") or "请填写患者地址",
+        "address": getattr(patient, "address", "") or "",
         "emergency_contact": getattr(patient, "ec_name", "") or "",
         "emergency_relation": getattr(patient, "ec_relation", "") or  "",
         "emergency_phone": getattr(patient, "ec_phone", "") or  "",
@@ -359,25 +366,24 @@ def _build_settings_context(
     last_history = MedicalHistoryService.get_last_medical_history(patient)
     if last_history:
         medical_info = {
-            "diagnosis": last_history.tumor_diagnosis,
-            "risk_factors": last_history.risk_factors,
-            "clinical_diagnosis": last_history.clinical_diagnosis,
-            "gene_test": last_history.genetic_test,
-            "history": last_history.past_medical_history,
-            "surgery": last_history.surgical_information,
-            "last_updated": last_history.created_at.strftime("%Y-%m-%d"),
-        }
+        "diagnosis": last_history.tumor_diagnosis if last_history.tumor_diagnosis is not None else "",
+        "risk_factors": last_history.risk_factors if last_history.risk_factors is not None else "",
+        "clinical_diagnosis": last_history.clinical_diagnosis if last_history.clinical_diagnosis is not None else "",
+        "gene_test": last_history.genetic_test if last_history.genetic_test is not None else "",
+        "history": last_history.past_medical_history if last_history.past_medical_history is not None else "",
+        "surgery": last_history.surgical_information if last_history.surgical_information is not None else "",
+        "last_updated": last_history.created_at.strftime("%Y-%m-%d") if last_history.created_at else "",  # 额外兼容created_at为None的情况
+    }
     else:
         # 无记录时的默认空状态
         medical_info = {
-            "diagnosis": "暂无记录",
-            "risk_factors": "暂无记录",
-            "clinical_diagnosis": "暂无记录",
-            "gene_test": "暂无记录",
-            "history": "暂无记录",
-            "surgery": "暂无记录",
-            "clinical_events": "暂无记录",
-            "last_updated": "暂无记录",
+            "diagnosis": "",
+            "risk_factors": "",
+            "clinical_diagnosis": "",
+            "gene_test": "",
+            "history": "",
+            "surgery": "",
+            "last_updated": "",
         }
 
     return {
