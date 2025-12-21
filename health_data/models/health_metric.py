@@ -8,6 +8,8 @@ class MetricType(models.TextChoices):
     STEPS = "M_STEPS", "步数"
     WEIGHT = "M_WEIGHT", "体重"
     BODY_TEMPERATURE = "M_TEMP", "体温"
+    USE_MEDICATED = "M_USE_MEDICATED", "用药情况"
+
    
 
 
@@ -61,6 +63,8 @@ class HealthMetric(models.Model):
     is_active = models.BooleanField("是否有效", default=True, db_index=True)
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    
 
     # 默认 Manager：只返回 is_active=True 的记录
     objects = ActiveHealthMetricManager()

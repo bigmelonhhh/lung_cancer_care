@@ -66,7 +66,7 @@ class DailyTask(models.Model):
         "交互配置快照",
         blank=True,
         default=dict,
-        help_text="生成任务时从 plan_item.interaction_config 拷贝的快照。",
+        help_text="生成任务时保留的交互配置快照。",
     )
 
     # 自定义查询集

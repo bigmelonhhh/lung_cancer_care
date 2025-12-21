@@ -31,6 +31,7 @@ class TaskSchedulerTest(TestCase):
         self.plan_item = PlanItem.objects.create(
             cycle=self.cycle,
             category=choices.PlanItemCategory.MEDICATION,
+            template_id=1,
             item_name="化疗用药A",
             drug_dosage="100mg",
             drug_usage="每日一次",

@@ -15,7 +15,6 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
-from django.core.exceptions import ValidationError
 
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
@@ -272,7 +271,6 @@ def _build_settings_context(
                 "is_active": bool(q.get("is_active")),
                 "schedule": list(q.get("schedule_days") or []),
                 "plan_item_id": q.get("plan_item_id"),
-                "detail_config": (q.get("interaction_config") or {}).get("details", {}),
             }
             questionnaires.append(item)
 
@@ -826,43 +824,6 @@ def patient_plan_item_update_field(request: HttpRequest, patient_id: int, plan_i
         "web_doctor/partials/settings/main.html",
         context,
     )
-
-
-@login_required
-@check_doctor_or_assistant
-@require_POST
-def patient_questionnaire_detail_toggle(
-    request: HttpRequest, patient_id: int, plan_item_id: int, code: str
-) -> HttpResponse:
-    """
-    切换问卷 PlanItem 的单个问卷模块开关状态（interaction_config.details[code]）。
-    - 由前端问卷内容区域的 checkbox 以 HTMX 方式调用，保持每次点击原子更新。
-    """
-    patients_qs = _get_workspace_patients(request.user, query=None)
-    patient = patients_qs.filter(pk=patient_id).first()
-    if patient is None:
-        raise Http404("未找到患者")
-
-    try:
-        plan = PlanItem.objects.select_related("cycle__patient").get(pk=plan_item_id)
-    except PlanItem.DoesNotExist:
-        raise Http404("问卷计划条目不存在")
-
-    if plan.cycle.patient_id != patient.id:
-        raise Http404("计划条目与患者不匹配")
-
-    enabled = "enabled" in request.POST
-
-    try:
-        PlanItemService.toggle_questionnaire_detail(plan_item_id, code, enabled)
-    except ValidationError as exc:
-        message = str(exc) or "问卷内容更新失败。"
-        response = HttpResponse(message, status=400)
-        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
-        return response
-
-    # 不返回 HTML，HTMX 侧仅用于触发后端更新与 Toast
-    return HttpResponse(status=204)
 
 
 @login_required

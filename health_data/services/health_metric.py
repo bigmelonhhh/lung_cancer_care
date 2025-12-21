@@ -24,6 +24,7 @@ from django.core.paginator import Paginator, Page
 
 from business_support.models import Device
 from health_data.models import HealthMetric, MetricSource, MetricType
+from core.models import choices
 from core.utils.sentinel import UNSET
 import datetime
 
@@ -486,7 +487,7 @@ class HealthMetricService:
         cls,
         patient_id: int,
         metric_type: str,
-        measured_at: datetime,
+        measured_at: datetime | None,
         value_main: Optional[Decimal] = None,
         value_sub: Optional[Decimal] = None,
         questionnaire_submission_id: int | None = None,
@@ -510,8 +511,10 @@ class HealthMetricService:
             - MetricType.BODY_TEMPERATURE ("body_temperature")
             - MetricType.WEIGHT ("weight")
             - MetricType.STEPS ("steps")
+            - MetricType.USE_MEDICATED ("use_medicated")
         :param measured_at: datetime
             测量时间（带时区）。通常由前端传入用户选择的时间。
+            对于 MetricType.USE_MEDICATED，可不传，默认使用当前时间。
         :param value_main: Optional[Decimal]
             主数值。
             - 对于数值型指标（如体重），直接存入。
@@ -534,6 +537,26 @@ class HealthMetricService:
             2. 如果数据库约束失败（如 patient_id 不存在），会抛出 IntegrityError。
             View 层应当捕获这些异常，或者在调用前确保数据格式正确。
         """
+        if metric_type == MetricType.USE_MEDICATED:
+            if measured_at is None:
+                measured_at = timezone.now()
+            if value_main is None:
+                value_main = Decimal("1")
+            task_id = cls._complete_daily_medication_tasks(patient_id, measured_at)
+            return cls._persist_metric(
+                patient_id=patient_id,
+                metric_type=metric_type,
+                value_main=value_main,
+                value_sub=value_sub,
+                measured_at=measured_at,
+                source=MetricSource.MANUAL,
+                questionnaire_submission_id=questionnaire_submission_id,
+                task_id=task_id,
+            )
+
+        if measured_at is None:
+            raise ValueError("measured_at 不能为空。")
+
         return cls._persist_metric(
             patient_id=patient_id,
             metric_type=metric_type,
@@ -647,6 +670,7 @@ class HealthMetricService:
         value_main: Optional[Decimal] = None,
         value_sub: Optional[Decimal] = None,
         questionnaire_submission_id: int | None = None,
+        task_id: int | None = None,
     ) -> HealthMetric:
         data = {
             "patient_id": patient_id,
@@ -658,7 +682,25 @@ class HealthMetricService:
         }
         if questionnaire_submission_id is not None:
             data["questionnaire_submission_id"] = questionnaire_submission_id
+        if task_id is not None:
+            data["task_id"] = task_id
         return HealthMetric.objects.create(**data)
+
+    @staticmethod
+    def _complete_daily_medication_tasks(patient_id: int, measured_at: datetime) -> int | None:
+        DailyTask = apps.get_model("core", "DailyTask")
+        task_date = measured_at.date()
+        tasks = DailyTask.objects.filter(
+            patient_id=patient_id,
+            task_date=task_date,
+            task_type=1,
+        )
+        task_id = tasks.values_list("id", flat=True).first()
+        tasks.update(
+            status=choices.TaskStatus.COMPLETED,
+            completed_at=measured_at,
+        )
+        return task_id
 
     # ============
     # 工具方法

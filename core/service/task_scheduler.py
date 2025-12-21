@@ -17,7 +17,7 @@ from datetime import date
 
 from django.db import models, transaction
 
-from core.models import choices, DailyTask, PlanItem, TreatmentCycle
+from core.models import CheckupLibrary, choices, DailyTask, PlanItem, TreatmentCycle
 
 
 @transaction.atomic
@@ -112,11 +112,12 @@ def _build_task_defaults_from_plan_item(plan_item: PlanItem) -> dict:
 
     detail = "\n".join(detail_parts) if detail_parts else ""
 
-    # 检查任务可以在后续根据 checkup 模板补充关联报告类型等信息
+    # 检查任务从检查库模板继承关联报告类型
     related_report_type = None
-    if plan_item.category == choices.PlanItemCategory.CHECKUP and plan_item.checkup:
-        # 这里预留从检查库模板中继承报告类型的能力
-        related_report_type = getattr(plan_item.checkup, "report_type", None)
+    if plan_item.category == choices.PlanItemCategory.CHECKUP:
+        template = CheckupLibrary.objects.filter(pk=plan_item.template_id).first()
+        if template:
+            related_report_type = template.related_report_type
 
     return {
         "task_type": plan_item.category,
@@ -125,5 +126,5 @@ def _build_task_defaults_from_plan_item(plan_item: PlanItem) -> dict:
         "status": choices.TaskStatus.PENDING,
         "related_report_type": related_report_type,
         # 快照当前交互配置，后续不随 PlanItem 变化
-        "interaction_payload": plan_item.interaction_config or {},
+        "interaction_payload": {},
     }

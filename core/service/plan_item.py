@@ -37,39 +37,39 @@ class PlanItemService:
         """
 
         cycle = cls._get_cycle(cycle_id)
-        plan_items = list(
-            PlanItem.objects.filter(cycle=cycle).select_related("medicine", "checkup", "questionnaire")
-        )
-        med_map = {pi.medicine_id: pi for pi in plan_items if pi.medicine_id}
-        checkup_map = {pi.checkup_id: pi for pi in plan_items if pi.checkup_id}
-        questionnaire_map = {pi.questionnaire_id: pi for pi in plan_items if pi.questionnaire_id}
-
-        # MONITORING 类型的 PlanItem：通过 interaction_config 中的 monitoring_template_id 关联到模板
-        monitoring_plan_map: Dict[int, PlanItem] = {}
+        plan_items = list(PlanItem.objects.filter(cycle=cycle))
+        plan_map: Dict[Tuple[int, int], PlanItem] = {}
         for pi in plan_items:
-            if pi.category != choices.PlanItemCategory.MONITORING:
+            if pi.template_id is None:
                 continue
-            config = pi.interaction_config or {}
-            tpl_id = None
-            if isinstance(config, dict):
-                tpl_id = config.get("monitoring_template_id")
-            if tpl_id:
-                monitoring_plan_map[int(tpl_id)] = pi
+            plan_map[(pi.category, pi.template_id)] = pi
 
         medications = [
-            cls._build_med_payload(med, med_map.get(med.id))
+            cls._build_med_payload(
+                med,
+                plan_map.get((choices.PlanItemCategory.MEDICATION, med.id)),
+            )
             for med in Medication.objects.filter(is_active=True).order_by("name")
         ]
         checkups = [
-            cls._build_checkup_payload(chk, checkup_map.get(chk.id))
+            cls._build_checkup_payload(
+                chk,
+                plan_map.get((choices.PlanItemCategory.CHECKUP, chk.id)),
+            )
             for chk in CheckupLibrary.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
         questionnaires = [
-            cls._build_questionnaire_payload(q, questionnaire_map.get(q.id))
+            cls._build_questionnaire_payload(
+                q,
+                plan_map.get((choices.PlanItemCategory.QUESTIONNAIRE, q.id)),
+            )
             for q in Questionnaire.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
         monitorings = [
-            cls._build_monitoring_payload(tpl, monitoring_plan_map.get(tpl.id))
+            cls._build_monitoring_payload(
+                tpl,
+                plan_map.get((choices.PlanItemCategory.MONITORING, tpl.id)),
+            )
             for tpl in MonitoringTemplate.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
 
@@ -105,7 +105,7 @@ class PlanItemService:
         【参数说明】
         - cycle_id: 所属疗程 ID。
         - category: 计划类型（PlanItemCategory 枚举值）。
-        - library_id: 标准库记录 ID（药物/检查/问卷）。
+        - library_id: 标准库记录 ID（药物/检查/问卷/监测）。
         - enable: True 表示开启，False 表示关闭。
 
         【返回参数说明】
@@ -114,54 +114,12 @@ class PlanItemService:
 
         cycle = cls._get_cycle(cycle_id)
 
-        # MONITORING 类别：不依赖 PlanItem 外键字段，通过 interaction_config 绑定 MonitoringTemplate
-        if category == choices.PlanItemCategory.MONITORING:
-            # 这里使用 MonitoringTemplate 作为“标准库”，library_id 即模板 ID
-            library_obj = cls._get_library_instance(MonitoringTemplate, library_id)
-            plan = PlanItem.objects.filter(
-                cycle=cycle,
-                category=choices.PlanItemCategory.MONITORING,
-                interaction_config__monitoring_template_id=library_id,
-            ).first()
-
-            if enable:
-                schedule_template = list(getattr(library_obj, "schedule_days_template", []) or [])
-                current_day = cls._get_current_day_index_for_cycle(cycle)
-                schedule_template = [d for d in schedule_template if d >= current_day]
-                if plan is None:
-                    plan = PlanItem.objects.create(
-                        cycle=cycle,
-                        category=choices.PlanItemCategory.MONITORING,
-                        item_name=library_obj.name,
-                        status=choices.PlanItemStatus.ACTIVE,
-                        schedule_days=schedule_template,
-                        interaction_config={"monitoring_template_id": library_id},
-                    )
-                else:
-                    updates = {"status": choices.PlanItemStatus.ACTIVE}
-                    if not plan.schedule_days:
-                        updates["schedule_days"] = schedule_template
-                    for field, value in updates.items():
-                        setattr(plan, field, value)
-                    plan.save(update_fields=list(updates.keys()))
-            else:
-                if plan:
-                    current_day = cls._get_current_day_index_for_cycle(plan.cycle)
-                    schedule = list(plan.schedule_days or [])
-                    if schedule:
-                        schedule = [d for d in schedule if d < current_day]
-                    plan.status = choices.PlanItemStatus.DISABLED
-                    plan.schedule_days = schedule
-                    plan.save(update_fields=["status", "schedule_days"])
-            return plan
-
-        # 其它类别：沿用原有基于库外键的逻辑
-        library_field, library_model = cls._get_library_binding(category)
-        plan = cls._get_plan_item(cycle_id, category, library_field, library_id)
+        library_model = cls._get_library_model(category)
+        plan = cls._get_plan_item(cycle_id, category, library_id)
 
         if enable:
             library_obj = cls._get_library_instance(library_model, library_id)
-            schedule_template = list(library_obj.schedule_days_template or [])
+            schedule_template = list(getattr(library_obj, "schedule_days_template", []) or [])
             # 仅保留“今天及之后”的执行日，历史执行日不会出现在新建计划中
             current_day = cls._get_current_day_index_for_cycle(cycle)
             schedule_template = [d for d in schedule_template if d >= current_day]
@@ -169,11 +127,10 @@ class PlanItemService:
                 plan = PlanItem.objects.create(
                     cycle=cycle,
                     category=category,
+                    template_id=library_id,
                     item_name=library_obj.name,
                     status=choices.PlanItemStatus.ACTIVE,
                     schedule_days=schedule_template,
-                    interaction_config=cls._build_interaction_config(category, library_obj),
-                    **cls._build_library_fk_kwargs(category, library_obj),
                     **cls._build_default_snapshot(category, library_obj),
                 )
             else:
@@ -238,18 +195,18 @@ class PlanItemService:
     def update_item_field(cls, plan_item_id: int, field_name: str, value: Any) -> PlanItem:
         """
         【功能说明】
-        - 更新指定 PlanItem 的剂量、用法、优先级或交互配置等文本/配置字段。
+        - 更新指定 PlanItem 的剂量、用法或优先级等文本字段。
 
         【参数说明】
         - plan_item_id: 计划条目 ID。
-        - field_name: 允许修改的字段名（drug_dosage、drug_usage、priority_level、interaction_config）。
+        - field_name: 允许修改的字段名（drug_dosage、drug_usage、priority_level）。
         - value: 新值，由前端保证格式正确。
 
         【返回参数说明】
         - 更新后的 PlanItem 实例。
         """
 
-        allowed_fields = {"drug_dosage", "drug_usage", "priority_level", "interaction_config"}
+        allowed_fields = {"drug_dosage", "drug_usage", "priority_level"}
         if field_name not in allowed_fields:
             raise ValidationError("不支持修改该字段。")
         plan = cls._get_plan_by_id(plan_item_id)
@@ -258,29 +215,6 @@ class PlanItemService:
         return plan
 
     @classmethod
-    def toggle_questionnaire_detail(cls, plan_item_id: int, code: str, enabled: bool) -> PlanItem:
-        """
-        【功能说明】
-        - 更新问卷计划条目的 interaction_config 中的 details 配置。
-        - 用于控制问卷中特定模块/问题的开启状态。
-        """
-        plan = cls._get_plan_by_id(plan_item_id)
-
-        # 确保 interaction_config 及其 details 字典存在
-        config = plan.interaction_config or {}
-        details = config.get("details", {})
-
-        # 更新状态
-        if enabled:
-            details[code] = True
-        else:
-            details[code] = False
-
-        config["details"] = details
-        plan.interaction_config = config
-        plan.save(update_fields=["interaction_config"])
-        return plan
-
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -303,24 +237,25 @@ class PlanItemService:
         cls,
         cycle_id: int,
         category: int,
-        library_field: str,
-        library_id: int,
+        template_id: int,
     ) -> Optional[PlanItem]:
         filters = {
             "cycle_id": cycle_id,
             "category": category,
-            library_field: library_id,
+            "template_id": template_id,
         }
         return PlanItem.objects.filter(**filters).first()
 
     @staticmethod
-    def _get_library_binding(category: int) -> Tuple[str, type]:
+    def _get_library_model(category: int) -> type:
         if category == choices.PlanItemCategory.MEDICATION:
-            return "medicine_id", Medication
+            return Medication
         if category == choices.PlanItemCategory.CHECKUP:
-            return "checkup_id", CheckupLibrary
+            return CheckupLibrary
         if category == choices.PlanItemCategory.QUESTIONNAIRE:
-            return "questionnaire_id", Questionnaire
+            return Questionnaire
+        if category == choices.PlanItemCategory.MONITORING:
+            return MonitoringTemplate
         raise ValidationError("无效的计划类型。")
 
     @staticmethod
@@ -334,16 +269,6 @@ class PlanItemService:
         return obj
 
     @staticmethod
-    def _build_library_fk_kwargs(category: int, library_obj) -> Dict[str, Any]:
-        if category == choices.PlanItemCategory.MEDICATION:
-            return {"medicine": library_obj}
-        if category == choices.PlanItemCategory.CHECKUP:
-            return {"checkup": library_obj}
-        if category == choices.PlanItemCategory.QUESTIONNAIRE:
-            return {"questionnaire": library_obj}
-        return {}
-
-    @staticmethod
     def _build_default_snapshot(category: int, library_obj) -> Dict[str, Any]:
         if category == choices.PlanItemCategory.MEDICATION:
             return {
@@ -351,12 +276,6 @@ class PlanItemService:
                 "drug_usage": library_obj.default_frequency or "",
             }
         return {"drug_dosage": "", "drug_usage": ""}
-
-    @staticmethod
-    def _build_interaction_config(category: int, library_obj) -> Dict[str, Any]:
-        if category == choices.PlanItemCategory.CHECKUP and getattr(library_obj, "related_report_type", None):
-            return {"related_report_type": library_obj.related_report_type}
-        return {}
 
     @staticmethod
     def _build_med_payload(med: Medication, plan: Optional[PlanItem]) -> Dict[str, Any]:
@@ -377,7 +296,6 @@ class PlanItemService:
             "current_dosage": plan.drug_dosage if plan else med.default_dosage,
             "current_usage": plan.drug_usage if plan else med.default_frequency,
             "priority_level": plan.priority_level if plan else None,
-            "interaction_config": plan.interaction_config if plan else {},
         }
 
     @staticmethod
@@ -395,7 +313,6 @@ class PlanItemService:
             "status": plan.status if plan else choices.PlanItemStatus.DISABLED,
             "is_active": bool(plan and plan.status == choices.PlanItemStatus.ACTIVE),
             "schedule_days": schedule_days,
-            "interaction_config": plan.interaction_config if plan else {},
         }
 
     @staticmethod
@@ -412,7 +329,6 @@ class PlanItemService:
             "status": plan.status if plan else choices.PlanItemStatus.DISABLED,
             "is_active": bool(plan and plan.status == choices.PlanItemStatus.ACTIVE),
             "schedule_days": schedule_days,
-            "interaction_config": plan.interaction_config if plan else {},
         }
 
     @staticmethod
@@ -430,7 +346,6 @@ class PlanItemService:
             "status": plan.status if plan else choices.PlanItemStatus.DISABLED,
             "is_active": bool(plan and plan.status == choices.PlanItemStatus.ACTIVE),
             "schedule_days": schedule_days,
-            "interaction_config": plan.interaction_config if plan else {},
         }
 
     @staticmethod

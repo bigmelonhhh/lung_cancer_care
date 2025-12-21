@@ -14,32 +14,8 @@ class PlanItem(models.Model):
         verbose_name="所属疗程",
     )
 
-    
     category = models.PositiveSmallIntegerField("类型", choices=choices.PlanItemCategory.choices)
-    medicine = models.ForeignKey(
-        "core.Medication",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="plan_items",
-        verbose_name="药品模板",
-    )
-    checkup = models.ForeignKey(
-        "core.CheckupLibrary",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="plan_items",
-        verbose_name="复查模板",
-    )
-    questionnaire = models.ForeignKey(
-        "core.Questionnaire",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="plan_items",
-        verbose_name="问卷模板",
-    )
+    template_id = models.PositiveIntegerField("模板ID")
     item_name = models.CharField("项目名称", max_length=100)
     drug_dosage = models.CharField("单次用量", max_length=50, blank=True)
     drug_usage = models.CharField("用法", max_length=50, blank=True)
@@ -60,19 +36,13 @@ class PlanItem(models.Model):
         choices=choices.PriorityLevel.choices,
         blank=True,
     )
-    interaction_config = models.JSONField(
-        "交互配置",
-        blank=True,
-        default=dict,
-        help_text='随访问卷/复查注意事项配置，例如 {"modules":["pain"]}',
-    )
-
     class Meta:
         db_table = "core_plan_items"
         verbose_name = "疗程计划条目"
         verbose_name_plural = "疗程计划条目"
         indexes = [
             models.Index(fields=["cycle", "category"], name="idx_cycle_category"),
+            models.Index(fields=["cycle", "category", "template_id"], name="idx_cycle_category_template"),
         ]
 
     def __str__(self) -> str:  # pragma: no cover
