@@ -17,32 +17,37 @@ from users.models import PatientProfile, CustomUser, PatientRelation
 
 class PatientService:
 
-    
-    def get_guard_days(self, patient: PatientProfile) -> int:
+    def get_guard_days(self, patient: PatientProfile) -> tuple[int, int]:
         """
-        【业务说明】按自然日统计患者已享受的“守护时间”总天数。
+        【业务说明】计算患者的“已服务天数”和“剩余服务天数”。
 
         【计算规则】
-        - 仅统计已支付且有支付时间的订单（status=PAID, paid_at 非空）。
-        - 每个订单贡献一个服务区间：
-          - start_date = paid_at 对应的本地日期；
-          - end_date = min(start_date + duration_days - 1, 今天前一天)；
-          - 若 end_date < start_date，则该订单贡献 0 天。
-        - 多个订单的服务区间按自然日合并去重（重叠或相邻的日期只算一次）。
-        - 结果为所有合并区间长度之和（单位：天），按自然日计数。
+        1. 数据源：仅统计已支付且有支付时间的订单（status=PAID, paid_at 非空）。
+        2. 区间生成：
+           - start_date = paid_at 对应的本地日期。
+           - end_date = start_date + duration_days - 1。
+        3. 区间合并：
+           - 对所有订单生成的 [start_date, end_date] 进行自然日合并，去除重叠部分。
+           - 连续的日期也会合并（如10号结束，11号开始，视为连续）。
+        4. 切分统计：
+           - 以“今天”为界进行切分。
+           - 已服务天数 (Served Days)：合并区间在“今天之前”的部分（截止到昨天）。
+           - 剩余天数 (Remaining Days)：合并区间在“今天及以后”的部分。
+
+        【参数】
+        - patient: PatientProfile 对象，需统计的患者档案。
+
+        【返回值】
+        - tuple[int, int]: (已服务天数, 剩余服务天数)
+
+        【使用示例】
+        >>> served_days, remaining_days = patient_service.get_guard_days(patient)
+        >>> print(f"已守护 {served_days} 天，剩余权益 {remaining_days} 天")
         """
         from market.models import Order  # 避免在模块顶层引入引起不必要耦合
 
         today: date = timezone.localdate()
-        end_limit: date = today - timedelta(days=1)
-        if end_limit < today - timedelta(days=1):
-            # 理论上不会发生，仅为类型检查和防御性
-            end_limit = today - timedelta(days=1)
-
-        # 无历史可统计
-        if end_limit < today - timedelta(days=36500):
-            # 占位防御，后面过滤仍会处理
-            pass
+        yesterday: date = today - timedelta(days=1)
 
         paid_orders = (
             Order.objects.select_related("product")
@@ -50,46 +55,53 @@ class PatientService:
             .order_by("paid_at")
         )
 
-        ranges: list[tuple[date, date]] = []
+        # 1. 生成原始服务区间 (不截断)
+        raw_ranges: list[tuple[date, date]] = []
         for order in paid_orders:
             duration = getattr(order.product, "duration_days", 0) or 0
             if duration <= 0:
                 continue
 
             start_date = timezone.localtime(order.paid_at).date()
-            theoretical_end = start_date + timedelta(days=duration - 1)
-            end_date = min(theoretical_end, end_limit)
+            end_date = start_date + timedelta(days=duration - 1)
+            raw_ranges.append((start_date, end_date))
 
-            # 该订单尚未对“过去天数”产生贡献
-            if end_date < start_date:
-                continue
+        if not raw_ranges:
+            return 0, 0
 
-            ranges.append((start_date, end_date))
-
-        if not ranges:
-            return 0
-
-        # 按开始日期排序后进行区间合并（自然日去重）
-        ranges.sort(key=lambda r: r[0])
-        merged: list[tuple[date, date]] = []
-        cur_start, cur_end = ranges[0]
-
-        for start, end in ranges[1:]:
-            # 若与当前区间相连或重叠（例如 cur_end=10, start=11），合并为单一连续段
-            if start <= cur_end + timedelta(days=1):
-                if end > cur_end:
-                    cur_end = end
+        # 2. 区间合并
+        raw_ranges.sort(key=lambda r: r[0])
+        merged_ranges: list[tuple[date, date]] = []
+        
+        curr_start, curr_end = raw_ranges[0]
+        for next_start, next_end in raw_ranges[1:]:
+            # 若与当前区间相连或重叠（例如 curr_end=10, next_start=11），合并为单一连续段
+            if next_start <= curr_end + timedelta(days=1):
+                if next_end > curr_end:
+                    curr_end = next_end
             else:
-                merged.append((cur_start, cur_end))
-                cur_start, cur_end = start, end
+                merged_ranges.append((curr_start, curr_end))
+                curr_start, curr_end = next_start, next_end
+        merged_ranges.append((curr_start, curr_end))
 
-        merged.append((cur_start, cur_end))
+        # 3. 统计天数 (切分过去与未来)
+        served_days = 0
+        remaining_days = 0
 
-        total_days = 0
-        for s, e in merged:
-            total_days += (e - s).days + 1
+        for start, end in merged_ranges:
+            # --- 计算已服务天数 ( < today ) ---
+            # 有效结束时间取 min(区间结束, 昨天)
+            served_end = min(end, yesterday)
+            if served_end >= start:
+                served_days += (served_end - start).days + 1
 
-        return total_days
+            # --- 计算剩余天数 ( >= today ) ---
+            # 有效开始时间取 max(区间开始, 今天)
+            remaining_start = max(start, today)
+            if end >= remaining_start:
+                remaining_days += (end - remaining_start).days + 1
+
+        return served_days, remaining_days
     
     
     
@@ -287,9 +299,12 @@ class PatientService:
         """
         phone = (data.get("phone") or "").strip()
         name = (data.get("name") or "").strip()
+        remark = (data.get("remark") or "").strip()
         
         if not phone or not name:
             raise ValidationError("姓名与手机号必填")
+        if len(remark) > 500:
+            raise ValidationError("备注不能超过500字")
 
         # -------------------------------------------------------
         # 场景 A: 编辑模式 (已知 ID)
@@ -335,6 +350,7 @@ class PatientService:
             profile.ec_name = (data.get("ec_name") or "").strip()
             profile.ec_relation = (data.get("ec_relation") or "").strip()
             profile.ec_phone = (data.get("ec_phone") or "").strip()
+            profile.remark = remark
             
             profile.save()
             return profile
@@ -369,6 +385,7 @@ class PatientService:
             profile.ec_name = (data.get("ec_name") or "").strip()
             profile.ec_relation = (data.get("ec_relation") or "").strip()
             profile.ec_phone = (data.get("ec_phone") or "").strip()
+            profile.remark = remark
 
             # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
             if not profile.sales and getattr(user, "bound_sales", None):
@@ -403,3 +420,5 @@ class PatientService:
         patient.doctor = doctor
         patient.save(update_fields=["doctor", "updated_at"])
         return patient
+
+# TODO : 依从性计算。用药， 数据监测。

@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxLengthValidator
 from django.db import models
 from django.utils import timezone
 
@@ -115,6 +116,12 @@ class PatientProfile(TimeStampedModel):
         max_length=100,
         blank=True,
         help_text="【业务说明】患者联系地址；【用法】邮寄资料或上门；【示例】上海市浦东新区XX路；【参数】str；【返回值】str",
+    )
+    remark = models.TextField(
+        "备注",
+        blank=True,
+        validators=[MaxLengthValidator(500)],
+        help_text="【业务说明】患者备注信息（最多500字）；【用法】医生或销售补充；【示例】需重点关注；【参数】str；【返回值】str",
     )
     ec_relation = models.CharField(
         "紧急联系人关系",

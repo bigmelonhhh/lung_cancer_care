@@ -165,7 +165,7 @@ class QuestionnaireSubmissionService:
         QuestionnaireAnswer.objects.bulk_create(answers_to_create)
 
         # 4. 更新总分
-        # TODO: 如果有复杂策略 (如 EORTC QLQ-C30)，在此处根据 strategy 调用不同算法
+        
         submission.total_score = total_score
         submission.save(update_fields=["total_score"])
 

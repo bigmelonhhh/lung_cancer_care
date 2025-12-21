@@ -46,7 +46,6 @@ class _Context:
     patient_id: int
     measured_at: datetime
 
-
 class HealthMetricService:
     @classmethod
     def handle_payload(cls, payload: dict) -> None:
@@ -235,7 +234,7 @@ class HealthMetricService:
 
         date = context.measured_at.date()
         
-        # BUG FIX: 使用精确的 timezone-aware 日期范围替代 __date 查询
+        
         # 避免因北京时间与 UTC 时间的日期差异导致查询失败
         start_of_day = context.measured_at.replace(
             hour=0, minute=0, second=0, microsecond=0

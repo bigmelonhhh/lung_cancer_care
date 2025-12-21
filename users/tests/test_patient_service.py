@@ -1,6 +1,5 @@
 import datetime
 
-import pytest
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
@@ -86,6 +85,7 @@ class PatientServiceTests(TestCase):
             "gender": choices.Gender.MALE,
             "birth_date": datetime.date(1981, 6, 16),
             "address": "123 New Address St",
+            "remark": "需重点关注随访",
         }
         
         updated_profile = self.service.save_patient_profile(
@@ -99,6 +99,7 @@ class PatientServiceTests(TestCase):
         self.assertEqual(self.patient_profile.name, "John Doe Updated")
         self.assertEqual(self.patient_profile.address, "123 New Address St")
         self.assertEqual(self.patient_profile.birth_date, datetime.date(1981, 6, 16))
+        self.assertEqual(self.patient_profile.remark, "需重点关注随访")
 
     def test_edit_by_doctor_success(self):
         """The assigned doctor can successfully edit a patient's profile."""
@@ -192,6 +193,7 @@ class PatientServiceTests(TestCase):
             "name": "Brand New Patient",
             "phone": "18600009999", # New phone
             "gender": choices.Gender.FEMALE,
+            "remark": "首次建档备注",
         }
 
         # Call without profile_id to trigger claim/create logic
@@ -202,6 +204,7 @@ class PatientServiceTests(TestCase):
         self.assertEqual(new_profile.name, "Brand New Patient")
         self.assertEqual(new_profile.phone, "18600009999")
         self.assertEqual(new_profile.source, choices.PatientSource.SELF)
+        self.assertEqual(new_profile.remark, "首次建档备注")
 
     def test_claim_profile_already_bound_fails(self):
         """Attempting to claim a profile already bound to another user fails."""
@@ -227,4 +230,19 @@ class PatientServiceTests(TestCase):
         with self.assertRaisesRegex(ValidationError, "姓名与手机号必填"):
             self.service.save_patient_profile(
                 user=self.patient_user, data={"phone": "1234567890"}
+            )
+
+    def test_remark_too_long_fails(self):
+        """Remark longer than 500 chars should raise ValidationError."""
+        update_data = {
+            "name": "John Doe Updated",
+            "phone": "18600000001",
+            "remark": "a" * 501,
+        }
+
+        with self.assertRaisesRegex(ValidationError, "备注不能超过500字"):
+            self.service.save_patient_profile(
+                user=self.patient_user,
+                data=update_data,
+                profile_id=self.patient_profile.id,
             )
