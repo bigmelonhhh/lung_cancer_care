@@ -17,7 +17,7 @@ from .home import patient_home
 from .plan import management_plan, my_medication
 from .record import record_temperature, record_bp, record_spo2, record_weight, record_breath, record_sputum, record_pain, health_records,record_checkup, health_record_detail
 from .followup import daily_survey, get_survey_detail, submit_surveys
-from .api import delete_health_metric, update_health_metric
+from .api import delete_health_metric, update_health_metric, submit_medication
 from .chat import consultation_chat
 
 __all__ = [
@@ -57,5 +57,7 @@ __all__ = [
     "get_survey_detail",
     "submit_surveys",
     "delete_health_metric",
-    "update_health_metric"
+    "update_health_metric",
+    "submit_medication",
+    "consultation_chat"
 ]

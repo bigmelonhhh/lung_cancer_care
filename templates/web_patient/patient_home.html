@@ -24,31 +24,46 @@
             >
               {{patient.name}}
             </h1>
-             <div class="flex items-center mt-1.5">
             <div class="flex items-center mt-1.5">
-              <span
-                class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
-              >
-                <svg
-                  class="w-3 h-3 text-yellow-300"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-                  />
-                </svg>
-                已守护 {{ service_days }} 天
-              </span>
-            </div>
               <div class="flex items-center mt-1.5">
-              <span
-                class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
+                <span
+                  class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
                 >
-               <svg t="1765982215869" class="icon w-3 h-3" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4514" width="32" height="32"><path d="M896.287817 458.825143s-144.713143 30.829714-184.758857 41.581714c-39.68 10.788571-88.868571-67.218286-102.034286-70.034286-8.448 24.466286-35.730286 96.219429-52.004571 144.932572 25.234286-0.768 156.050286 38.875429 160.804571 61.988571 5.449143 23.369143 66.56 276.516571 66.56 276.516572s25.892571 54.418286-47.652571 74.313143c-73.618286 19.858286-76.909714-40.667429-76.909714-40.667429s-51.382857-194.194286-55.954286-205.897143c-4.278857-11.739429-100.096-31.451429-122.038857-25.526857-22.089143 6.034286-69.449143 171.776-116.187429 183.04-60.050286 14.555429-235.885714-92.233143-235.885714-92.233143s-69.485714-17.188571-55.296-82.358857c14.445714-64.731429 81.883429-47.030857 81.883428-47.030857s124.525714 68.461714 138.898286 60.416c14.518857-8.155429 22.784-55.369143 44.032-101.156572 0.877714-17.261714 49.737143-154.514286 49.737143-154.514285s27.062857-91.392 16.310857-97.097143c-14.848-7.862857-30.354286 8.923429-38.509714 22.893714-8.155429 13.860571-40.448 70.985143-94.464 145.371429-48.018286 66.267429-133.668571 4.754286-98.084572-57.124572 29.622857-51.492571 108.361143-198.729143 165.010286-226.486857 57.051429-27.904 155.355429-43.446857 239.067429-23.844571 84.114286 19.2 143.067429 114.468571 159.561143 127.049143 16.091429 12.141714 129.389714-24.502857 129.389714-24.502858s64.512-22.418286 80.530286 36.461715c16.091429 59.245714-52.004571 73.874286-52.004572 73.874285zM631.291246 216.137143a110.006857 110.006857 0 0 1-135.68-77.129143A110.299429 110.299429 0 0 1 573.764389 3.913143c59.245714-16.018286 119.917714 18.724571 135.68 77.165714 16.018286 58.806857-18.980571 118.930286-78.153143 135.058286z" fill="#35E2B0" p-id="4515"></path></svg>
-                 今日步数：{{step_count}}
-              </span>
-            </div>
+                  <svg
+                    class="w-3 h-3 text-yellow-300"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
+                    />
+                  </svg>
+                  已守护 {{ service_days }} 天
+                </span>
+              </div>
+              <div class="flex items-center mt-1.5">
+                <span
+                  class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
+                >
+                  <svg
+                    t="1765982215869"
+                    class="icon w-3 h-3"
+                    viewBox="0 0 1024 1024"
+                    version="1.1"
+                    xmlns="http://www.w3.org/2000/svg"
+                    p-id="4514"
+                    width="32"
+                    height="32"
+                  >
+                    <path
+                      d="M896.287817 458.825143s-144.713143 30.829714-184.758857 41.581714c-39.68 10.788571-88.868571-67.218286-102.034286-70.034286-8.448 24.466286-35.730286 96.219429-52.004571 144.932572 25.234286-0.768 156.050286 38.875429 160.804571 61.988571 5.449143 23.369143 66.56 276.516571 66.56 276.516572s25.892571 54.418286-47.652571 74.313143c-73.618286 19.858286-76.909714-40.667429-76.909714-40.667429s-51.382857-194.194286-55.954286-205.897143c-4.278857-11.739429-100.096-31.451429-122.038857-25.526857-22.089143 6.034286-69.449143 171.776-116.187429 183.04-60.050286 14.555429-235.885714-92.233143-235.885714-92.233143s-69.485714-17.188571-55.296-82.358857c14.445714-64.731429 81.883429-47.030857 81.883428-47.030857s124.525714 68.461714 138.898286 60.416c14.518857-8.155429 22.784-55.369143 44.032-101.156572 0.877714-17.261714 49.737143-154.514286 49.737143-154.514285s27.062857-91.392 16.310857-97.097143c-14.848-7.862857-30.354286 8.923429-38.509714 22.893714-8.155429 13.860571-40.448 70.985143-94.464 145.371429-48.018286 66.267429-133.668571 4.754286-98.084572-57.124572 29.622857-51.492571 108.361143-198.729143 165.010286-226.486857 57.051429-27.904 155.355429-43.446857 239.067429-23.844571 84.114286 19.2 143.067429 114.468571 159.561143 127.049143 16.091429 12.141714 129.389714-24.502857 129.389714-24.502858s64.512-22.418286 80.530286 36.461715c16.091429 59.245714-52.004571 73.874286-52.004572 73.874285zM631.291246 216.137143a110.006857 110.006857 0 0 1-135.68-77.129143A110.299429 110.299429 0 0 1 573.764389 3.913143c59.245714-16.018286 119.917714 18.724571 135.68 77.165714 16.018286 58.806857-18.980571 118.930286-78.153143 135.058286z"
+                      fill="#35E2B0"
+                      p-id="4515"
+                    ></path>
+                  </svg>
+                  今日步数：{{step_count}}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -61,8 +76,7 @@
     <a
       href="{% if patient.is_member and patient.membership_expire_date %}{% url 'web_patient:consultation_chat' %}?patient_id={{ patient_id }}{% else %}{{ buy_url }}{% endif %}"
       class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
-    > 
-     
+    >
       <div class="flex items-center gap-4 relative z-10">
         <div
           class="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200"
@@ -560,15 +574,6 @@
             </div>
           </div>
           {% if plan.status != 'completed' %}
-          <!-- 核心修改：直接使用后端生成的auth_url跳转 window.location.href='{{ plan.auth_url }}'-->
-          {% comment %}
-          <button
-            onclick="handleTaskClick(plan.title,plan.type)"
-            class="bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap"
-          >
-            {{ plan.action_text }}
-          </button>
-          {% endcomment %}
 
           <button
             onclick="handleTaskClick('{{ plan.title }}', '{{ plan.type }}')"
@@ -670,44 +675,74 @@
 </div>
 
 <script>
-function openMedicationModal() {
-    const modal = document.getElementById('medication-modal');
-    modal.classList.remove('hidden');
-    modal.style.display = 'block'; // Ensure it's visible if hidden class toggle isn't enough
-}
+  function openMedicationModal() {
+      const modal = document.getElementById('medication-modal');
+      modal.classList.remove('hidden');
+      modal.style.display = 'block'; // Ensure it's visible if hidden class toggle isn't enough
+  }
 
-function closeMedicationModal() {
-    const modal = document.getElementById('medication-modal');
-    modal.classList.add('hidden');
-    modal.style.display = 'none';
-}
+  function closeMedicationModal() {
+      const modal = document.getElementById('medication-modal');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+  }
 
-function submitMedication() {
-    window.location.href = "{% url 'web_patient:patient_home' %}?patient_id=" + patient_id + "&medication_taken=true";
-}
+  function submitMedication() {
+      const patientId = "{{ patient_id|default:'' }}";
+      if (!patientId) {
+          alert('未找到患者信息');
+          return;
+      }
 
-function handleTaskClick(title, type) {
-    // 获取当前用户openid
-    const patientId = "{{ patient_id|default:'' }}";
-    
-    // 获取后端传递的菜单URL映射
-    const menuUrls = {{ menuUrl|safe }};
-    
-    if(title.includes('用药提醒')){
-        openMedicationModal();
-    } else  {
-       let urlA = menuUrls[type];
-       console.log("跳转地址:", urlA);
-       
-       if (urlA) {
-            // 判断URL是否已经包含参数
-            const separator = urlA.includes('?') ? '&' : '?';
-            window.location.href = urlA + separator + "patient_id=" + patientId;
-       } else {
-            console.error("未找到对应类型的跳转链接:", type);
-            // 可以在这里添加默认跳转或提示
-       }
-    } 
-}
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+      fetch("{% url 'web_patient:submit_medication' %}", {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: new URLSearchParams({
+              'patient_id': patientId
+          })
+      })
+      .then(response => response.json())
+      .then(data => {
+          if (data.success) {
+              // 成功后刷新页面并带上成功参数
+               window.location.replace("{% url 'web_patient:patient_home' %}?medication_taken=true");
+          } else {
+              alert(data.message || '提交失败');
+          }
+      })
+      .catch(error => {
+          console.error('Error:', error);
+          alert('提交出错，请稍后重试');
+      });
+  }
+
+  function handleTaskClick(title, type) {
+      // 获取当前用户openid
+      const patientId = "{{ patient_id|default:'' }}";
+
+      // 获取后端传递的菜单URL映射
+      const menuUrls = {{ menuUrl|safe }};
+
+      if(title.includes('用药提醒')){
+          openMedicationModal();
+      } else  {
+         let urlA = menuUrls[type];
+         console.log("跳转地址:", urlA);
+
+         if (urlA) {
+              // 判断URL是否已经包含参数
+              const separator = urlA.includes('?') ? '&' : '?';
+              window.location.href = urlA + separator + "patient_id=" + patientId;
+         } else {
+              console.error("未找到对应类型的跳转链接:", type);
+              // 可以在这里添加默认跳转或提示
+         }
+      }
+  }
 </script>
 {% endblock %}

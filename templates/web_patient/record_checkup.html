@@ -262,7 +262,7 @@ function submitCheckup() {
     
     // Redirect
     const openid = "{{ openid }}";
-    window.location.href = "{% url 'web_patient:patient_home' %}?openid=" + openid + "&checkup_completed=true";
+    window.location.replace("{% url 'web_patient:patient_home' %}?checkup_completed=true");
 }
 </script>
 {% endblock %}

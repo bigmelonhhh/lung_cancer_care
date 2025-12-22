@@ -1,11 +1,42 @@
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_POST
 from health_data.services.health_metric import HealthMetricService
+from health_data.models import MetricType
 from users.decorators import auto_wechat_login, check_patient
 from decimal import Decimal
 import logging
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+@auto_wechat_login
+@check_patient
+@require_POST
+def submit_medication(request: HttpRequest) -> JsonResponse:
+    """
+    提交用药记录接口
+    POST /p/api/medication/submit/
+    """
+    patient = request.patient
+    patient_id = patient.id if patient else None
+    
+    if not patient_id:
+        return JsonResponse({'success': False, 'message': '未找到患者信息'})
+        
+    try:
+        # 使用 HealthMetricService 保存用药记录
+        # MetricType.USE_MEDICATED = "use_medicated"
+        # value_main 默认为 1，表示已服药
+        HealthMetricService.save_manual_metric(
+            patient_id=int(patient_id),
+            metric_type=MetricType.USE_MEDICATED,
+            measured_at=timezone.now(),
+            value_main=Decimal("1")
+        )
+        return JsonResponse({'success': True, 'message': '提交成功'})
+    except Exception as e:
+        logger.error(f"提交用药记录失败: {e}")
+        return JsonResponse({'success': False, 'message': f'提交失败: {str(e)}'})
 
 @auto_wechat_login
 @check_patient

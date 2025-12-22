@@ -41,7 +41,7 @@ PLAN_METRIC_MAPPING = {
         "format_func": lambda x: f"{x['value_display']}"
     },
     "medication": {
-        "key": "medication",  # 假设接口中有用药字段，可根据实际调整
+        "key": MetricType.USE_MEDICATED,
         "name": "用药提醒",
         "format_func": lambda x: "已服药" if x else "未服药"
     },

@@ -56,4 +56,5 @@ urlpatterns = [
     # API endpoints
     path("api/health/metric/delete/", views.delete_health_metric, name="delete_health_metric"),
     path("api/health/metric/update/", views.update_health_metric, name="update_health_metric"),
+    path("api/medication/submit/", views.submit_medication, name="submit_medication"),
 ]
