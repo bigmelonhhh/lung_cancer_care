@@ -188,6 +188,29 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
     elif section == "home":
         template_name = "web_doctor/partials/home/home.html"
         context.update(build_home_context(patient))
+    elif section == "checkup_history":
+        from web_doctor.views.home import handle_checkup_history_section
+        return render(
+            request,
+            handle_checkup_history_section(request, context),
+            context
+        )
+
+    elif section == "medication_history":
+        from web_doctor.views.home import handle_medication_history_section
+        return render(
+            request,
+            handle_medication_history_section(request, context),
+            context
+        )
+
+    elif section == "reports_history":
+        from web_doctor.views.home import handle_reports_history_section
+        return render(
+            request,
+            handle_reports_history_section(request, context),
+            context
+        )
 
     return render(request, template_name, context)
 
@@ -230,7 +253,9 @@ def _build_settings_context(
             selected_cycle = active_cycle
 
     # 默认展开选中的疗程；若不存在则不展开任何卡片
-    expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
+    # expanded_cycle_id: int | None = selected_cycle.id if selected_cycle else None
+    expanded_cycle_id: int | None = selected_cycle.id if (selected_cycle and hasattr(selected_cycle, 'id')) else None
+
 
     # 判断当前选中的疗程是否可以终止（必须是进行中状态）
     can_terminate_selected_cycle = False
@@ -251,7 +276,15 @@ def _build_settings_context(
         delta_days = (date.today() - selected_cycle.start_date).days + 1
         current_day_index = 1 if delta_days < 1 else delta_days
 
-        cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+        # cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+        cycle_plan = {}
+        if hasattr(selected_cycle, 'id') and selected_cycle.id:
+            try:
+                cycle_plan = PlanItemService.get_cycle_plan_view(selected_cycle.id)
+            except Exception as e:
+                # 捕获异常，避免单个疗程计划查询失败导致整个页面报错
+                logger.error(f"获取疗程 {selected_cycle.id} 计划视图失败：{e}")
+                cycle_plan = {}
 
         # 用药计划：仅展示当前疗程已选中的药品
         for med in cycle_plan.get("medications", []):
@@ -383,7 +416,6 @@ def _build_settings_context(
             "surgery": "",
             "last_updated": "",
         }
-
     return {
         "active_cycle": active_cycle,
         "selected_cycle": selected_cycle,

@@ -66,6 +66,11 @@ urlpatterns = [
         name="patient_home_remark_update",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/medication/stop/",
+        home.patient_medication_stop,
+        name="patient_medication_stop",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",
         views.patient_workspace_section,
         name="patient_workspace_section",

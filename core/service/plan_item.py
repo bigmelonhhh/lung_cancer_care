@@ -214,7 +214,6 @@ class PlanItemService:
         plan.save(update_fields=[field_name])
         return plan
 
-    @classmethod
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

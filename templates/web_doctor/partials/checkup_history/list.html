@@ -1,0 +1,147 @@
+<div class="space-y-6">
+    <div class="flex items-center gap-4 mb-4">
+        <button 
+            class="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-sm"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
+            hx-target="#patient-content"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            返回
+        </button>
+        <h2 class="text-lg font-bold text-slate-800">复查/诊疗历史记录</h2>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        {# 搜索筛选区域 #}
+        <form 
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'checkup_history' %}" 
+            hx-target="#patient-content"
+            class="p-6 border-b border-slate-100 bg-slate-50/50 flex flex-wrap items-center gap-6"
+        >
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">记录类型：</label>
+                <select name="type" class="p-2 text-sm border border-[#c1c1c1] rounded-md shadow-sm ">
+                    <option value="" {% if not filters.type %}selected{% endif %}>全部</option>
+                    <option value="checkup" {% if filters.type == 'checkup' %}selected{% endif %}>复查</option>
+                    <option value="outpatient" {% if filters.type == 'outpatient' %}selected{% endif %}>门诊</option>
+                    <option value="hospitalization" {% if filters.type == 'hospitalization' %}selected{% endif %}>住院</option>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">日期：</label>
+                <input type="date" name="start_date" value="{{ filters.start_date }}" class="p-2 text-sm border border-[#c1c1c1] rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <span class="text-slate-400">-</span>
+                <input type="date" name="end_date" value="{{ filters.end_date }}" class="p-2 text-sm border  border-[#c1c1c1] rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+            </div>
+
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">操作人：</label>
+                <input type="text" name="operator" value="{{ filters.operator }}" placeholder="请输入操作人" class="p-2 text-sm border  border-[#c1c1c1] rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 w-32">
+            </div>
+                            <button type="submit" class="px-6 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">搜索</button>
+
+
+            
+        </form>
+
+        {# 表格区域 #}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-slate-100 text-slate-700 font-medium border-b border-slate-200">
+                    <tr>
+                        <th class="px-6 py-4 whitespace-nowrap ">记录类型</th>
+                        <th class="px-6 py-4 whitespace-nowrap">复查/门诊/住院时间</th>
+                        <th class="px-6 py-4 whitespace-nowrap">记录时间</th>
+                        <th class="px-6 py-4 whitespace-nowrap">操作人</th>
+                        <th class="px-6 py-4 whitespace-nowrap  text-center">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for record in history_page %}
+                    <tr class="hover:bg-slate-50/50">
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                {% if record.type == 'checkup' %}
+                                    <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                                    <span class="text-slate-700">复查</span>
+                                {% elif record.type == 'outpatient' %}
+                                    <svg class="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                                    <span class="text-slate-700">门诊</span>
+                                {% else %}
+                                    <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/></svg>
+                                    <span class="text-slate-700">住院</span>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-slate-600">{{ record.event_date }}</td>
+                        <td class="px-6 py-4 text-slate-600">{{ record.record_date }}</td>
+                        <td class="px-6 py-4 text-slate-600">{{ record.operator }}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center justify-center gap-2">
+                                <button class="px-3 py-1 border  rounded bg-white  text-indigo-600 border-indigo-300 text-xs transition-colors flex items-center gap-1">
+                                    <svg t="1766497107715" class="icon w-4 h-4" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="11241" width="32" height="32"><path d="M861.090909 489.611636a46.545455 46.545455 0 1 1 93.090909 0V814.545455a139.636364 139.636364 0 0 1-139.636363 139.636363H209.454545a139.636364 139.636364 0 0 1-139.636363-139.636363V209.454545a139.636364 139.636364 0 0 1 139.636363-139.636363h326.260364a46.545455 46.545455 0 1 1 0 93.090909H209.454545a46.545455 46.545455 0 0 0-46.545454 46.545454v605.09091a46.545455 46.545455 0 0 0 46.545454 46.545454h605.09091a46.545455 46.545455 0 0 0 46.545454-46.545454V489.611636z m-472.762182 80.221091l460.8-460.776727a46.545455 46.545455 0 1 1 65.815273 65.838545l-460.8 460.776728a46.545455 46.545455 0 1 1-65.815273-65.838546z" fill="#004198" p-id="11242"></path></svg>
+                                    查看
+                                </button>
+                                {% if record.can_delete %}
+                                <button class="px-3 py-1 border rounded bg-white  text-rose-600 border-rose-300 text-xs transition-colors flex items-center gap-1">
+                                    <svg t="1766497046574" class="icon w-4 h-4" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="9164" width="32" height="32"><path d="M376.0128 320.1024L271.9744 320v494.3872a25.6 25.6 0 0 0 25.6 25.6h428.8a25.6 25.6 0 0 0 25.6-25.6V320h-103.936l-80.0256 0.1024-112.0256-0.1024-79.9744 0.1024z m39.9872 111.4624c22.0672 0 39.9872 17.92 39.9872 39.936v200.4992a39.9872 39.9872 0 1 1-79.9744 0V471.552c0-22.1184 17.92-39.9872 39.9872-39.9872z m192 0c22.0672 0 39.9872 17.92 39.9872 39.936v200.4992a39.9872 39.9872 0 1 1-79.9744 0V471.552c0-22.1184 17.92-39.9872 39.9872-39.9872z m121.6 488.448h-435.2a102.4 102.4 0 0 1-102.4-102.4V320h-39.9872a39.9872 39.9872 0 0 1 0-80.0256H871.936a39.9872 39.9872 0 1 1 0 80.0256h-39.9872v497.6128a102.4 102.4 0 0 1-102.4 102.4zM367.9744 103.936h288a39.9872 39.9872 0 1 1 0 80.0256H368.0768a39.9872 39.9872 0 0 1 0-80.0256z" fill="#d81e06" p-id="9165"></path></svg>
+                                    删除
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-slate-400">
+                            暂无记录
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {# 分页 #}
+    {% if history_page.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-center gap-2 mt-6">
+        {% if history_page.has_previous %}
+        <button 
+            class="w-8 h-8 flex items-center justify-center border border-slate-300 rounded bg-white text-slate-600 hover:bg-slate-50"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'checkup_history' %}?page={{ history_page.previous_page_number }}&type={{ filters.type }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&operator={{ filters.operator }}"
+            hx-target="#patient-content"
+        >
+            &lt;
+        </button>
+        {% endif %}
+        
+        {% for p in history_page.paginator.page_range %}
+            {% if p == history_page.number %}
+            <button class="w-8 h-8 flex items-center justify-center border border-indigo-500 bg-indigo-50 text-indigo-600 rounded font-medium">
+                {{ p }}
+            </button>
+            {% else %}
+            <button 
+                class="w-8 h-8 flex items-center justify-center border border-slate-300 rounded bg-white text-slate-600 hover:bg-slate-50"
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'checkup_history' %}?page={{ p }}&type={{ filters.type }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&operator={{ filters.operator }}"
+                hx-target="#patient-content"
+            >
+                {{ p }}
+            </button>
+            {% endif %}
+        {% endfor %}
+
+        {% if history_page.has_next %}
+        <button 
+            class="w-8 h-8 flex items-center justify-center border border-slate-300 rounded bg-white text-slate-600 hover:bg-slate-50"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'checkup_history' %}?page={{ history_page.next_page_number }}&type={{ filters.type }}&start_date={{ filters.start_date }}&end_date={{ filters.end_date }}&operator={{ filters.operator }}"
+            hx-target="#patient-content"
+        >
+            &gt;
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>

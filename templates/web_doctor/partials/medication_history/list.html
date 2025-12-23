@@ -1,0 +1,82 @@
+<div class="space-y-6">
+    <div class="flex items-center gap-4 mb-4">
+        <button 
+            class="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-sm"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
+            hx-target="#patient-content"
+        >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            返回
+        </button>
+        <h2 class="text-lg font-bold text-slate-800">历史用药方案</h2>
+    </div>
+
+    <div class="space-y-4">
+        {% for history in history_page %}
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-6 py-3 bg-slate-50/50 border-b border-slate-100">
+                <span class="font-medium text-slate-700">开始用药日期：{{ history.start_date }}</span>
+            </div>
+            <div class="p-6">
+                 <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-100 text-slate-700 font-medium">
+                            <tr>
+                                <th class="px-4 py-3 whitespace-nowrap">线数</th>
+                                <th class="px-4 py-3 whitespace-nowrap">药品名称</th>
+                                <th class="px-4 py-3 whitespace-nowrap">频次</th>
+                                <th class="px-4 py-3 whitespace-nowrap">每次用量</th>
+                                <th class="px-4 py-3 whitespace-nowrap">用药方式</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            {% for med in history.items %}
+                            <tr class="hover:bg-slate-50/50">
+                                <td class="px-4 py-3 text-slate-600">{{ med.line }}</td>
+                                <td class="px-4 py-3 font-medium text-slate-800">{{ med.name }}</td>
+                                <td class="px-4 py-3 text-slate-600">{{ med.frequency }}</td>
+                                <td class="px-4 py-3 text-slate-600">{{ med.dosage }}</td>
+                                <td class="px-4 py-3 text-slate-600">{{ med.usage }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-12 text-slate-500">
+            暂无历史用药方案
+        </div>
+        {% endfor %}
+    </div>
+
+    {# 分页 #}
+    {% if history_page.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-center gap-2 mt-6">
+        {% if history_page.has_previous %}
+        <button 
+            class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'medication_history' %}?page={{ history_page.previous_page_number }}"
+            hx-target="#patient-content"
+        >
+            上一页
+        </button>
+        {% endif %}
+        
+        <span class="text-sm text-slate-600">
+            第 {{ history_page.number }} / {{ history_page.paginator.num_pages }} 页
+        </span>
+
+        {% if history_page.has_next %}
+        <button 
+            class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'medication_history' %}?page={{ history_page.next_page_number }}"
+            hx-target="#patient-content"
+        >
+            下一页
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
