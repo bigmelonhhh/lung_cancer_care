@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 
-from core.models import TreatmentCycle
+from core.models import PlanItem, TreatmentCycle
 from core.models import choices
-from users.models import PatientProfile
+from users.models import CustomUser, PatientProfile
 
 # 根据 patient 来查询当前所有疗程。 按照开始时间倒序排列，并在此处直接做分页。
 
@@ -153,3 +153,32 @@ def get_active_treatment_cycle(patient: PatientProfile) -> Optional[TreatmentCyc
     ).order_by("-start_date")
 
     return qs.first()
+
+
+def get_cycle_confirmer(cycle_id: int) -> tuple[Optional[CustomUser], Optional[datetime]]:
+    """
+    【功能说明】
+    - 获取疗程“确认人”（最近更新计划的人）。
+    - 通过该疗程下 PlanItem 的最新 updated_at 来判定，并返回确认时间。
+
+    【参数说明】
+    - cycle_id: TreatmentCycle 主键 ID。
+
+    【返回值说明】
+    - 返回 (CustomUser, confirmed_at)；
+    - 若不存在计划或均未记录 updated_by，则返回 (None, None)。
+
+    【使用示例】
+    >>> user, confirmed_at = get_cycle_confirmer(cycle_id=1)
+    >>> if user and confirmed_at:
+    ...     print(user.display_name, confirmed_at)
+    """
+    plan = (
+        PlanItem.objects.filter(cycle_id=cycle_id, updated_by__isnull=False)
+        .select_related("updated_by")
+        .order_by("-updated_at")
+        .first()
+    )
+    if not plan:
+        return None, None
+    return plan.updated_by, plan.updated_at

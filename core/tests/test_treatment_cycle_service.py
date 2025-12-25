@@ -1,12 +1,19 @@
-"""treatment_cycle service 测试：get_treatment_cycles 分页与排序。"""
+"""treatment_cycle service 测试：分页/排序与确认人查询。"""
 
 from datetime import date, timedelta
 
+from django.core.exceptions import ValidationError
 from django.test import TestCase
+from django.utils import timezone
 
-from core.models import TreatmentCycle, choices
-from core.service.treatment_cycle import get_treatment_cycles
-from users.models import PatientProfile
+from core.models import PlanItem, TreatmentCycle, choices
+from core.service.treatment_cycle import (
+    create_treatment_cycle,
+    get_cycle_confirmer,
+    get_treatment_cycles,
+)
+from users import choices as user_choices
+from users.models import CustomUser, PatientProfile
 
 
 class TreatmentCycleServiceTest(TestCase):
@@ -55,3 +62,115 @@ class TreatmentCycleServiceTest(TestCase):
         first_cycle_second_page = page.object_list[0]
         self.assertEqual(first_cycle_second_page.name, "疗程4")
 
+    def test_create_treatment_cycle_rejects_overlapping_active_cycles(self):
+        """同一患者进行中疗程的时间区间不可重叠。"""
+        start_date = date(2025, 2, 1)
+        create_treatment_cycle(
+            patient=self.patient,
+            name="疗程A",
+            start_date=start_date,
+            cycle_days=10,
+        )
+
+        with self.assertRaises(ValidationError):
+            create_treatment_cycle(
+                patient=self.patient,
+                name="疗程B",
+                start_date=start_date + timedelta(days=5),
+                cycle_days=10,
+            )
+
+    def test_create_treatment_cycle_allows_overlap_when_terminated(self):
+        """已终止疗程允许时间重叠。"""
+        start_date = date(2025, 3, 1)
+        cycle = create_treatment_cycle(
+            patient=self.patient,
+            name="疗程A",
+            start_date=start_date,
+            cycle_days=10,
+        )
+        cycle.status = choices.TreatmentCycleStatus.TERMINATED
+        cycle.save(update_fields=["status"])
+
+        created = create_treatment_cycle(
+            patient=self.patient,
+            name="疗程B",
+            start_date=start_date + timedelta(days=5),
+            cycle_days=10,
+        )
+
+        self.assertIsNotNone(created.id)
+
+
+class TreatmentCycleConfirmerTest(TestCase):
+    """测试疗程确认人查询逻辑。"""
+
+    def setUp(self) -> None:
+        self.patient = PatientProfile.objects.create(
+            phone="13900000006",
+            name="确认人患者",
+        )
+        self.cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="确认人疗程",
+            start_date=date(2025, 1, 1),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        self.doctor = CustomUser.objects.create_user(
+            username="doctor_confirm",
+            password="password",
+            user_type=user_choices.UserType.DOCTOR,
+            phone="13900000007",
+        )
+        self.assistant = CustomUser.objects.create_user(
+            username="assistant_confirm",
+            password="password",
+            user_type=user_choices.UserType.ASSISTANT,
+            phone="13900000008",
+        )
+
+    def test_get_cycle_confirmer_returns_latest_updated_by(self):
+        plan_early = PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MEDICATION,
+            template_id=1,
+            item_name="化疗用药A",
+            schedule_days=[1],
+            status=choices.PlanItemStatus.ACTIVE,
+            updated_by=self.doctor,
+        )
+        PlanItem.objects.filter(pk=plan_early.id).update(
+            updated_at=timezone.now() - timedelta(days=1)
+        )
+        PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MEDICATION,
+            template_id=2,
+            item_name="化疗用药B",
+            schedule_days=[2],
+            status=choices.PlanItemStatus.ACTIVE,
+            updated_by=self.assistant,
+        )
+
+        confirmer, confirmed_at = get_cycle_confirmer(self.cycle.id)
+
+        self.assertIsNotNone(confirmer)
+        self.assertEqual(confirmer.id, self.assistant.id)
+        self.assertIsNotNone(confirmed_at)
+
+    def test_get_cycle_confirmer_returns_none_when_missing(self):
+        PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MEDICATION,
+            template_id=3,
+            item_name="化疗用药C",
+            schedule_days=[3],
+            status=choices.PlanItemStatus.ACTIVE,
+            updated_by=None,
+        )
+
+        confirmer, confirmed_at = get_cycle_confirmer(self.cycle.id)
+
+        self.assertIsNone(confirmer)
+        self.assertIsNone(confirmed_at)
