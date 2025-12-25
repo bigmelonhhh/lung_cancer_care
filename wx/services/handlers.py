@@ -94,9 +94,6 @@ QR_HANDLERS = {
 def handle_message(message):
     user_openid = message.source
     
-    print('-----------------')
-    print(f"mesasge type is [{message.type}] and event is [{message.event}], event_key is[{_get_event_key(message)}]")
-    print('-----------------')
     # 1. 统一处理关注/扫码事件
     if message.type == 'event':
         if message.event in ['subscribe', 'subscribe_scan']:
@@ -147,13 +144,9 @@ def _dispatch_scan_logic(user, event_key):
     try:
     # 找到最后一个下划线，分割为 type 和 id
         prefix, object_id_str = event_key.rsplit('_', 1)
-        print('**'*10)
-        print(object_id_str)
-        print('**'*10)
         object_id = int(object_id_str)
         
         handler = QR_HANDLERS.get(prefix)
-        print(handler)
         if handler:
             return handler(user, object_id)
         

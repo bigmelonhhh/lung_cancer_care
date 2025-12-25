@@ -42,7 +42,6 @@ def wechat_main(request):
         )
 
         msg = parse_message(decrypted_xml)
-        print(msg)
         reply = handle_message(msg)
         if reply:
             reply_xml = reply.render()

@@ -106,6 +106,8 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
+                
+                # 显式跳转并带参数，确保首页回显
                 redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?bp_hr=true&patient_id={patient_id}")
             except Exception as e:
@@ -157,6 +159,8 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
+                
+                # 显式跳转并带参数，确保首页回显
                 redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?spo2=true&patient_id={patient_id}")
             except Exception as e:
@@ -211,6 +215,8 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
+                
+                # 显式跳转并带参数，确保首页回显
                 redirect_url = reverse("web_patient:patient_home")
                 return redirect(f"{redirect_url}?weight=true&patient_id={patient_id}")
             except Exception as e:
@@ -519,7 +525,6 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                 raw_list = page_obj.object_list
                 has_more = page < page_obj.paginator.num_pages
                 weekday_map = {0: "星期一", 1: "星期二", 2: "星期三", 3: "星期四", 4: "星期五", 5: "星期六", 6: "星期日"}
-                print(f"==提交后拉取健康指标数据=={raw_list}")
                 for metric in raw_list:
                     # measured_at 是带时区的 datetime
                     dt = metric.measured_at.astimezone(timezone.get_current_timezone())

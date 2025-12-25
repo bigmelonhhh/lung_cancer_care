@@ -26,7 +26,7 @@
             <p class="text-slate-600 mb-8 leading-relaxed text-center">建议：继续按医嘱服药，密切关注相关指标，如有不适，请联系医生</p>
         </div>
         <div class="mt-8 px-4">
-            <a href="{% url 'web_patient:patient_home' %}?followup=true" class="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-bold shadow-md hover:bg-blue-700 transition">返回首页</a>
+            <a href="{% url 'web_patient:patient_home' %}?followup=true&patient_id={{ patient_id }}" class="block w-full py-3 bg-blue-600 text-white text-center rounded-lg font-bold shadow-md hover:bg-blue-700 transition">返回首页</a>
         </div>
     </div>
 

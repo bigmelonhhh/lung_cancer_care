@@ -24,7 +24,7 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
         form = PatientEntryVerificationForm(request.POST)
         if form.is_valid():
             try:
-                patient_service.save_profile_by_self(request.user, form.cleaned_data)
+                patient_service.save_patient_profile(request.user, form.cleaned_data)
             except ValidationError as exc:
                 form.add_error(None, exc.message)
             else:

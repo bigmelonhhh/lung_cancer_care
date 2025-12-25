@@ -100,10 +100,10 @@ def profile_update(request: HttpRequest, patient_id: int) -> HttpResponse:
     if form.is_valid():
         
         try:
-            updated_patient = PatientService().save_profile_by_self(
+            updated_patient = PatientService().save_patient_profile(
                 request.user,
                 form.cleaned_data,
-                profile_id=patient.pk,
+                profile_id=patient.id,
             )
         except ValidationError as exc:
             

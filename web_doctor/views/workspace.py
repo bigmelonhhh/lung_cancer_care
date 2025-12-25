@@ -985,7 +985,6 @@ def patient_profile_update(request: HttpRequest, patient_id: int) -> HttpRespons
         # 强制刷新 patient 对象，确保获取到最新数据
         patient.refresh_from_db()
     except ValidationError as exc:
-        print(f"{exc}")
         message = str(exc)
         response = HttpResponse(message, status=400)
         response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
