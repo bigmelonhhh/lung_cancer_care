@@ -109,10 +109,11 @@ class TreatmentCycleConfirmerTest(TestCase):
             updated_by=self.assistant,
         )
 
-        confirmer = get_cycle_confirmer(self.cycle.id)
+        confirmer, confirmed_at = get_cycle_confirmer(self.cycle.id)
 
         self.assertIsNotNone(confirmer)
         self.assertEqual(confirmer.id, self.assistant.id)
+        self.assertIsNotNone(confirmed_at)
 
     def test_get_cycle_confirmer_returns_none_when_missing(self):
         PlanItem.objects.create(
@@ -125,6 +126,7 @@ class TreatmentCycleConfirmerTest(TestCase):
             updated_by=None,
         )
 
-        confirmer = get_cycle_confirmer(self.cycle.id)
+        confirmer, confirmed_at = get_cycle_confirmer(self.cycle.id)
 
         self.assertIsNone(confirmer)
+        self.assertIsNone(confirmed_at)
