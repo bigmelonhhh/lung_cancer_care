@@ -20,11 +20,9 @@ from core.models import (
 
 
 
-# TODO 患者主页：当前用药方案。  确认时间就是创建疗程的时间。   确认人就是最后点击的那个人。 
+
 # TODO 患者指标： 默认最近30天。最多选一年。
 
-# TODO 用药提醒功能， 更新每日任务表的status.
-# TODO 体温测量上传功能， 血压， 心率， 血氧， 体重， 随访， 复查
 
 
 class PlanItemService:
