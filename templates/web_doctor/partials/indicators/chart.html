@@ -130,6 +130,14 @@
                     setTimeout(initChart, 100);
                 } else {
                     console.error('ECharts library not loaded.');
+                    // Last resort: try to load it dynamically if missing
+                    var script = document.createElement('script');
+                    script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+                    script.onload = function() {
+                         retryCount = 0;
+                         initChart();
+                    };
+                    document.head.appendChild(script);
                 }
                 return;
             }
@@ -142,10 +150,23 @@
                 tooltip: {
                     trigger: 'axis'
                 },
+                legend: {
+                    data: seriesData.map(function(item) { return item.name; }),
+                    top: 0,
+                    right: 0,
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    textStyle: {
+                        fontSize: 12,
+                        color: '#64748b'
+                    }
+                },
                 grid: {
                     left: '3%',
                     right: '4%',
                     bottom: '3%',
+                    top: '15%',
                     containLabel: true
                 },
                 xAxis: {

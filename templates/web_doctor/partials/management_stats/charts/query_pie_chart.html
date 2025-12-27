@@ -1,0 +1,86 @@
+<div class="bg-white p-4 rounded-lg shadow-sm h-full flex flex-col items-center">
+    <h4 class="text-sm font-medium text-slate-700 mb-4">{{ chart.title }}</h4>
+    <div id="{{ chart.id }}" class="w-full h-64"></div>
+</div>
+
+<script>
+    (function() {
+        var chartId = '{{ chart.id }}';
+        var pieData = [
+            {% for item in chart.series %}
+            {
+                value: {{ item.value }},
+                name: '{{ item.name }}',
+                itemStyle: { color: '{{ item.color }}' }
+            },
+            {% endfor %}
+        ];
+
+        var maxRetries = 20; 
+        var retryCount = 0;
+
+        function initChart() {
+            if (typeof echarts === 'undefined') {
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(initChart, 100);
+                }
+                return;
+            }
+
+            var chartDom = document.getElementById(chartId);
+            if (!chartDom) return;
+            
+            var existingChart = echarts.getInstanceByDom(chartDom);
+            if (existingChart) {
+                existingChart.dispose();
+            }
+
+            var myChart = echarts.init(chartDom);
+            var option = {
+                tooltip: {
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: {
+                    orient: 'vertical',
+                    left: 'left',
+                    top: 'center',
+                    itemWidth: 12,
+                    itemHeight: 12,
+                    textStyle: {
+                        fontSize: 12,
+                        color: '#64748b'
+                    }
+                },
+                series: [
+                    {
+                        name: '时间段分布',
+                        type: 'pie',
+                        radius: '70%',
+                        center: ['65%', '50%'], 
+                        data: pieData,
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 10,
+                                shadowOffsetX: 0,
+                                shadowColor: 'rgba(0, 0, 0, 0.5)'
+                            }
+                        },
+                        label: {
+                            show: false 
+                        }
+                    }
+                ]
+            };
+
+            myChart.setOption(option);
+            
+            window.addEventListener('resize', function() {
+                myChart.resize();
+            });
+        }
+
+        setTimeout(initChart, 50);
+    })();
+</script>

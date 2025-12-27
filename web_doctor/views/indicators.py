@@ -10,7 +10,8 @@ def build_indicators_context(
     patient: PatientProfile,
     cycle_id: str | None = None,
     start_date_str: str | None = None,
-    end_date_str: str | None = None
+    end_date_str: str | None = None,
+    filter_type: str | None = None
 ) -> dict:
     """
     构建“患者指标”Tab 所需的上下文数据：
@@ -24,25 +25,54 @@ def build_indicators_context(
     end_date = today
     
     is_default_view = True
-
-    # 1. 优先使用自定义日期范围
-    if start_date_str and end_date_str:
-        try:
-            start_date = date.fromisoformat(start_date_str)
-            end_date = date.fromisoformat(end_date_str)
-            is_default_view = False
-        except ValueError:
-            pass # 格式错误回退到默认
     
-    # 2. 其次使用疗程范围
-    elif cycle_id:
-        try:
-            cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
-            start_date = cycle.start_date
-            end_date = cycle.end_date if cycle.end_date else today
-            is_default_view = False
-        except (TreatmentCycle.DoesNotExist, ValueError):
-            pass
+    # 根据 filter_type 决定优先级
+    if filter_type == 'cycle':
+        # 即使 cycle_id 为空（全部疗程），也视为 cycle 模式，但使用默认日期
+        if cycle_id:
+            try:
+                cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+                start_date = cycle.start_date
+                end_date = cycle.end_date if cycle.end_date else today
+                is_default_view = False
+            except (TreatmentCycle.DoesNotExist, ValueError):
+                pass
+        else:
+             # cycle_id 为空 -> "全部疗程" -> 默认30天，但需要保持 filter_type='cycle'
+             # is_default_view = True (UI上可能需要根据 filter_type 判断)
+             pass
+             
+    elif filter_type == 'date':
+        if start_date_str and end_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+                end_date = date.fromisoformat(end_date_str)
+                is_default_view = False
+            except ValueError:
+                pass
+    
+    # 兼容旧逻辑（如果 filter_type 未传，尝试推断）
+    elif not filter_type:
+        # 1. 优先使用自定义日期范围
+        if start_date_str and end_date_str:
+            try:
+                start_date = date.fromisoformat(start_date_str)
+                end_date = date.fromisoformat(end_date_str)
+                is_default_view = False
+                filter_type = 'date'
+            except ValueError:
+                pass 
+        
+        # 2. 其次使用疗程范围
+        elif cycle_id:
+            try:
+                cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+                start_date = cycle.start_date
+                end_date = cycle.end_date if cycle.end_date else today
+                is_default_view = False
+                filter_type = 'cycle'
+            except (TreatmentCycle.DoesNotExist, ValueError):
+                pass
 
     # 3. 校验跨度（最大1年 = 366天）
     delta_days = (end_date - start_date).days
@@ -197,6 +227,108 @@ def build_indicators_context(
     total_days = len(date_strs)
     compliance = int((med_count / total_days) * 100) if total_days > 0 else 0
 
+    # ==========================================
+    # 4. 随访问卷指标处理 (Questionnaire Indicators - Mock Data)
+    # ==========================================
+    import random
+    
+    # 4.1 体能与呼吸 (Q_PHYSICAL)
+    # 模拟数据：0-4分
+    phys_score_data = [random.randint(0, 4) for _ in date_strs]
+    breath_score_data = [random.randint(0, 4) for _ in date_strs]
+        
+    charts['physical'] = {
+        "id": "chart-physical",
+        "title": "体能与呼吸",
+        "dates": date_strs,
+        "series": [
+            {"name": "体能评分", "data": phys_score_data, "color": "#3b82f6"}, # Blue
+            {"name": "呼吸困难评分", "data": breath_score_data, "color": "#10b981"} # Teal
+        ],
+        "y_min": 0,
+        "y_max": 5
+    }
+
+    # 4.2 咳嗽与痰色 (Q_COUGH)
+    # 模拟数据：0-10分
+    cough_score_data = [random.randint(0, 10) for _ in date_strs]
+    
+    # 模拟表格数据
+    sputum_colors = ["无痰", "黄色", "脓色", "红色", "白色"]
+    blood_status = ["是", "无"]
+    
+    sputum_table_row = [random.choice(sputum_colors) for _ in date_strs]
+    blood_table_row = [random.choice(blood_status) for _ in date_strs]
+        
+    charts['cough'] = {
+        "id": "chart-cough",
+        "title": "咳嗽与痰色量表",
+        "dates": date_strs,
+        "series": [{"name": "咳嗽量表", "data": cough_score_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 12
+    }
+    
+    cough_table = {
+        "dates": date_strs,
+        "rows": [
+            {"label": "痰色", "values": sputum_table_row},
+            {"label": "咯血", "values": blood_table_row}
+        ]
+    }
+
+    # 4.3 食欲评估 (Q_APPETITE)
+    # 模拟数据：0-10分
+    app_data = [random.randint(0, 10) for _ in date_strs]
+        
+    charts['appetite'] = {
+        "id": "chart-appetite",
+        "title": "食欲评估量表",
+        "dates": date_strs,
+        "series": [{"name": "食欲量表", "data": app_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 12
+    }
+
+    # 4.4 疼痛量表 (Q_PAIN)
+    # 模拟数据：0-10分
+    pain_data = [random.randint(0, 10) for _ in date_strs]
+        
+    charts['pain'] = {
+        "id": "chart-pain",
+        "title": "疼痛量表",
+        "dates": date_strs,
+        "series": [{"name": "疼痛量表", "data": pain_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 10
+    }
+    
+    # 4.5 睡眠质量 (Q_SLEEP)
+    # 模拟数据：0-5分
+    sleep_data = [random.randint(0, 5) for _ in date_strs]
+
+    charts['sleep'] = {
+        "id": "chart-sleep",
+        "title": "睡眠质量量表",
+        "dates": date_strs,
+        "series": [{"name": "睡眠质量", "data": sleep_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 6
+    }
+    
+    # 4.6 心理痛苦分级 (Q_PSYCH)
+    # 模拟数据：0-10分
+    psych_data = [random.randint(0, 10) for _ in date_strs]
+
+    charts['psych'] = {
+        "id": "chart-psych",
+        "title": "心理痛苦分级评估量表",
+        "dates": date_strs,
+        "series": [{"name": "心理痛苦", "data": psych_data, "color": "#3b82f6"}],
+        "y_min": 0,
+        "y_max": 10
+    }
+
     return {
         "medication_data": medication_data,
         "medication_stats": {
@@ -204,6 +336,7 @@ def build_indicators_context(
             "compliance": compliance
         },
         "charts": charts,
+        "cough_table": cough_table, # 新增
         "treatment_cycles": treatment_cycles,
         "dates": date_strs,
         # 回显当前的筛选条件
@@ -212,4 +345,5 @@ def build_indicators_context(
         "current_start_date": start_date.isoformat() if not is_default_view else "",
         "current_end_date": end_date.isoformat() if not is_default_view else "",
         "is_default_view": is_default_view,
+        "current_filter_type": filter_type or "",
     }

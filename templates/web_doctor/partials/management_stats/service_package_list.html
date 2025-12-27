@@ -1,0 +1,24 @@
+<div  class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4">
+
+    <div class="flex items-center gap-2 mb-4 border-l-4 border-blue-500 pl-2">
+        <h3 class="font-bold text-gray-800">患者服务包</h3>
+    </div>
+    <div class="overflow-x-auto pb-2">
+        <div class="flex space-x-4 min-w-max">
+            {% for pkg in service_packages %}
+            <div class="cursor-pointer border rounded-lg p-4 min-w-[240px] transition-all duration-200 
+                        {% if pkg.is_active %}bg-blue-50 border-blue-500 shadow-sm{% else %}bg-white border-gray-200 hover:border-blue-300{% endif %}"
+                 hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'statistics' %}?package_id={{ pkg.id }}"
+                 hx-target="#patient-content"
+                 hx-swap="innerHTML">
+                <div class="font-bold {% if pkg.is_active %}text-gray-900{% else %}text-gray-700{% endif %} text-lg mb-1">
+                    {{ pkg.name }}
+                </div>
+                <div class="text-sm text-gray-500">
+                    ({{ pkg.start_date }} ~ {{ pkg.end_date }})
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>

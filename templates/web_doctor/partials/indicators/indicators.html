@@ -1,6 +1,9 @@
 <div class="space-y-6">
     {% include "web_doctor/partials/indicators/routine_monitoring.html" %}
     
+    <!-- 随访问卷指标模块 -->
+    {% include "web_doctor/partials/indicators/questionnaire_monitoring.html" %}
+    
     {# OOB 更新 Tab 栏状态 #}
     {% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True %}
 </div>

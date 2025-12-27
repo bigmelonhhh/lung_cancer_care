@@ -6,6 +6,7 @@ web_doctor 视图模块聚合。
 """
 
 from .auth import login_view, logout_view, doctor_change_password
+from .questionnaire import questionnaire_detail
 from .workspace import (
     doctor_workspace,
     doctor_workspace_patient_list,
@@ -18,7 +19,8 @@ from .workspace import (
     patient_plan_item_toggle_day,
     patient_profile_update,
     patient_medical_history_update,
-    patient_treatment_cycle_terminate
+    patient_treatment_cycle_terminate,
+    patient_health_metrics_update
 )
 
 __all__ = [
@@ -36,5 +38,6 @@ __all__ = [
     "patient_plan_item_update_field",
     "patient_plan_item_toggle_day",
     "patient_profile_update",
-    "patient_medical_history_update"
+    "patient_medical_history_update",
+    "patient_health_metrics_update"
 ]

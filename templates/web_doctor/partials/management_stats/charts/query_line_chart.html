@@ -1,0 +1,112 @@
+<div class="bg-white p-4 rounded-lg shadow-sm h-full flex flex-col items-center">
+    <h4 class="text-sm font-medium text-slate-700 mb-4">{{ chart.title }}</h4>
+    <div id="{{ chart.id }}" class="w-full h-64"></div>
+</div>
+
+<script>
+    (function() {
+        var chartId = '{{ chart.id }}';
+        var chartData = {{ chart.xAxis|safe }};
+        var seriesData = [
+            {% for s in chart.series %}
+            {
+                name: '{{ s.name }}',
+                type: 'line',
+                smooth: true, 
+                symbol: 'circle',
+                symbolSize: 4,
+                itemStyle: {
+                    color: '{{ s.color }}',
+                    borderColor: '{{ s.color }}',
+                    borderWidth: 2
+                },
+                lineStyle: {
+                    width: 2,
+                    color: '{{ s.color }}'
+                },
+                 areaStyle: {
+                    opacity: 0.1,
+                    color: '{{ s.color }}'
+                },
+                data: {{ s.data|safe }},
+                
+            },
+            {% endfor %}
+        ];
+        var yMin = {{ chart.yAxis.min }};
+        var yMax = {{ chart.yAxis.max }};
+
+        var maxRetries = 20; 
+        var retryCount = 0;
+ 
+        function initChart() {
+            if (typeof echarts === 'undefined') {
+                if (retryCount < maxRetries) {
+                    retryCount++;
+                    setTimeout(initChart, 100);
+                }
+                return;
+            }
+
+            var chartDom = document.getElementById(chartId);
+            if (!chartDom) return;
+            
+            var existingChart = echarts.getInstanceByDom(chartDom);
+            if (existingChart) {
+                existingChart.dispose();
+            }
+
+            var myChart = echarts.init(chartDom);
+            var option = {
+                tooltip: {
+                    trigger: 'axis'
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    top: '10%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: chartData,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#94a3b8'
+                        }
+                    },
+                    axisTick: {
+                        show: true,
+                        alignWithLabel: true
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    min: yMin,
+                    max: yMax,
+                    splitLine: {
+                        lineStyle: {
+                            color: '#e2e8f0',
+                            type: 'solid'
+                        }
+                    },
+                    axisLine: {
+                        show: false
+                    }
+                },
+                series: seriesData,
+                
+            };
+
+            myChart.setOption(option);
+            
+            window.addEventListener('resize', function() {
+                myChart.resize();
+            });
+        }
+
+        setTimeout(initChart, 50);
+    })();
+</script>

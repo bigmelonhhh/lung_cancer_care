@@ -1,0 +1,66 @@
+<div  class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4">
+    <div class="flex items-center gap-2 mb-4 border-l-4 border-blue-500 pl-2">
+        <h3 class="font-bold text-gray-800">管理数据概览</h3>
+    </div>
+    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <div class="w-full flex flex-wrap items-center justify-between gap-y-4">
+            <!-- Left Group -->
+            <div class="flex flex-col gap-3  pr-28 border-r border-gray-300">
+                <div class="flex items-center gap-6 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="text-blue-500">💊</span>
+                        <span class="text-gray-600">药物调整:</span>
+                        <span class="font-bold text-blue-600">{{ stats_overview.medication_adjustment }}次</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-600">药物服用:</span>
+                        <span class="font-bold text-blue-600">{{ stats_overview.medication_taken }}次</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-600">服药依从率:</span>
+                        <span class="font-bold text-blue-600">{{ stats_overview.medication_compliance }}</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6 text-sm">
+                    <div class="flex items-center gap-2">
+                        <span class="text-blue-500">📊</span>
+                        <span class="text-gray-600">指标监测:</span>
+                        <span class="font-bold text-blue-600">{{ stats_overview.indicators_monitoring }}项</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-600">指标记录:</span>
+                        <span class="font-bold text-blue-600">{{ stats_overview.indicators_recorded }}次</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-gray-600">监测依从率:</span>
+                        <span class="font-bold text-blue-600">{{ stats_overview.monitoring_compliance }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Group -->
+            <div class="flex flex-wrap items-center gap-8 pl-4 flex-1">
+                <div class="flex items-center gap-2">
+                    <span class="bg-blue-500 text-white rounded-sm p-0.5 text-xs">💬</span>
+                    <span class="text-gray-600 text-sm">在线咨询:</span>
+                    <span class="font-bold text-blue-600">{{ stats_overview.online_consultation }}次</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-blue-500">📞</span>
+                    <span class="text-gray-600 text-sm">随访:</span>
+                    <span class="font-bold text-blue-600">{{ stats_overview.follow_up }}次</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-blue-500">📄</span>
+                    <span class="text-gray-600 text-sm">复查:</span>
+                    <span class="font-bold text-blue-600">{{ stats_overview.checkup }}次</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-blue-500">🏥</span>
+                    <span class="text-gray-600 text-sm">住院:</span>
+                    <span class="font-bold text-blue-600">{{ stats_overview.hospitalization }}次</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

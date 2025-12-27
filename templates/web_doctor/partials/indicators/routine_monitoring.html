@@ -3,27 +3,66 @@
         <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">常规监测指标</h3>
         
         <!-- 筛选表单区域 -->
-        <form id="indicators-filter-form" class="flex items-center gap-4 text-sm relative" onsubmit="return false;">
+        <form id="indicators-filter-form" 
+              class="flex items-center gap-4 text-sm relative" 
+              onsubmit="return false;"
+              x-data="{ 
+                  filterType: '{{ current_filter_type|default:'' }}' || '{% if current_cycle_id %}cycle{% elif current_start_date %}date{% else %}{% endif %}',
+                  updateDatesFromCycle(event) {
+                      const select = event.target;
+                      const option = select.options[select.selectedIndex];
+                      const start = option.getAttribute('data-start') || '';
+                      const end = option.getAttribute('data-end') || '';
+                      
+                      const startInput = document.getElementById('start_date');
+                      const endInput = document.getElementById('end_date');
+                      
+                      if (startInput) startInput.value = start;
+                      if (endInput) endInput.value = end;
+                  }
+              }"
+        >
+            <!-- 筛选条件选择 --> 
             <div class="flex items-center gap-2">
-                <span class="text-slate-600">按疗程选择:</span>
-                <select name="cycle_id" class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[200px]">
+                <input type="hidden" name="filter_type" x-model="filterType">
+                <span class="text-slate-600">筛选条件:</span>
+                <select x-model="filterType" class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500">
+                    <option value="">请选择</option>
+                    <option value="cycle">按疗程选择</option>
+                    <option value="date">按日期查看</option>
+                </select>
+            </div>
+
+            <!-- 按疗程选择 -->
+            <div class="flex items-center gap-2" x-show="filterType === 'cycle'" x-cloak>
+                <select name="cycle_id" 
+                        :disabled="filterType !== 'cycle'"
+                        @change="updateDatesFromCycle($event)"
+                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[200px]">
                     <option value="">全部疗程</option>
                     {% for cycle in treatment_cycles %}
-                    <option value="{{ cycle.id }}" {% if cycle.id == current_cycle_id %}selected{% endif %}>
+                    <option value="{{ cycle.id }}" 
+                            data-start="{{ cycle.start_date|date:'Y-m-d' }}" 
+                            data-end="{% if cycle.end_date %}{{ cycle.end_date|date:'Y-m-d' }}{% else %}{% now 'Y-m-d' %}{% endif %}"
+                            {% if cycle.id == current_cycle_id %}selected{% endif %}>
                         {{ cycle.name }} ({{ cycle.start_date|date:"Y/m/d" }} - {{ cycle.end_date|date:"Y/m/d"|default:"至今" }})
                     </option>
                     {% endfor %}
                 </select>
             </div>
             
-            <div class="flex items-center gap-2">
-                <span class="text-slate-600">按日期查看:</span>
+            <!-- 按日期查看 -->
+            <div class="flex items-center gap-2" x-show="filterType === 'date'" x-cloak>
                 <div class="flex items-center border border-slate-300 rounded px-2 py-1 bg-white">
-                    <input placeholder="开始日期" type="date" name="start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
+                                        <input placeholder="开始日期" type="date" name="start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
                     <span class="text-slate-400 mx-1">-</span>
-                    <input placeholder="结束日期" type="date" name="end_date" value="{{ current_end_date }}" class="focus:outline-none text-slate-700 date-input">
-                </div>
+                                        <input placeholder="结束日期" type="date" name="end_date" value="{{ current_end_date }}" class="focus:outline-none text-slate-700 date-input">
 
+                </div>
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="flex items-center gap-2" x-show="filterType !== ''" x-cloak>
                 <button 
                     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
                     hx-target="#indicators-container"
@@ -33,22 +72,20 @@
                     搜索
                 </button>
                 <button 
-                 hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                hx-target="#indicators-container"
-                hx-swap="outerHTML"
+                    hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
+                    hx-target="#indicators-container"
+                    hx-swap="outerHTML"
+                    @click="filterType = ''"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-gray-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     重置
                 </button>
             </div>
-            
-          
-        </form>
-        
-        {% if is_default_view %}
-        <div class="absolute top-0 right-4 mt-14 text-indigo-600 font-medium hover:text-indigo-800">
+             {% if is_default_view %}
+        <div class="absolute top-0 right-4 mt-14 text-indigo-600 font-medium hover:text-indigo-800" x-show="filterType === ''">
             最近30天
         </div>
         {% endif %}
+        </form>
     </div>
 
     <!-- Medication Record -->

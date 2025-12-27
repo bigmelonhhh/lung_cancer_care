@@ -236,27 +236,7 @@ def get_checkup_history_data(filters: dict) -> list:
     return history_list
 
 
-def get_reports_history_data() -> list:
-    """
-    获取检查报告历史记录模拟数据
-    """
-    history_list = []
-    import random
-    for i in range(15):
-        img_count = random.randint(1, 6)
-        images = [f"https://placehold.co/200x200?text=Report+{i}-{j}" for j in range(img_count)]
-        
-        # 模拟报告解读和推送状态
-        interpretation = f"这是关于报告 {i} 的解读内容。患者情况稳定，建议继续观察。" if i % 3 != 0 else ""
-        is_pushed = i % 2 == 0
 
-        history_list.append({
-            "date": f"2025-11-{12-i:02d} 14:22",
-            "images": images,
-            "interpretation": interpretation,
-            "is_pushed": is_pushed
-        })
-    return history_list
 
 def handle_checkup_history_section(request: HttpRequest, context: dict) -> str:
     """
@@ -346,9 +326,10 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     处理检查报告历史记录板块
     """
     from django.core.paginator import Paginator
+    from web_doctor.views.reports_history_data import get_mock_reports_data
     
     template_name = "web_doctor/partials/reports_history/list.html"
-    history_list = get_reports_history_data()
+    history_list = get_mock_reports_data()
     
     paginator = Paginator(history_list, 10)
     try:

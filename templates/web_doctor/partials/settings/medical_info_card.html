@@ -1,48 +1,149 @@
-<div id="medical-info-card" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[240px] flex flex-col relative">
-    <div class="px-5 py-4 flex items-center justify-between shrink-0">
-        <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">病情信息</h3>
-        <a href="#" 
-           hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'medical_history' %}"
-           hx-target="#patient-content"
-           class="text-sm text-indigo-600 hover:underline">
-            历史记录 >
-        </a>
-    </div>
+<div id="medical-info-card" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[240px] flex flex-col md:flex-row">
+    {# 左侧：病情信息 #}
+    <div class="relative w-full md:w-1/2 border-b md:border-b-0 md:border-r border-slate-200 flex flex-col">
+        <div class="px-5 py-4 flex items-center justify-between shrink-0">
+            <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">病情信息</h3>
+            <a href="#" 
+               hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'medical_history' %}"
+               hx-target="#patient-content"
+               class="text-sm text-indigo-600 hover:underline">
+                历史记录 >
+            </a>
+        </div>
 
-    <div class="flex-1 px-5 pb-4 overflow-y-auto">
-        <div class="grid grid-cols-1 gap-y-2 text-sm">
-            <div class="flex items-start">
-                <span class="text-slate-500 w-20 shrink-0 text-right mr-3">肿瘤诊断：</span>
-                <span class="text-slate-800 font-medium">{{ medical_info.diagnosis|default:"无" }}</span>
+        <div class="flex-1 px-5 pb-4 overflow-y-auto">
+            <div class="grid grid-cols-1 gap-y-2 text-sm">
+                <div class="flex items-start">
+                    <span class="text-slate-500 w-20 shrink-0 text-right mr-3">肿瘤诊断：</span>
+                    <span class="text-slate-800 font-medium">{{ medical_info.diagnosis|default:"无" }}</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-slate-500 w-20 shrink-0 text-right mr-3">危险因素：</span>
+                    <span class="text-slate-800">{{ medical_info.risk_factors|default:"无" }}</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-slate-500 w-20 shrink-0 text-right mr-3">临床诊断：</span>
+                    <span class="text-slate-800">{{ medical_info.clinical_diagnosis|default:"无" }}</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-slate-500 w-20 shrink-0 text-right mr-3">基因检测：</span>
+                    <span class="text-slate-800">{{ medical_info.gene_test|default:"无" }}</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-slate-500 w-20 shrink-0 text-right mr-3">既往病史：</span>
+                    <span class="text-slate-800">{{ medical_info.history|default:"无" }}</span>
+                </div>
+                <div class="flex items-start">
+                    <span class="text-slate-500 w-20 shrink-0 text-right mr-3">手术信息：</span>
+                    <span class="text-slate-800">{{ medical_info.surgery|default:"无" }}</span>
+                </div>
             </div>
-            <div class="flex items-start">
-                <span class="text-slate-500 w-20 shrink-0 text-right mr-3">危险因素：</span>
-                <span class="text-slate-800">{{ medical_info.risk_factors|default:"无" }}</span>
-            </div>
-            <div class="flex items-start">
-                <span class="text-slate-500 w-20 shrink-0 text-right mr-3">临床诊断：</span>
-                <span class="text-slate-800">{{ medical_info.clinical_diagnosis|default:"无" }}</span>
-            </div>
-            <div class="flex items-start">
-                <span class="text-slate-500 w-20 shrink-0 text-right mr-3">基因检测：</span>
-                <span class="text-slate-800">{{ medical_info.gene_test|default:"无" }}</span>
-            </div>
-            <div class="flex items-start">
-                <span class="text-slate-500 w-20 shrink-0 text-right mr-3">既往病史：</span>
-                <span class="text-slate-800">{{ medical_info.history|default:"无" }}</span>
-            </div>
-            <div class="flex items-start">
-                <span class="text-slate-500 w-20 shrink-0 text-right mr-3">手术信息：</span>
-                <span class="text-slate-800">{{ medical_info.surgery|default:"无" }}</span>
-            </div>
+        </div>
+
+        <div class=" flex items-center justify-end gap-4 p-5">
+            <span class="text-xs text-slate-400">最近更新：{{ medical_info.last_updated }}</span>
+            <button onclick="document.getElementById('edit-medical-modal').showModal()" class="px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-full hover:bg-indigo-700 shadow-sm transition-colors">
+                更新
+            </button>
         </div>
     </div>
 
-    <div class=" flex items-center justify-end gap-4 p-5">
-        <span class="text-xs text-slate-400">最近更新：{{ medical_info.last_updated }}</span>
-        <button onclick="document.getElementById('edit-medical-modal').showModal()" class="px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-full hover:bg-indigo-700 shadow-sm transition-colors">
-            更新
-        </button>
+    {# 右侧：生命体征基线 #}
+    <div class="w-full md:w-1/2 flex flex-col relative">
+        <div class="px-5 py-4 flex items-center justify-between shrink-0">
+            <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">生命体征基线</h3>
+        </div>
+        
+        <form hx-post="{% url 'web_doctor:patient_health_metrics_update' patient.id %}"
+              hx-target="#medical-info-card"
+              hx-swap="outerHTML"
+              class="flex-1 px-5 pb-4 flex flex-col">
+            {% csrf_token %}
+            <div class="flex-1 space-y-3 overflow-y-auto">
+                {# 血氧 #}
+                <div class="flex items-center">
+                    <label class=" shrink-0 text-sm text-slate-500 text-right mr-3">血氧</label>
+                    <div class="flex-1 flex items-center gap-2">
+                        <input type="number" step="0.1" name="blood_oxygen" 
+                               value="{{ metrics_info.blood_oxygen.value_main|default:'' }}"
+                               placeholder="请输入血氧基线值" 
+                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-xs text-slate-400 w-8 shrink-0">%</span>
+                    </div>
+                </div>
+
+                {# 血压 #}
+                <div class="flex items-center pr-10">
+                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">血压</label>
+                    <div class="flex-1 flex items-center gap-2">
+                        <input type="number" name="sbp" 
+                               value="{{ metrics_info.blood_pressure.value_main|default:'' }}"
+                               placeholder="请输入收缩压基线值" 
+                               class="w-1/2 text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-slate-400">/</span>
+                        <input type="number" name="dbp" 
+                               value="{{ metrics_info.blood_pressure.value_sub|default:'' }}"
+                               placeholder="请输入舒张压基线值" 
+                               class="w-1/2 text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-xs text-slate-400 w-8 shrink-0">mmHg</span>
+                    </div>
+                </div>
+
+                {# 心率 #}
+                <div class="flex items-center">
+                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">心率</label>
+                    <div class="flex-1 flex items-center gap-2">
+                        <input type="number" name="heart_rate" 
+                               value="{{ metrics_info.heart_rate.value_main|default:'' }}"
+                               placeholder="请输入心率基线值" 
+                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-xs text-slate-400 w-8 shrink-0">bpm</span>
+                    </div>
+                </div>
+
+                {# 体重 #}
+                <div class="flex items-center">
+                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">体重</label>
+                    <div class="flex-1 flex items-center gap-2">
+                        <input type="number" step="0.1" name="weight" 
+                               value="{{ metrics_info.weight.value_main|default:'' }}"
+                               placeholder="请输入体重基线值" 
+                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-xs text-slate-400 w-8 shrink-0">kg</span>
+                    </div>
+                </div>
+
+                {# 体温 #}
+                <div class="flex items-center">
+                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">体温</label>
+                    <div class="flex-1 flex items-center gap-2">
+                        <input type="number" step="0.1" name="temperature" 
+                               value="{{ metrics_info.body_temperature.value_main|default:'' }}"
+                               placeholder="请输入体温基线值" 
+                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-xs text-slate-400 w-8 shrink-0">℃</span>
+                    </div>
+                </div>
+
+                {# 步数 #}
+                <div class="flex items-center">
+                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">步数</label>
+                    <div class="flex-1 flex items-center gap-2">
+                        <input type="number" name="steps" 
+                               value="{{ metrics_info.steps.value_main|default:'' }}"
+                               placeholder="请输入步数基线值" 
+                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
+                        <span class="text-xs text-slate-400 w-8 shrink-0">步</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-auto flex justify-end p-5 pr-0 pb-0">
+                 <button type="submit" class="px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-full hover:bg-indigo-700 shadow-sm transition-colors">
+                    保存
+                </button>
+            </div>
+        </form>
     </div>
 </div>
 

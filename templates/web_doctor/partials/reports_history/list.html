@@ -1,13 +1,5 @@
 <div class="space-y-6" x-data="{ showPreview: false, previewImage: '' }">
     <div class="flex items-center gap-4 mb-4">
-        <button 
-            class="text-slate-500 hover:text-slate-700 flex items-center gap-1 text-sm"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
-            hx-target="#patient-content"
-        >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-            返回
-        </button>
         <h2 class="text-lg font-bold text-slate-800">检查报告历史记录</h2>
     </div>
 
@@ -104,7 +96,7 @@
         {% if history_page.has_previous %}
         <button 
             class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports_history' %}?page={{ history_page.previous_page_number }}"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?page={{ history_page.previous_page_number }}"
             hx-target="#patient-content"
         >
             上一页
@@ -118,7 +110,7 @@
         {% if history_page.has_next %}
         <button 
             class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports_history' %}?page={{ history_page.next_page_number }}"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?page={{ history_page.next_page_number }}"
             hx-target="#patient-content"
         >
             下一页
@@ -130,14 +122,14 @@
     {# 图片预览弹窗 (复用) #}
     <div 
         x-show="showPreview" 
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+        class="fixed inset-0 z-99999 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
         x-transition:enter="transition ease-out duration-300"
         x-transition:enter-start="opacity-0"
         x-transition:enter-end="opacity-100"
         x-transition:leave="transition ease-in duration-200"
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
-        style="display: none;"
+        style="display: none;z-index: 9999;"
     >
         <div class="relative max-w-4xl max-h-full" @click.outside="showPreview = false">
             <button 
@@ -150,3 +142,6 @@
         </div>
     </div>
 </div>
+
+{# OOB Update Tab Status #}
+{% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True active_tab="reports" %}
