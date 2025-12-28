@@ -74,7 +74,7 @@ def build_home_context(patient: PatientProfile) -> dict:
         
         # 筛选出当前生效的药物
         active_meds = [m for m in plan_view["medications"] if m["is_active"]]
-        print(f"{active_meds}")
+        
         
         items = []
         for med in active_meds:

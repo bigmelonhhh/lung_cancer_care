@@ -19,7 +19,7 @@ def questionnaire_detail(request, patient_id):
         except ValueError:
             pass
 
-    # 模拟左侧历史记录数据 (疗程 -> 日期列表)
+    # 随访问卷详情页面列表接口 模拟左侧历史记录数据 (疗程 -> 日期列表)
     # 假设有三个疗程
     history = [
         {
@@ -57,7 +57,7 @@ def questionnaire_detail(request, patient_id):
     
     # 模拟六大模块的详细对比数据
     # 如果该日期有数据，生成 mock data；否则为空
-    
+    # TODO 根据左侧菜单选择的某个疗程下的日期-查询六大模块的基本信息+表格数据展示
     has_data = True # 简化逻辑，假设选中的日期都有数据
     
     # 定义问题对比数据结构

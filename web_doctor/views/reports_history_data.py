@@ -23,6 +23,7 @@ def get_mock_reports_data() -> List[Dict[str, Any]]:
         ...
     ]
     """
+    # TODO 待联调获取患者的检查报告历史记录-分页查询
     history_list = []
     
     report_types = ["CT胸部平扫", "MRI头部扫描", "血常规", "肝功能", "肿瘤标志物"]

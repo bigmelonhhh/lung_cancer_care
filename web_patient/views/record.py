@@ -44,7 +44,6 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 )
                 logging.info(f"体温数据保存成功: patient_id={patient_id}, weight={weight_val}")
                 next_url = request.GET.get('next') or request.POST.get('next')
-                messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
                 redirect_url = reverse("web_patient:patient_home")
@@ -103,7 +102,6 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 )
                 logging.info(f"血氧数据保存成功: patient_id={patient_id}")
                 next_url = request.GET.get('next') or request.POST.get('next')
-                messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
                 
@@ -156,7 +154,6 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 )
                 logging.info(f"血氧数据保存成功: patient_id={patient_id}, weight={weight_val}")
                 next_url = request.GET.get('next') or request.POST.get('next')
-                messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
                 
@@ -212,7 +209,6 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 )
                 logging.info(f"体重数据保存成功: patient_id={patient_id}, weight={weight_val}")
                 next_url = request.GET.get('next') or request.POST.get('next')
-                messages.success(request, "提交成功！")
                 if next_url:
                     return redirect(next_url)
                 

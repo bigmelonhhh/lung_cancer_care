@@ -1094,7 +1094,7 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
     patient = patients_qs.filter(pk=patient_id).first()
     if patient is None:
         raise Http404("未找到患者")
-
+    # TODO 添加生命体征基线字段区分进行保存数据
     try:
         # Blood Oxygen
         if val := request.POST.get("blood_oxygen"):

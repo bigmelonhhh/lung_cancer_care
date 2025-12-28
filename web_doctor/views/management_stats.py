@@ -7,6 +7,7 @@ class ManagementStatsView:
         """
         获取管理统计页面的上下文数据
         """
+        # TODO 获取患者服务包列表数据，根据当前的服务包去查询管理数据概览、管理数据统计、咨询数据统计接口
         # 模拟服务包数据
         service_packages = [
             {
@@ -36,7 +37,7 @@ class ManagementStatsView:
             if service_packages:
                 service_packages[0]["is_active"] = True
 
-        # 模拟统计概览数据
+        # TODO 数据概览接口待联调 模拟统计概览数据
         stats_overview = {
             "medication_adjustment": 2,
             "medication_taken": 220,
@@ -51,9 +52,11 @@ class ManagementStatsView:
         }
 
         # 生成图表数据
+        # TODO 待联调管理数据统计接口
         charts = self._generate_charts_data()
         
         # 生成咨询数据
+        # TODO 咨询数据统计接口待联调
         query_stats = self._generate_query_stats()
 
         return {
@@ -62,7 +65,7 @@ class ManagementStatsView:
             "charts": charts,
             "query_stats": query_stats,
         }
-
+    # TODO 数据统计接口待联调
     def _generate_charts_data(self) -> Dict[str, Any]:
         months = [f"{i}月" for i in range(1, 13)]
         
@@ -120,7 +123,7 @@ class ManagementStatsView:
         """
         months = [f"{i}月" for i in range(1, 13)]
         
-        # 模拟折线图数据：咨询次数随月份变化
+        # TODO 咨询数据统计接口待联调 模拟折线图数据：咨询次数随月份变化
         line_data = [0, 0, 0, 30, 31, 23, 26, 31, 27, 31, 5, 0] # 模拟数据，模仿图中趋势
         
         line_chart = {
