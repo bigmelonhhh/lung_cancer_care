@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -246,3 +247,33 @@ class PatientServiceTests(TestCase):
                 data=update_data,
                 profile_id=self.patient_profile.id,
             )
+
+    def test_edit_baseline_fields_success(self):
+        """Editing a profile updates baseline monitoring fields."""
+        update_data = {
+            "name": "John Doe",
+            "phone": "18600000001",
+            "baseline_body_temperature": Decimal("36.6"),
+            "baseline_blood_oxygen": 98,
+            "baseline_weight": Decimal("68.5"),
+            "baseline_blood_pressure_sbp": 120,
+            "baseline_blood_pressure_dbp": 80,
+            "baseline_heart_rate": 72,
+            "baseline_steps": 6000,
+        }
+
+        updated_profile = self.service.save_patient_profile(
+            user=self.doctor_user,
+            data=update_data,
+            profile_id=self.patient_profile.id,
+        )
+
+        self.patient_profile.refresh_from_db()
+        self.assertEqual(updated_profile.id, self.patient_profile.id)
+        self.assertEqual(self.patient_profile.baseline_body_temperature, Decimal("36.6"))
+        self.assertEqual(self.patient_profile.baseline_blood_oxygen, 98)
+        self.assertEqual(self.patient_profile.baseline_weight, Decimal("68.5"))
+        self.assertEqual(self.patient_profile.baseline_blood_pressure_sbp, 120)
+        self.assertEqual(self.patient_profile.baseline_blood_pressure_dbp, 80)
+        self.assertEqual(self.patient_profile.baseline_heart_rate, 72)
+        self.assertEqual(self.patient_profile.baseline_steps, 6000)

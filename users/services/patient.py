@@ -351,6 +351,27 @@ class PatientService:
             profile.ec_relation = (data.get("ec_relation") or "").strip()
             profile.ec_phone = (data.get("ec_phone") or "").strip()
             profile.remark = remark
+            profile.baseline_body_temperature = data.get(
+                "baseline_body_temperature", profile.baseline_body_temperature
+            )
+            profile.baseline_blood_oxygen = data.get(
+                "baseline_blood_oxygen", profile.baseline_blood_oxygen
+            )
+            profile.baseline_weight = data.get(
+                "baseline_weight", profile.baseline_weight
+            )
+            profile.baseline_blood_pressure_sbp = data.get(
+                "baseline_blood_pressure_sbp", profile.baseline_blood_pressure_sbp
+            )
+            profile.baseline_blood_pressure_dbp = data.get(
+                "baseline_blood_pressure_dbp", profile.baseline_blood_pressure_dbp
+            )
+            profile.baseline_heart_rate = data.get(
+                "baseline_heart_rate", profile.baseline_heart_rate
+            )
+            profile.baseline_steps = data.get(
+                "baseline_steps", profile.baseline_steps
+            )
             
             profile.save()
             return profile
@@ -386,6 +407,13 @@ class PatientService:
             profile.ec_relation = (data.get("ec_relation") or "").strip()
             profile.ec_phone = (data.get("ec_phone") or "").strip()
             profile.remark = remark
+            profile.baseline_body_temperature = data.get("baseline_body_temperature")
+            profile.baseline_blood_oxygen = data.get("baseline_blood_oxygen")
+            profile.baseline_weight = data.get("baseline_weight")
+            profile.baseline_blood_pressure_sbp = data.get("baseline_blood_pressure_sbp")
+            profile.baseline_blood_pressure_dbp = data.get("baseline_blood_pressure_dbp")
+            profile.baseline_heart_rate = data.get("baseline_heart_rate")
+            profile.baseline_steps = data.get("baseline_steps")
 
             # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
             if not profile.sales and getattr(user, "bound_sales", None):
