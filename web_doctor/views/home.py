@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from users.models import PatientProfile
 from users.decorators import check_doctor_or_assistant
 from users.services.patient import PatientService
+from users import choices as user_choices
 from health_data.services.medical_history_service import MedicalHistoryService
 from core.service.treatment_cycle import (
     get_active_treatment_cycle,
@@ -64,12 +65,42 @@ def build_home_context(patient: PatientProfile) -> dict:
     # 注入备注信息（来自 PatientProfile）
     medical_info["remark"] = patient.remark or ""
 
-    # 4. 获取当前用药数据（真实数据）
+    # 4. 获取当前用药数据（真实数据） 
     active_cycle = get_active_treatment_cycle(patient)
     current_medication = {}
     
     if active_cycle:
+        # 1. 获取确认人信息（返回 CustomUser 对象和确认时间）
         confirmer, confirm_at = get_cycle_confirmer(active_cycle.id)
+        
+        # 2. 根据用户类型解析确认人姓名
+        confirmer_name = "--"
+        if confirmer:
+            try:
+                # 判断用户类型并获取对应档案的真实姓名
+                if confirmer.user_type == user_choices.UserType.ASSISTANT:
+                    # 医生助理类型：查询 AssistantProfile
+                    if hasattr(confirmer, "assistant_profile") and confirmer.assistant_profile:
+                        confirmer_name = "医生助理-"+confirmer.assistant_profile.name
+                    else:
+                        confirmer_name = "医生助理-"+confirmer.wx_nickname or "医生助理-"+confirmer.username or "未知助理"
+                        
+                elif confirmer.user_type == user_choices.UserType.DOCTOR:
+                    # 医生类型：查询 DoctorProfile
+                    if hasattr(confirmer, "doctor_profile") and confirmer.doctor_profile:
+                        confirmer_name = "医生-"+confirmer.doctor_profile.name
+                    else:
+                        confirmer_name = "医生-"+confirmer.wx_nickname or "医生-"+confirmer.username or "未知医生"
+                
+                else:
+                    # 其他类型：默认显示昵称或用户名
+                    confirmer_name = getattr(confirmer, "name", "") or confirmer.wx_nickname or confirmer.username or "系统用户"
+                    
+            except Exception as e:
+                # 5. 错误处理：防止因关联查询失败导致页面崩溃
+                logger.error(f"获取确认人姓名失败 (User ID: {confirmer.id}): {e}")
+                confirmer_name = "未知"
+
         plan_view = PlanItemService.get_cycle_plan_view(active_cycle.id)
         
         # 筛选出当前生效的药物
@@ -78,30 +109,6 @@ def build_home_context(patient: PatientProfile) -> dict:
         
         items = []
         for med in active_meds:
-        # # 1. 提取并校验服药天数列表，做空值/空列表兼容
-        #     schedule_days = med.get("schedule_days", [])
-        #     if not schedule_days:  # 无服药天数时的兜底
-        #         frequency = "暂无明确服药日期"
-        #     else:
-        # # 2. 排序（确保数字按升序排列，避免乱序）
-        #      sorted_days = sorted(schedule_days)
-        #     # 3. 判断是否为连续天数（医学提醒优先简化连续区间）
-        #     is_continuous = all(sorted_days[i+1] - sorted_days[i] == 1 for i in range(len(sorted_days)-1))
-            
-        #     if is_continuous:
-        #         # 连续天数：格式为“第X至X天 每日1次”（医学通用表述）
-        #         start_day = sorted_days[0]
-        #         end_day = sorted_days[-1]
-        #         if start_day == end_day:
-        #             # 仅单天服药
-        #             frequency = f"第{start_day}天服药，每日1次"
-        #         else:
-        #             frequency = f"第{start_day}至{end_day}天服药，每日1次"
-        #     else:
-        #         # 非连续天数：格式为“第X、X、X天服药，每日1次”
-        #         days_str = "、".join(str(day) for day in sorted_days)
-        #         frequency = f"第{days_str}天服药，每日1次"
-               
             items.append({
                         "name": med["name"],
                         "frequency": med["current_usage"],  # 专业医学格式的频次提醒
@@ -110,7 +117,7 @@ def build_home_context(patient: PatientProfile) -> dict:
                     })   
         current_medication = {
             "confirm_date": confirm_at.strftime("%Y-%m-%d") if confirm_at else "--",
-            "confirmer": confirmer.display_name if confirmer else "--",
+            "confirmer": confirmer_name,
             "start_date": active_cycle.start_date.strftime("%Y-%m-%d"),
             "items": items
         }
