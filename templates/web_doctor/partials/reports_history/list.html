@@ -5,21 +5,90 @@
 
     <div class="space-y-4 gap-2">
         {% for report in history_page %}
-        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" x-data="{ isEditing: false, interpretation: '{{ report.interpretation|default:"" }}', pushToPatient: {{ report.is_pushed|yesno:'true,false' }} }">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden" 
+             x-data="{ 
+                 isEditing: false, 
+                 interpretation: '{{ report.interpretation|default:"" }}', 
+                 pushToPatient: {{ report.is_pushed|yesno:'true,false' }},
+                 saving: false,
+                 async saveChanges() {
+                     if (this.saving) return;
+                     this.saving = true;
+                     
+                     const updates = [];
+                     const selects = $el.querySelectorAll('select[data-image-id]');
+                     selects.forEach(select => {
+                         updates.push({
+                             image_id: select.dataset.imageId,
+                             category: select.value
+                         });
+                     });
+
+                     try {
+                         const response = await fetch('{% url 'web_doctor:patient_report_update' patient.id report.id %}?page={{ history_page.number }}', {
+                             method: 'POST',
+                             headers: {
+                                 'Content-Type': 'application/json',
+                                 'X-CSRFToken': '{{ csrf_token }}'
+                             },
+                             body: JSON.stringify({ image_updates: updates })
+                         });
+
+                         if (response.ok) {
+                             const html = await response.text();
+                             // Replace the entire reports list container content
+                             const container = document.querySelector('#patient-content');
+                             if (container) {
+                                 container.innerHTML = html;
+                                 htmx.process(container);
+                             }
+                         } else {
+                             alert('保存失败，请重试');
+                             this.saving = false;
+                         }
+                     } catch (error) {
+                         console.error('Save failed:', error);
+                         alert('网络错误，请重试');
+                         this.saving = false;
+                     }
+                 }
+             }"
+        >
             <div class="px-6 py-3 bg-slate-50/50 border-b border-slate-100 flex justify-between items-center">
                 <span class="font-medium text-slate-700">上传时间：{{ report.date }}</span>
                 <span class="text-xs text-slate-500">共 {{ report.images|length }} 张图片</span>
             </div>
             <div class="p-6">
-                  <div class="flex flex-wrap gap-4 mb-6">
-                    {% for img_url in report.images %}
-                    <div 
-                        class="w-[100px] h-[100px] relative shrink-0 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 cursor-pointer group"
-                        @click="showPreview = true; previewImage = '{{ img_url }}'"
-                    >
-                        <img src="{{ img_url }}" alt="检查报告" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
-                        <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                            <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                  <div class="flex flex-wrap gap-6 mb-6">
+                    {% for img in report.images %}
+                    <div class="flex flex-col gap-2 w-[120px]">
+                        <div 
+                            class="w-full h-[120px] relative shrink-0 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 cursor-pointer group"
+                            @click="showPreview = true; previewImage = '{{ img.url }}'"
+                        >
+                            <img src="{{ img.url }}" alt="{{ img.name }}" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105">
+                            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                <svg class="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                            </div>
+                        </div>
+                        
+                        <!-- Category Display -->
+                        <div class="text-center" x-show="!isEditing">
+                            <span class="text-xs text-slate-600 font-medium px-2 py-1  rounded-md block truncate " title="{{ img.category }}">
+                                 {{ img.category }}
+                            </span>
+                        </div>
+                        
+                        <!-- Category Edit -->
+                        <div x-show="isEditing" style="display: none;">
+                            <select 
+                                data-image-id="{{ img.id }}"
+                                class="w-full text-xs border-slate-300 border p-2 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 pl-1 pr-6 bg-[length:12px_12px]"
+                            >
+                                {% for cat_val, cat_label in image_categories %}
+                                <option value="{{ cat_val }}" {% if img.category == cat_val %}selected{% endif %}>{{ cat_label }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
                     </div>
                     {% empty %}
@@ -45,39 +114,16 @@
                         </div>
                     </div>
 
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <label class="w-20 text-sm font-medium text-slate-700">推送患者：</label>
-                            <div class="flex items-center gap-4">
-                                <label class="inline-flex items-center">
-                                    <input 
-                                        type="radio" 
-                                        x-model="pushToPatient" 
-                                        :value="true" 
-                                        :disabled="!isEditing"
-                                        class="form-radio text-indigo-600 focus:ring-indigo-500 disabled:text-slate-400"
-                                    >
-                                    <span class="ml-2 text-sm text-slate-700" :class="{'text-slate-400': !isEditing}">是</span>
-                                </label>
-                                <label class="inline-flex items-center">
-                                    <input 
-                                        type="radio" 
-                                        x-model="pushToPatient" 
-                                        :value="false" 
-                                        :disabled="!isEditing"
-                                        class="form-radio text-indigo-600 focus:ring-indigo-500 disabled:text-slate-400"
-                                    >
-                                    <span class="ml-2 text-sm text-slate-700" :class="{'text-slate-400': !isEditing}">否</span>
-                                </label>
-                            </div>
-                        </div>
-
+                    <div class="flex items-center justify-end">
+                       
                         <button 
-                            @click="isEditing = !isEditing"
+                            @click="if(isEditing) { saveChanges(); } else { isEditing = true; }"
                             class="px-4 py-1.5 text-sm font-medium rounded-lg transition-colors min-w-[64px]"
                             :class="isEditing ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-600 hover:bg-slate-200'"
-                            x-text="isEditing ? '保存' : '编辑'"
+                            :disabled="saving"
                         >
+                            <span x-show="!saving" x-text="isEditing ? '保存' : '编辑'"></span>
+                            <span x-show="saving">保存中...</span>
                         </button>
                     </div>
                 </div>

@@ -54,96 +54,89 @@
             <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">生命体征基线</h3>
         </div>
         
-        <form hx-post="{% url 'web_doctor:patient_health_metrics_update' patient.id %}"
-              hx-target="#medical-info-card"
-              hx-swap="outerHTML"
-              class="flex-1 px-5 pb-4 flex flex-col">
-            {% csrf_token %}
+        <div class="flex-1 px-5 pb-4 flex flex-col">
             <div class="flex-1 space-y-3 overflow-y-auto">
-                {# 血氧 #}
-                <div class="flex items-center">
-                    <label class=" shrink-0 text-sm text-slate-500 text-right mr-3">血氧</label>
-                    <div class="flex-1 flex items-center gap-2">
-                        <input type="number" step="0.1" name="blood_oxygen" 
-                               value="{{ metrics_info.blood_oxygen.value_main|default:'' }}"
-                               placeholder="请输入血氧基线值" 
-                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-xs text-slate-400 w-8 shrink-0">%</span>
+                <div class="grid grid-cols-1 gap-y-2 text-sm">
+                    {# 血氧 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500 shrink-0 text-right mr-3">血氧：</span>
+                        <span class="text-slate-800 font-medium" data-metric="blood_oxygen" data-value="{{ patient.baseline_blood_oxygen|default:'' }}">
+                            {% if patient.baseline_blood_oxygen %}
+                                {{ patient.baseline_blood_oxygen }} %
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
                     </div>
-                </div>
 
-                {# 血压 #}
-                <div class="flex items-center pr-10">
-                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">血压</label>
-                    <div class="flex-1 flex items-center gap-2">
-                        <input type="number" name="sbp" 
-                               value="{{ metrics_info.blood_pressure.value_main|default:'' }}"
-                               placeholder="请输入收缩压基线值" 
-                               class="w-1/2 text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-slate-400">/</span>
-                        <input type="number" name="dbp" 
-                               value="{{ metrics_info.blood_pressure.value_sub|default:'' }}"
-                               placeholder="请输入舒张压基线值" 
-                               class="w-1/2 text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-xs text-slate-400 w-8 shrink-0">mmHg</span>
+                    {# 血压 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500  shrink-0 text-right mr-3">血压：</span>
+                        <span class="text-slate-800 font-medium" data-metric="blood_pressure" data-sbp="{{ patient.baseline_blood_pressure_sbp|default:'' }}" data-dbp="{{ patient.baseline_blood_pressure_dbp|default:'' }}">
+                            {% if patient.baseline_blood_pressure_sbp and patient.baseline_blood_pressure_dbp %}
+                                {{ patient.baseline_blood_pressure_sbp }} / {{ patient.baseline_blood_pressure_dbp }} mmHg
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
                     </div>
-                </div>
 
-                {# 心率 #}
-                <div class="flex items-center">
-                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">心率</label>
-                    <div class="flex-1 flex items-center gap-2">
-                        <input type="number" name="heart_rate" 
-                               value="{{ metrics_info.heart_rate.value_main|default:'' }}"
-                               placeholder="请输入心率基线值" 
-                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-xs text-slate-400 w-8 shrink-0">bpm</span>
+                    {# 心率 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500 shrink-0 text-right mr-3">心率：</span>
+                        <span class="text-slate-800 font-medium" data-metric="heart_rate" data-value="{{ patient.baseline_heart_rate|default:'' }}">
+                            {% if patient.baseline_heart_rate %}
+                                {{ patient.baseline_heart_rate }} bpm
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
                     </div>
-                </div>
 
-                {# 体重 #}
-                <div class="flex items-center">
-                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">体重</label>
-                    <div class="flex-1 flex items-center gap-2">
-                        <input type="number" step="0.1" name="weight" 
-                               value="{{ metrics_info.weight.value_main|default:'' }}"
-                               placeholder="请输入体重基线值" 
-                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-xs text-slate-400 w-8 shrink-0">kg</span>
+                    {# 体重 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500  shrink-0 text-right mr-3">体重：</span>
+                        <span class="text-slate-800 font-medium" data-metric="weight" data-value="{{ patient.baseline_weight|default:'' }}">
+                            {% if patient.baseline_weight %}
+                                {{ patient.baseline_weight }} kg
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
                     </div>
-                </div>
 
-                {# 体温 #}
-                <div class="flex items-center">
-                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">体温</label>
-                    <div class="flex-1 flex items-center gap-2">
-                        <input type="number" step="0.1" name="temperature" 
-                               value="{{ metrics_info.body_temperature.value_main|default:'' }}"
-                               placeholder="请输入体温基线值" 
-                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-xs text-slate-400 w-8 shrink-0">℃</span>
+                    {# 体温 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500  shrink-0 text-right mr-3">体温：</span>
+                        <span class="text-slate-800 font-medium" data-metric="temperature" data-value="{{ patient.baseline_body_temperature|default:'' }}">
+                            {% if patient.baseline_body_temperature %}
+                                {{ patient.baseline_body_temperature }} ℃
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
                     </div>
-                </div>
 
-                {# 步数 #}
-                <div class="flex items-center">
-                    <label class="shrink-0 text-sm text-slate-500 text-right mr-3">步数</label>
-                    <div class="flex-1 flex items-center gap-2">
-                        <input type="number" name="steps" 
-                               value="{{ metrics_info.steps.value_main|default:'' }}"
-                               placeholder="请输入步数基线值" 
-                               class="w-full text-sm border border-slate-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all">
-                        <span class="text-xs text-slate-400 w-8 shrink-0">步</span>
+                    {# 步数 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500  shrink-0 text-right mr-3">步数：</span>
+                        <span class="text-slate-800 font-medium" data-metric="steps" data-value="{{ patient.baseline_steps|default:'' }}">
+                            {% if patient.baseline_steps %}
+                                {{ patient.baseline_steps }} 步
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
                     </div>
                 </div>
             </div>
 
             <div class="mt-auto flex justify-end p-5 pr-0 pb-0">
-                 <button type="submit" class="px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-full hover:bg-indigo-700 shadow-sm transition-colors">
-                    保存
+                 <button onclick="window.initMetricsModal()" class="px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-full hover:bg-indigo-700 shadow-sm transition-colors">
+                    编辑
                 </button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -204,6 +197,97 @@
     </div>
 </dialog>
 
+{# 生命体征基线编辑弹框 #}
+<dialog id="edit-metrics-modal" class="rounded-xl shadow-xl backdrop:bg-slate-900/30 w-full max-w-2xl p-0 open:animate-fade-in">
+    <div class="flex flex-col max-h-[90vh]">
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <h3 class="text-lg font-bold text-slate-800">编辑生命体征基线</h3>
+            <button type="button" onclick="this.closest('dialog').close()" class="text-slate-400 hover:text-slate-600">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <form method="post" 
+              hx-post="{% url 'web_doctor:patient_health_metrics_update' patient.id %}" 
+              hx-target="#medical-info-card" 
+              hx-swap="outerHTML"
+              hx-indicator="#metrics-save-indicator-modal"
+              class="p-6 overflow-y-auto space-y-4"
+              onsubmit="this.closest('dialog').close()">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {# 血氧 #}
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">血氧 (%)</label>
+                    <input type="number" step="0.1" name="blood_oxygen" min="0" max="100"
+                           value="{{ patient.baseline_blood_oxygen|default:'' }}"
+                           placeholder="请输入血氧基线值" 
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
+                {# 心率 #}
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">心率 (bpm)</label>
+                    <input type="number" name="heart_rate" min="0" max="300"
+                           value="{{ patient.baseline_heart_rate|default:'' }}"
+                           placeholder="请输入心率基线值" 
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
+                {# 血压 #}
+                <div class="space-y-1 md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700">血压 (mmHg)</label>
+                    <div class="flex items-center gap-2">
+                        <input type="number" name="sbp" min="0" max="300"
+                               value="{{ patient.baseline_blood_pressure_sbp|default:'' }}"
+                               placeholder="收缩压" 
+                               class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                        <span class="text-slate-400">/</span>
+                        <input type="number" name="dbp" min="0" max="300"
+                               value="{{ patient.baseline_blood_pressure_dbp|default:'' }}"
+                               placeholder="舒张压" 
+                               class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                    </div>
+                </div>
+
+                {# 体重 #}
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">体重 (kg)</label>
+                    <input type="number" step="0.1" name="weight" min="0" max="500"
+                           value="{{ patient.baseline_weight|default:'' }}"
+                           placeholder="请输入体重基线值" 
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
+                {# 体温 #}
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">体温 (℃)</label>
+                    <input type="number" step="0.1" name="temperature" min="30" max="45"
+                           value="{{ patient.baseline_body_temperature|default:'' }}"
+                           placeholder="请输入体温基线值" 
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
+                {# 步数 #}
+                <div class="space-y-1 md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700">步数 (步)</label>
+                    <input type="number" name="steps" min="0"
+                           value="{{ patient.baseline_steps|default:'' }}"
+                           placeholder="请输入步数基线值" 
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-6">
+                <button type="button" onclick="this.closest('dialog').close()" class="px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 rounded-lg transition-colors">取消</button>
+                <button type="submit" class="flex items-center gap-2 px-6 py-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-sm transition-colors">
+                    <span>确定保存</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
 <script>
 function validateMedicalForm(form) {
     const requiredFields = form.querySelectorAll('[required]');
@@ -235,4 +319,94 @@ document.getElementById('edit-medical-modal').addEventListener('input', function
         e.target.classList.remove('border-rose-300', 'ring-1', 'ring-rose-200');
     }
 });
+
+// 生命体征基线弹框逻辑
+(function() {
+    const modal = document.getElementById('edit-metrics-modal');
+    if (!modal) return;
+
+    // 弹框打开时，从 DOM 读取最新数据填充表单
+    // 即使表单被清空过，下次打开也会重新读取页面上的值
+    // 注意：dialog 的 showModal 方法不会自动触发事件，我们需要手动绑定点击事件或使用 MutationObserver
+    // 这里采用在按钮点击时调用初始化函数的策略，或者监听 dialog 的 'close' 事件来重置表单（虽然 close 是后置）
+    // 更稳妥的方式是：每次点击“编辑”按钮时，不仅调用 showModal，还调用 syncDataToForm
+    
+    window.initMetricsModal = function() {
+        const form = modal.querySelector('form');
+        if (!form) return;
+
+        // 1. 获取页面上最新的基线数据
+        const dataElements = document.querySelectorAll('[data-metric]');
+        const dataMap = {};
+        
+        dataElements.forEach(el => {
+            const metric = el.getAttribute('data-metric');
+            if (metric === 'blood_pressure') {
+                dataMap['sbp'] = el.getAttribute('data-sbp');
+                dataMap['dbp'] = el.getAttribute('data-dbp');
+            } else {
+                dataMap[metric] = el.getAttribute('data-value');
+            }
+        });
+
+        // 2. 填充表单输入框
+        // 映射关系：表单 name -> dataMap key
+        const inputs = form.querySelectorAll('input');
+        inputs.forEach(input => {
+            const name = input.getAttribute('name');
+            if (name === 'blood_oxygen') {
+                input.value = dataMap['blood_oxygen'] || '';
+            } else if (name === 'heart_rate') {
+                input.value = dataMap['heart_rate'] || '';
+            } else if (name === 'weight') {
+                input.value = dataMap['weight'] || '';
+            } else if (name === 'temperature') {
+                input.value = dataMap['temperature'] || '';
+            } else if (name === 'steps') {
+                input.value = dataMap['steps'] || '';
+            } else if (name === 'sbp') {
+                input.value = dataMap['sbp'] || '';
+            } else if (name === 'dbp') {
+                input.value = dataMap['dbp'] || '';
+            }
+        });
+        
+        modal.showModal();
+    };
+
+    // 监听弹框关闭事件，重置表单（可选，其实每次打开覆盖即可，但重置更安全）
+    modal.addEventListener('close', function() {
+        const form = modal.querySelector('form');
+        if (form) form.reset();
+    });
+})();
+
+(function () {
+  if (window.__planSuccessToastInstalled) return;
+  window.__planSuccessToastInstalled = true;
+
+  function showPlanSuccess(message) {
+    if (!message) return;
+    let container = document.getElementById("plan-success-toast");
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "plan-success-toast";
+      container.className =
+        "fixed bottom-4 right-4 max-w-sm bg-emerald-600 text-white text-sm px-3 py-2 rounded shadow-lg z-50 animate-fade-in-up";
+      document.body.appendChild(container);
+    }
+    container.textContent = message;
+    container.style.display = "block";
+    clearTimeout(container._hideTimer);
+    container._hideTimer = setTimeout(function () {
+      container.style.display = "none";
+    }, 3000);
+  }
+
+  document.body.addEventListener("plan-success", function (event) {
+    const detail = event.detail || {};
+    const msg = detail.message || "";
+    showPlanSuccess(msg);
+  });
+})();
 </script>

@@ -576,7 +576,7 @@
           {% if plan.status != 'completed' %}
 
           <button
-            onclick="handleTaskClick('{{ plan.title }}', '{{ plan.type }}')"
+            onclick="handleTaskClick('{{ plan.title }}', '{{ plan.type }}', '{{ plan.url|default:'' }}')"
             class="bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap"
           >
             {{ plan.action_text }}
@@ -721,7 +721,7 @@
       });
   }
 
-  function handleTaskClick(title, type) {
+  function handleTaskClick(title, type, specificUrl) {
       // 获取当前用户openid
       const patientId = "{{ patient_id|default:'' }}";
 
@@ -731,12 +731,14 @@
       if(title.includes('用药提醒')){
           openMedicationModal();
       } else  {
-         let urlA = menuUrls[type];
+         // 优先使用特定URL，否则查表
+         let urlA = specificUrl || menuUrls[type];
          console.log("跳转地址:", urlA);
 
          if (urlA) {
               // 判断URL是否已经包含参数
               const separator = urlA.includes('?') ? '&' : '?';
+              // 如果specificUrl已经包含了ids参数，我们仍然追加patient_id，不影响
               window.location.href = urlA + separator + "patient_id=" + patientId;
          } else {
               console.error("未找到对应类型的跳转链接:", type);

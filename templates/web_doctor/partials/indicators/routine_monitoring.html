@@ -3,7 +3,7 @@
         <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">常规监测指标</h3>
         
         <!-- 筛选表单区域 -->
-        <form id="indicators-filter-form" 
+        <form id="routine-filter-form" 
               class="flex items-center gap-4 text-sm relative" 
               onsubmit="return false;"
               x-data="{ 
@@ -65,15 +65,15 @@
             <div class="flex items-center gap-2" x-show="filterType !== ''" x-cloak>
                 <button 
                     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#indicators-container"
+                    hx-target="#indicators-wrapper"
                     hx-swap="outerHTML"
-                    hx-include="#indicators-filter-form"
+                    hx-include="#routine-filter-form"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     搜索
                 </button>
                 <button 
                     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#indicators-container"
+                    hx-target="#indicators-wrapper"
                     hx-swap="outerHTML"
                     @click="filterType = ''"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-gray-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
@@ -107,7 +107,9 @@
                   p-id="22092"
                 ></path>
               </svg>
-            <h3 class="font-medium text-slate-800">服药记录 ({{ medication_stats.count }}次) </h3>
+            <div class="font-medium text-black ">服药记录 ({{ medication_stats.count }}次) 
+                <span class="font-medium text-black ml-3">依从性：{{ medication_stats.compliance }}%</span>
+            </div>
         </div>
         
         <div class="overflow-x-auto">

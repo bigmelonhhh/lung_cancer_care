@@ -92,6 +92,8 @@
             {% endif %}
         <h3 class="font-medium text-slate-800">{{ chart.title }}</h3>
         <span class="text-sm text-slate-500 font-medium">{{ chart.subtitle }}</span>
+         <span class="font-medium text-black ml-3">依从性：{{ chart.compliance|default:0 }}%
+        </span>
     </div>
     
     <div id="{{ chart.id }}" style="width: 100%; height: 250px;"></div>

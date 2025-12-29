@@ -1,10 +1,15 @@
+import logging
 from datetime import date, timedelta, datetime
 from django.utils import timezone
-from core.models import TreatmentCycle
+from django.core.cache import cache
+from core.models import TreatmentCycle, choices
 from core.service.treatment_cycle import get_treatment_cycles
+from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
 from users.models import PatientProfile
+
+logger = logging.getLogger(__name__)
 
 def build_indicators_context(
     patient: PatientProfile,
@@ -225,27 +230,95 @@ def build_indicators_context(
         })
     
     total_days = len(date_strs)
-    compliance = int((med_count / total_days) * 100) if total_days > 0 else 0
+    # compliance = int((med_count / total_days) * 100) if total_days > 0 else 0  # Deprecated: use real adherence data
 
+    # 3.1 批量获取依从性数据 (Adherence Metrics)
+    # 定义需要查询的指标类型映射
+    chart_metric_map = {
+        'spo2': MetricType.BLOOD_OXYGEN,
+        'bp': MetricType.BLOOD_PRESSURE,
+        'hr': MetricType.HEART_RATE,
+        'weight': MetricType.WEIGHT,
+        'temp': MetricType.BODY_TEMPERATURE,
+        'steps': MetricType.STEPS
+    }
+    
+    # 用药依从性使用 PlanItemCategory.MEDICATION
+    med_type = choices.PlanItemCategory.MEDICATION
+    
+    # 构造查询列表
+    types_to_query = [med_type] + list(chart_metric_map.values())
+    
+    # 尝试从缓存获取
+    cache_key = f"adherence_metrics_{patient.id}_{start_date}_{end_date}"
+    adherence_results = cache.get(cache_key)
+    
+    if not adherence_results:
+        try:
+            adherence_results = get_adherence_metrics_batch(
+                patient=patient,
+                adherence_types=types_to_query,
+                start_date=start_date,
+                end_date=end_date
+            )
+            # 缓存 5 分钟
+            cache.set(cache_key, adherence_results, 300)
+        except Exception as e:
+            logger.error(f"Failed to fetch adherence metrics for patient {patient.id}: {e}")
+            # 发生错误时，返回空列表，页面依从性将显示为 0%
+            adherence_results = []
+        
+    # 将结果转换为字典以便查找
+    adherence_map = {res['type']: res for res in adherence_results}
+    
+    # 更新用药依从性
+    med_res = adherence_map.get(med_type)
+    compliance = 0
+    if med_res and med_res['rate'] is not None:
+         compliance = int(med_res['rate'] * 100)
+    
+    # 更新各图表的依从性
+    for key, metric_type in chart_metric_map.items():
+        if key in charts:
+            res = adherence_map.get(metric_type)
+            rate = 0
+            if res and res['rate'] is not None:
+                rate = int(res['rate'] * 100)
+            charts[key]['compliance'] = rate
+    
+    
     # ==========================================
     # 4. 随访问卷指标处理 (Questionnaire Indicators - Mock Data)
     # ==========================================
-    # TODO 随访问卷-体能呼吸、咳嗽与痰色、食欲评估、疼痛量表、睡眠质量、心里痛苦分级评估，
-    # 根据疗程日期、自定义日期筛选数据，查询六大模块的图表数据
+    # TODO 随访问卷-体能评估、呼吸评估、咳嗽与痰色、食欲评估、疼痛量表、睡眠质量、心里痛苦分级评估，
+    # 1、筛选条件-按疗程选择或者按自定义日期选择，点击搜索按钮-根据日期进行筛选查询数据
+    # 2、咳嗽与痰色量表有个特殊情况，需要单独获取咳嗽与痰色随访问卷模块里的-咯血数据，问题：咳嗽或痰中是否带血？
+    # 去判断根据当前筛选条件日期，去查询这个数据，返回用户填写的这个问题选择的数据评分-前端去动态判断回显内容
     import random
     
-    # 4.1 体能与呼吸 (Q_PHYSICAL)
+    # 4.1 体能 (Q_PHYSICAL)
     # 模拟数据：0-4分
     phys_score_data = [random.randint(0, 4) for _ in date_strs]
-    breath_score_data = [random.randint(0, 4) for _ in date_strs]
-        
+    
     charts['physical'] = {
         "id": "chart-physical",
-        "title": "体能与呼吸",
+        "title": "体能评估",
         "dates": date_strs,
         "series": [
             {"name": "体能评分", "data": phys_score_data, "color": "#3b82f6"}, # Blue
-            {"name": "呼吸困难评分", "data": breath_score_data, "color": "#10b981"} # Teal
+        ],
+        "y_min": 0,
+        "y_max": 5
+    }
+
+    # 4.2 呼吸 (Q_BREATH - Mock, 假设与体能分开)
+    breath_score_data = [random.randint(0, 4) for _ in date_strs]
+    charts['breath'] = {
+        "id": "chart-breath",
+        "title": "呼吸评估",
+        "dates": date_strs,
+        "series": [
+            {"name": "呼吸困难评分", "data": breath_score_data, "color": "#3b82f6"} # Teal
         ],
         "y_min": 0,
         "y_max": 5
@@ -264,7 +337,7 @@ def build_indicators_context(
         
     charts['cough'] = {
         "id": "chart-cough",
-        "title": "咳嗽与痰色量表",
+        "title": "",
         "dates": date_strs,
         "series": [{"name": "咳嗽量表", "data": cough_score_data, "color": "#3b82f6"}],
         "y_min": 0,
@@ -274,7 +347,6 @@ def build_indicators_context(
     cough_table = {
         "dates": date_strs,
         "rows": [
-            {"label": "痰色", "values": sputum_table_row},
             {"label": "咯血", "values": blood_table_row}
         ]
     }

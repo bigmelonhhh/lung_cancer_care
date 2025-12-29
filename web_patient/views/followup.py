@@ -1,4 +1,5 @@
 import json
+import logging
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET, require_POST
@@ -7,6 +8,8 @@ from users.decorators import auto_wechat_login, check_patient
 from core.service.questionnaire import QuestionnaireService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from django.core.exceptions import ValidationError
+
+logger = logging.getLogger(__name__)
 
 @auto_wechat_login
 @check_patient
@@ -17,6 +20,19 @@ def daily_survey(request: HttpRequest) -> HttpResponse:
     """
     # 1. 获取所有启用的问卷 ID
     active_questionnaires = QuestionnaireService.get_active_questionnaires()
+    
+    # 根据URL参数过滤问卷
+    target_ids_str = request.GET.get('ids')
+    if target_ids_str:
+        try:
+            target_ids = {int(i) for i in target_ids_str.split(',') if i.strip()}
+            original_count = len(active_questionnaires)
+            # 只保留在 active_questionnaires 中且在 target_ids 中的问卷
+            active_questionnaires = [q for q in active_questionnaires if q.id in target_ids]
+            logger.info(f"Filtered questionnaires for patient {request.patient.id}: {original_count} -> {len(active_questionnaires)}. Target IDs: {target_ids}")
+        except ValueError:
+            logger.warning(f"Invalid questionnaire IDs provided for patient {request.patient.id}: {target_ids_str}")
+
     survey_ids = [q.id for q in active_questionnaires]
 
     if not survey_ids:

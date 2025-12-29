@@ -151,10 +151,18 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                         "action_text": "去填写"
                     })
                 elif "随访" in title_val or "问卷" in title_val:
+                    # 获取问卷ID列表并构建带参数的URL
+                    q_ids = item.get("questionnaire_ids", [])
+                    action_url = reverse("web_patient:daily_survey")
+                    if q_ids:
+                         ids_str = ",".join(map(str, q_ids))
+                         action_url = f"{action_url}?ids={ids_str}"
+                    
                     plan_data.update({
                         "type": "followup",
                         "subtitle": "请及时完成您的随访任务",
-                        "action_text": "去完成"
+                        "action_text": "去完成",
+                        "url": action_url
                     })
                 elif "复查" in title_val:
                     plan_data.update({
@@ -264,6 +272,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
+            print(f"{listData}")
             if MetricType.STEPS in listData and listData[MetricType.STEPS] is not None:
                 steps_info = listData[MetricType.STEPS]
                 # 仅当步数是今日数据时才更新，否则保持0

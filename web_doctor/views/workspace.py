@@ -209,7 +209,7 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
         )
 
     elif section == "reports_history" or section == "reports":
-        from web_doctor.views.home import handle_reports_history_section
+        from web_doctor.views.reports_history_data import handle_reports_history_section
         # 确保 active_tab 正确设置为 'reports'，以便 tab 高亮
         context["active_tab"] = "reports"
         return render(
@@ -442,19 +442,6 @@ def _build_settings_context(
             "surgery": "",
             "last_updated": "",
         }
-    # 获取患者当前基线数据
-    last_metrics = HealthMetricService.query_last_metric(patient.id)
-    # 打印接口返回结果，用于调试验证
-    logger.info(f"Query last metrics for patient {patient.id}: {last_metrics}")
-
-    metrics_info = {
-        "blood_oxygen": last_metrics.get(MetricType.BLOOD_OXYGEN),
-        "blood_pressure": last_metrics.get(MetricType.BLOOD_PRESSURE),
-        "heart_rate": last_metrics.get(MetricType.HEART_RATE),
-        "weight": last_metrics.get(MetricType.WEIGHT),
-        "body_temperature": last_metrics.get(MetricType.BODY_TEMPERATURE),
-        "steps": last_metrics.get(MetricType.STEPS),
-    }
 
     return {
         "active_cycle": active_cycle,
@@ -467,7 +454,6 @@ def _build_settings_context(
         "current_day_index": current_day_index,
         "patient_info": patient_info,
         "medical_info": medical_info,
-        "metrics_info": metrics_info,
     }
 
 
@@ -1094,76 +1080,52 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
     patient = patients_qs.filter(pk=patient_id).first()
     if patient is None:
         raise Http404("未找到患者")
-    # TODO 添加生命体征基线字段区分进行保存数据
+    
+    # 构造数据字典
+    # 注意：PatientService.save_patient_profile 接口要求的基线数据字段名为 baseline_xxx
+    # 因此需要将前端传来的简写字段名映射为接口定义的完整字段名
+    data = {
+        "name": patient.name,
+        "phone": patient.phone,
+        "address": getattr(patient, "address", "") or "",
+        "ec_name": getattr(patient, "ec_name", "") or "",
+        "ec_relation": getattr(patient, "ec_relation", "") or "",
+        "ec_phone": getattr(patient, "ec_phone", "") or "",
+        "remark": getattr(patient, "remark", "") or "", 
+        "baseline_blood_oxygen": request.POST.get("blood_oxygen"),
+        "baseline_blood_pressure_sbp": request.POST.get("sbp"),
+        "baseline_blood_pressure_dbp": request.POST.get("dbp"),
+        "baseline_heart_rate": request.POST.get("heart_rate"),
+        "baseline_weight": request.POST.get("weight"),
+        "baseline_body_temperature": request.POST.get("temperature"),
+        "baseline_steps": request.POST.get("steps"),
+    }
+    
+    # 清理空值，避免传递空字符串给 Decimal/Int 字段导致错误
+    cleaned_data = {}
+    for k, v in data.items():
+        if v and str(v).strip():
+            cleaned_data[k] = v.strip()
+        else:
+            # 对于非必填的基线字段，如果为空则传 None
+            if k not in ["name", "phone"]:
+                cleaned_data[k] = None
+            else:
+                # name/phone 必填，保留原值（虽然上面已取值，这里防守一下）
+                cleaned_data[k] = v
+
     try:
-        # Blood Oxygen
-        if val := request.POST.get("blood_oxygen"):
-            HealthMetricService.save_manual_metric(
-                patient_id=patient.id,
-                metric_type=MetricType.BLOOD_OXYGEN,
-                measured_at=timezone.now(),
-                value_main=Decimal(val)
-            )
-        
-        # Blood Pressure (sbp/dbp)
-        sbp = request.POST.get("sbp")
-        dbp = request.POST.get("dbp")
-        if sbp and dbp:
-             HealthMetricService.save_manual_metric(
-                patient_id=patient.id,
-                metric_type=MetricType.BLOOD_PRESSURE,
-                measured_at=timezone.now(),
-                value_main=Decimal(sbp),
-                value_sub=Decimal(dbp)
-            )
-
-        # Heart Rate
-        if val := request.POST.get("heart_rate"):
-             HealthMetricService.save_manual_metric(
-                patient_id=patient.id,
-                metric_type=MetricType.HEART_RATE,
-                measured_at=timezone.now(),
-                value_main=Decimal(val)
-            )
-
-        # Weight
-        if val := request.POST.get("weight"):
-             HealthMetricService.save_manual_metric(
-                patient_id=patient.id,
-                metric_type=MetricType.WEIGHT,
-                measured_at=timezone.now(),
-                value_main=Decimal(val)
-            )
-
-        # Temperature
-        if val := request.POST.get("temperature"):
-             HealthMetricService.save_manual_metric(
-                patient_id=patient.id,
-                metric_type=MetricType.BODY_TEMPERATURE,
-                measured_at=timezone.now(),
-                value_main=Decimal(val)
-            )
-            
-        # Steps
-        if val := request.POST.get("steps"):
-             HealthMetricService.save_manual_metric(
-                patient_id=patient.id,
-                metric_type=MetricType.STEPS,
-                measured_at=timezone.now(),
-                value_main=Decimal(val)
-            )
-            
-        logger.info(f"Successfully updated health metrics for patient {patient_id}.")
-        
-    except (InvalidOperation, ValueError) as e:
-        logger.warning(f"Invalid metric data: {e}")
-        message = "输入数据格式错误，请检查数值。"
+        PatientService().save_patient_profile(request.user, cleaned_data, profile_id=patient.id)
+        logger.info(f"Successfully updated health baselines for patient {patient_id}.")
+        # 强制刷新以获取最新数据
+        patient.refresh_from_db()
+    except ValidationError as exc:
+        message = str(exc)
         response = HttpResponse(message, status=400)
         response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
         return response
-
     except Exception as exc:
-        logger.exception(f"Unexpected error updating metrics: {exc}")
+        logger.exception(f"Unexpected error updating baselines: {exc}")
         message = "系统错误，请联系管理员。"
         response = HttpResponse(message, status=500)
         response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
@@ -1172,15 +1134,17 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
     # 重新构建上下文以获取最新数据
     settings_ctx = _build_settings_context(patient)
     
-    return render(
+    response = render(
         request,
         "web_doctor/partials/settings/medical_info_card.html",
         {
             "medical_info": settings_ctx["medical_info"],
             "patient": patient,
-            "metrics_info": settings_ctx["metrics_info"]
+            # "metrics_info": settings_ctx["metrics_info"] # 已移除
         }
     )
+    response["HX-Trigger"] = '{"plan-success": {"message": "生命体征基线保存成功"}}'
+    return response
 
 
 @login_required
