@@ -40,7 +40,7 @@ class QuestionnaireSubmissionService:
         - 校验所有题目是否都已作答，否则抛出 ValidationError；
         - 在当前仅支持选择题场景下，对所有选中选项的 score 做简单累加，得到 total_score；
         - 将答题明细保存到 QuestionnaireAnswer，将总分冗余到 QuestionnaireSubmission.total_score；
-        - 若问卷配置了 metric_type，则同时写入一条 HealthMetric 记录。
+        - 提交成功后写入一条 HealthMetric 记录（metric_type 使用问卷 code）。
         - 提交成功后同步更新患者当天的问卷任务状态。
 
         【参数说明】

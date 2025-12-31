@@ -46,7 +46,6 @@ class QuestionnaireAdmin(admin.ModelAdmin):
     list_display = (
         "name",
         "code",
-        "metric_type",
         "is_active",
         "sort_order",
     )

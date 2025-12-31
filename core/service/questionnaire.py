@@ -150,3 +150,71 @@ class QuestionnaireService:
             )
 
         return results
+
+    @classmethod
+    def print_all_questionnaire_contents(cls) -> None:
+        """
+        按顺序打印所有问卷、题目与选项内容，便于人工核对。
+
+        【功能说明】
+        - 问卷按 sort_order、name 排序；
+        - 题目按 seq 排序；
+        - 选项按 seq 排序；
+        - 直接打印到控制台，适合在 Django shell 中使用。
+
+        【使用示例】
+        >>> from core.service.questionnaire import QuestionnaireService
+        >>> QuestionnaireService.print_all_questionnaire_contents()
+        """
+        options_qs = QuestionnaireOption.objects.order_by("seq", "id")
+        questions_qs = QuestionnaireQuestion.objects.order_by(
+            "seq", "id"
+        ).prefetch_related(Prefetch("options", queryset=options_qs))
+        questionnaires = (
+            Questionnaire.objects.all()
+            .order_by("sort_order", "name", "id")
+            .prefetch_related(Prefetch("questions", queryset=questions_qs))
+        )
+
+        lines: List[str] = []
+        questionnaire_count = 0
+        question_count = 0
+        option_count = 0
+
+        for questionnaire in questionnaires:
+            questionnaire_count += 1
+            lines.append(
+                "[Questionnaire] "
+                f"id={questionnaire.id} | sort={questionnaire.sort_order} | "
+                f"active={questionnaire.is_active} | code={questionnaire.code} | "
+                f"name={questionnaire.name}"
+            )
+            for question in questionnaire.questions.all():
+                question_count += 1
+                lines.append(
+                    "  [Question] "
+                    f"id={question.id} | seq={question.seq} | "
+                    f"required={question.is_required} | type={question.q_type} | "
+                    f"weight={question.weight} | "
+                    f"section={question.section or '-'} | text={question.text}"
+                )
+                for option in question.options.all():
+                    option_count += 1
+                    lines.append(
+                        "    "
+                        "[Option] "
+                        f"id={option.id} | seq={option.seq} | "
+                        f"text={option.text} | value={option.value or '-'} | "
+                        f"score={option.score}"
+                    )
+            lines.append("")
+
+        lines.insert(
+            0,
+            f"TOTAL questionnaires={questionnaire_count}, "
+            f"questions={question_count}, options={option_count}",
+        )
+        lines.insert(1, "")
+
+        for line in lines:
+            print(line)
