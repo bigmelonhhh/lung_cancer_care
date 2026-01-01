@@ -14,8 +14,8 @@
                       const start = option.getAttribute('data-start') || '';
                       const end = option.getAttribute('data-end') || '';
                       
-                      const startInput = document.getElementById('start_date');
-                      const endInput = document.getElementById('end_date');
+                      const startInput = document.getElementById('routine_start_date');
+                      const endInput = document.getElementById('routine_end_date');
                       
                       if (startInput) startInput.value = start;
                       if (endInput) endInput.value = end;
@@ -54,9 +54,9 @@
             <!-- 按日期查看 -->
             <div class="flex items-center gap-2" x-show="filterType === 'date'" x-cloak>
                 <div class="flex items-center border border-slate-300 rounded px-2 py-1 bg-white">
-                                        <input placeholder="开始日期" type="date" name="start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
+                                        <input placeholder="开始日期" type="date" name="start_date" id="routine_start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
                     <span class="text-slate-400 mx-1">-</span>
-                                        <input placeholder="结束日期" type="date" name="end_date" value="{{ current_end_date }}" class="focus:outline-none text-slate-700 date-input">
+                                        <input placeholder="结束日期" type="date" name="end_date" id="routine_end_date" value="{{ current_end_date }}" class="focus:outline-none text-slate-700 date-input">
 
                 </div>
             </div>

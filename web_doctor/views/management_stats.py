@@ -156,37 +156,24 @@ class ManagementStatsView:
             months = []
 
         # 准备批量查询的数据源
-        metric_types_to_query = []
-        questionnaire_codes_to_query = []
-        
+        all_types_to_query = []
         config_map = {} # key -> (title, unit, color, type/code)
 
         for key, title, unit, color, type_code in chart_configs:
             config_map[key] = (title, unit, color, type_code)
-            if isinstance(type_code, MetricType) or (isinstance(type_code, str) and type_code.startswith("M_")):
-                metric_types_to_query.append(type_code)
-            else:
-                questionnaire_codes_to_query.append(type_code)
+            all_types_to_query.append(type_code)
 
         # 获取数据
-        metrics_data = {}
-        questionnaires_data = {}
+        combined_data = {}
 
-        if start_date and end_date:
-            # 1. 获取 Metrics 数据
-            if metric_types_to_query:
-                try:
-                    metrics_data = HealthMetricService.count_metric_uploads_by_month(
-                        patient, list(set(metric_types_to_query)), start_date, end_date
-                    )
-                except Exception:
-                    metrics_data = {}
-
-            # 2. 获取 Questionnaires 数据
-            if questionnaire_codes_to_query:
-                questionnaires_data = self._count_questionnaire_uploads_by_month(
-                    patient, list(set(questionnaire_codes_to_query)), start_date, end_date
+        if start_date and end_date and all_types_to_query:
+            try:
+                # 统一调用接口获取所有类型（指标+问卷）的数据
+                combined_data = HealthMetricService.count_metric_uploads_by_month(
+                    patient, list(set(all_types_to_query)), start_date, end_date
                 )
+            except Exception:
+                combined_data = {}
 
         # 组装图表
         for key, title, unit, color, type_code in chart_configs:
@@ -194,16 +181,9 @@ class ManagementStatsView:
             total_count = 0
             
             # 查找数据
-            data_list = []
-            if isinstance(type_code, MetricType) or (isinstance(type_code, str) and type_code.startswith("M_")):
-                data_list = metrics_data.get(type_code, [])
-            else:
-                data_list = questionnaires_data.get(type_code, [])
+            data_list = combined_data.get(type_code, [])
             
             # 将 data_list (dict list) 转换为按 months 顺序的 list
-            # metrics_data 返回格式: [{'month': '2025-01', 'count': 3}, ...]
-            # months 格式: ['2025-09', '2025-10', ...]
-            
             # 建立 month -> count 映射
             count_map = {item['month']: item['count'] for item in data_list}
             
@@ -229,71 +209,6 @@ class ManagementStatsView:
             }
         
         return charts
-
-    def _count_questionnaire_uploads_by_month(
-        self,
-        patient: Any,
-        codes: List[str],
-        start_date: date,
-        end_date: date
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        """
-        按月统计问卷提交次数 (模拟 HealthMetricService.count_metric_uploads_by_month 的行为)
-        """
-        # 生成月份列表
-        month_labels = []
-        current_month = date(start_date.year, start_date.month, 1)
-        end_month = date(end_date.year, end_date.month, 1)
-        while current_month <= end_month:
-            month_labels.append(f"{current_month.year:04d}-{current_month.month:02d}")
-            if current_month.month == 12:
-                current_month = date(current_month.year + 1, 1, 1)
-            else:
-                current_month = date(current_month.year, current_month.month + 1, 1)
-
-        # 初始化结果结构
-        result = {
-            code: [{"month": label, "count": 0} for label in month_labels]
-            for code in codes
-        }
-        month_index = {label: idx for idx, label in enumerate(month_labels)}
-
-        # 构造查询时间范围
-        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
-        end_dt = datetime.datetime.combine(
-            end_date + datetime.timedelta(days=1),
-            datetime.datetime.min.time(),
-        )
-        if timezone.is_aware(timezone.now()):
-            start_dt = timezone.make_aware(start_dt)
-            end_dt = timezone.make_aware(end_dt)
-
-        # 数据库查询
-        qs = QuestionnaireSubmission.objects.filter(
-            patient=patient,
-            questionnaire__code__in=codes,
-            created_at__gte=start_dt,
-            created_at__lt=end_dt
-        ).annotate(
-            month=TruncMonth('created_at', tzinfo=timezone.get_current_timezone())
-        ).values('questionnaire__code', 'month').annotate(count=Count('id'))
-
-        # 填充结果
-        for item in qs:
-            code = item['questionnaire__code']
-            month_value = item['month']
-            count = item['count']
-            
-            if not month_value:
-                continue
-            
-            month_date = month_value.date() if isinstance(month_value, datetime.datetime) else month_value
-            month_label = f"{month_date.year:04d}-{month_date.month:02d}"
-            
-            if month_label in month_index and code in result:
-                result[code][month_index[month_label]]['count'] = count
-                
-        return result
 
     def _generate_query_stats(self) -> Dict[str, Any]:
         """

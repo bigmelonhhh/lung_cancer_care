@@ -2469,6 +2469,10 @@ video {
   background-color: rgb(255 255 255 / 0.95);
 }
 
+.bg-white\/50 {
+  background-color: rgb(255 255 255 / 0.5);
+}
+
 .bg-gradient-to-b {
   background-image: linear-gradient(to bottom, var(--tw-gradient-stops));
 }

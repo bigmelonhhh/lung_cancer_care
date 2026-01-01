@@ -1,4 +1,23 @@
-<div id="questionnaire-container" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4 mt-6">
+<div id="questionnaire-container" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4 mt-6 relative">
+     <style>
+        #questionnaire-loading {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+        }
+        #questionnaire-loading.htmx-request {
+            opacity: 1;
+            pointer-events: auto;
+        }
+     </style>
+     <!-- Loading Overlay -->
+     <div id="questionnaire-loading" class="htmx-indicator absolute inset-0 z-50 bg-white/50 flex items-center justify-center">
+        <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+     </div>
+
      <div class="flex items-center justify-between mb-6 relative">
         <div class="flex items-center gap-6">
             <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">随访问卷</h3>
@@ -8,7 +27,7 @@
             </a>
         </div>
         <!-- 筛选表单区域 -->
-        <form id="indicators-filter-form" 
+        <form id="questionnaire-filter-form" 
               class="flex items-center gap-4 text-sm relative" 
               onsubmit="return false;"
               x-data="{ 
@@ -19,8 +38,8 @@
                       const start = option.getAttribute('data-start') || '';
                       const end = option.getAttribute('data-end') || '';
                       
-                      const startInput = document.getElementById('start_date');
-                      const endInput = document.getElementById('end_date');
+                      const startInput = document.getElementById('questionnaire_start_date');
+                      const endInput = document.getElementById('questionnaire_end_date');
                       
                       if (startInput) startInput.value = start;
                       if (endInput) endInput.value = end;
@@ -59,9 +78,9 @@
             <!-- 按日期查看 -->
             <div class="flex items-center gap-2" x-show="filterType === 'date'" x-cloak>
                 <div class="flex items-center border border-slate-300 rounded px-2 py-1 bg-white">
-                                        <input placeholder="开始日期" type="date" name="start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
+                                        <input placeholder="开始日期" type="date" name="start_date" id="questionnaire_start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
                     <span class="text-slate-400 mx-1">-</span>
-                                        <input placeholder="结束日期" type="date" name="end_date" value="{{ current_end_date }}" class="focus:outline-none text-slate-700 date-input">
+                                        <input placeholder="结束日期" type="date" name="end_date" id="questionnaire_end_date" value="{{ current_end_date }}" class="focus:outline-none text-slate-700 date-input">
 
                 </div>
             </div>
@@ -70,16 +89,22 @@
             <div class="flex items-center gap-2" x-show="filterType !== ''" x-cloak>
                 <button 
                     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#indicators-wrapper"
+                    hx-target="#questionnaire-container"
+                    hx-select="#questionnaire-container"
                     hx-swap="outerHTML"
+                    hx-indicator="#questionnaire-loading"
                     hx-include="#questionnaire-filter-form"
+                    hx-on:htmx:response-error="alert('数据加载失败，请稍后重试。')"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     搜索
                 </button>
                 <button 
                     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#indicators-wrapper"
+                    hx-target="#questionnaire-container"
+                    hx-select="#questionnaire-container"
                     hx-swap="outerHTML"
+                    hx-indicator="#questionnaire-loading"
+                    hx-on:htmx:response-error="alert('数据加载失败，请稍后重试。')"
                     @click="filterType = ''"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-gray-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     重置

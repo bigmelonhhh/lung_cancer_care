@@ -2,11 +2,12 @@ import logging
 from datetime import date, timedelta, datetime
 from django.utils import timezone
 from django.core.cache import cache
-from core.models import TreatmentCycle, choices
+from core.models import TreatmentCycle, choices, QuestionnaireCode
 from core.service.treatment_cycle import get_treatment_cycles
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
+from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from users.models import PatientProfile
 
 logger = logging.getLogger(__name__)
@@ -288,62 +289,65 @@ def build_indicators_context(
     
     
     # ==========================================
-    # 4. 随访问卷指标处理 (Questionnaire Indicators - Mock Data)
-    # ==========================================    
-    # TODO 随访问卷-体能评估、呼吸评估、咳嗽与痰色、食欲评估、身体疼痛评估、睡眠质量评估、抑郁评估、焦虑评估，
-    # TODO 1、筛选条件-按疗程选择或者按自定义日期选择，点击搜索按钮-根据日期进行筛选查询数据
-    # TODO 2、咳嗽与痰色量表有个特殊情况，需要单独获取咳嗽与痰色随访问卷模块里的-咯血数据，问题：咳嗽或痰中是否带血？
-    # TODO 3、去判断根据当前筛选条件日期，去查询这个数据，返回用户填写的这个问题选择的数据评分-前端去动态判断回显内容
-    import random
+    # 4. 随访问卷指标处理 (Questionnaire Indicators - Real Data)
+    # ==========================================
     
-    # 4.1 体能 (Q_PHYSICAL)
-    # 模拟数据：0-4分
-    phys_score_data = [random.randint(0, 4) for _ in date_strs]
-    
-    charts['physical'] = {
-        "id": "chart-physical",
-        "title": "体能评估",
-        "dates": date_strs,
-        "series": [
-            {"name": "体能评分", "data": phys_score_data, "color": "#3b82f6"}, # Blue
-        ],
-        "y_min": 0,
-        "y_max": 5
-    }
+    def fetch_chart_data(code, title, y_max, series_name, color="#3b82f6"):
+        try:
+            results = QuestionnaireSubmissionService.list_daily_questionnaire_scores(
+                patient=patient,
+                start_date=start_date,
+                end_date=end_date,
+                questionnaire_code=code,
+            )
+            print(f"{results}")
+            # Map results to date_strs
+            score_map = {res['date'].strftime(date_fmt): res['score'] for res in results}
+            data = [float(score_map.get(d, 0)) for d in date_strs]
+        except Exception as e:
+            logger.error(f"Failed to fetch questionnaire scores for {code}: {e}")
+            data = [0] * len(date_strs)
 
-    # 4.2 呼吸 (Q_BREATH - Mock, 假设与体能分开)
-    breath_score_data = [random.randint(0, 4) for _ in date_strs]
-    charts['breath'] = {
-        "id": "chart-breath",
-        "title": "呼吸评估",
-        "dates": date_strs,
-        "series": [
-            {"name": "呼吸评分", "data": breath_score_data, "color": "#3b82f6"} # Teal
-        ],
-        "y_min": 0,
-        "y_max": 5
-    }
-
-    # 4.2 咳嗽与痰色 (Q_COUGH)
-    # 模拟数据：0-10分
-    cough_score_data = [random.randint(0, 10) for _ in date_strs]
-    
-    # 模拟表格数据
-    sputum_colors = ["无痰", "黄色", "脓色", "红色", "白色"]
-    blood_status = ["是", "无"]
-    
-    sputum_table_row = [random.choice(sputum_colors) for _ in date_strs]
-    blood_table_row = [random.choice(blood_status) for _ in date_strs]
+        # Generate a unique ID based on code, handle special cases if needed (e.g. psych/depressive)
+        chart_id_suffix = code.lower().replace("q_", "")
+        if code == QuestionnaireCode.Q_DEPRESSIVE:
+             chart_id_suffix = "psych" # maintain compatibility with template ID if needed, or just use 'psych' key
         
-    charts['cough'] = {
-        "id": "chart-cough",
-        "title": "",
-        "dates": date_strs,
-        "series": [{"name": "咳嗽评分", "data": cough_score_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 12
-    }
+        return {
+            "id": f"chart-{chart_id_suffix}", 
+            "title": title,
+            "dates": date_strs,
+            "series": [{"name": series_name, "data": data, "color": color}],
+            "y_min": 0,
+            "y_max": y_max
+        }
+
+    # 4.1 体能 (Q_PHYSICAL)
+    charts['physical'] = fetch_chart_data(QuestionnaireCode.Q_PHYSICAL, "体能评估", 5, "体能评分")
+
+    # 4.2 呼吸 (Q_BREATH)
+    charts['breath'] = fetch_chart_data(QuestionnaireCode.Q_BREATH, "呼吸评估", 5, "呼吸评分")
+
+    # 4.3 咳嗽与痰色 (Q_COUGH)
+    charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 12, "咳嗽评分")
     
+    # 4.3.1 咯血表格
+    blood_table_row = []
+    # try:
+    #     cough_answers = QuestionnaireSubmissionService.list_daily_question_answers(
+    #         patient=patient,
+    #         start_date=start_date,
+    #         end_date=end_date,
+    #         questionnaire_code=QuestionnaireCode.Q_COUGH,
+    #         question_id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID
+    #     )
+    #     ans_map = {res['date'].strftime(date_fmt): res['value'] for res in cough_answers}
+    #     # If no data, show "-"
+    #     blood_table_row = [ans_map.get(d, "") or "-" for d in date_strs]
+    # except Exception as e:
+    #     logger.error(f"Failed to fetch cough answers: {e}")
+    #     blood_table_row = ["-"] * len(date_strs)
+
     cough_table = {
         "dates": date_strs,
         "rows": [
@@ -351,68 +355,23 @@ def build_indicators_context(
         ]
     }
 
-    # 4.3 食欲评估 (Q_APPETITE)
-    # 模拟数据：0-10分
-    app_data = [random.randint(0, 10) for _ in date_strs]
-        
-    charts['appetite'] = {
-        "id": "chart-appetite",
-        "title": "食欲评估",
-        "dates": date_strs,
-        "series": [{"name": "食欲评分", "data": app_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 12
-    }
+    # 4.4 食欲评估 (Q_APPETITE)
+    charts['appetite'] = fetch_chart_data(QuestionnaireCode.Q_APPETITE, "食欲评估", 12, "食欲评分")
 
-    # 4.4 疼痛量表 (Q_PAIN)
-    # 模拟数据：0-10分
-    pain_data = [random.randint(0, 10) for _ in date_strs]
-        
-    charts['pain'] = {
-        "id": "chart-pain",
-        "title": "身体疼痛评估",
-        "dates": date_strs,
-        "series": [{"name": "身体疼痛评分", "data": pain_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 10
-    }
-    
-    # 4.5 睡眠质量 (Q_SLEEP)
-    # 模拟数据：0-5分
-    sleep_data = [random.randint(0, 5) for _ in date_strs]
+    # 4.5 疼痛量表 (Q_PAIN)
+    charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 10, "身体疼痛评分")
 
-    charts['sleep'] = {
-        "id": "chart-sleep",
-        "title": "睡眠质量评估",
-        "dates": date_strs,
-        "series": [{"name": "睡眠质量评分", "data": sleep_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 6
-    }
-    
-    # 4.6 心理痛苦分级 (Q_PSYCH)
-    # 模拟数据：0-10分
-    anxiety_data = [random.randint(0, 10) for _ in date_strs]
+    # 4.6 睡眠质量 (Q_SLEEP)
+    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 6, "睡眠质量评分")
 
-    charts['psych'] = {
-        "id": "chart-psych",
-        "title": "抑郁评估",
-        "dates": date_strs,
-        "series": [{"name": "抑郁评分", "data": anxiety_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 10
-    }
-     # 4.7 焦虑评估 (Q_PSYCH)
-    psych_data = [random.randint(0, 10) for _ in date_strs]
+    # 4.7 抑郁评估 (Q_DEPRESSIVE) -> Mapped to 'psych' key
+    charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 10, "抑郁评分")
+    # Override id to match template expectation if necessary (template uses chart-psych?)
+    charts['psych']['id'] = "chart-psych"
 
-    charts['anxiety'] = {
-        "id": "chart-anxiety",
-        "title": "焦虑评估",
-        "dates": date_strs,
-        "series": [{"name": "焦虑评分", "data": psych_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 10
-    }
+    # 4.8 焦虑评估 (Q_ANXIETY)
+    charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 10, "焦虑评分")
+
     return {
         "medication_data": medication_data,
         "medication_stats": {
@@ -420,7 +379,7 @@ def build_indicators_context(
             "compliance": compliance
         },
         "charts": charts,
-        "cough_table": cough_table, # 新增
+        "cough_table": cough_table,
         "treatment_cycles": treatment_cycles,
         "dates": date_strs,
         # 回显当前的筛选条件
