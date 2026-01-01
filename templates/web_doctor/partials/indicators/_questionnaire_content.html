@@ -1,0 +1,172 @@
+            <!-- Tab 导航栏 -->
+            {% if questionnaires %}
+            <div class="bg-white border-b border-slate-200 px-6 pt-4 sticky top-0 z-10 shrink-0">
+                <nav class="flex gap-8 overflow-x-auto no-scrollbar scroll-smooth" id="questionnaire-tabs">
+                    {% for data_obj in questionnaires %}
+                    <button 
+                        class="tab-btn whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors
+                               {% if forloop.first %}border-indigo-500 text-indigo-600{% else %}border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300{% endif %}"
+                        data-target="questionnaire-module-{{ data_obj.questionnaire_id }}"
+                        onclick="scrollToModule('questionnaire-module-{{ data_obj.questionnaire_id }}')">
+                        {{ data_obj.questionnaire_name }}
+                    </button>
+                    {% endfor %}
+                </nav>
+            </div>
+            {% endif %}
+
+            <!-- 列表内容 -->
+            <div class="flex-1 overflow-y-auto p-6 bg-gray-50 scroll-smooth" id="modules-container">
+                <div class="mx-auto space-y-6 max-w-5xl">
+                    {% if questionnaires %}
+                        {% for data_obj in questionnaires %}
+                        <div id="questionnaire-module-{{ data_obj.questionnaire_id }}" class="questionnaire-module bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-24">
+                            <!-- 模块头部 -->
+                            <div class="p-6 border-b border-slate-100">
+                                <h2 class="text-lg font-bold text-slate-800 mb-4">{{ data_obj.questionnaire_name }}</h2>
+                                <div class="flex items-baseline gap-4 mb-4">
+                                    <div class="text-sm text-slate-500">当前评分:</div>
+                                    <div class="text-2xl font-bold text-indigo-600">{{ data_obj.current_score|floatformat:"-2" }}分</div>
+                                    <div class="flex items-center text-sm font-semibold
+                                        {% if data_obj.change_type == 'down' %}text-emerald-600
+                                        {% elif data_obj.change_type == 'up' %}text-rose-600
+                                        {% else %}text-slate-500{% endif %}">
+                                        {{ data_obj.change_text }}
+                                         {% if data_obj.change_type == 'up' %}<svg t="1767246932779" class="icon w-8 h-8" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6090" width="48" height="48"><path d="M703.28 365.512c-4.33 10.697-13.92 17.04-25.236 17.04h-133.81V835.11c0 17.838-14.399 32.297-32.232 32.297-17.838 0-32.236-14.459-32.236-32.297V382.552H345.559c-11.314 0-20.906-6.343-25.234-17.04-4.331-10.7-2.082-22.149 5.92-30.335l166.242-170.104c5.333-5.46 11.773-8.172 19.316-8.172 7.543 0 13.982 2.743 19.316 8.202l166.242 170.069c7.998 8.186 10.25 19.641 5.92 30.34z" fill="#D81E06" p-id="6091"></path></svg>
+                                          {% elif data_obj.change_type == 'down' %}<svg t="1767246961143" class="icon w-8 h-8" viewBox="0 0 1280 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="8961" width="48" height="48"><path d="M25.6 0h1024v1024H25.6z" fill-opacity="0" p-id="8962" fill="#059669"></path><path d="M716.8 660.48c-5.12-10.24-15.36-15.36-25.6-15.36H558.08V194.56c0-15.36-15.36-30.72-30.72-30.72s-30.72 15.36-30.72 30.72v450.56H363.52c-10.24 0-20.48 5.12-25.6 15.36-5.12 10.24 0 20.48 5.12 30.72l163.84 168.96c5.12 5.12 10.24 10.24 20.48 10.24 5.12 0 15.36-5.12 20.48-10.24l163.84-168.96c10.24-5.12 10.24-20.48 5.12-30.72z" fill="#059669" p-id="8963"></path></svg>
+                                       {% else %}{% endif %}
+                                    </div>
+                                </div>
+                                {% if data_obj.ai_summary %}
+                                <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
+                                    <div class="flex gap-3">
+                                        <div class="shrink-0 text-amber-500"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div>
+                                        <div class="text-sm text-amber-900">{{ data_obj.ai_summary }}</div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- 题目列表 -->
+                            <div class="w-full overflow-x-auto px-6 py-4">
+                                <p class="mb-4 font-semibold">问卷题目对比详情</p>
+                                <table class="w-full text-sm text-left table-fixed border-collapse">
+                                    <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
+                                    <tr>
+                                        <th class="px-6 py-3 w-[40%]">题目</th> 
+                                        <th class="px-6 py-3 w-[25%]">本次回答 <span class="text-slate-600 font-normal">({{ selected_date|date:"Y-m-d" }})</span></th>
+                                        <th class="px-6 py-3 w-[25%]">上次回答 
+                                            <span class="text-slate-600 font-normal">
+                                                {% if data_obj.prev_date %}({{ data_obj.prev_date|date:"Y-m-d" }}){% else %}(无){% endif %}
+                                            </span>
+                                        </th>
+                                        <th class="px-6 py-3 w-[10%] text-center">变化</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                    {% for q in data_obj.questions %}
+                                    <tr class="hover:bg-slate-50 transition-colors">
+                                        <td class="px-6 py-4 font-medium text-slate-800 align-top break-words whitespace-normal">
+                                        {{ q.text }}
+                                        </td>
+                                        <td class="px-6 py-4 text-slate-600 align-top break-words whitespace-normal">
+                                        {{ q.current_answer }}
+                                        </td>
+                                        <td class="px-6 py-4 text-slate-600 align-top break-words whitespace-normal">
+                                        {{ q.prev_answer|default:"-" }}
+                                        </td>
+                                        <td class="px-6 py-4 text-center font-semibold align-top
+                                        {% if q.change_type == 'up' %}text-emerald-600
+                                        {% elif q.change_type == 'down' %}text-rose-600
+                                        {% else %}text-slate-600{% endif %}">
+                                        {{ q.change }}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                         <div class="flex flex-col items-center justify-center h-64 text-slate-600 bg-white rounded-xl border border-slate-200">
+                            <svg t="1767249664842" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="20970" width="128" height="128"><path d="M76.288 484.864m-20.992 0a20.992 20.992 0 1 0 41.984 0 20.992 20.992 0 1 0-41.984 0Z" fill="#FF2C72" p-id="20971"></path><path d="M892.416 737.792m-20.992 0a20.992 20.992 0 1 0 41.984 0 20.992 20.992 0 1 0-41.984 0Z" fill="#FFCE1E" p-id="20972"></path><path d="M940.544 508.928m-28.672 0a28.672 28.672 0 1 0 57.344 0 28.672 28.672 0 1 0-57.344 0Z" fill="#1677FF" p-id="20973"></path><path d="M241.664 288.256l-90.112 293.376h162.304zM764.416 288.768l90.112 292.864h-162.304z" fill="#DBE0EA" p-id="20974"></path><path d="M241.664 288.256h522.752l-72.192 293.376H313.856z" fill="#F0F3F7" p-id="20975"></path><path d="M295.97696 203.50464l394.98752 15.28832L670.72 741.69344l-394.98752-15.28832z" fill="#CDD6E1" p-id="20976"></path><path d="M670.72 743.936l-395.264-15.36c-1.024 0-2.048-1.024-2.048-2.56l20.48-522.752c0-1.024 1.024-2.048 2.56-2.048l395.264 15.36c1.024 0 2.048 1.024 2.048 2.56l-20.48 522.752c0 0.512-0.512 1.024-0.512 1.536-1.024 0-1.536 0.512-2.048 0.512z m-392.704-19.968l390.656 15.36 19.968-518.144-390.656-15.36-19.968 518.144z" fill="#1161C9" p-id="20977"></path><path d="M413.32736 113.93536l382.65344 99.01056-131.07712 506.5728-382.65344-99.01056z" fill="#E8F0F9" p-id="20978"></path><path d="M665.088 721.408h-0.512L281.6 622.592c-1.024-0.512-2.048-1.536-1.536-2.56l131.072-506.368c0-0.512 0.512-1.024 1.024-1.536 0.512-0.512 1.024-0.512 1.536 0l382.976 98.816c1.024 0.512 2.048 1.536 1.536 2.56l-131.072 506.368c0 0.512-0.512 1.024-1.024 1.536h-1.024z m-379.904-102.912l378.368 97.792 130.048-501.76-378.88-97.792-129.536 501.76z" fill="#1161C9" p-id="20979"></path><path d="M351.32928 136.86784l391.94112 51.03104-67.55328 518.86592-391.94112-51.02592z" fill="#0083FC" p-id="20980"></path><path d="M753.152 886.784H253.44l-101.888-305.152h702.976z" fill="#F3F3F3" p-id="20981"></path><path d="M753.152 581.632l101.888 305.152H253.44l-101.888-305.152h601.6z" fill="#E8F0F9" p-id="20982"></path><path d="M718.336 852.992l-41.984-125.952-47.616-142.848H395.264l-47.616 142.848-41.984 125.952h412.672z" fill="#CDD6E1" p-id="20983"></path><path d="M628.736 584.192l47.616 142.848H347.648l47.616-142.848h233.472z" fill="#E8F0F9" p-id="20984"></path><path d="M473.088 852.992l-77.824-233.472h-47.616l77.824 233.472h47.616zM676.352 852.992l-77.824-233.472h-47.616l77.824 233.472h47.616z" fill="#F3F3F3" p-id="20985"></path></svg>
+                            <p>暂无问卷数据</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+<script>
+    function scrollToModule(moduleId) {
+        const element = document.getElementById(moduleId);
+        if (element) {
+            // 平滑滚动到元素
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    (function() {
+        const tabsContainer = document.getElementById('questionnaire-tabs');
+        const modulesContainer = document.getElementById('modules-container');
+        const tabs = document.querySelectorAll('.tab-btn');
+        const modules = document.querySelectorAll('.questionnaire-module');
+
+        if (!tabsContainer || !modulesContainer || tabs.length === 0 || modules.length === 0) {
+            return;
+        }
+
+        // 样式常量
+        const activeClasses = ['border-indigo-500', 'text-indigo-600'];
+        const inactiveClasses = ['border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300'];
+
+        // 更新 Tab 样式的函数
+        function updateActiveTab(targetId) {
+            tabs.forEach(tab => {
+                if (tab.dataset.target === targetId) {
+                    tab.classList.add(...activeClasses);
+                    tab.classList.remove(...inactiveClasses);
+                    
+                    // 确保 Tab 在可视区域内
+                    const tabRect = tab.getBoundingClientRect();
+                    const containerRect = tabsContainer.getBoundingClientRect();
+                    
+                    if (tabRect.left < containerRect.left || tabRect.right > containerRect.right) {
+                        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+                    }
+                } else {
+                    tab.classList.remove(...activeClasses);
+                    tab.classList.add(...inactiveClasses);
+                }
+            });
+        }
+
+        // 使用 IntersectionObserver 监听滚动
+        const observerOptions = {
+            root: modulesContainer, // 监听在容器内的滚动
+            threshold: 0.5, // 50% 可见时触发
+            rootMargin: "-10% 0px -40% 0px" // 调整触发区域，偏向上部
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    updateActiveTab(entry.target.id);
+                }
+            });
+        }, observerOptions);
+
+        modules.forEach(module => {
+            observer.observe(module);
+        });
+        
+        // 处理手动点击时的状态更新（为了更即时的反馈）
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                // 暂时断开 Observer 以避免滚动过程中的闪烁？
+                // 这里选择简单处理，IntersectionObserver 最终会校正状态
+                updateActiveTab(tab.dataset.target);
+            });
+        });
+    })();
+</script>

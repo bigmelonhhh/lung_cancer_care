@@ -7,7 +7,7 @@
         <div class="flex items-center gap-3">
             <h1 class="text-xl font-bold text-slate-800">随访问卷详情</h1>
             <div class="h-6 w-px bg-slate-200"></div>
-            <span class="text-slate-500 text-sm">{{ patient.name }} ({{ patient.gender_display }}, {{ patient.age }}岁)</span>
+            <span class="text-slate-500 text-sm">{{ patient.name }} ({{ patient.age }}岁)</span>
         </div>
          <div onclick="history.back()"   class="cursor-pointer flex items-center text-indigo-600 hover:text-indigo-800 text-sm font-medium transition-colors">
             <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -19,163 +19,13 @@
     <!-- 主体内容 -->
     <div class="flex flex-1 overflow-hidden">
         <!-- 左侧历史记录 -->
-        <div class="w-64 h-full bg-white border-r border-slate-200 flex flex-col shrink-0">
-            <div class="p-4 border-b border-slate-100 bg-slate-50">
-                <h2 class="font-bold text-slate-700">历史记录</h2>
-            </div>
-            <div class="flex-1 overflow-y-auto">
-                {% for cycle in history %}
-                <div class="border-b border-slate-100">
-                    <div class="px-4 py-2 bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider sticky top-0">
-                        {{ cycle.name }}
-                    </div>
-                    <ul>
-                        {% for d in cycle.dates %}
-                        <li>
-                            <a href="?date={{ d|date:'Y-m-d' }}" 
-                               class="block px-6 py-3 text-sm border-l-4 transition-colors hover:bg-slate-50
-                                      {% if d == selected_date %}
-                                        border-indigo-500 bg-indigo-50 text-indigo-700 font-medium
-                                      {% else %}
-                                        border-transparent text-slate-600
-                                      {% endif %}">
-                                {{ d|date:"Y-m-d" }}
-                            </a>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-                {% endfor %}
-            </div>
+        <div id="sidebar-container" class="w-64 h-full bg-white border-r border-slate-200 flex flex-col shrink-0">
+            {% include "web_doctor/partials/indicators/_questionnaire_sidebar.html" %}
         </div>
 
         <!-- 右侧详情内容 -->
-        <div class="flex-1 flex flex-col overflow-hidden" x-data="{ activeTab: 'physical' }">
-            <!-- Tab 切换 -->
-            <div class="bg-white border-b border-slate-200 px-6 pt-4 shrink-0">
-                <nav class="flex gap-8" aria-label="Tabs">
-                    <button @click="activeTab = 'physical'" 
-                            :class="activeTab === 'physical' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-                            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
-                        体能与呼吸困难
-                    </button>
-                    <button @click="activeTab = 'cough'" 
-                            :class="activeTab === 'cough' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-                            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
-                        咳嗽与痰色
-                    </button>
-                    <button @click="activeTab = 'appetite'" 
-                            :class="activeTab === 'appetite' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-                            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
-                        食欲评估
-                    </button>
-                    <button @click="activeTab = 'pain'" 
-                            :class="activeTab === 'pain' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-                            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
-                        疼痛评分
-                    </button>
-                    <button @click="activeTab = 'sleep'" 
-                            :class="activeTab === 'sleep' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-                            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
-                        睡眠质量
-                    </button>
-                    <button @click="activeTab = 'psych'" 
-                            :class="activeTab === 'psych' ? 'border-indigo-500 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'"
-                            class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors">
-                        心理情绪
-                    </button>
-                </nav>
-            </div>
-
-            <!-- Tab 内容 -->
-            <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
-                <div class="mx-auto space-y-6">
-                    
-                    <!-- 动态表格展示 -->
-                    <!-- 定义 Tab 对应的 Key 映射，以便 JS 获取数据 (Alpine.js 逻辑) -->
-                    <!-- 由于数据是后端传来的，我们可以在 Alpine 中存储数据，或者利用 Django 渲染出所有数据结构，用 x-show 控制 -->
-                    
-                    <!-- 方案：遍历所有模块，使用 x-show="activeTab === 'key'" -->
-                    {% for key, data_obj in data.items %}
-                    <div x-show="activeTab === '{{ key }}'" x-cloak class="space-y-6">
-                        {% if data_obj %}
-                            <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm">
-                                <h2 class="text-lg font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">
-                                    {% if key == 'physical' %}体能与呼吸困难问卷
-                                    {% elif key == 'cough' %}咳嗽与痰色评估
-                                    {% elif key == 'appetite' %}食欲评估
-                                    {% elif key == 'pain' %}疼痛评分
-                                    {% elif key == 'sleep' %}睡眠质量
-                                    {% elif key == 'psych' %}心理情绪
-                                    {% endif %}
-                                </h2>
-                                <div class="flex items-baseline gap-4 mb-4">
-                                    <div class="text-sm text-slate-500">当前评分:</div>
-                                    <div class="text-2xl font-bold text-indigo-600">{{ data_obj.current_score }}分</div>
-                                    <div class="flex items-center text-sm font-medium
-                                        {% if data_obj.change_type == 'good' %}text-emerald-600
-                                        {% elif data_obj.change_type == 'bad' %}text-rose-600
-                                        {% else %}text-slate-500{% endif %}">
-                                        {{ data_obj.change_text }}
-                                    </div>
-                                </div>
-                                <div class="bg-amber-50 border-l-4 border-amber-400 p-4 rounded-r-lg">
-                                    <div class="flex gap-3">
-                                        <div class="shrink-0 text-amber-500"><svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg></div>
-                                        <div class="text-sm text-amber-900">{{ data_obj.ai_summary }}</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- 统一的表格布局 -->
-                            <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-                                <div class="w-full overflow-x-auto">
-                                <table class="w-full text-sm text-left table-fixed border-collapse">
-                                    <thead class="bg-slate-50 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
-                                    <tr>
-                                        <th class="px-6 py-3  max-w-[300px]">题目</th> 
-                                        <th class="px-6 py-3  max-w-[250px]">本次回答 <span class="text-slate-400 font-normal">({{ selected_date|date:"Y-m-d" }})</span></th> <!-- 锁定250px -->
-                                        <th class="px-6 py-3  max-w-[250px]">上次回答 <span class="text-slate-400 font-normal">({{ data_obj.prev_date|date:"Y-m-d" }})</span></th> <!-- 锁定250px -->
-                                        <th class="px-6 py-3  max-w-[150px] text-center">变化</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                    {% for q in data_obj.questions %}
-                                    <tr class="hover:bg-slate-50 transition-colors">
-                                        <td class="px-6 py-4 font-medium text-slate-800 align-top w-[300px] min-w-[300px] max-w-[300px] break-words whitespace-normal">
-                                        {{ q.text }}
-                                        </td>
-                                        <td class="px-6 py-4 text-slate-600 align-top w-[250px] min-w-[250px] max-w-[250px] break-words whitespace-normal">
-                                        {{ q.current_answer }}
-                                        </td>
-                                        <td class="px-6 py-4 text-slate-400 align-top w-[250px] min-w-[250px] max-w-[250px] break-words whitespace-normal">
-                                        {{ q.prev_answer }}
-                                        </td>
-                                        <td class="px-6 py-4 text-center font-medium align-top w-[150px] min-w-[150px] max-w-[150px]
-                                        {% if q.change_type == 'good' %}text-emerald-600
-                                        {% elif q.change_type == 'bad' %}text-rose-600
-                                        {% else %}text-slate-400{% endif %}">
-                                        {{ q.change }}
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                    </tbody>
-                                </table>
-                                </div>
-                            </div>
-                        {% else %}
-                             <div class="flex flex-col items-center justify-center h-64 text-slate-400 bg-white rounded-xl border border-slate-200">
-                                <svg class="w-12 h-12 mb-3 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                                <p>该日期暂无此模块问卷调查数据</p>
-                            </div>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                    
-                </div>
-            </div>
+        <div id="detail-container" class="flex-1 flex flex-col overflow-hidden">
+            {% include "web_doctor/partials/indicators/_questionnaire_content.html" %}
         </div>
     </div>
 </div>

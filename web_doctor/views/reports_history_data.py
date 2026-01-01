@@ -21,6 +21,9 @@ REPORT_IMAGE_CATEGORIES = [
 # 全局变量存储模拟数据，实现内存级持久化
 MOCK_REPORTS_DATA: List[Dict[str, Any]] = []
 
+# TODO 1、待联调检查报告列表接口
+# TODO 2、获取图片分类接口
+# TODO 3、编辑接口-可以修改图片分类、报告解读内容
 def _init_mock_data():
     """初始化模拟数据"""
     global MOCK_REPORTS_DATA

@@ -792,6 +792,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             "cycle": cycle,
             "questionnaire": target_q,
             "current_day": current_day,
+            "is_cycle_editable": cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS,
         }
         return render(
             request,
