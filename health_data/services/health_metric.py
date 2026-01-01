@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Optional
 
 from django.apps import apps
 from django.utils import timezone
+from django.db.models import Count
+from django.db.models.functions import TruncMonth
 from django.core.paginator import Paginator, Page
 
 from business_support.models import Device
@@ -628,6 +630,119 @@ class HealthMetricService:
             )
             .count()
         )
+
+    @classmethod
+    def count_metric_uploads_by_month(
+        cls,
+        patient: "PatientProfile",
+        metric_types: list[MetricType],
+        start_date: date,
+        end_date: date,
+    ) -> dict[str, list[dict[str, int]]]:
+        """
+        统计指定指标在日期范围内按自然月拆分的上传次数。
+
+        【功能说明】
+        - 按自然月统计每个指标的上传记录条数；
+        - 日期范围为闭区间 [start_date, end_date]；
+        - 输出包含范围内所有月份，缺失月份补 0；
+        - 不支持 MONITORING_ADHERENCE_ALL（需业务端自行拆分为具体指标）。
+
+        【使用方法】
+        - count_metric_uploads_by_month(patient, [MetricType.BLOOD_PRESSURE], start_date, end_date)
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - metric_types: List[MetricType]，指标类型常量列表。
+        - start_date: date，开始日期（含）。
+        - end_date: date，结束日期（含）。
+
+        【返回值说明】
+        - Dict[str, List[dict]]，结构示例：
+          {
+            "M_BP": [{"month": "2025-01", "count": 3}, ...],
+            "M_SPO2": [{"month": "2025-01", "count": 1}, ...],
+          }
+
+        【异常说明】
+        - start_date > end_date：抛出 ValueError。
+        - metric_types 为空或包含不支持类型：抛出 ValueError。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValueError("patient 不能为空")
+        if start_date > end_date:
+            raise ValueError("start_date 不能晚于 end_date")
+        if not metric_types:
+            raise ValueError("metric_types 不能为空")
+
+        normalized_types: list[str] = []
+        seen = set()
+        for metric_type in metric_types:
+            if metric_type == task_service.MONITORING_ADHERENCE_ALL:
+                raise ValueError("metric_types 不支持 MONITORING_ADHERENCE_ALL")
+            if metric_type not in MetricType.values:
+                raise ValueError("不支持的指标类型")
+            if metric_type not in seen:
+                normalized_types.append(metric_type)
+                seen.add(metric_type)
+
+        month_labels: list[str] = []
+        current_month = date(start_date.year, start_date.month, 1)
+        end_month = date(end_date.year, end_date.month, 1)
+        while current_month <= end_month:
+            month_labels.append(f"{current_month.year:04d}-{current_month.month:02d}")
+            if current_month.month == 12:
+                current_month = date(current_month.year + 1, 1, 1)
+            else:
+                current_month = date(current_month.year, current_month.month + 1, 1)
+
+        result = {
+            metric_type: [{"month": label, "count": 0} for label in month_labels]
+            for metric_type in normalized_types
+        }
+        month_index = {label: idx for idx, label in enumerate(month_labels)}
+
+        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
+        end_dt = datetime.datetime.combine(
+            end_date + datetime.timedelta(days=1),
+            datetime.datetime.min.time(),
+        )
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+
+        monthly_counts = (
+            HealthMetric.objects.filter(
+                patient_id=patient.id,
+                metric_type__in=normalized_types,
+                measured_at__gte=start_dt,
+                measured_at__lt=end_dt,
+            )
+            .annotate(
+                month=TruncMonth(
+                    "measured_at", tzinfo=timezone.get_current_timezone()
+                )
+            )
+            .values("metric_type", "month")
+            .annotate(count=Count("id"))
+        )
+
+        for item in monthly_counts:
+            month_value = item["month"]
+            if not month_value:
+                continue
+            month_date = (
+                month_value.date()
+                if isinstance(month_value, datetime.datetime)
+                else month_value
+            )
+            month_label = f"{month_date.year:04d}-{month_date.month:02d}"
+            if month_label not in month_index:
+                continue
+            metric_type = item["metric_type"]
+            result[metric_type][month_index[month_label]]["count"] = item["count"]
+
+        return result
 
     # ============
     # 客观指标数据手动录入接口

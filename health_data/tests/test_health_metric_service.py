@@ -432,3 +432,69 @@ class HealthMetricServiceTest(TestCase):
         )
 
         self.assertEqual(count, 2)
+
+    def test_count_metric_uploads_by_month_fills_missing_months(self):
+        """
+        按自然月统计上传次数，并补全缺失月份为 0。
+        """
+        patient = PatientProfile.objects.create(phone="13800138002")
+        tz = timezone.get_current_timezone()
+
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 15, 9, 0), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 20, 10, 0), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.HEART_RATE,
+            measured_at=timezone.make_aware(datetime(2025, 2, 2, 11, 0), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 3, 1, 8, 0), tz),
+        )
+
+        result = HealthMetricService.count_metric_uploads_by_month(
+            patient=patient,
+            metric_types=[MetricType.BLOOD_PRESSURE, MetricType.HEART_RATE],
+            start_date=date(2025, 1, 10),
+            end_date=date(2025, 3, 5),
+        )
+
+        self.assertEqual(
+            result[MetricType.BLOOD_PRESSURE],
+            [
+                {"month": "2025-01", "count": 2},
+                {"month": "2025-02", "count": 0},
+                {"month": "2025-03", "count": 1},
+            ],
+        )
+        self.assertEqual(
+            result[MetricType.HEART_RATE],
+            [
+                {"month": "2025-01", "count": 0},
+                {"month": "2025-02", "count": 1},
+                {"month": "2025-03", "count": 0},
+            ],
+        )
+
+    def test_count_metric_uploads_by_month_rejects_monitoring_all(self):
+        """
+        不支持 MONITORING_ADHERENCE_ALL。
+        """
+        patient = PatientProfile.objects.create(phone="13800138003")
+
+        with self.assertRaises(ValueError):
+            HealthMetricService.count_metric_uploads_by_month(
+                patient=patient,
+                metric_types=[task_service.MONITORING_ADHERENCE_ALL],
+                start_date=date(2025, 1, 1),
+                end_date=date(2025, 1, 31),
+            )
