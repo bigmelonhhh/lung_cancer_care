@@ -22,6 +22,42 @@ if TYPE_CHECKING:
 
 class QuestionnaireSubmissionService:
     """处理问卷提交、算分及指标落库。"""
+    COUGH_BLOOD_QUESTION_ID = 40
+    SLEEP_T_SCORE_MAP = {
+        8: Decimal("30.5"),
+        9: Decimal("35.3"),
+        10: Decimal("38.1"),
+        11: Decimal("40.4"),
+        12: Decimal("42.2"),
+        13: Decimal("43.9"),
+        14: Decimal("45.3"),
+        15: Decimal("46.7"),
+        16: Decimal("47.9"),
+        17: Decimal("49.1"),
+        18: Decimal("50.2"),
+        19: Decimal("51.3"),
+        20: Decimal("52.4"),
+        21: Decimal("53.4"),
+        22: Decimal("54.3"),
+        23: Decimal("55.3"),
+        24: Decimal("56.2"),
+        25: Decimal("57.2"),
+        26: Decimal("58.1"),
+        27: Decimal("59.1"),
+        28: Decimal("60.0"),
+        29: Decimal("61.0"),
+        30: Decimal("62.0"),
+        31: Decimal("63.0"),
+        32: Decimal("64.0"),
+        33: Decimal("65.1"),
+        34: Decimal("66.2"),
+        35: Decimal("67.4"),
+        36: Decimal("68.7"),
+        37: Decimal("70.2"),
+        38: Decimal("72.0"),
+        39: Decimal("74.1"),
+        40: Decimal("77.5"),
+    }
 
     @classmethod
     @transaction.atomic
@@ -355,6 +391,7 @@ class QuestionnaireSubmissionService:
 
         return summaries
 
+    # 以下这个方法生命周期很短。 仅随着问卷对比功能上线而存在，后续可能会被废弃。有点类似 view.
     @classmethod
     def get_questionnaire_comparison(
         cls,
@@ -362,7 +399,7 @@ class QuestionnaireSubmissionService:
         submission_id: int,
     ) -> dict[str, Any]:
         """
-        获取单份问卷提交与上一份提交的对比详情（含题目级别）。
+        获取单份问卷提交与上一份提交的对比详情（含题目级别）。 
 
         【功能说明】
         - 基于 submission_id 获取当前问卷提交；
@@ -473,6 +510,155 @@ class QuestionnaireSubmissionService:
             "change_text": summary_change["change_text"],
             "questions": question_details,
         }
+
+    @classmethod
+    def get_submission_grade(cls, submission_id: int) -> int:
+        """
+        根据问卷类型计算当前提交的分级结果。
+
+        【功能说明】
+        - 根据问卷 code 选择不同的分级规则；
+        - 当前支持体能评估（Q_PHYSICAL）、呼吸评估（Q_BREATH）与咳嗽评估（Q_COUGH）。
+
+        【参数说明】
+        :param submission_id: 问卷提交 ID。
+
+        【返回值说明】
+        :return: int，分级数字（1-4）。
+        """
+        if not submission_id:
+            raise ValidationError("提交记录不能为空。")
+
+        try:
+            submission = QuestionnaireSubmission.objects.select_related(
+                "questionnaire"
+            ).get(id=submission_id)
+        except QuestionnaireSubmission.DoesNotExist as exc:
+            raise ValidationError("提交记录不存在。") from exc
+
+        questionnaire_code = submission.questionnaire.code
+        total_score = submission.total_score
+        if total_score is None:
+            answers = list(
+                QuestionnaireAnswer.objects.filter(
+                    submission=submission
+                ).select_related("option")
+            )
+            total_score = cls._sum_answer_score(answers)
+
+        if questionnaire_code in ("Q_PHYSICAL", "Q_BREATH"):
+            if total_score <= 1:
+                grade_level = 1
+            elif total_score == 2:
+                grade_level = 2
+            elif total_score == 3:
+                grade_level = 3
+            elif total_score == 4:
+                grade_level = 4
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
+        elif questionnaire_code == "Q_COUGH":
+            bleeding_score = Decimal("0.00")
+            bleeding_answers = QuestionnaireAnswer.objects.filter(
+                submission=submission,
+                question_id=cls.COUGH_BLOOD_QUESTION_ID,
+            ).select_related("option")
+            for answer in bleeding_answers:
+                if not answer.option:
+                    continue
+                if answer.option.score > bleeding_score:
+                    bleeding_score = answer.option.score
+
+            if bleeding_score >= Decimal("9") or total_score >= Decimal("9"):
+                grade_level = 4
+            elif total_score >= Decimal("6"):
+                grade_level = 3
+            elif total_score >= Decimal("3"):
+                grade_level = 2
+            elif total_score >= Decimal("0"):
+                grade_level = 1
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
+        elif questionnaire_code == "Q_APPETITE":
+            if total_score >= Decimal("14"):
+                grade_level = 4
+            elif total_score >= Decimal("9"):
+                grade_level = 3
+            elif total_score >= Decimal("4"):
+                grade_level = 2
+            elif total_score >= Decimal("0"):
+                grade_level = 1
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
+        elif questionnaire_code == "Q_PAIN":
+            pain_answers = QuestionnaireAnswer.objects.filter(
+                submission=submission
+            ).select_related("option")
+            pain_sites_with_max = set()
+            for answer in pain_answers:
+                if not answer.option:
+                    continue
+                if answer.option.score == Decimal("9"):
+                    pain_sites_with_max.add(answer.question_id)
+
+            max_score_sites = len(pain_sites_with_max)
+
+            if max_score_sites >= 3:
+                grade_level = 4
+            elif total_score > Decimal("20") and max_score_sites >= 1:
+                grade_level = 3
+            elif total_score > Decimal("10") and max_score_sites == 0:
+                grade_level = 2
+            elif total_score <= Decimal("4"):
+                grade_level = 1
+            elif total_score <= Decimal("8"):
+                grade_level = 2
+            elif total_score <= Decimal("20"):
+                grade_level = 3
+            elif total_score <= Decimal("36"):
+                grade_level = 4
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
+        elif questionnaire_code == "Q_SLEEP":
+            raw_score = int(total_score)
+            t_score = cls.SLEEP_T_SCORE_MAP.get(raw_score)
+            if t_score is None:
+                raise ValidationError("睡眠评估原始分数不在有效范围内。")
+
+            if t_score <= Decimal("55"):
+                grade_level = 1
+            elif t_score < Decimal("60"):
+                grade_level = 2
+            elif t_score < Decimal("70"):
+                grade_level = 3
+            else:
+                grade_level = 4
+        elif questionnaire_code == "Q_DEPRESSIVE":
+            if total_score >= Decimal("15"):
+                grade_level = 4
+            elif total_score >= Decimal("10"):
+                grade_level = 3
+            elif total_score >= Decimal("5"):
+                grade_level = 2
+            elif total_score >= Decimal("0"):
+                grade_level = 1
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
+        elif questionnaire_code == "Q_ANXIETY":
+            if total_score >= Decimal("15"):
+                grade_level = 4
+            elif total_score >= Decimal("10"):
+                grade_level = 3
+            elif total_score >= Decimal("5"):
+                grade_level = 2
+            elif total_score >= Decimal("0"):
+                grade_level = 1
+            else:
+                raise ValidationError("问卷分数不在有效范围内。")
+        else:
+            raise ValidationError("该问卷暂不支持分级。")
+
+        return grade_level
 
     @staticmethod
     def _build_date_range(start_date: date, end_date: date) -> tuple[datetime, datetime]:
