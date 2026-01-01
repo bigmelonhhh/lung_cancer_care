@@ -338,3 +338,142 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         self.assertEqual(questions[0]["current_answer"], self.q1_opt2.text)
         self.assertEqual(questions[0]["prev_answer"], self.q1_opt1.text)
         self.assertEqual(questions[0]["change_text"], "提升1分")
+
+
+class QuestionnaireSubmissionGradeTest(TestCase):
+    def setUp(self) -> None:
+        self.patient = PatientProfile.objects.create(
+            phone="13800000001",
+            name="分级测试患者",
+        )
+
+    def _get_or_create_questionnaire(self, code: str, name: str) -> Questionnaire:
+        questionnaire = Questionnaire.objects.filter(code=code).first()
+        if questionnaire:
+            return questionnaire
+        return Questionnaire.objects.create(name=name, code=code)
+
+    def _create_submission(
+        self, questionnaire: Questionnaire, total_score: str
+    ) -> QuestionnaireSubmission:
+        return QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal(total_score),
+        )
+
+    def test_grade_physical(self):
+        questionnaire = self._get_or_create_questionnaire("Q_PHYSICAL", "体能评分")
+        submission = self._create_submission(questionnaire, "1")
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            1,
+        )
+
+    def test_grade_breath(self):
+        questionnaire = self._get_or_create_questionnaire("Q_BREATH", "呼吸困难评估")
+        submission = self._create_submission(questionnaire, "3")
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            3,
+        )
+
+    def test_grade_cough_bleeding_forces_red(self):
+        questionnaire = self._get_or_create_questionnaire("Q_COUGH", "咳嗽评估")
+        question = QuestionnaireQuestion.objects.filter(
+            id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID
+        ).first()
+        if not question:
+            question = QuestionnaireQuestion.objects.create(
+                id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID,
+                questionnaire=questionnaire,
+                text="痰中带血",
+                seq=1,
+                is_required=True,
+            )
+        option = QuestionnaireOption.objects.create(
+            question=question,
+            text="高风险",
+            score=Decimal("9"),
+            seq=1,
+        )
+        submission = self._create_submission(questionnaire, "3")
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=question,
+            option=option,
+        )
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            4,
+        )
+
+    def test_grade_appetite(self):
+        questionnaire = self._get_or_create_questionnaire("Q_APPETITE", "食欲评估")
+        submission = self._create_submission(questionnaire, "9")
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            3,
+        )
+
+    def test_grade_pain_three_sites_max(self):
+        questionnaire = self._get_or_create_questionnaire("Q_PAIN", "疼痛评估")
+        submission = self._create_submission(questionnaire, "18")
+
+        questions = [
+            QuestionnaireQuestion.objects.create(
+                questionnaire=questionnaire,
+                text=f"部位{i}",
+                seq=i,
+                is_required=True,
+            )
+            for i in range(1, 4)
+        ]
+        for question in questions:
+            option = QuestionnaireOption.objects.create(
+                question=question,
+                text="重度",
+                score=Decimal("9"),
+                seq=1,
+            )
+            QuestionnaireAnswer.objects.create(
+                submission=submission,
+                question=question,
+                option=option,
+            )
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            4,
+        )
+
+    def test_grade_sleep(self):
+        questionnaire = self._get_or_create_questionnaire("Q_SLEEP", "睡眠评估")
+        submission = self._create_submission(questionnaire, "20")
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            1,
+        )
+
+    def test_grade_depressive(self):
+        questionnaire = self._get_or_create_questionnaire("Q_DEPRESSIVE", "抑郁评估")
+        submission = self._create_submission(questionnaire, "12")
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            3,
+        )
+
+    def test_grade_anxiety(self):
+        questionnaire = self._get_or_create_questionnaire("Q_ANXIETY", "焦虑评估")
+        submission = self._create_submission(questionnaire, "15")
+
+        self.assertEqual(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id),
+            4,
+        )

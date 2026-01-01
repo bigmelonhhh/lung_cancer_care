@@ -1,9 +1,10 @@
 """Order model for market application."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from django.db import models
+from django.utils import timezone
 
 from users.models.base import TimeStampedModel
 from users.models import PatientProfile
@@ -75,3 +76,17 @@ class Order(TimeStampedModel):
             self.paid_at = datetime.now()
         super().save(*args, **kwargs)
 
+    @property
+    def start_date(self):
+        """服务开始日期（支付日期，按本地时间归日）。"""
+        if not self.paid_at:
+            return None
+        return timezone.localtime(self.paid_at).date()
+
+    @property
+    def end_date(self):
+        """服务结束日期（含起始日）。"""
+        start = self.start_date
+        if not start:
+            return None
+        return start + timedelta(days=self.product.duration_days - 1)

@@ -36,3 +36,12 @@ class QuestionnaireSubmission(models.Model):
 
     def __str__(self) -> str:
         return f"{self.patient_id} - {self.questionnaire_id}"
+
+    @property
+    def grade_level(self) -> int:
+        """返回问卷分级（1-4），计算逻辑由 Service 统一维护。"""
+        from health_data.services.questionnaire_submission import (
+            QuestionnaireSubmissionService,
+        )
+
+        return QuestionnaireSubmissionService.get_submission_grade(self.id)

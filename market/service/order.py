@@ -185,3 +185,26 @@ def handle_wechat_pay_success(data: dict) -> Order:
             order.save(update_fields=["status", "paid_at", "updated_at"])
     return order
 
+
+def get_paid_orders_for_patient(patient: PatientProfile) -> list[Order]:
+    """
+    获取患者已支付的服务包订单列表。
+
+    【功能说明】
+    - 仅返回已支付（paid_at 非空）的订单；
+    - 默认按支付时间倒序排列。
+
+    【使用方法】
+    - get_paid_orders_for_patient(patient)
+
+    【参数说明】
+    - patient: PatientProfile 实例。
+
+    【返回值说明】
+    - List[Order]。
+    """
+    return list(
+        Order.objects.filter(patient=patient, paid_at__isnull=False)
+        .select_related("product")
+        .order_by("-paid_at")
+    )

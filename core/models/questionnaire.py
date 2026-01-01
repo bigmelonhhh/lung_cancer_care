@@ -13,13 +13,6 @@ class Questionnaire(models.Model):
         unique=True,
         help_text="唯一英文编码，例如 Q_PAIN、Q_SLEEP。",
     )
-    metric_type = models.CharField(
-        "关联指标类型",
-        max_length=50,
-        blank=True,
-        null=True,
-        help_text="对应 HealthMetric.MetricType，用于将问卷结果存入指标表。",
-    )
     calculation_strategy = models.CharField(
         "计分策略",
         max_length=50,
