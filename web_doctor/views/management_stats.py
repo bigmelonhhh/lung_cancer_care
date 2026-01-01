@@ -1,39 +1,24 @@
 from typing import Any, Dict, Optional, List
 from datetime import date
 import random
+from django.db.models import Count
+from django.db.models.functions import TruncMonth
+from django.utils import timezone
+import datetime
+
 from market.service.order import get_paid_orders_for_patient
+from core.service.tasks import get_adherence_metrics, MONITORING_ADHERENCE_ALL
+from health_data.services.health_metric import HealthMetricService
+from core.models.choices import PlanItemCategory
+from health_data.models import MetricType, QuestionnaireSubmission
+from django.contrib.auth.decorators import login_required
+from users.decorators import check_doctor_or_assistant
 
 class ManagementStatsView:
     def get_context_data(self, patient: Any, selected_package_id: Optional[int] = None) -> Dict[str, Any]:
         """
         获取管理统计页面的上下文数据
         """
-        # TODO 1、根据当前的服务包日期去查询管理数据概览、管理数据统计、咨询数据统计接口
-        # TODO 2、管理数据概览模块：
-        # TODO 2.1 显示药物调整次数、药物服务次数、服药已从率；指标监测项数量、指标记录次数、监测依从率
-        # TODO 2.2显示在线咨询次数、随访次数、复查次数、住院次数
-        # TODO 3、管理数据统计模块
-        # 服药统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 体温统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 呼吸困难统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 咳嗽程度统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 痰色统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数、
-        # 疼痛量统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 体重统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 血氧统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 血压统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # 心率统计次数总量、图表数据，X轴：1-12月，Y轴：每月统计次数
-        # TODO 4、咨询数据统计模块
-        # TODO 在线咨询次数总计数量
-        # TODO 4.1 按月统计咨询次数: X轴：1-12月，Y轴：每月咨询次数
-        # TODO 4.2 按时间段分布：
-        # TODO 按00:00-07:00的咨询次数
-        # TODO 按07:00-10:00的咨询次数
-        # TODO 按10:00-13:00的咨询次数
-        # TODO 按13:00-18:00的咨询次数
-        # TODO 按18:00-21:00的咨询次数
-        # TODO 按21:00-24:00的咨询次数
-        
         # 获取真实服务包数据（已支付订单）
         orders = get_paid_orders_for_patient(patient)
         service_packages = []
@@ -46,33 +31,78 @@ class ManagementStatsView:
                 "is_active": False,
             })
 
-        # 设置选中状态
-        if selected_package_id:
-            for pkg in service_packages:
-                if pkg["id"] == selected_package_id:
-                    pkg["is_active"] = True
-                    break
-        else:
-            # 默认选中第一个
-            if service_packages:
-                service_packages[0]["is_active"] = True
+        # 确定选中的服务包及时间范围
+        active_package = None
+        start_date = None
+        end_date = None
 
-        # TODO 数据概览接口待联调 模拟统计概览数据
+        if service_packages:
+            if selected_package_id:
+                for pkg in service_packages:
+                    if pkg["id"] == selected_package_id:
+                        pkg["is_active"] = True
+                        active_package = pkg
+                        break
+            
+            # 如果没有找到选中的（或未提供ID），默认选中第一个
+            if not active_package:
+                service_packages[0]["is_active"] = True
+                active_package = service_packages[0]
+            
+            start_date = active_package["start_date"]
+            end_date = active_package["end_date"]
+
+        # 管理数据概览
         stats_overview = {
-            "medication_adjustment": 2,
-            "medication_taken": 220,
-            "medication_compliance": "89%",
-            "indicators_monitoring": 7,
-            "indicators_recorded": 200,
-            "monitoring_compliance": "89%",
-            "online_consultation": 35,
-            "follow_up": 3,
-            "checkup": 3,
-            "hospitalization": 1,
+            "medication_adjustment": 0, 
+            "medication_taken": 0,
+            "medication_compliance": "0%",
+            "indicators_monitoring": 0,
+            "indicators_recorded": 0,
+            "monitoring_compliance": "0%",
+            "online_consultation": 0,
+            "follow_up": 0,
+            "checkup": 0,
+            "hospitalization": 0,
         }
 
+        if start_date and end_date:
+            # 1. 药物相关统计
+            med_metrics = get_adherence_metrics(
+                patient_id=patient.id,
+                adherence_type=PlanItemCategory.MEDICATION,
+                start_date=start_date,
+                end_date=end_date
+            )
+            stats_overview["medication_taken"] = med_metrics.get("completed", 0)
+            med_rate = med_metrics.get("rate")
+            if med_rate is not None:
+                stats_overview["medication_compliance"] = f"{int(med_rate * 100)}%"
+
+            # 2. 监测相关统计
+            # 监测依从性
+            mon_metrics = get_adherence_metrics(
+                patient_id=patient.id,
+                adherence_type=MONITORING_ADHERENCE_ALL,
+                start_date=start_date,
+                end_date=end_date
+            )
+            stats_overview["indicators_monitoring"] = mon_metrics.get("total", 0)
+            mon_rate = mon_metrics.get("rate")
+            if mon_rate is not None:
+                stats_overview["monitoring_compliance"] = f"{int(mon_rate * 100)}%"
+            
+            # 监测记录数 (实际上传量)
+            record_count = HealthMetricService.count_metric_uploads(
+                patient=patient,
+                metric_type=MONITORING_ADHERENCE_ALL,
+                start_date=start_date,
+                end_date=end_date
+            )
+            stats_overview["indicators_recorded"] = record_count
+
         # 生成图表数据
-        charts = self._generate_charts_data()
+        charts = self._generate_charts_data(patient, start_date, end_date)
         
         # 生成咨询数据
         query_stats = self._generate_query_stats()
@@ -83,38 +113,104 @@ class ManagementStatsView:
             "charts": charts,
             "query_stats": query_stats,
         }
-    def _generate_charts_data(self) -> Dict[str, Any]:
-        months = [f"{i}月" for i in range(1, 13)]
-        
-        def generate_series(min_val=0, max_val=30):
-            # 模拟一个有起伏的数据
-            data = []
-            for i in range(12):
-                if 3 <= i <= 9: # 4月到10月数据较高
-                    val = random.randint(max_val - 5, max_val)
-                else:
-                    val = random.randint(min_val, min_val + 5)
-                data.append(val)
-            return data
-
+    
+    def _generate_charts_data(self, patient: Any, start_date: date | None, end_date: date | None) -> Dict[str, Any]:
+        """
+        生成管理数据统计图表数据
+        """
         chart_configs = [
-            ("medication", "服药统计次数", "次", "#3B82F6"), # Blue
-            ("temp", "体温统计次数", "次", "#EF4444"), # Red
-            ("dyspnea", "呼吸困难统计次数", "次", "#8B5CF6"), # Purple
-            ("cough", "咳嗽程度统计次数", "次", "#F59E0B"), # Amber
-            ("sputum", "痰色统计次数", "次", "#10B981"), # Emerald
-            ("pain", "疼痛量表统计次数", "次", "#EC4899"), # Pink
-            ("weight", "体重统计次数", "次", "#06B6D4"), # Cyan
-            ("spo2", "血氧统计次数", "次", "#3B82F6"), # Blue
-            ("bp", "血压统计次数", "次", "#6366F1"), # Indigo
-            ("hr", "心率统计次数", "次", "#EF4444"), # Red
+            ("medication", "服药统计次数", "次", "#9BB711", MetricType.USE_MEDICATED),
+            ("temp", "体温统计次数", "次", "#EF4444", MetricType.BODY_TEMPERATURE),
+            ("spo2", "血氧统计次数", "次", "#3B82F6", MetricType.BLOOD_OXYGEN),
+            ("bp", "血压统计次数", "次", "#6366F1", MetricType.BLOOD_PRESSURE),
+            ("hr", "心率统计次数", "次", "#EFA244", MetricType.HEART_RATE),
+            ("weight", "体重统计次数", "次", "#06B6D4", MetricType.WEIGHT),
+            ("step", "步数统计次数", "次", "#09D406", MetricType.STEPS),
+            ("stamina", "体能评分统计次数", "次", "#5CC3F6", "Q_PHYSICAL"),
+            ("dyspnea", "呼吸困难统计次数", "次", "#8B5CF6", "Q_BREATH"),
+            ("cough", "咳嗽与痰色统计次数", "次", "#F59E0B", "Q_COUGH"),
+            ("sputum", "食欲统计次数", "次", "#10B981", "Q_APPETITE"), 
+            ("pain", "身体疼痛统计次数", "次", "#EC4899", "Q_PAIN"),
+            ("sleep", "睡眠质量统计次数", "次", "#82E608", "Q_SLEEP"),
+            ("depressed", "抑郁评估统计次数", "次", "#4861EC", "Q_DEPRESSIVE"),
+            ("anxiety", "焦虑统计次数", "次", "#48B8EC", "Q_ANXIETY"),
         ]
 
         charts = {}
-        for key, title, unit, color in chart_configs:
-            total_count = 100 # 模拟总次数
-            if key == "medication": total_count = 220
-            elif key == "temp": total_count = 110
+        
+        # 初始化默认数据（空数据）
+        # 默认显示月份（如果无日期，默认显示当前年1-12月? 或者空列表?）
+        # 如果没有 start_date，则无法确定月份范围。这里我们假设如果没数据，就显示当前年的月份
+        months = []
+        if start_date and end_date:
+            curr = date(start_date.year, start_date.month, 1)
+            end = date(end_date.year, end_date.month, 1)
+            while curr <= end:
+                months.append(f"{curr.year}-{curr.month:02d}")
+                if curr.month == 12:
+                    curr = date(curr.year + 1, 1, 1)
+                else:
+                    curr = date(curr.year, curr.month + 1, 1)
+        else:
+            # 默认显示空
+            months = []
+
+        # 准备批量查询的数据源
+        metric_types_to_query = []
+        questionnaire_codes_to_query = []
+        
+        config_map = {} # key -> (title, unit, color, type/code)
+
+        for key, title, unit, color, type_code in chart_configs:
+            config_map[key] = (title, unit, color, type_code)
+            if isinstance(type_code, MetricType) or (isinstance(type_code, str) and type_code.startswith("M_")):
+                metric_types_to_query.append(type_code)
+            else:
+                questionnaire_codes_to_query.append(type_code)
+
+        # 获取数据
+        metrics_data = {}
+        questionnaires_data = {}
+
+        if start_date and end_date:
+            # 1. 获取 Metrics 数据
+            if metric_types_to_query:
+                try:
+                    metrics_data = HealthMetricService.count_metric_uploads_by_month(
+                        patient, list(set(metric_types_to_query)), start_date, end_date
+                    )
+                except Exception:
+                    metrics_data = {}
+
+            # 2. 获取 Questionnaires 数据
+            if questionnaire_codes_to_query:
+                questionnaires_data = self._count_questionnaire_uploads_by_month(
+                    patient, list(set(questionnaire_codes_to_query)), start_date, end_date
+                )
+
+        # 组装图表
+        for key, title, unit, color, type_code in chart_configs:
+            series_data = []
+            total_count = 0
+            
+            # 查找数据
+            data_list = []
+            if isinstance(type_code, MetricType) or (isinstance(type_code, str) and type_code.startswith("M_")):
+                data_list = metrics_data.get(type_code, [])
+            else:
+                data_list = questionnaires_data.get(type_code, [])
+            
+            # 将 data_list (dict list) 转换为按 months 顺序的 list
+            # metrics_data 返回格式: [{'month': '2025-01', 'count': 3}, ...]
+            # months 格式: ['2025-09', '2025-10', ...]
+            
+            # 建立 month -> count 映射
+            count_map = {item['month']: item['count'] for item in data_list}
+            
+            for m in months:
+                count = count_map.get(m, 0)
+                series_data.append(count)
+                total_count += count
             
             charts[key] = {
                 "id": f"chart-{key}",
@@ -122,17 +218,82 @@ class ManagementStatsView:
                 "subtitle": "",
                 "dates": months,
                 "y_min": 0,
-                "y_max": 35,
+                "y_max": max(series_data) + 5 if series_data else 10, # 动态调整 Y 轴
                 "series": [
                     {
                         "name": title,
-                        "data": generate_series(),
+                        "data": series_data,
                         "color": color
                     }
                 ]
             }
         
         return charts
+
+    def _count_questionnaire_uploads_by_month(
+        self,
+        patient: Any,
+        codes: List[str],
+        start_date: date,
+        end_date: date
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        按月统计问卷提交次数 (模拟 HealthMetricService.count_metric_uploads_by_month 的行为)
+        """
+        # 生成月份列表
+        month_labels = []
+        current_month = date(start_date.year, start_date.month, 1)
+        end_month = date(end_date.year, end_date.month, 1)
+        while current_month <= end_month:
+            month_labels.append(f"{current_month.year:04d}-{current_month.month:02d}")
+            if current_month.month == 12:
+                current_month = date(current_month.year + 1, 1, 1)
+            else:
+                current_month = date(current_month.year, current_month.month + 1, 1)
+
+        # 初始化结果结构
+        result = {
+            code: [{"month": label, "count": 0} for label in month_labels]
+            for code in codes
+        }
+        month_index = {label: idx for idx, label in enumerate(month_labels)}
+
+        # 构造查询时间范围
+        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
+        end_dt = datetime.datetime.combine(
+            end_date + datetime.timedelta(days=1),
+            datetime.datetime.min.time(),
+        )
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+
+        # 数据库查询
+        qs = QuestionnaireSubmission.objects.filter(
+            patient=patient,
+            questionnaire__code__in=codes,
+            created_at__gte=start_dt,
+            created_at__lt=end_dt
+        ).annotate(
+            month=TruncMonth('created_at', tzinfo=timezone.get_current_timezone())
+        ).values('questionnaire__code', 'month').annotate(count=Count('id'))
+
+        # 填充结果
+        for item in qs:
+            code = item['questionnaire__code']
+            month_value = item['month']
+            count = item['count']
+            
+            if not month_value:
+                continue
+            
+            month_date = month_value.date() if isinstance(month_value, datetime.datetime) else month_value
+            month_label = f"{month_date.year:04d}-{month_date.month:02d}"
+            
+            if month_label in month_index and code in result:
+                result[code][month_index[month_label]]['count'] = count
+                
+        return result
 
     def _generate_query_stats(self) -> Dict[str, Any]:
         """

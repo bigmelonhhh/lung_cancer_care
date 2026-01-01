@@ -1,38 +1,54 @@
-<div  class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4">
-    <div class="flex items-center gap-2 mb-3 border-l-4 border-blue-500 pl-2">
-        <h3 class="font-bold text-gray-800">管理数据统计</h3>
-    </div>
+<div
+  class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4"
+>
+  <div class="flex items-center gap-2 mb-3 border-l-4 border-blue-500 pl-2">
+    <h3 class="font-bold text-gray-800">管理数据统计</h3>
+  </div>
+
+  <!-- 5行2列网格布局 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- 1. 服药统计 -->
+    {% include "web_doctor/partials/management_stats/stats_medication_chart.html" %}
+    <!-- 2. 体温统计 -->
+    {% include "web_doctor/partials/management_stats/stats_temp_chart.html" %}
+    <!-- 3. 血氧统计 -->
+    {% include "web_doctor/partials/management_stats/stats_oxygen_chart.html" %}
+
+    <!-- 4. 血压统计 -->
+    {% include "web_doctor/partials/management_stats/stats_blood_pressure_chart.html" %}
+
+    <!-- 5. 心率统计 -->
+    {% include "web_doctor/partials/management_stats/stats_heart_rate_chart.html" %}
+
+    <!-- 6. 体重统计 -->
+    {% include "web_doctor/partials/management_stats/stats_weight_chart.html" %}
+
+     <!-- 7. 步数统计 -->
+    {% include "web_doctor/partials/management_stats/stats_step_chart.html" %}
+
     
-    <!-- 5行2列网格布局 -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <!-- 1. 服药统计 -->
-        {% include "web_doctor/partials/management_stats/stats_medication_chart.html" %}
-        
-        <!-- 2. 体温统计 -->
-        {% include "web_doctor/partials/management_stats/stats_temp_chart.html" %}
-        
-        <!-- 3. 呼吸困难统计 -->
-        {% include "web_doctor/partials/management_stats/stats_dyspnea_chart.html" %}
-        
-        <!-- 4. 咳嗽程度统计 -->
-        {% include "web_doctor/partials/management_stats/stats_cough_chart.html" %}
-        
-        <!-- 5. 痰色统计 -->
-        {% include "web_doctor/partials/management_stats/stats_sputum_chart.html" %}
-        
-        <!-- 6. 疼痛量表统计 -->
-        {% include "web_doctor/partials/management_stats/stats_pain_chart.html" %}
-        
-        <!-- 7. 体重统计 -->
-        {% include "web_doctor/partials/management_stats/stats_weight_chart.html" %}
-        
-        <!-- 8. 血氧统计 -->
-        {% include "web_doctor/partials/management_stats/stats_oxygen_chart.html" %}
-        
-        <!-- 9. 血压统计 -->
-        {% include "web_doctor/partials/management_stats/stats_blood_pressure_chart.html" %}
-        
-        <!-- 10. 心率统计 -->
-        {% include "web_doctor/partials/management_stats/stats_heart_rate_chart.html" %}
-    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-t-slate-300 border-dashed mt-10 pt-5">
+    <!-- 1. 体能评分统计 -->
+    {% include "web_doctor/partials/management_stats/stats_stamina_chart.html"%}
+    <!-- 2. 呼吸困难统计 -->
+    {% include "web_doctor/partials/management_stats/stats_dyspnea_chart.html"%}
+
+    <!-- 3. 咳嗽程度统计 -->
+    {% include "web_doctor/partials/management_stats/stats_cough_chart.html" %}
+
+    <!-- 4. 食欲评估统计 -->
+    {% include "web_doctor/partials/management_stats/stats_sputum_chart.html" %}
+
+    <!-- 5. 疼痛量表统计 -->
+    {% include "web_doctor/partials/management_stats/stats_pain_chart.html" %}
+
+     <!-- 6. 睡眠质量统计 -->
+    {% include "web_doctor/partials/management_stats/stats_sleep_chart.html" %}
+     <!-- 7. 抑郁评估统计 -->
+    {% include "web_doctor/partials/management_stats/stats_depressed_chart.html" %}
+     <!-- 8. 焦虑评估统计 -->
+    {% include "web_doctor/partials/management_stats/stats_anxiety_chart.html" %}
+  </div>
 </div>
