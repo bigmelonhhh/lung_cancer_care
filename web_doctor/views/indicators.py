@@ -331,7 +331,7 @@ def build_indicators_context(
     # 4.3 咳嗽与痰色 (Q_COUGH)
     charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 12, "咳嗽评分")
     
-    # 4.3.1 咯血表格
+    # TODO 4.3.1 咯血表格 需要根据筛选日期去查询获取数据，按照回答的答案分值格式化数据-0-无，3-血丝，5-少量，9-大量
     blood_table_row = []
     # try:
     #     cough_answers = QuestionnaireSubmissionService.list_daily_question_answers(
