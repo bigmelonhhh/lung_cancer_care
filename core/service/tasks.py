@@ -18,6 +18,16 @@ _SUMMARY_TITLE_BY_TYPE = {
     choices.PlanItemCategory.QUESTIONNAIRE: "问卷提醒",
 }
 
+MONITORING_ADHERENCE_ALL = "MONITORING_ALL"
+MONITORING_ADHERENCE_TYPES = (
+    MetricType.BLOOD_PRESSURE,
+    MetricType.BLOOD_OXYGEN,
+    MetricType.HEART_RATE,
+    MetricType.STEPS,
+    MetricType.WEIGHT,
+    MetricType.BODY_TEMPERATURE,
+)
+
 
 def get_daily_plan_summary(
     patient: PatientProfile,
@@ -330,9 +340,15 @@ def get_adherence_metrics(
     - 计算指定患者在时间范围内的依从性（按任务完成率统计）。
     - 依从性 = 已完成任务数 / 计划任务数。
 
+    【使用方法】
+    - get_adherence_metrics(patient_id, choices.PlanItemCategory.MEDICATION)
+    - get_adherence_metrics(patient_id, MetricType.BLOOD_PRESSURE, start_date, end_date)
+    - get_adherence_metrics(patient_id, MONITORING_ADHERENCE_ALL, start_date, end_date)
+
     【适用类型】
     - choices.PlanItemCategory: MEDICATION / CHECKUP / QUESTIONNAIRE / MONITORING。
     - health_data.models.MetricType: 血压/血氧/心率/体重/体温/步数等具体监测项。
+    - MONITORING_ADHERENCE_ALL: 综合监测依从率（六项监测汇总）。
 
     【参数说明】
     - patient_id: int，患者 ID。
@@ -350,6 +366,9 @@ def get_adherence_metrics(
         "rate": float | None,
       }
     - 若 total=0，rate 返回 None。
+
+    【异常说明】
+    - 不支持的依从性类型：抛出 ValueError。
     """
     start_date, end_date = _resolve_adherence_date_range(start_date, end_date)
 
@@ -358,7 +377,25 @@ def get_adherence_metrics(
         task_date__range=(start_date, end_date),
     )
 
-    if adherence_type in choices.PlanItemCategory.values:
+    if adherence_type == MONITORING_ADHERENCE_ALL:
+        template_ids = list(
+            MonitoringTemplate.objects.filter(code__in=MONITORING_ADHERENCE_TYPES)
+            .values_list("id", flat=True)
+        )
+        if not template_ids:
+            return {
+                "type": adherence_type,
+                "start_date": start_date,
+                "end_date": end_date,
+                "total": 0,
+                "completed": 0,
+                "rate": None,
+            }
+        task_qs = base_qs.filter(
+            task_type=choices.PlanItemCategory.MONITORING,
+            plan_item__template_id__in=template_ids,
+        )
+    elif adherence_type in choices.PlanItemCategory.values:
         task_qs = base_qs.filter(task_type=adherence_type)
     elif adherence_type in MetricType.values:
         template_ids = list(

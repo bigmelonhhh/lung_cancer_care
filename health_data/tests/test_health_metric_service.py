@@ -1,11 +1,14 @@
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
 
+from core.service import tasks as task_service
 from health_data.models import HealthMetric, MetricSource, MetricType
 from health_data.services.health_metric import HealthMetricService
+from users.models import PatientProfile
 
 
 class HealthMetricServiceTest(TestCase):
@@ -359,3 +362,73 @@ class HealthMetricServiceTest(TestCase):
         self.assertIs(result, mock_metric)
         self.assertFalse(mock_metric.is_active)
         mock_metric.save.assert_called_once_with(update_fields=["is_active"])
+
+    def test_count_metric_uploads_single_type_inclusive_range(self):
+        """
+        统计单一指标的上传次数，日期范围为闭区间。
+        """
+        patient = PatientProfile.objects.create(phone="13800138000")
+        tz = timezone.get_current_timezone()
+
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 1, 10, 0), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 2, 23, 59), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 3, 0, 0), tz),
+        )
+
+        count = HealthMetricService.count_metric_uploads(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 2),
+        )
+
+        self.assertEqual(count, 2)
+
+    def test_count_metric_uploads_monitoring_all_excludes_non_monitoring(self):
+        """
+        综合监测上传次数：仅统计六类监测指标，忽略非监测与无效记录。
+        """
+        patient = PatientProfile.objects.create(phone="13800138001")
+        tz = timezone.get_current_timezone()
+
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 2, 1, 9, 0), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.STEPS,
+            measured_at=timezone.make_aware(datetime(2025, 2, 1, 12, 0), tz),
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.USE_MEDICATED,
+            measured_at=timezone.make_aware(datetime(2025, 2, 1, 18, 0), tz),
+        )
+        HealthMetric.all_objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_OXYGEN,
+            measured_at=timezone.make_aware(datetime(2025, 2, 1, 20, 0), tz),
+            is_active=False,
+        )
+
+        count = HealthMetricService.count_metric_uploads(
+            patient=patient,
+            metric_type=task_service.MONITORING_ADHERENCE_ALL,
+            start_date=date(2025, 2, 1),
+            end_date=date(2025, 2, 1),
+        )
+
+        self.assertEqual(count, 2)

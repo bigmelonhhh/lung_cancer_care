@@ -14,9 +14,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from django.apps import apps
 from django.utils import timezone
@@ -29,6 +29,9 @@ from core.utils.sentinel import UNSET
 import datetime
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from users.models import PatientProfile
 
 # 同一患者、同一指标类型、同一天最多允许写入的记录数
 # （仅对“血压 / 血氧 / 心率 / 体重”生效；步数采用“单条累加”的特殊策略）
@@ -505,6 +508,126 @@ class HealthMetricService:
             }
 
         return result
+
+    @classmethod
+    def list_monitoring_metric_types_for_patient(
+        cls,
+        patient: "PatientProfile",
+        start_date: date,
+        end_date: date,
+    ) -> list[MetricType]:
+        """
+        查询患者在指定日期范围内提交过的监测指标类型（去重）。
+
+        【功能说明】
+        - 仅统计监测类指标（MONITORING_ADHERENCE_TYPES 配置的六类）；
+        - 日期范围为闭区间 [start_date, end_date]；
+        - 返回去重后的指标类型列表。
+
+        【使用方法】
+        - list_monitoring_metric_types_for_patient(patient, start_date, end_date)
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - start_date: date，开始日期（含）。
+        - end_date: date，结束日期（含）。
+
+        【返回值说明】
+        - List[MetricType]，监测指标类型常量列表。
+
+        【异常说明】
+        - start_date > end_date：抛出 ValueError。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValueError("patient 不能为空")
+        if start_date > end_date:
+            raise ValueError("start_date 不能晚于 end_date")
+
+        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
+        end_dt = datetime.datetime.combine(
+            end_date + datetime.timedelta(days=1),
+            datetime.datetime.min.time(),
+        )
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+
+        metric_types = (
+            HealthMetric.objects.filter(
+                patient_id=patient.id,
+                metric_type__in=task_service.MONITORING_ADHERENCE_TYPES,
+                measured_at__gte=start_dt,
+                measured_at__lt=end_dt,
+            )
+            .values_list("metric_type", flat=True)
+            .distinct()
+        )
+
+        return [MetricType(metric_type) for metric_type in metric_types]
+
+    @classmethod
+    def count_metric_uploads(
+        cls,
+        patient: "PatientProfile",
+        metric_type: str,
+        start_date: date,
+        end_date: date,
+    ) -> int:
+        """
+        统计患者在指定日期范围内某指标的上传次数（记录条数）。
+
+        【功能说明】
+        - 统计指定指标在时间区间内的上传记录条数；
+        - 支持 MONITORING_ADHERENCE_ALL 统计六项监测指标的综合上传次数；
+        - 日期范围为闭区间 [start_date, end_date]。
+
+        【使用方法】
+        - count_metric_uploads(patient, MetricType.BLOOD_PRESSURE, start_date, end_date)
+        - count_metric_uploads(patient, MONITORING_ADHERENCE_ALL, start_date, end_date)
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - metric_type: str，指标类型或 MONITORING_ADHERENCE_ALL 常量。
+        - start_date: date，开始日期（含）。
+        - end_date: date，结束日期（含）。
+
+        【返回值说明】
+        - int，上传记录条数。
+
+        【异常说明】
+        - start_date > end_date：抛出 ValueError。
+        - 不支持的指标类型：抛出 ValueError。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValueError("patient 不能为空")
+        if start_date > end_date:
+            raise ValueError("start_date 不能晚于 end_date")
+
+        if metric_type == task_service.MONITORING_ADHERENCE_ALL:
+            target_types = task_service.MONITORING_ADHERENCE_TYPES
+        elif metric_type in MetricType.values:
+            target_types = [metric_type]
+        else:
+            raise ValueError("不支持的指标类型")
+
+        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
+        end_dt = datetime.datetime.combine(
+            end_date + datetime.timedelta(days=1),
+            datetime.datetime.min.time(),
+        )
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+
+        return (
+            HealthMetric.objects.filter(
+                patient_id=patient.id,
+                metric_type__in=target_types,
+                measured_at__gte=start_dt,
+                measured_at__lt=end_dt,
+            )
+            .count()
+        )
 
     # ============
     # 客观指标数据手动录入接口
