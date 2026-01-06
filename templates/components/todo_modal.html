@@ -100,6 +100,14 @@
                         // 1. 如果在待办列表页，刷新表格
                         if (document.getElementById('todo-filter-form')) {
                              htmx.trigger('#todo-filter-form', 'submit');
+                             
+                             // 标记数据已变更，用于返回上一页时刷新
+                             sessionStorage.setItem('todo_needs_refresh', 'true');
+                             
+                             // 同时通知其他页面（如首页）数据已更新
+                             const channel = new BroadcastChannel('app-events');
+                             channel.postMessage({ type: 'todo-updated' });
+                             channel.close();
                         } 
                         // 2. 如果在首页，刷新页面或触发特定的局部刷新（目前首页直接刷新页面最简单，或者不做操作等待下次加载）
                         else {

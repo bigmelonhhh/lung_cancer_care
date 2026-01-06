@@ -5,7 +5,7 @@
     <!-- 顶部标题区 -->
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-3">
-            <button onclick="window.history.back()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors" title="返回上一页">
+            <button onclick="handleBackNavigation()" class="p-1.5 rounded-full hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors" title="返回上一页">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
@@ -100,6 +100,18 @@
 {% include "components/todo_modal.html" %}
 
 <script>
+    // 处理返回逻辑
+    function handleBackNavigation() {
+        if (sessionStorage.getItem('todo_needs_refresh') === 'true') {
+            // 如果数据已变更，强制跳转回首页以确保数据刷新
+            // 注意：这里假设上一页通常是首页。如果系统有更复杂的路由，可能需要判断 document.referrer
+            window.location.href = "{% url 'web_doctor:doctor_workspace' %}";
+        } else {
+            // 无变更则正常返回，保留滚动位置等状态
+            window.history.back();
+        }
+    }
+
     function todoListFilter() {
         return {
             status: '{{ current_status|default:"all" }}',

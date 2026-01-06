@@ -47,4 +47,28 @@
 <!-- 引入待办事项弹框组件 -->
 {% include "components/todo_modal.html" %}
 
+<script>
+    // 监听跨页面消息，当待办事项更新时自动刷新首页数据
+    (function() {
+        // 1. 监听 BroadcastChannel (用于多标签页)
+        const channel = new BroadcastChannel('app-events');
+        channel.onmessage = function(event) {
+            if (event.data && event.data.type === 'todo-updated') {
+                console.log('收到待办更新通知，正在刷新页面...');
+                window.location.reload();
+            }
+        };
+
+        // 2. 监听 pageshow 事件 (用于处理浏览器后退/缓存恢复)
+        window.addEventListener('pageshow', function(event) {
+            // 检查是否有未处理的刷新标记
+            if (sessionStorage.getItem('todo_needs_refresh') === 'true') {
+                console.log('检测到数据变更标记，正在刷新页面...');
+                sessionStorage.removeItem('todo_needs_refresh');
+                window.location.reload();
+            }
+        });
+    })();
+</script>
+
 {% endblock %}
