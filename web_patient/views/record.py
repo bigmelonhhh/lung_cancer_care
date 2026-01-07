@@ -5,6 +5,9 @@ from django.utils import timezone
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.models import MetricType
+from core.models import (
+    QuestionnaireCode
+)
 import os
 from decimal import Decimal
 from datetime import datetime
@@ -392,25 +395,91 @@ def health_records(request: HttpRequest) -> HttpResponse:
     patient_id = patient.id or None
     
 
-    # TODO 待联调健康档案列表接口 模拟数据：健康指标记录
-    # 实际开发中应从数据库统计
+    # TODO 异常总数接口待联调
+    # 一般检测数据
     health_stats = [
+        {"type": "medical", "title": "用药", "count": 0, "abnormal": 0, "icon": "medical"},
         {"type": "temperature", "title": "体温", "count": 0, "abnormal": 0, "icon": "temperature"},
-        {"type": "breath", "title": "呼吸", "count": 0, "abnormal": 0, "icon": "breath"},
-        {"type": "sputum", "title": "咳嗽/痰色", "count": 0, "abnormal": 0, "icon": "sputum"},
-        {"type": "pain", "title": "疼痛", "count": 0, "abnormal": 0, "icon": "pain"},
-        {"type": "weight", "title": "体重", "count": 0, "abnormal": 0, "icon": "weight"},
         {"type": "spo2", "title": "血氧", "count": 0, "abnormal": 0, "icon": "spo2"},
         {"type": "bp", "title": "血压", "count": 0, "abnormal": 0, "icon": "bp"},
+        {"type": "weight", "title": "体重", "count": 0, "abnormal": 0, "icon": "weight"},
         {"type": "heart", "title": "心率", "count": 0, "abnormal": 0, "icon": "heart"},
+        {"type": "step", "title": "步数", "count": 0, "abnormal": 0, "icon": "step"},
     ]
-    
-    # 模拟空数据测试
-    # health_stats = []
+
+    # 动态获取各项指标的总数
+    if patient_id:
+        metric_type_map = {
+            "medical": MetricType.USE_MEDICATED,
+            "temperature": MetricType.BODY_TEMPERATURE,
+            "spo2": MetricType.BLOOD_OXYGEN,
+            "bp": MetricType.BLOOD_PRESSURE,
+            "weight": MetricType.WEIGHT,
+            "heart": MetricType.HEART_RATE,
+            "step": MetricType.STEPS,
+        }
+
+        for item in health_stats:
+            m_type = metric_type_map.get(item["type"])
+            if m_type:
+                try:
+                    # 调用 Service 获取分页对象，从而获取总数
+                    # page=1, page_size=1 最小化数据传输
+                    page_obj = HealthMetricService.query_metrics_by_type(
+                        patient_id=int(patient_id),
+                        metric_type=m_type,
+                        page=1,
+                        page_size=1
+                    )
+                    item["count"] = page_obj.paginator.count
+                except Exception as e:
+                    logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
+                    # 保持默认值 0
+    # 随访问卷
+    health_survey_stats = [
+        {"type": "physical", "title": "体能评估", "count": 0, "abnormal": 0, "icon": "physical"},
+        {"type": "breath", "title": "呼吸评估", "count": 0, "abnormal": 0, "icon": "breath"},
+        {"type": "cough", "title": "咳嗽与痰色评估", "count": 0, "abnormal": 0, "icon": "cough"},
+        {"type": "appetite", "title": "食欲评估", "count": 0, "abnormal": 0, "icon": "appetite"},
+        {"type": "pain", "title": "身体疼痛评估", "count": 0, "abnormal": 0, "icon": "pain"},
+        {"type": "sleep", "title": "睡眠质量评估", "count": 0, "abnormal": 0, "icon": "sleep"},
+        {"type": "psych", "title": "抑郁评估", "count": 0, "abnormal": 0, "icon": "psych"},
+        {"type": "anxiety", "title": "焦虑评估", "count": 0, "abnormal": 0, "icon": "anxiety"},
+    ]
+    # 动态获取各项指标的总数
+    if patient_id:
+        metric_type_map_survey = {
+            "physical": QuestionnaireCode.Q_PHYSICAL,
+            "breath": QuestionnaireCode.Q_BREATH,
+            "cough": QuestionnaireCode.Q_COUGH,
+            "appetite": QuestionnaireCode.Q_APPETITE,
+            "pain": QuestionnaireCode.Q_PAIN,
+            "sleep": QuestionnaireCode.Q_SLEEP,
+            "psych": QuestionnaireCode.Q_PSYCH,
+            "anxiety": QuestionnaireCode.Q_ANXIETY,
+        }
+
+        for item in health_survey_stats:
+            m_type = metric_type_map_survey.get(item["type"])
+            if m_type:
+                try:
+                    # 调用 Service 获取分页对象，从而获取总数
+                    # page=1, page_size=1 最小化数据传输
+                    page_obj = HealthMetricService.query_metrics_by_type(
+                        patient_id=int(patient_id),
+                        metric_type=m_type,
+                        page=1,
+                        page_size=1
+                    )
+                    item["count"] = page_obj.paginator.count
+                except Exception as e:
+                    logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
+                    # 保持默认值 0
 
     context = {
         "patient_id": patient_id,
-        "health_stats": health_stats
+        "health_stats": health_stats,
+        "health_survey_stats": health_survey_stats
     }
 
     return render(request, "web_patient/health_records.html", context)

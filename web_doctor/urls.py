@@ -10,8 +10,9 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     # path("doctor/dashboard/", views.doctor_dashboard, name="doctor_dashboard"), # 已删除
     
-    path("doctor/workspace/", todo_workspace.doctor_workspace, name="doctor_workspace"),
+    path("doctor/workspace/", views.doctor_workspace, name="doctor_workspace"),
     path("doctor/todo-list/", todo_workspace.doctor_todo_list_page, name="doctor_todo_list"),
+    path("doctor/todo/update_status/", todo_workspace.update_alert_status, name="doctor_todo_update_status"),
     path(
         "doctor/workspace/patient-list/",
         views.doctor_workspace_patient_list,

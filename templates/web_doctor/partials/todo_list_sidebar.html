@@ -1,0 +1,36 @@
+<div id="patient-todo-list" class="h-1/2 flex flex-col border-b border-slate-200" hx-swap-oob="true">
+    <div class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+        <h3 class="font-semibold text-slate-700 text-sm">患者待办 <span class="text-rose-500">({{ todo_list|length|default:0 }})</span></h3>
+        <a href="{% url 'web_doctor:doctor_todo_list' %}" class="cursor-pointer flex flex-row items-center text-sm text-indigo-600 hover:underline">
+            待办列表
+            <svg t="1767330488881" class="icon w-4 h-4" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2519" width="32" height="32"><path d="M332.501333 183.168a42.666667 42.666667 0 0 1 57.621334-2.496l2.709333 2.496 298.666667 298.666667a42.666667 42.666667 0 0 1 2.496 57.621333l-2.496 2.709333-298.666667 298.666667a42.666667 42.666667 0 0 1-62.826667-57.621333l2.496-2.709334L600.96 512 332.501333 243.498667a42.666667 42.666667 0 0 1-2.496-57.621334l2.496-2.709333z" fill="#4f46e5" p-id="2520"></path></svg>
+        </a>
+    </div>
+    <div class="flex-1 overflow-y-auto p-4 space-y-3">
+        {% for item in todo_list %}
+        <div class="relative p-3 bg-rose-50 border border-rose-100 rounded-lg text-sm todo-item" data-id="{{ item.id }}">
+            <div class="flex justify-between">
+                <span class="font-medium text-black">{{ item.patient_name }} - {{ item.event_title }}</span>
+                
+            </div>
+            <div class="mt-1 text-slate-600">{{ item.event_content }}</div>
+            <div class="mt-1 text-slate-400 text-xs">{{ item.event_time }}</div>
+            <div class="flex justify-end">
+                <button 
+                    data-todo-id="{{ item.id }}"
+                    data-todo-title="{{ item.patient_name }} - {{ item.event_title }}"
+                    data-todo-content="{{ item.event_content }}"
+                    data-todo-status="{{ item.status }}"
+                    data-todo-handle-content="{{ item.handle_content|default:'' }}"
+                    onclick="handleTodoModalTrigger(this, true)"
+                    class="text-rose-600 hover:text-rose-800 font-medium handle-btn">去处理</button>
+            </div>
+            <button class="absolute top-0 right-0 pl-2 pr-2 bg-[#ff0000] rounded-tr-[10px] rounded-bl-[10px] text-white font-medium text-sm ">{{item.status_display}}</button>
+        </div>
+        {% empty %}
+        <div class="pt-5 flex flex-col items-center justify-center text-center gap-4 text-slate-400 py-4 text-sm">
+            <svg t="1767707793417" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3513" width="64" height="64"><path d="M76.3904 82.0736m135.936 0l525.5168 0q135.936 0 135.936 135.936l0 580.4544q0 135.936-135.936 135.936l-525.5168 0q-135.936 0-135.936-135.936l0-580.4544q0-135.936 135.936-135.936Z" fill="#A5ADF6" p-id="3514"></path><path d="M642.4064 379.2384H229.3248a40.96 40.96 0 0 1 0-81.92h413.0816a40.96 40.96 0 1 1 0 81.92zM485.5296 611.9424h-256a40.96 40.96 0 0 1 0-81.92h256a40.96 40.96 0 0 1 0 81.92z" fill="#FFFFFF" p-id="3515"></path><path d="M738.6112 724.6848m-221.5936 0a221.5936 221.5936 0 1 0 443.1872 0 221.5936 221.5936 0 1 0-443.1872 0Z" fill="#A5ADF6" p-id="3516"></path><path d="M738.6112 503.1424a221.5424 221.5424 0 0 0-71.68 431.2576h70.7584a135.936 135.936 0 0 0 136.0896-135.68v-249.4976a220.16 220.16 0 0 0-135.168-46.08z" fill="#635DF7" p-id="3517"></path><path d="M686.08 857.0368a40.96 40.96 0 0 1-31.2832-67.3792l59.9552-70.912v-97.7408a40.96 40.96 0 0 1 81.92 0v112.64a40.96 40.96 0 0 1-9.6768 26.4192l-69.632 82.3808a40.96 40.96 0 0 1-31.2832 14.592z" fill="#FFFFFF" p-id="3518"></path></svg>
+            暂无待办事项</div>
+        {% endfor %}
+    </div>
+</div>

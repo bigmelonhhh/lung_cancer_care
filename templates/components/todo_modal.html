@@ -1,7 +1,7 @@
 <!-- 弹框HTML结构 -->
 <div id="todo-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
     <div class="bg-white rounded-lg p-6 w-[650px] shadow-xl">
-        <h3 class="text-lg font-medium mb-4 text-slate-800" id="modal-title">处理患者待办</h3>
+        <h3 class="text-lg font-medium mb-4 text-slate-800" id="modal-title">啊啊啊处理患者待办</h3>
         
         <div class="mb-4">
             <label class="block text-sm font-medium text-slate-700 mb-1">待处理事件</label>
@@ -79,12 +79,48 @@
                 
                 console.log('保存数据:', newData);
                 
-                if (typeof onSave === 'function') {
-                    onSave(newData);
-                }
-                
-                // 关闭弹框
-                closeModal();
+                // 发送请求
+                fetch("{% url 'web_doctor:doctor_todo_update_status' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify(newData)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        if (typeof onSave === 'function') {
+                            onSave(newData);
+                        }
+                        closeModal();
+                        
+                        // 触发列表刷新
+                        // 1. 如果在待办列表页，刷新表格
+                        if (document.getElementById('todo-filter-form')) {
+                             htmx.trigger('#todo-filter-form', 'submit');
+                             
+                             // 标记数据已变更，用于返回上一页时刷新
+                             sessionStorage.setItem('todo_needs_refresh', 'true');
+                             
+                             // 同时通知其他页面（如首页）数据已更新
+                             const channel = new BroadcastChannel('app-events');
+                             channel.postMessage({ type: 'todo-updated' });
+                             channel.close();
+                        } 
+                        // 2. 如果在首页，刷新页面或触发特定的局部刷新（目前首页直接刷新页面最简单，或者不做操作等待下次加载）
+                        else {
+                            window.location.reload();
+                        }
+                    } else {
+                        alert('保存失败: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('网络请求失败，请稍后重试');
+                });
             });
             
         } else {
@@ -122,9 +158,8 @@
         };
         
         showTodoModal(itemData, isEditMode, function(data) {
-            alert('保存成功（模拟）：' + JSON.stringify(data));
-            // 如果使用了 HTMX，这里可以触发列表刷新
-            // htmx.trigger('#todo-filter-form', 'submit');
+            // alert('保存成功（模拟）：' + JSON.stringify(data));
+            // 保存逻辑已移至 showTodoModal 内部
         });
     };
 

@@ -34,6 +34,8 @@ from core.service.plan_item import PlanItemService
 from web_doctor.services.current_user import get_user_display_name
 from users.services.patient import PatientService
 from web_doctor.views.home import build_home_context
+from patient_alerts.services.todo_list import TodoListService
+from django.template.loader import render_to_string
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +89,16 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     patients = _get_workspace_patients(request.user, request.GET.get("q"))
     display_name = get_user_display_name(request.user)
+    
+    # 首页默认加载当前医生的全局待办事项
+    todo_page = TodoListService.get_todo_page(
+        user=request.user,
+        status="pending",
+        page=1,
+        size=5  # 首页侧边栏显示较多条目
+    )
+    logging.info(f"当前待办事项：{todo_page.object_list}")
+    
     return render(
         request,
         "web_doctor/index.html",
@@ -95,6 +107,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
             "assistant": assistant_profile,
             "workspace_display_name": display_name,
             "patients": patients,
+            "todo_list": todo_page.object_list,
         },
     )
 

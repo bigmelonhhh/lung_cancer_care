@@ -102,3 +102,13 @@
     {% endif %}
 </div>
 {% endif %}
+
+<script>
+    // 同步当前页码到筛选表单，确保刷新列表时停留在当前页
+    (function(){
+        var pageInput = document.querySelector('#todo-filter-form input[name="page"]');
+        if (pageInput) {
+            pageInput.value = "{{ todo_page.number }}";
+        }
+    })();
+</script>

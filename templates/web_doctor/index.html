@@ -24,32 +24,7 @@
     </main>
 
     <aside class="w-80 flex flex-col border-l border-slate-200 bg-white shrink-0 z-10">
-        <div class="h-1/2 flex flex-col border-b border-slate-200">
-            <div class="px-4 py-3 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-                <h3 class="font-semibold text-slate-700 text-sm">患者待办 <span class="text-rose-500">({{ todo_list|length|default:0 }})</span></h3>
-                <a href="{% url 'web_doctor:doctor_todo_list' %}" class="cursor-pointer flex flex-row items-center text-sm text-indigo-600 hover:underline">
-                    待办列表
-                    <svg t="1767330488881" class="icon w-4 h-4" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2519" width="32" height="32"><path d="M332.501333 183.168a42.666667 42.666667 0 0 1 57.621334-2.496l2.709333 2.496 298.666667 298.666667a42.666667 42.666667 0 0 1 2.496 57.621333l-2.496 2.709333-298.666667 298.666667a42.666667 42.666667 0 0 1-62.826667-57.621333l2.496-2.709334L600.96 512 332.501333 243.498667a42.666667 42.666667 0 0 1-2.496-57.621334l2.496-2.709333z" fill="#4f46e5" p-id="2520"></path></svg>
-                </a>
-            </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-3">
-                {% for item in todo_list %}
-                <div class="p-3 bg-rose-50 border border-rose-100 rounded-lg text-sm todo-item" data-id="{{ item.id }}">
-                    <div class="flex justify-between">
-                        <span class="font-medium text-black">{{ item.patient_name }} - {{ item.event_title }}</span>
-                        <button class="text-blue-500 font-medium ">进行中</button>
-                    </div>
-                    <div class="mt-1 text-slate-600">{{ item.event_content }}</div>
-                    <div class="mt-1 text-slate-400 text-xs">{{ item.event_time }}</div>
-                    <div class="flex justify-end">
-                        <button class="text-rose-600 hover:text-rose-800 font-medium handle-btn">去处理</button>
-                    </div>
-                </div>
-                {% empty %}
-                <div class="text-center text-slate-400 py-4 text-sm">暂无待办事项</div>
-                {% endfor %}
-            </div>
-        </div>
+        {% include "web_doctor/partials/todo_list_sidebar.html" %}
 
         <div class="h-1/2 flex flex-col">
             <div class="px-4 py-3 border-b border-slate-50 bg-slate-50/50">
@@ -63,99 +38,37 @@
 
 </div>
 
-<!-- 弹框HTML结构 -->
-<div id="todo-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 w-[650px] shadow-xl">
-        <h3 class="text-lg font-medium mb-4 text-slate-800">处理患者待办</h3>
-        
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-slate-700 mb-1">待处理事件</label>
-            <div id="event-title" class="p-2 bg-slate-50 rounded text-slate-800 font-medium border border-slate-100"></div>
-            <div id="event-content" class="p-2 bg-slate-50 rounded mt-1 text-sm text-slate-600 border border-slate-100"></div>
-        </div>
-        
-        <div class="mb-4">
-            <label for="event-handle" class="block text-sm font-medium text-slate-700 mb-1">事件处理情况 <span class="text-rose-500">*</span></label>
-            <textarea id="event-handle" class="w-full p-2 border border-slate-300 rounded focus:ring-rose-500 focus:border-rose-500 outline-none transition" rows="3" required placeholder="请填写处理详情..."></textarea>
-        </div>
-        
-        <div class="mb-6">
-            <label for="event-status" class="block text-sm font-medium text-slate-700 mb-1">事件状态 <span class="text-rose-500">*</span></label>
-            <select id="event-status" class="w-full p-2 border border-slate-300 rounded focus:ring-rose-500 focus:border-rose-500 outline-none bg-white">
-                <option value="" disabled selected>请选择状态</option>
-                <option value="pending">待跟进</option>
-                <option value="escalate">升级主任</option>
-                <option value="completed">已完成</option>
-            </select>
-        </div>
-        
-        <div class="flex justify-end space-x-3">
-            <button id="cancel-btn" class="px-4 py-2 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 transition">取消</button>
-            <button id="save-btn" class="px-4 py-2 bg-rose-600 text-white rounded hover:bg-rose-700 transition shadow-sm">保存</button>
-        </div>
-    </div>
-</div>
+<!-- 确保页面中有 CSRF Token 供 JS 使用 -->
+{% csrf_token %}
 
+<!-- 引入 jQuery (必需，且必须在组件之前引入) -->
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+<!-- 引入待办事项弹框组件 -->
+{% include "components/todo_modal.html" %}
+
 <script>
-$(document).ready(function() {
-    let currentItemId = null;
-
-    // 点击处理按钮
-    $('.handle-btn').click(function() {
-        const item = $(this).closest('.todo-item');
-        const itemData = {
-            id: item.data('id'),
-            title: item.find('.font-medium').text(), // 获取完整标题（含患者名）
-            content: item.find('.text-slate-600').text()
+    // 监听跨页面消息，当待办事项更新时自动刷新首页数据
+    (function() {
+        // 1. 监听 BroadcastChannel (用于多标签页)
+        const channel = new BroadcastChannel('app-events');
+        channel.onmessage = function(event) {
+            if (event.data && event.data.type === 'todo-updated') {
+                console.log('收到待办更新通知，正在刷新页面...');
+                window.location.reload();
+            }
         };
-        currentItemId = itemData.id;
-        showTodoModal(itemData);
-    });
 
-    // 显示弹框
-    function showTodoModal(data) {
-        // 初始化弹框内容
-        $('#event-title').text(data.title);
-        $('#event-content').text(data.content);
-        $('#event-handle').val(''); // 清空输入
-        $('#event-status').val(''); // 默认待跟进
-        
-        // 显示弹框
-        $('#todo-modal').removeClass('hidden');
-    }
-
-    // 保存验证逻辑
-    $('#save-btn').click(function() {
-        const handleContent = $('#event-handle').val().trim();
-        const status = $('#event-status').val();
-        
-        if (!handleContent) {
-            alert('请填写事件处理情况');
-            return;
-        }
-        
-        if (!status) {
-            alert('请选择事件状态');
-            return;
-        }
-        
-        // 这里添加保存逻辑
-        console.log('保存数据:', {
-            id: currentItemId,
-            handle_content: handleContent,
-            status: status
+        // 2. 监听 pageshow 事件 (用于处理浏览器后退/缓存恢复)
+        window.addEventListener('pageshow', function(event) {
+            // 检查是否有未处理的刷新标记
+            if (sessionStorage.getItem('todo_needs_refresh') === 'true') {
+                console.log('检测到数据变更标记，正在刷新页面...');
+                sessionStorage.removeItem('todo_needs_refresh');
+                window.location.reload();
+            }
         });
-        
-        // 关闭弹框
-        $('#todo-modal').addClass('hidden');
-        alert('保存成功（模拟）');
-    });
-
-    // 取消按钮
-    $('#cancel-btn').click(function() {
-        $('#todo-modal').addClass('hidden');
-    });
-});
+    })();
 </script>
+
 {% endblock %}
