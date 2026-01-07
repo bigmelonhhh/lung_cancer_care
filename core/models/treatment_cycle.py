@@ -56,3 +56,19 @@ class TreatmentCycle(models.Model):
             return True
         return False
 
+    def refresh_status_if_expired(self) -> bool:
+        """
+        【业务说明】在读取状态前刷新疗程状态，避免过期仍显示进行中。
+        【规则】
+        - 若状态不是“进行中”，直接返回 False；
+        - 若状态为“进行中”且已超过结束日期，自动更新为“已结束”，返回 False；
+        - 若状态为“进行中”且未过期，返回 True。
+        """
+
+        if self.status != choices.TreatmentCycleStatus.IN_PROGRESS:
+            return False
+        if self.end_date and date.today() > self.end_date:
+            self.status = choices.TreatmentCycleStatus.COMPLETED
+            self.save(update_fields=["status"])
+            return False
+        return True

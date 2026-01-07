@@ -182,3 +182,24 @@ def get_cycle_confirmer(cycle_id: int) -> tuple[Optional[CustomUser], Optional[d
     if not plan:
         return None, None
     return plan.updated_by, plan.updated_at
+
+
+def refresh_expired_treatment_cycles(task_date: Optional[date] = None) -> int:
+    """
+    【功能说明】
+    - 将已过期但状态仍为“进行中”的疗程更新为“已结束”。
+
+    【参数说明】
+    - task_date: date | None，用于指定检查日期；默认使用今天。
+
+    【返回值说明】
+    - int，实际更新的疗程数量。
+    """
+
+    today = task_date or date.today()
+    return (
+        TreatmentCycle.objects.filter(
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+            end_date__lt=today,
+        ).update(status=choices.TreatmentCycleStatus.COMPLETED)
+    )

@@ -11,6 +11,7 @@ from core.service.treatment_cycle import (
     create_treatment_cycle,
     get_cycle_confirmer,
     get_treatment_cycles,
+    refresh_expired_treatment_cycles,
 )
 from users import choices as user_choices
 from users.models import CustomUser, PatientProfile
@@ -174,3 +175,47 @@ class TreatmentCycleConfirmerTest(TestCase):
 
         self.assertIsNone(confirmer)
         self.assertIsNone(confirmed_at)
+
+
+class TreatmentCycleStatusRefreshTest(TestCase):
+    def test_refresh_status_if_expired_updates_status(self):
+        patient = PatientProfile.objects.create(
+            phone="13900000010",
+            name="状态患者",
+        )
+        cycle = TreatmentCycle.objects.create(
+            patient=patient,
+            name="已过期疗程",
+            start_date=date.today() - timedelta(days=10),
+            end_date=date.today() - timedelta(days=1),
+            cycle_days=10,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        is_active = cycle.refresh_status_if_expired()
+
+        cycle.refresh_from_db()
+        self.assertFalse(is_active)
+        self.assertEqual(cycle.status, choices.TreatmentCycleStatus.COMPLETED)
+
+
+class TreatmentCycleStatusJobTest(TestCase):
+    def test_refresh_expired_treatment_cycles_updates_status(self):
+        patient = PatientProfile.objects.create(
+            phone="13900000011",
+            name="定时患者",
+        )
+        expired_cycle = TreatmentCycle.objects.create(
+            patient=patient,
+            name="过期疗程",
+            start_date=date.today() - timedelta(days=10),
+            end_date=date.today() - timedelta(days=1),
+            cycle_days=10,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        updated_count = refresh_expired_treatment_cycles()
+
+        expired_cycle.refresh_from_db()
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(expired_cycle.status, choices.TreatmentCycleStatus.COMPLETED)
