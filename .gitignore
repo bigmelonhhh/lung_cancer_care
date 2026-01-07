@@ -30,6 +30,7 @@ pip-wheel-metadata/
 .vscode/
 .idea/
 /static/demo/
+/static/docs/
 
 # Django
 *.db

@@ -449,4 +449,29 @@ class PatientService:
         patient.save(update_fields=["doctor", "updated_at"])
         return patient
 
+    def get_active_studio_assignment(self, patient: PatientProfile):
+        """
+        【功能说明】
+        - 获取患者当前有效的工作室归属记录（end_at 为空视为有效）。
+
+        【使用方法】
+        - patient_service.get_active_studio_assignment(patient)
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+
+        【返回值说明】
+        - PatientStudioAssignment | None
+        """
+        if patient is None:
+            raise ValidationError("患者档案不能为空。")
+
+        from chat.models import PatientStudioAssignment
+
+        return (
+            PatientStudioAssignment.objects.filter(patient=patient, end_at__isnull=True)
+            .order_by("-start_at")
+            .first()
+        )
+
 # TODO : 依从性计算。用药， 数据监测。

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'business_support',
     'core',
     'patient_alerts',
+    'chat',
 ]
 
 ADMIN_APP_ORDER = [
@@ -75,6 +76,7 @@ ADMIN_APP_ORDER = [
     'wx',
     'regions',
     'patient_alerts',
+    'chat',
 ]
 
 LOGOUT_REDIRECT_URL = '/admin/'
