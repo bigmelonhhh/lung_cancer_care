@@ -13,7 +13,7 @@ from users.models.patient_profile import PatientProfile
 @login_required
 @check_doctor_or_assistant
 def get_chat_context(request: HttpRequest):
-    """获取聊天上下文信息（当前用户信息、角色、会话标签等）"""
+    """获取聊天上下文信息（当前用户信息、角色、会话标签、权限等）"""
     user = request.user
     doctor_profile = getattr(user, "doctor_profile", None)
     assistant_profile = getattr(user, "assistant_profile", None)
@@ -44,34 +44,68 @@ def get_chat_context(request: HttpRequest):
     else:
          return JsonResponse({'status': 'error', 'message': 'Not a doctor or assistant account'}, status=400)
 
-    # 3. 计算内部会话标签
-    internal_label = "内部会话"
+    # 3. 计算会话信息
+    chat_service = ChatService()
     patient_id = request.GET.get('patient_id')
+    
+    patient_conv_id = None
+    internal_conv_id = None
+    tab_patient_label = "患者"
+    tab_internal_label = "内部会话"
+    can_send_patient = True
+    can_send_internal = True
     
     if patient_id:
         try:
             patient = PatientProfile.objects.get(id=patient_id)
-            if is_director:
-                # 主任视角：显示关联的平台助理姓名
-                # 逻辑：查询该主任医生关联的助理（取第一个）
-                assistant = doctor_profile.assistants.first()
-                if assistant:
-                    internal_label = assistant.name
-                else:
-                    internal_label = "平台助理"
+            tab_patient_label = f"{patient.name}(患者)"
+            
+            # 确定当前操作的工作室
+            target_studio = None
+            if patient.doctor and patient.doctor.studio:
+                target_studio = patient.doctor.studio
             else:
-                # 平台医生视角 或 助理视角：显示工作室主任姓名
-                # 逻辑：优先取患者主治医生的工作室负责人
-                target_studio = None
-                if patient.doctor and patient.doctor.studio:
-                    target_studio = patient.doctor.studio
-                else:
-                    target_studio = studio
+                target_studio = studio
                 
-                if target_studio and target_studio.owner_doctor:
-                    internal_label = target_studio.owner_doctor.name
+            if target_studio:
+                # 获取/创建会话
+                try:
+                    p_conv = chat_service.get_or_create_patient_conversation(patient, target_studio, user)
+                    patient_conv_id = p_conv.id
+                    
+                    i_conv = chat_service.get_or_create_internal_conversation(patient, target_studio, user)
+                    internal_conv_id = i_conv.id
+                except Exception as e:
+                    print(f"Error creating conversation: {e}")
+
+                if is_director:
+                    # 主任视角
+                    can_send_patient = False # 主任对患者会话只读
+                    can_send_internal = True
+                    
+                    # 内部会话对方标签：显示关联的平台医生/助理
+                    # 优先显示正在处理该患者的非主任医生或助理
+                    # 简化逻辑：显示“平台医生”或具体助理名
+                    # 如果有 assistants，取第一个
+                    assistant = doctor_profile.assistants.first()
+                    if assistant:
+                        tab_internal_label = f"{assistant.name}(平台医生)"
+                    else:
+                        tab_internal_label = "平台医生(平台医生)"
                 else:
-                    internal_label = "主任"
+                    # 平台医生/助理视角
+                    can_send_patient = True
+                    can_send_internal = True
+                    
+                    # 内部会话对方标签：显示主任
+                    if target_studio.owner_doctor:
+                        owner = target_studio.owner_doctor
+                        title = owner.title or ""
+                        hospital = owner.hospital or ""
+                        tab_internal_label = f"{owner.name}({hospital} {title})".strip()
+                    else:
+                        tab_internal_label = "主任(未知)"
+                        
         except PatientProfile.DoesNotExist:
             pass
     
@@ -80,8 +114,14 @@ def get_chat_context(request: HttpRequest):
         'data': {
             'user_name': real_name,
             'role_label': role_label,
-            'internal_label': internal_label,
-            'studio_name': studio.name if studio else ''
+            'studio_name': studio.name if studio else '',
+            # New fields
+            'tab_patient_label': tab_patient_label,
+            'tab_internal_label': tab_internal_label,
+            'patient_conversation_id': patient_conv_id,
+            'internal_conversation_id': internal_conv_id,
+            'can_send_patient': can_send_patient,
+            'can_send_internal': can_send_internal
         }
     })
 

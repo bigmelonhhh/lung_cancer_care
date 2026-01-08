@@ -16,27 +16,27 @@
             <button @click="switchTab('patient')" 
                     :class="{'bg-white shadow text-slate-700': activeTab === 'patient', 'text-slate-500 hover:text-slate-600': activeTab !== 'patient'}"
                     class="px-3 py-1 text-xs font-medium rounded-md transition-all duration-200">
-                <span x-text="patientName">患者</span>
+                <span class="truncate" x-text="patientLabel">患者</span>
             </button>
             <button @click="switchTab('internal')" 
                     :class="{'bg-white shadow text-slate-700': activeTab === 'internal', 'text-slate-500 hover:text-slate-600': activeTab !== 'internal'}"
                     class="px-3 py-1 text-xs font-medium rounded-md transition-all duration-200 ml-1">
-                <span x-text="internalChatLabel">内部会话</span>
+                <span class="truncate" x-text="internalLabel">内部会话</span>
             </button>
         </div>
         </div>
     </div>
 
     <!-- 空状态 -->
-    <div x-show="!patientId" class="flex-1 flex flex-col items-center justify-center text-slate-300 text-sm" data-test="empty-state">
-        <svg class="w-12 h-12 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div x-show="!patientId" class="pt-10 flex-1 flex flex-col items-center justify-center text-slate-300 text-sm" data-test="empty-state">
+        <svg class="w-12 h-12 mb-2 opacity-50" fill="#10b981" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
         </svg>
         请从左侧选择患者开始聊天
     </div>
 
     <!-- 聊天内容区域 -->
-    <div x-show="patientId" class=" flex flex-col h-[500px]" style="display: none;">
+    <div x-show="patientId" class=" flex flex-col h-[440px] relative" style="display: none;">
         
         <!-- 消息列表 -->
         <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages-container" x-ref="messagesContainer">
@@ -45,7 +45,7 @@
                     <!-- 时间戳 (可选: 仅当时间间隔较大时显示) -->
                     <div class="text-xs text-slate-300 mb-1 text-center w-full" x-text="formatTime(msg.created_at)"></div>
                     
-                    <div class="flex max-w-[85%]" :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'">
+                    <div class="flex max-w-[95%]" :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'">
                         <!-- 头像/名字 -->
                         <div class="flex-shrink-0 flex flex-col items-center mx-2">
                             <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white"
@@ -56,11 +56,11 @@
                         </div>
 
                         <!-- 消息气泡 -->
-                        <div class="px-4 py-2 rounded-2xl text-sm shadow-sm relative group"
-                             :class="isMyMessage(msg) ? 'bg-emerald-500 text-white rounded-tr-none' : 'bg-white text-slate-700 border border-slate-100 rounded-tl-none'">
+                        <div class="px-4 py-2.5 rounded-2xl shadow-sm relative group border border-black/5"
+                             :class="isMyMessage(msg) ? 'bg-emerald-500 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none'">
                             
                             <!-- 文本内容 -->
-                            <div x-show="msg.content_type === 1" class="whitespace-pre-wrap break-words" x-text="msg.text_content"></div>
+                            <p x-show="msg.content_type === 1" class="whitespace-pre-wrap break-words text-[15px] leading-6" x-text="msg.text_content"></p>
                             
                             <!-- 图片内容 -->
                             <div x-show="msg.content_type === 2">
@@ -85,8 +85,8 @@
         </div>
 
         <!-- 底部输入栏 -->
-        <div class="p-3 border-t border-slate-100 bg-white">
-            <div class="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200 transition-all">
+        <div class="p-3 border-t border-slate-100 bg-white" x-show="canChat">
+            <div class="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 transition-all">
                 <textarea 
                     x-model="inputText" 
                     @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
@@ -115,6 +115,10 @@
                 </div>
             </div>
         </div>
+        
+        <!-- 只读提示 -->
+        <div x-show="!canChat" class="p-3 border-t border-slate-100 bg-slate-50 text-center text-slate-400 text-sm">
+        </div>
     </div>
 </div>
 
@@ -124,7 +128,18 @@ function chatWidget() {
         patientId: null,
         patientName: '',
         activeTab: 'patient', // 'patient' or 'internal'
-        internalChatLabel: '内部会话',
+        patientLabel: '患者',
+        internalLabel: '内部会话',
+        
+        conversations: {
+            patient: null,
+            internal: null
+        },
+        permissions: {
+            patient: true,
+            internal: true
+        },
+        
         messages: [],
         inputText: '',
         loading: false,
@@ -140,6 +155,14 @@ function chatWidget() {
             PLATFORM_DOCTOR: 4,
             ASSISTANT: 5,
             CRC: 6
+        },
+
+        get currentConversationId() {
+            return this.conversations[this.activeTab];
+        },
+        
+        get canChat() {
+            return this.permissions[this.activeTab];
         },
 
         async init() {
@@ -162,7 +185,14 @@ function chatWidget() {
                     const info = data.data;
                     this.currentUserInfo = `当前账号: ${info.user_name}(${info.role_label})`;
                     if (patientId) {
-                        this.internalChatLabel = info.internal_label;
+                        this.patientLabel = info.tab_patient_label;
+                        this.internalLabel = info.tab_internal_label;
+                        
+                        this.conversations.patient = info.patient_conversation_id;
+                        this.conversations.internal = info.internal_conversation_id;
+                        
+                        this.permissions.patient = info.can_send_patient;
+                        this.permissions.internal = info.can_send_internal;
                     }
                 }
             } catch (e) {
@@ -174,7 +204,7 @@ function chatWidget() {
             }
         },
 
-        handlePatientSelect(detail) {
+        async handlePatientSelect(detail) {
             if (this.patientId === detail.id) return;
             
             this.patientId = detail.id;
@@ -183,59 +213,38 @@ function chatWidget() {
             this.messages = [];
             
             // 获取新的上下文（包括动态的内部会话标签）
-            this.fetchContext(this.patientId);
+            await this.fetchContext(this.patientId);
             
             this.loadMessages();
             this.startPolling();
         },
 
         switchTab(tab) {
+            if (this.activeTab === tab) return;
             this.activeTab = tab;
-            this.loadMessages();
+            this.messages = [];
+            this.$nextTick(() => {
+                this.loadMessages();
+            });
         },
 
         async loadMessages() {
-            if (!this.patientId) return;
+            if (!this.patientId || !this.currentConversationId) {
+                 this.messages = [];
+                 return;
+            }
             
             this.loading = true;
             try {
-                // 1. 获取会话 ID (简化处理：先获取会话列表找到对应的 conversation_id)
-                // 实际项目中后端接口应支持直接传 patient_id 获取或创建会话
-                // 这里我们假设后端 list_conversations 返回了包含 conversation_id 的信息
-                // 或者我们调用一个新接口。鉴于目前接口设计，我们先用 list_conversations 过滤
+                const msgRes = await fetch(`/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`);
+                const msgData = await msgRes.json();
                 
-                // 优化：直接使用 list_messages 接口，但目前接口需要 conversation_id。
-                // 临时方案：前端先调用 conversations 接口找到对应患者的 conversation_id
-                // 长期方案：后端增加 get_conversation_by_patient 接口
-                
-                const convRes = await fetch(`/doctor/chat/api/conversations/`);
-                const convData = await convRes.json();
-                
-                if (convData.status === 'success') {
-                    const conv = convData.conversations.find(c => c.patient_id === this.patientId);
-                    if (conv) {
-                        this.currentConversationId = conv.conversation_id;
-                        
-                        // 加载消息
-                        const msgRes = await fetch(`/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`);
-                        const msgData = await msgRes.json();
-                        
-                        if (msgData.status === 'success') {
-                            this.messages = msgData.messages;
-                            this.scrollToBottom();
-                            // 标记已读
-                            this.markRead(this.currentConversationId, this.messages.length > 0 ? this.messages[this.messages.length-1].id : null);
-                        }
-                    } else {
-                        // 还没有会话，显示空
-                        this.messages = [];
-                        this.currentConversationId = null; // 此时发送消息会失败，后端应提供 auto-create
-                        // 如果后端 send 接口支持自动创建会话则更好，但目前看 send_text_message 需要 conversation_id
-                        // 这是一个潜在的问题点。
-                        // 修正：如果列表里没有，说明还没聊过。
-                        // 医生端可能需要先"发起"会话？或者我们假设患者已经发起了。
-                        // 根据需求，如果是空会话，医生发消息时可能需要先创建。
-                        // 暂时先留空。
+                if (msgData.status === 'success') {
+                    this.messages = msgData.messages;
+                    this.scrollToBottom();
+                    // 标记已读
+                    if (this.messages.length > 0) {
+                        this.markRead(this.currentConversationId, this.messages[this.messages.length-1].id);
                     }
                 }
             } catch (e) {

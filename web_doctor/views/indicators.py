@@ -141,8 +141,8 @@ def build_indicators_context(
         "title": "静息血氧 SpO2 (%)",
         "dates": date_strs,
         "series": [{"name": "静息血氧", "data": spo2_data, "color": "#3b82f6"}],
-        "y_min": 80,
-        "y_max": 100
+        "y_min": 0,
+        "y_max": 200
     }
 
     # BP (需要主值和副值)
@@ -156,8 +156,8 @@ def build_indicators_context(
             {"name": "收缩压", "data": bp_sbp, "color": "#3b82f6"},
             {"name": "舒张压", "data": bp_dbp, "color": "#10b981"}
         ],
-        "y_min": 60,
-        "y_max": 180
+        "y_min": 0,
+        "y_max": 300
     }
 
     # Heart Rate
@@ -167,8 +167,8 @@ def build_indicators_context(
         "title": "静息心率 (次/min)",
         "dates": date_strs,
         "series": [{"name": "静息心率", "data": hr_data, "color": "#3b82f6"}],
-        "y_min": 40,
-        "y_max": 140
+        "y_min": 0,
+        "y_max": 200
     }
 
     # Weight
@@ -178,8 +178,8 @@ def build_indicators_context(
         "title": "体重 (KG)",
         "dates": date_strs,
         "series": [{"name": "体重", "data": weight_data, "color": "#3b82f6"}],
-        "y_min": 40,
-        "y_max": 120
+        "y_min": 0,
+        "y_max": 100
     }
 
     # Temperature
@@ -189,8 +189,8 @@ def build_indicators_context(
         "title": "体温 (℃)",
         "dates": date_strs,
         "series": [{"name": "体温", "data": temp_data, "color": "#3b82f6"}],
-        "y_min": 35,
-        "y_max": 42
+        "y_min": 0,
+        "y_max": 45
     }
 
     # Steps
@@ -201,7 +201,7 @@ def build_indicators_context(
         "dates": date_strs,
         "series": [{"name": "步数", "data": steps_data, "color": "#3b82f6"}],
         "y_min": 0,
-        "y_max": 15000 
+        "y_max": 30000 
     }
 
     # 3. 服药记录
@@ -323,13 +323,13 @@ def build_indicators_context(
         }
 
     # 4.1 体能 (Q_PHYSICAL)
-    charts['physical'] = fetch_chart_data(QuestionnaireCode.Q_PHYSICAL, "体能评估", 5, "体能评分")
+    charts['physical'] = fetch_chart_data(QuestionnaireCode.Q_PHYSICAL, "体能评估", 50, "体能评分")
 
     # 4.2 呼吸 (Q_BREATH)
-    charts['breath'] = fetch_chart_data(QuestionnaireCode.Q_BREATH, "呼吸评估", 5, "呼吸评分")
+    charts['breath'] = fetch_chart_data(QuestionnaireCode.Q_BREATH, "呼吸评估", 50, "呼吸评分")
 
     # 4.3 咳嗽与痰色 (Q_COUGH)
-    charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 12, "咳嗽评分")
+    charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 50, "咳嗽评分")
     
     # TODO 4.3.1 咯血表格 需要根据筛选日期去查询获取数据，按照回答的答案分值格式化数据-0-无，3-血丝，5-少量，9-大量
     blood_table_row = []
@@ -356,21 +356,21 @@ def build_indicators_context(
     }
 
     # 4.4 食欲评估 (Q_APPETITE)
-    charts['appetite'] = fetch_chart_data(QuestionnaireCode.Q_APPETITE, "食欲评估", 12, "食欲评分")
+    charts['appetite'] = fetch_chart_data(QuestionnaireCode.Q_APPETITE, "食欲评估", 50, "食欲评分")
 
     # 4.5 疼痛量表 (Q_PAIN)
-    charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 10, "身体疼痛评分")
+    charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 50, "身体疼痛评分")
 
     # 4.6 睡眠质量 (Q_SLEEP)
-    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 6, "睡眠质量评分")
+    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 50, "睡眠质量评分")
 
     # 4.7 抑郁评估 (Q_DEPRESSIVE) -> Mapped to 'psych' key
-    charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 10, "抑郁评分")
+    charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 50, "抑郁评分")
     # Override id to match template expectation if necessary (template uses chart-psych?)
     charts['psych']['id'] = "chart-psych"
 
     # 4.8 焦虑评估 (Q_ANXIETY)
-    charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 10, "焦虑评分")
+    charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 50, "焦虑评分")
 
     return {
         "medication_data": medication_data,
