@@ -379,6 +379,133 @@ class QuestionnaireSubmissionServiceTest(TestCase):
                 questionnaire_code="Q_NOT_EXIST",
             )
 
+    def test_list_daily_cough_hemoptysis_flags_fill_missing_and_latest(self):
+        """
+        按日返回咯血标记：缺失日期补 False，同日多次提交取最新。
+        """
+        tz = timezone.get_current_timezone()
+        questionnaire = Questionnaire.objects.filter(code=QuestionnaireCode.Q_COUGH).first()
+        if not questionnaire:
+            questionnaire = Questionnaire.objects.create(
+                name="咳嗽与痰色评估",
+                code=QuestionnaireCode.Q_COUGH,
+            )
+
+        question = QuestionnaireQuestion.objects.filter(
+            id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID
+        ).first()
+        if not question:
+            question = QuestionnaireQuestion.objects.create(
+                id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID,
+                questionnaire=questionnaire,
+                text="咳嗽或痰中是否带血？",
+                seq=1,
+                is_required=True,
+            )
+        elif question.questionnaire_id != questionnaire.id:
+            question.questionnaire = questionnaire
+            question.save(update_fields=["questionnaire"])
+
+        options = {
+            option.seq: option
+            for option in QuestionnaireOption.objects.filter(question=question)
+        }
+        option_specs = {
+            1: ("完全没血", "0", Decimal("0")),
+            2: ("血丝", "3", Decimal("3")),
+            3: ("少量", "5", Decimal("5")),
+            4: ("大量", "9", Decimal("9")),
+        }
+        for seq, (text, value, score) in option_specs.items():
+            if seq not in options:
+                options[seq] = QuestionnaireOption.objects.create(
+                    question=question,
+                    text=text,
+                    value=value,
+                    score=score,
+                    seq=seq,
+                )
+
+        day1 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+        day2 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+        day3_early = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+        day3_late = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+        day4 = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+
+        QuestionnaireSubmission.objects.filter(id=day1.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 1, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day2.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 2, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day3_early.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 3, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day3_late.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 3, 20, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=day4.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 4, 9, 0), tz)
+        )
+
+        QuestionnaireAnswer.objects.create(
+            submission=day1,
+            question=question,
+            option=options[2],
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=day2,
+            question=question,
+            option=options[3],
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=day3_early,
+            question=question,
+            option=options[4],
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=day3_late,
+            question=question,
+            option=options[1],
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=day4,
+            question=question,
+            option=options[4],
+        )
+
+        results = QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags(
+            patient=self.patient,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 5),
+        )
+
+        self.assertEqual(
+            results,
+            [
+                {"date": date(2025, 1, 1), "has_hemoptysis": False},
+                {"date": date(2025, 1, 2), "has_hemoptysis": True},
+                {"date": date(2025, 1, 3), "has_hemoptysis": False},
+                {"date": date(2025, 1, 4), "has_hemoptysis": True},
+                {"date": date(2025, 1, 5), "has_hemoptysis": False},
+            ],
+        )
+
     def test_get_questionnaire_comparison_returns_question_details(self):
         """
         查询问卷对比：返回题目明细与分数变化。

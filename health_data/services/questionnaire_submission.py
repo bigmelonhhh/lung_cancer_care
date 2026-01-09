@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Prefetch
 from django.utils import timezone
 
 from core.models import (
@@ -383,6 +384,111 @@ class QuestionnaireSubmissionService:
         for day in sorted(scores_by_date.keys()):
             score = scores_by_date[day]
             results.append({"date": day, "score": score or Decimal("0")})
+
+        return results
+
+    @classmethod
+    def list_daily_cough_hemoptysis_flags(
+        cls,
+        *,
+        patient: "PatientProfile",
+        start_date: date,
+        end_date: date,
+    ) -> list[dict[str, Any]]:
+        """
+        按日返回咳嗽问卷“咯血题”(ID=40)是否为咯血的结果。
+
+        【功能说明】
+        - 仅查询问卷类型数据（Q_COUGH），并限定题目 ID=40；
+        - 同一天多次提交时，仅取当天最新一条；
+        - 选项序号为 3 或 4 视为“咯血”，1 或 2 不算；
+        - 若当日无提交或该题未作答，默认返回 False。
+
+        【使用方法】
+        - list_daily_cough_hemoptysis_flags(
+              patient=patient,
+              start_date=date(2025, 1, 1),
+              end_date=date(2025, 1, 31),
+          )
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - start_date: date，开始日期（含）。
+        - end_date: date，结束日期（含）。
+
+        【返回值说明】
+        - list[dict]，结构示例：
+          [
+            {"date": date(2025, 1, 1), "has_hemoptysis": False},
+            {"date": date(2025, 1, 2), "has_hemoptysis": True},
+          ]
+
+        【异常说明】
+        - patient 无效或日期非法：抛出 ValidationError。
+        - 咳嗽问卷或题目不存在：抛出 ValidationError。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValidationError("患者信息无效。")
+        if start_date is None or end_date is None:
+            raise ValidationError("起止日期不能为空。")
+        if start_date > end_date:
+            raise ValidationError("起始日期不能晚于结束日期。")
+
+        if not Questionnaire.objects.filter(code=QuestionnaireCode.Q_COUGH).exists():
+            raise ValidationError("咳嗽问卷不存在。")
+        if not QuestionnaireQuestion.objects.filter(
+            id=cls.COUGH_BLOOD_QUESTION_ID,
+            questionnaire__code=QuestionnaireCode.Q_COUGH,
+        ).exists():
+            raise ValidationError("咳嗽问卷未配置咯血题目。")
+
+        start_dt, end_dt = cls._build_date_range(start_date, end_date)
+
+        submissions = (
+            QuestionnaireSubmission.objects.filter(
+                patient_id=patient.id,
+                questionnaire__code=QuestionnaireCode.Q_COUGH,
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
+            )
+            .order_by("-created_at")
+            .prefetch_related(
+                Prefetch(
+                    "answers",
+                    queryset=QuestionnaireAnswer.objects.filter(
+                        question_id=cls.COUGH_BLOOD_QUESTION_ID
+                    ).select_related("option"),
+                    to_attr="cough_blood_answers",
+                )
+            )
+        )
+
+        results_by_date: dict[date, bool] = {}
+        current_date = start_date
+        while current_date <= end_date:
+            results_by_date[current_date] = False
+            current_date += timedelta(days=1)
+
+        processed_dates: set[date] = set()
+        for submission in submissions:
+            local_date = cls._to_localtime(submission.created_at).date()
+            if local_date not in results_by_date or local_date in processed_dates:
+                continue
+            processed_dates.add(local_date)
+
+            answers = getattr(submission, "cough_blood_answers", [])
+            has_hemoptysis = any(
+                answer.option
+                and answer.option.seq in (3, 4)
+                for answer in answers
+            )
+            results_by_date[local_date] = has_hemoptysis
+
+        results: list[dict[str, Any]] = []
+        for day in sorted(results_by_date.keys()):
+            results.append(
+                {"date": day, "has_hemoptysis": results_by_date[day]}
+            )
 
         return results
 
