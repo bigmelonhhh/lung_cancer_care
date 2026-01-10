@@ -12,7 +12,7 @@ from users.decorators import check_patient, auto_wechat_login
 def list_messages(request: HttpRequest):
     """获取消息列表"""
     patient = request.patient
-    service = ChatService()
+    service = ChatService() 
     
     try:
         conversation = service.get_or_create_patient_conversation(patient=patient)

@@ -160,14 +160,14 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     
                     plan_data.update({
                         "type": "followup",
-                        "subtitle": "请及时完成您的随访任务",
+                        "subtitle": "请及时完成您的随访任务" if status_val == 0 else "今日已完成",
                         "action_text": "去完成",
                         "url": action_url
                     })
                 elif "复查" in title_val:
                     plan_data.update({
                         "type": "checkup",
-                        "subtitle": "请及时完成您的复查任务",
+                        "subtitle": "请及时完成您的复查任务" if status_val == 0 else "今日已完成",
                         "action_text": "去完成"
                     })
                 # 去除呼吸、咳嗽、疼痛等映射
@@ -261,7 +261,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         utc_time = metric_info['measured_at']
         local_time = timezone.localtime(utc_time)
         # 2. 获取当前本地时间的年月日
-        today = timezone.now().date()
+        today = timezone.localdate()
         # 3. 对比年月日是否一致
         return local_time.date() == today
 
@@ -325,6 +325,9 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         # 获取该计划对应的指标数据
         metric_data = get_metric_value(metric_config["key"], listData)
         
+        # 标记是否找到今日有效数据
+        has_today_data = False
+        
         # 有有效数据 → 先判断是否是今日数据，再更新状态
         if metric_data:
             # 找到原始指标信息（用于获取measured_at）
@@ -340,21 +343,27 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             else:
                 raw_metric_info = listData.get(metric_key)
             
-            # 非今日数据 → 跳过更新，保留默认状态
-            if not is_today_data(raw_metric_info):
-                continue
+            # 只有是今日数据才更新状态
+            if is_today_data(raw_metric_info):
+                has_today_data = True
+                plan["status"] = "completed"
+                try:
+                    display_value = metric_config["format_func"](metric_data)
+                    plan["subtitle"] = f"今日已记录：{display_value}"
+                except Exception as e:
+                    plan["subtitle"] = "今日已记录"
+
+        # 如果没有今日数据（包括无数据或数据非今日）
+        if not has_today_data:
+            # 1. 检查是否是刚提交的任务（兜底标记为完成）
+            if plan_type in completed_task_types:
+                plan["status"] = "completed"
+                plan["subtitle"] = "今日已记录：提交成功"
             
-            # 今日数据 → 更新为已完成状态并展示数据
-            plan["status"] = "completed"
-            try:
-                display_value = metric_config["format_func"](metric_data)
-                plan["subtitle"] = f"今日已记录：{display_value}"
-            except Exception as e:
-                plan["subtitle"] = "今日已记录"
-        # 无有效数据 → 检查是否是刚提交的任务（兜底标记为完成）
-        elif plan_type in completed_task_types:
-            plan["status"] = "completed"
-            plan["subtitle"] = "今日已记录：问卷提交成功"
+            # 2. 如果是测量类任务，且没有今日数据，强制状态为 pending（显示去填写按钮）
+            # 修复：后台可能返回 completed 但无今日数据的情况
+            elif plan_type in ["temperature", "bp_hr", "spo2", "weight"]:
+                plan["status"] = "pending"
             
     # ========== 任务URL映射（如果需要保留） ==========
      # "temperature": generate_menu_auth_url("web_patient:record_temperature"),
