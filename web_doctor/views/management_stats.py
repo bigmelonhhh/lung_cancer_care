@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional, List
 from datetime import date
 import random
@@ -13,6 +14,7 @@ from core.models.choices import PlanItemCategory
 from health_data.models import MetricType, QuestionnaireSubmission
 from django.contrib.auth.decorators import login_required
 from users.decorators import check_doctor_or_assistant
+from chat.services.chat import ChatService
 
 class ManagementStatsView:
     def get_context_data(self, patient: Any, selected_package_id: Optional[int] = None) -> Dict[str, Any]:
@@ -104,10 +106,8 @@ class ManagementStatsView:
         # 生成图表数据
         charts = self._generate_charts_data(patient, start_date, end_date)
         
-        # TODO 生成咨询数据-待联调
-        # TODO 按月统计-在线咨询次数
-        # TODO 按时间段分布-在线咨询次数
-        query_stats = self._generate_query_stats()
+        # 生成咨询数据统计
+        query_stats = self._generate_query_stats(patient, start_date, end_date)
 
         return {
             "service_packages": service_packages,
@@ -212,46 +212,112 @@ class ManagementStatsView:
         
         return charts
 
-    def _generate_query_stats(self) -> Dict[str, Any]:
+    def _generate_query_stats(self, patient: Any, start_date: date | None, end_date: date | None) -> Dict[str, Any]:
         """
         生成咨询数据统计
         """
-        months = [f"{i}月" for i in range(1, 13)]
+        # 默认空数据结构
+        empty_result = {
+            "total_count": 0,
+            "line_chart": {
+                "id": "query-line-chart",
+                "title": "按月统计",
+                "xAxis": [],
+                "yAxis": {"min": 0, "max": 10},
+                "series": [{"name": "咨询次数", "data": [], "color": "#3B82F6"}]
+            },
+            "pie_chart": {
+                "id": "query-pie-chart",
+                "title": "按时间段分布",
+                "series": []
+            }
+        }
+
+        if not patient or not start_date or not end_date:
+            return empty_result
+
+        try:
+            chat_service = ChatService()
+            stats = chat_service.get_patient_chat_session_stats(
+                patient=patient,
+                start_date=start_date,
+                end_date=end_date
+            )
+            logging.info(f"数据: {stats}")
+        except Exception as e:
+            # 如果服务调用失败，返回空数据
+            return empty_result
+
+        # 1. 处理折线图数据 (按月统计)
+        months = []
+        curr = date(start_date.year, start_date.month, 1)
+        end = date(end_date.year, end_date.month, 1)
+        while curr <= end:
+            months.append(f"{curr.year}-{curr.month:02d}")
+            if curr.month == 12:
+                curr = date(curr.year + 1, 1, 1)
+            else:
+                curr = date(curr.year, curr.month + 1, 1)
+
+        monthly_data = stats.get("monthly", [])
+        monthly_map = {item["month"]: item["count"] for item in monthly_data}
         
-        line_data = [0, 0, 0, 30, 31, 23, 26, 31, 27, 31, 5, 0] # 模拟数据，模仿图中趋势
-        
+        line_series_data = []
+        for m in months:
+            line_series_data.append(monthly_map.get(m, 0))
+            
         line_chart = {
             "id": "query-line-chart",
             "title": "按月统计",
             "xAxis": months,
-            "yAxis": {"min": 0, "max": 35},
+            "yAxis": {"min": 0, "max": max(line_series_data) + 5 if line_series_data else 10},
             "series": [
                 {
                     "name": "咨询次数",
-                    "data": line_data,
+                    "data": line_series_data,
                     "color": "#3B82F6"
                 }
             ]
         }
+
+        # 2. 处理饼图数据 (按时段分布)
+        time_slots = stats.get("time_slots", {})
+        # 映射配置: key -> (name, color)
+        slot_config = {
+            "0-7": ("00:00-07:00", "#5B8FF9"),
+            "7-10": ("07:00-10:00", "#5AD8A6"),
+            "10-13": ("10:00-13:00", "#5D7092"),
+            "13-18": ("13:00-18:00", "#F6BD16"),
+            "18-21": ("18:00-21:00", "#E8684A"),
+            "21-24": ("21:00-24:00", "#D34949"),
+        }
         
-        # 模拟饼图数据：按时间段分布
-        pie_data = [
-            {"value": 1, "name": "00:00-07:00", "color": "#5B8FF9"},
-            {"value": 1, "name": "07:00-10:00", "color": "#5AD8A6"},
-            {"value": 8, "name": "10:00-13:00", "color": "#5D7092"},
-            {"value": 10, "name": "13:00-18:00", "color": "#F6BD16"},
-            {"value": 8, "name": "18:00-21:00", "color": "#E8684A"},
-            {"value": 3, "name": "21:00-24:00", "color": "#D34949"},
-        ]
+        pie_series_data = []
+        # 按固定顺序生成饼图数据
+        ordered_keys = ["0-7", "7-10", "10-13", "13-18", "18-21", "21-24"]
         
+        for key in ordered_keys:
+            count = time_slots.get(key, 0)
+            if count > 0: # 仅展示有数据的时段，或者全部展示？原Mock是全部展示，这里保留全部展示逻辑会更好看，但通常饼图只展示有值的。
+                # 再次参考原Mock，全部都有值。为了饼图美观，如果全是0则空。
+                # 但为了图例完整，我们构造所有，ECharts会自动处理0值。
+                name, color = slot_config.get(key, (key, "#ccc"))
+                pie_series_data.append({
+                    "value": count,
+                    "name": name,
+                    "color": color
+                })
+        
+        # 如果全是0，可能不想显示？保留0值也没关系。
+
         pie_chart = {
             "id": "query-pie-chart",
             "title": "按时间段分布",
-            "series": pie_data
+            "series": pie_series_data
         }
-        
+
         return {
-            "total_count": 35,
+            "total_count": stats.get("total", 0),
             "line_chart": line_chart,
             "pie_chart": pie_chart
         }

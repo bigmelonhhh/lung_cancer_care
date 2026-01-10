@@ -60,7 +60,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     - 左侧展示该医生名下患者列表（可搜索）
     - 右侧展示患者待办事项
     """
-    # TODO 待联调首页-患者待办列表：列表项包含事项分类、事项名称、事项报警内容、事项处理状态、事项创建时间
+    # 待联调首页-患者待办列表：列表项包含事项分类、事项名称、事项报警内容、事项处理状态、事项创建时间
     # 获取基础上下文以保证页面布局正常（如左侧患者列表）
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     patients = _get_workspace_patients(request.user, request.GET.get("q"))

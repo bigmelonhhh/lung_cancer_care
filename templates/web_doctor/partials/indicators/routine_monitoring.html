@@ -37,7 +37,7 @@
                 <select name="cycle_id" 
                         :disabled="filterType !== 'cycle'"
                         @change="updateDatesFromCycle($event)"
-                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[300px]">
+                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 min-w-[300px]">
                     <option value="">全部疗程</option>
                     {% for cycle in treatment_cycles %}
                     <option value="{{ cycle.id }}" 

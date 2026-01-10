@@ -62,7 +62,7 @@
                 <select name="cycle_id" 
                         :disabled="filterType !== 'cycle'"
                         @change="updateDatesFromCycle($event)"
-                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[300px]">
+                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 min-w-[300px]">
                     <option value="">全部疗程</option>
                     {% for cycle in treatment_cycles %}
                     <option value="{{ cycle.id }}" 
@@ -142,10 +142,10 @@
                              <td class="p-2 border border-slate-200 bg-slate-50 font-medium w-20 whitespace-nowrap">{{ row.label }}</td>
                              {% for val in row.values %}
                              <td class="p-1 border border-slate-200 min-w-[30px] text-xs text-slate-600 whitespace-nowrap">
-                                 <span class="{% if val == '是' or val == '脓色' or val == '红色' %}text-red-500 font-bold{% elif val == '黄色' %}text-yellow-600{% endif %}">
-                                    {{ val }}
-                                 </span>
-                             </td>
+                                <span class="{% if val == '是' or val == '脓色' or val == '红色' or val == '有' %}text-red-500 font-bold{% elif val == '黄色' %}text-yellow-600{% endif %}">
+                                   {{ val }}
+                                </span>
+                            </td>
                              {% endfor %}
                          </tr>
                          {% endfor %}

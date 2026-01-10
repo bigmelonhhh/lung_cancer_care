@@ -1102,8 +1102,8 @@ video {
   height: 350px;
 }
 
-.h-\[500px\] {
-  height: 500px;
+.h-\[440px\] {
+  height: 440px;
 }
 
 .h-\[80px\] {
@@ -1124,22 +1124,6 @@ video {
 
 .h-px {
   height: 1px;
-}
-
-.h-screen {
-  height: 100vh;
-}
-
-.h-\[400px\] {
-  height: 400px;
-}
-
-.h-\[450px\] {
-  height: 450px;
-}
-
-.h-\[440px\] {
-  height: 440px;
 }
 
 .max-h-24 {
@@ -1382,6 +1366,10 @@ video {
   min-width: 5rem;
 }
 
+.min-w-\[16px\] {
+  min-width: 16px;
+}
+
 .min-w-\[220px\] {
   min-width: 220px;
 }
@@ -1411,6 +1399,10 @@ video {
   min-width: max-content;
 }
 
+.min-w-\[300px\] {
+  min-width: 300px;
+}
+
 .max-w-2xl {
   max-width: 42rem;
 }
@@ -1431,10 +1423,6 @@ video {
   max-width: 72rem;
 }
 
-.max-w-\[200px\] {
-  max-width: 200px;
-}
-
 .max-w-\[300px\] {
   max-width: 300px;
 }
@@ -1447,8 +1435,8 @@ video {
   max-width: 75%;
 }
 
-.max-w-\[85\%\] {
-  max-width: 85%;
+.max-w-\[95\%\] {
+  max-width: 95%;
 }
 
 .max-w-full {
@@ -1540,6 +1528,18 @@ video {
 
 .rotate-45 {
   --tw-rotate: 45deg;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+
+.scale-0 {
+  --tw-scale-x: 0;
+  --tw-scale-y: 0;
+  transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
+}
+
+.scale-100 {
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
   transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y));
 }
 
@@ -2169,6 +2169,11 @@ video {
   border-color: transparent;
 }
 
+.border-white {
+  --tw-border-opacity: 1;
+  border-color: rgb(255 255 255 / var(--tw-border-opacity, 1));
+}
+
 .border-white\/10 {
   border-color: rgb(255 255 255 / 0.1);
 }
@@ -2343,11 +2348,6 @@ video {
 .bg-gray-50 {
   --tw-bg-opacity: 1;
   background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
-}
-
-.bg-gray-600 {
-  --tw-bg-opacity: 1;
-  background-color: rgb(75 85 99 / var(--tw-bg-opacity, 1));
 }
 
 .bg-green-100 {

@@ -357,22 +357,28 @@ def build_indicators_context(
     # 4.3 咳嗽与痰色 (Q_COUGH)
     charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 0,15, "咳嗽评分")
     
-    # TODO 4.3.1 咯血表格 需要根据筛选日期去查询获取数据，按照回答的答案分值格式化数据-0-无，3-血丝，5-少量，9-大量
+    # 4.3.1 咯血表格 
     blood_table_row = []
-    # try:
-    #     cough_answers = QuestionnaireSubmissionService.list_daily_question_answers(
-    #         patient=patient,
-    #         start_date=start_date,
-    #         end_date=end_date,
-    #         questionnaire_code=QuestionnaireCode.Q_COUGH,
-    #         question_id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID
-    #     )
-    #     ans_map = {res['date'].strftime(date_fmt): res['value'] for res in cough_answers}
-    #     # If no data, show "-"
-    #     blood_table_row = [ans_map.get(d, "") or "-" for d in date_strs]
-    # except Exception as e:
-    #     logger.error(f"Failed to fetch cough answers: {e}")
-    #     blood_table_row = ["-"] * len(date_strs)
+    try:
+        hemoptysis_flags = QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags(
+            patient=patient,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        
+        # 将 boolean 转换为 "有"/"无"
+        # True -> "有", False -> "无"
+        # 结果映射到日期
+        flag_map = {}
+        for item in hemoptysis_flags:
+            d_str = item['date'].strftime(date_fmt)
+            flag_map[d_str] = "有" if item['has_hemoptysis'] else "无"
+            
+        blood_table_row = [flag_map.get(d, "-") for d in date_strs]
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch hemoptysis flags: {e}")
+        blood_table_row = ["-"] * len(date_strs)
 
     cough_table = {
         "dates": date_strs,
