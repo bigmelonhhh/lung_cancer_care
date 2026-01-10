@@ -6,44 +6,45 @@ from users.models.base import TimeStampedModel
 
 class PatientStudioAssignment(TimeStampedModel):
     """
-    [Purpose]
-    - Track patient-to-studio assignment history.
+    患者工作室归属记录。
+
+    - 记录患者与工作室的归属历史。
     """
 
     patient = models.ForeignKey(
         "users.PatientProfile",
         on_delete=models.CASCADE,
         related_name="studio_assignments",
-        verbose_name="Patient",
-        help_text="Patient profile assigned to a studio.",
+        verbose_name="患者",
+        help_text="归属到工作室的患者档案。",
     )
     studio = models.ForeignKey(
         "users.DoctorStudio",
         on_delete=models.CASCADE,
         related_name="patient_assignments",
-        verbose_name="Studio",
-        help_text="Studio assigned to the patient.",
+        verbose_name="工作室",
+        help_text="患者当前归属的工作室。",
     )
     start_at = models.DateTimeField(
-        "Start At",
+        "开始时间",
         default=timezone.now,
-        help_text="Assignment start timestamp.",
+        help_text="归属开始时间。",
     )
     end_at = models.DateTimeField(
-        "End At",
+        "结束时间",
         null=True,
         blank=True,
-        help_text="Assignment end timestamp, null means active.",
+        help_text="归属结束时间，空值表示当前仍有效。",
     )
     reason = models.TextField(
-        "Reason",
+        "转移原因",
         blank=True,
-        help_text="Optional transfer reason note.",
+        help_text="可选的转移原因说明。",
     )
 
     class Meta:
-        verbose_name = "Patient Studio Assignment"
-        verbose_name_plural = "Patient Studio Assignments"
+        verbose_name = "患者工作室归属"
+        verbose_name_plural = "患者工作室归属"
         indexes = [
             models.Index(fields=["patient", "end_at"], name="idx_chat_assignment_active"),
         ]

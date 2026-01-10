@@ -1,4 +1,4 @@
-"""Chat service layer exports."""
+"""聊天服务层导出。"""
 
 from .chat import ChatService
 

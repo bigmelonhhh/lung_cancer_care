@@ -2,26 +2,26 @@ from django.db import models
 
 
 class ConversationType(models.IntegerChoices):
-    """Conversation type enum."""
+    """会话类型枚举。"""
 
-    PATIENT_STUDIO = 1, "Patient Studio"
-    INTERNAL = 2, "Internal"
+    PATIENT_STUDIO = 1, "患者会话"
+    INTERNAL = 2, "内部会话"
 
 
 class MessageContentType(models.IntegerChoices):
-    """Message content type enum."""
+    """消息内容类型枚举。"""
 
-    TEXT = 1, "Text"
-    IMAGE = 2, "Image"
+    TEXT = 1, "文本"
+    IMAGE = 2, "图片"
 
 
 class MessageSenderRole(models.IntegerChoices):
-    """Sender role snapshot enum."""
+    """发送者角色快照枚举。"""
 
-    PATIENT = 1, "Patient"
-    FAMILY = 2, "Family"
-    DIRECTOR = 3, "Director"
-    PLATFORM_DOCTOR = 4, "Platform Doctor"
-    ASSISTANT = 5, "Assistant"
+    PATIENT = 1, "患者"
+    FAMILY = 2, "家属"
+    DIRECTOR = 3, "主任"
+    PLATFORM_DOCTOR = 4, "平台医生"
+    ASSISTANT = 5, "医生助理"
     CRC = 6, "CRC"
-    OTHER = 99, "Other"
+    OTHER = 99, "其他"

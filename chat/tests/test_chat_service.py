@@ -1,11 +1,18 @@
 import base64
+from datetime import datetime, timedelta
+from unittest import mock
 
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.utils import timezone
 
-from chat.models import ConversationType, MessageContentType, PatientStudioAssignment
+from chat.models import (
+    ConversationSession,
+    ConversationType,
+    MessageContentType,
+    PatientStudioAssignment,
+)
 from chat.services import ChatService
 from users import choices
 from users.models import (
@@ -341,3 +348,99 @@ class ChatServiceTests(TestCase):
         internal_conversation.refresh_from_db()
         self.assertEqual(patient_conversation.studio_id, self.studio_b.id)
         self.assertEqual(internal_conversation.studio_id, self.studio_b.id)
+
+    def test_create_text_message_updates_conversation_session(self):
+        conversation = self.service.get_or_create_patient_conversation(
+            self.patient_profile
+        )
+        tz = timezone.get_current_timezone()
+        time_1 = timezone.make_aware(datetime(2025, 1, 1, 9, 0), tz)
+        time_2 = time_1 + timedelta(minutes=10)
+        time_3 = time_2 + timedelta(minutes=31)
+
+        with mock.patch("django.utils.timezone.now", return_value=time_1):
+            self.service.create_text_message(conversation, self.patient_user, "one")
+        with mock.patch("django.utils.timezone.now", return_value=time_2):
+            self.service.create_text_message(conversation, self.patient_user, "two")
+        with mock.patch("django.utils.timezone.now", return_value=time_3):
+            self.service.create_text_message(conversation, self.patient_user, "three")
+
+        sessions = list(
+            ConversationSession.objects.filter(conversation=conversation).order_by(
+                "start_at"
+            )
+        )
+        self.assertEqual(len(sessions), 2)
+        self.assertEqual(sessions[0].start_at, time_1)
+        self.assertEqual(sessions[0].end_at, time_2)
+        self.assertEqual(sessions[0].message_count, 2)
+        self.assertEqual(sessions[1].start_at, time_3)
+        self.assertEqual(sessions[1].end_at, time_3)
+
+    def test_get_patient_chat_session_stats(self):
+        conversation = self.service.get_or_create_patient_conversation(
+            self.patient_profile
+        )
+        internal_conversation = self.service.get_or_create_internal_conversation(
+            self.patient_profile,
+            self.studio,
+            operator=self.platform_user,
+        )
+        tz = timezone.get_current_timezone()
+        time_1 = timezone.make_aware(datetime(2025, 1, 2, 6, 30), tz)
+        time_2 = timezone.make_aware(datetime(2025, 1, 2, 8, 10), tz)
+        time_3 = timezone.make_aware(datetime(2025, 1, 2, 22, 5), tz)
+        time_4 = timezone.make_aware(datetime(2025, 2, 1, 9, 0), tz)
+
+        ConversationSession.objects.create(
+            conversation=conversation,
+            patient=self.patient_profile,
+            conversation_type=ConversationType.PATIENT_STUDIO,
+            start_at=time_1,
+            end_at=time_1,
+            message_count=1,
+        )
+        ConversationSession.objects.create(
+            conversation=conversation,
+            patient=self.patient_profile,
+            conversation_type=ConversationType.PATIENT_STUDIO,
+            start_at=time_2,
+            end_at=time_2,
+            message_count=1,
+        )
+        ConversationSession.objects.create(
+            conversation=conversation,
+            patient=self.patient_profile,
+            conversation_type=ConversationType.PATIENT_STUDIO,
+            start_at=time_3,
+            end_at=time_3,
+            message_count=1,
+        )
+        ConversationSession.objects.create(
+            conversation=internal_conversation,
+            patient=self.patient_profile,
+            conversation_type=ConversationType.INTERNAL,
+            start_at=time_4,
+            end_at=time_4,
+            message_count=1,
+        )
+
+        stats = self.service.get_patient_chat_session_stats(
+            patient=self.patient_profile,
+            start_date=time_1.date(),
+            end_date=time_3.date(),
+        )
+
+        self.assertEqual(stats["total"], 3)
+        self.assertEqual(stats["monthly"], [{"month": "2025-01", "count": 3}])
+        self.assertEqual(
+            stats["time_slots"],
+            {
+                "0-7": 1,
+                "7-10": 1,
+                "10-13": 0,
+                "13-18": 0,
+                "18-21": 0,
+                "21-24": 1,
+            },
+        )

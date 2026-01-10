@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
 from typing import Iterable, Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Case, CharField, Count, Value, When
+from django.db.models.functions import ExtractHour, TruncMonth
 from django.utils import timezone
 
 from chat.models import (
     Conversation,
     ConversationReadState,
     ConversationType,
+    ConversationSession,
     Message,
     MessageContentType,
     MessageSenderRole,
@@ -20,7 +24,9 @@ from users.models import CustomUser, DoctorStudio, PatientProfile, PatientRelati
 
 
 class ChatService:
-    """Chat domain services for conversations and messages."""
+    """聊天领域服务，负责会话与消息处理。"""
+
+    SESSION_GAP = timedelta(minutes=30)
 
     def get_or_create_patient_conversation(
         self,
@@ -179,6 +185,7 @@ class ChatService:
                 text_content=content,
             )
             self._touch_last_message(conversation, message.created_at)
+            self._record_session_for_message(conversation, message.created_at)
         return message
 
     def create_image_message(
@@ -225,6 +232,7 @@ class ChatService:
                 image=image_file,
             )
             self._touch_last_message(conversation, message.created_at)
+            self._record_session_for_message(conversation, message.created_at)
         return message
 
     def forward_to_director(
@@ -541,6 +549,7 @@ class ChatService:
                 image=image_file,
             )
             self._touch_last_message(conversation, message.created_at)
+            self._record_session_for_message(conversation, message.created_at)
         return message
 
     def _touch_last_message(self, conversation: Conversation, message_time) -> None:
@@ -548,6 +557,161 @@ class ChatService:
             last_message_at=message_time, updated_at=timezone.now()
         )
 
+    def _record_session_for_message(
+        self, conversation: Conversation, message_time: datetime
+    ) -> None:
+        if conversation is None or message_time is None:
+            return
+
+        session = (
+            ConversationSession.objects.filter(conversation=conversation)
+            .order_by("-end_at", "-id")
+            .first()
+        )
+        if not session:
+            ConversationSession.objects.create(
+                conversation=conversation,
+                patient=conversation.patient,
+                conversation_type=conversation.type,
+                start_at=message_time,
+                end_at=message_time,
+                message_count=1,
+            )
+            return
+
+        if message_time <= session.end_at:
+            session.message_count += 1
+            session.save(update_fields=["message_count", "updated_at"])
+            return
+
+        if message_time - session.end_at > self.SESSION_GAP:
+            ConversationSession.objects.create(
+                conversation=conversation,
+                patient=conversation.patient,
+                conversation_type=conversation.type,
+                start_at=message_time,
+                end_at=message_time,
+                message_count=1,
+            )
+            return
+
+        session.end_at = message_time
+        session.message_count += 1
+        session.save(update_fields=["end_at", "message_count", "updated_at"])
+
+    def _build_date_range(
+        self, start_date: date, end_date: date
+    ) -> tuple[datetime, datetime]:
+        query_end_date = end_date + timedelta(days=1)
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(query_end_date, datetime.min.time())
+
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+
+        return start_dt, end_dt
+
+    def get_patient_chat_session_stats(
+        self,
+        *,
+        patient: PatientProfile,
+        start_date: date,
+        end_date: date,
+        conversation_types: Optional[list[int]] = None,
+    ) -> dict:
+        """
+        【功能说明】
+        - 统计患者在时间范围内的聊天次数、按月次数与按时段次数。
+
+        【使用方法】
+        - chat_service.get_patient_chat_session_stats(
+              patient=patient,
+              start_date=date(2025, 1, 1),
+              end_date=date(2025, 1, 31),
+          )
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - start_date: date，开始日期（含）。
+        - end_date: date，结束日期（含）。
+        - conversation_types: list[int] | None，限定会话类型，默认仅患者会话。
+
+        【返回值说明】
+        - dict，结构示例：
+          {
+            "total": 12,
+            "monthly": [{"month": "2025-01", "count": 12}],
+            "time_slots": {"0-7": 1, "7-10": 2, ...}
+          }
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValidationError("患者信息无效。")
+        if start_date is None or end_date is None:
+            raise ValidationError("起止日期不能为空。")
+        if start_date > end_date:
+            raise ValidationError("起始日期不能晚于结束日期。")
+
+        types = conversation_types or [ConversationType.PATIENT_STUDIO]
+        if not types:
+            raise ValidationError("会话类型不能为空。")
+
+        start_dt, end_dt = self._build_date_range(start_date, end_date)
+        tz = timezone.get_current_timezone()
+
+        sessions = ConversationSession.objects.filter(
+            patient=patient,
+            conversation_type__in=types,
+            start_at__gte=start_dt,
+            start_at__lt=end_dt,
+        )
+
+        total = sessions.count()
+
+        monthly_rows = (
+            sessions.annotate(month=TruncMonth("start_at", tzinfo=tz))
+            .values("month")
+            .annotate(count=Count("id"))
+            .order_by("month")
+        )
+        monthly = [
+            {"month": item["month"].strftime("%Y-%m"), "count": item["count"]}
+            for item in monthly_rows
+            if item["month"]
+        ]
+
+        slot_defaults = {
+            "0-7": 0,
+            "7-10": 0,
+            "10-13": 0,
+            "13-18": 0,
+            "18-21": 0,
+            "21-24": 0,
+        }
+        slot_rows = (
+            sessions.annotate(hour=ExtractHour("start_at", tzinfo=tz))
+            .annotate(
+                slot=Case(
+                    When(hour__lt=7, then=Value("0-7")),
+                    When(hour__lt=10, then=Value("7-10")),
+                    When(hour__lt=13, then=Value("10-13")),
+                    When(hour__lt=18, then=Value("13-18")),
+                    When(hour__lt=21, then=Value("18-21")),
+                    default=Value("21-24"),
+                    output_field=CharField(),
+                )
+            )
+            .values("slot")
+            .annotate(count=Count("id"))
+        )
+        for row in slot_rows:
+            slot_defaults[row["slot"]] = row["count"]
+
+        return {
+            "total": total,
+            "monthly": monthly,
+            "time_slots": slot_defaults,
+        }
     def _assert_sender_can_send(
         self, conversation: Conversation, sender: CustomUser
     ) -> None:

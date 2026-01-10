@@ -6,32 +6,31 @@ from users.models.base import TimeStampedModel
 
 class Conversation(TimeStampedModel):
     """
-    [Purpose]
-    - Store patient-facing and internal conversation containers.
+    会话模型。
 
-    [Usage]
-    - One patient has one conversation per type.
+    - 保存患者会话与内部会话容器。
+    - 同一患者在每种会话类型下保持唯一。
     """
 
     type = models.PositiveSmallIntegerField(
-        "Conversation Type",
+        "会话类型",
         choices=ConversationType.choices,
         default=ConversationType.PATIENT_STUDIO,
-        help_text="Conversation type, patient-facing or internal.",
+        help_text="会话类型，患者会话或内部会话。",
     )
     patient = models.ForeignKey(
         "users.PatientProfile",
         on_delete=models.CASCADE,
         related_name="conversations",
-        verbose_name="Patient",
-        help_text="Patient profile linked to this conversation.",
+        verbose_name="患者",
+        help_text="会话关联的患者档案。",
     )
     studio = models.ForeignKey(
         "users.DoctorStudio",
         on_delete=models.CASCADE,
         related_name="conversations",
-        verbose_name="Studio",
-        help_text="Studio that owns the conversation context.",
+        verbose_name="工作室",
+        help_text="会话所属工作室。",
     )
     created_by = models.ForeignKey(
         "users.CustomUser",
@@ -39,19 +38,19 @@ class Conversation(TimeStampedModel):
         null=True,
         blank=True,
         related_name="created_conversations",
-        verbose_name="Created By",
-        help_text="Operator who created the conversation.",
+        verbose_name="创建人",
+        help_text="创建该会话的操作人。",
     )
     last_message_at = models.DateTimeField(
-        "Last Message At",
+        "最后消息时间",
         null=True,
         blank=True,
-        help_text="Timestamp of the latest message in this conversation.",
+        help_text="该会话最新一条消息的时间。",
     )
 
     class Meta:
-        verbose_name = "Conversation"
-        verbose_name_plural = "Conversations"
+        verbose_name = "会话"
+        verbose_name_plural = "会话"
         constraints = [
             models.UniqueConstraint(
                 fields=["patient", "type"],

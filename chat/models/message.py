@@ -8,7 +8,7 @@ from users.models.base import TimeStampedModel
 
 
 def _chat_image_upload_path(instance, filename: str) -> str:
-    """Build chat image upload path."""
+    """生成聊天图片上传路径。"""
 
     date_prefix = timezone.now().strftime("%Y/%m/%d")
     safe_name = f"{uuid.uuid4().hex}_{filename}"
@@ -17,62 +17,63 @@ def _chat_image_upload_path(instance, filename: str) -> str:
 
 class Message(TimeStampedModel):
     """
-    [Purpose]
-    - Persist message payloads with sender and studio snapshots.
+    消息模型。
+
+    - 保存消息内容及发送者、工作室快照信息。
     """
 
     conversation = models.ForeignKey(
         "chat.Conversation",
         on_delete=models.CASCADE,
         related_name="messages",
-        verbose_name="Conversation",
-        help_text="Conversation that this message belongs to.",
+        verbose_name="会话",
+        help_text="该消息所属的会话。",
     )
     sender = models.ForeignKey(
         "users.CustomUser",
         on_delete=models.CASCADE,
         related_name="chat_messages",
-        verbose_name="Sender",
-        help_text="User who sent this message.",
+        verbose_name="发送者",
+        help_text="发送该消息的用户。",
     )
     sender_role_snapshot = models.PositiveSmallIntegerField(
-        "Sender Role Snapshot",
+        "发送者角色快照",
         choices=MessageSenderRole.choices,
         default=MessageSenderRole.OTHER,
-        help_text="Sender role at the time of sending.",
+        help_text="发送时的角色快照。",
     )
     sender_display_name_snapshot = models.CharField(
-        "Sender Display Name Snapshot",
+        "发送者展示名快照",
         max_length=100,
-        help_text="Display name captured at send time.",
+        help_text="发送时的展示名称快照。",
     )
     studio_name_snapshot = models.CharField(
-        "Studio Name Snapshot",
+        "工作室名称快照",
         max_length=100,
-        help_text="Studio name captured at send time.",
+        help_text="发送时的工作室名称快照。",
     )
     content_type = models.PositiveSmallIntegerField(
-        "Content Type",
+        "内容类型",
         choices=MessageContentType.choices,
         default=MessageContentType.TEXT,
-        help_text="Content type of the message.",
+        help_text="消息的内容类型。",
     )
     text_content = models.TextField(
-        "Text Content",
+        "文本内容",
         blank=True,
-        help_text="Text payload for text messages.",
+        help_text="文本消息的内容。",
     )
     image = models.ImageField(
-        "Image",
+        "图片",
         upload_to=_chat_image_upload_path,
         null=True,
         blank=True,
-        help_text="Image file for image messages.",
+        help_text="图片消息的文件内容。",
     )
 
     class Meta:
-        verbose_name = "Message"
-        verbose_name_plural = "Messages"
+        verbose_name = "消息"
+        verbose_name_plural = "消息"
         indexes = [
             models.Index(fields=["conversation", "created_at"], name="idx_chat_msg_conv_time"),
         ]
