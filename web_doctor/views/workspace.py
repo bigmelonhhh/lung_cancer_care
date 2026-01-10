@@ -143,10 +143,10 @@ def patient_workspace(request: HttpRequest, patient_id: int) -> HttpResponse:
     if patient is None:
         raise Http404("未找到患者")
 
-    context = {"patient": patient, "active_tab": "settings"}
+    context = {"patient": patient, "active_tab": "home"}
 
-    # 默认加载“管理设置”内容，保证初次点击患者时中间区域完整
-    context.update(_build_settings_context(patient, tc_page=None, selected_cycle_id=None))
+    # 默认加载“患者主页”内容，保证初次点击患者时中间区域完整
+    context.update(build_home_context(patient))
 
     response_content = render_to_string("web_doctor/partials/patient_workspace.html", context, request=request)
     

@@ -2,8 +2,8 @@
     <!-- 顶部：患者工作台 Tab 导航（不再重复展示基础信息） -->
     {% include "web_doctor/partials/patient_workspace_tabs.html" with patient=patient active_tab=active_tab oob=False %}
 
-    <!-- 底部：可滚动内容区域（默认加载管理设置） -->
+    <!-- 底部：可滚动内容区域（默认加载患者主页） -->
     <div id="patient-content" class="flex-1 overflow-y-auto p-6 bg-slate-50">
-        {% include "web_doctor/partials/settings/main.html" %}
+        {% include "web_doctor/partials/home/home.html" %}
     </div>
 </div>

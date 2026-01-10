@@ -1378,6 +1378,10 @@ video {
   min-width: 240px;
 }
 
+.min-w-\[300px\] {
+  min-width: 300px;
+}
+
 .min-w-\[30px\] {
   min-width: 30px;
 }
@@ -1397,10 +1401,6 @@ video {
 .min-w-max {
   min-width: -moz-max-content;
   min-width: max-content;
-}
-
-.min-w-\[300px\] {
-  min-width: 300px;
 }
 
 .max-w-2xl {

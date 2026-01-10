@@ -46,6 +46,8 @@ _MONITORING_TASK_TYPES = {
     MetricType.BLOOD_OXYGEN,
     MetricType.HEART_RATE,
     MetricType.WEIGHT,
+    MetricType.STEPS,
+    MetricType.USE_MEDICATED,
 }
 
 
