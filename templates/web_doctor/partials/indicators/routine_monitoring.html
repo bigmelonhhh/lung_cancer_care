@@ -7,7 +7,7 @@
               class="flex items-center gap-4 text-sm relative" 
               onsubmit="return false;"
               x-data="{ 
-                  filterType: '{{ current_filter_type|default:'' }}' || '{% if current_cycle_id %}cycle{% elif current_start_date %}date{% else %}{% endif %}',
+                  filterType: '{{ current_filter_type|default:'cycle' }}',
                   updateDatesFromCycle(event) {
                       const select = event.target;
                       const option = select.options[select.selectedIndex];
@@ -27,7 +27,6 @@
                 <input type="hidden" name="filter_type" x-model="filterType">
                 <span class="text-slate-600">筛选条件:</span>
                 <select x-model="filterType" class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500">
-                    <option value="">请选择</option>
                     <option value="cycle">按疗程选择</option>
                     <option value="date">按日期查看</option>
                 </select>
@@ -38,7 +37,7 @@
                 <select name="cycle_id" 
                         :disabled="filterType !== 'cycle'"
                         @change="updateDatesFromCycle($event)"
-                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[200px]">
+                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[300px]">
                     <option value="">全部疗程</option>
                     {% for cycle in treatment_cycles %}
                     <option value="{{ cycle.id }}" 
@@ -70,14 +69,6 @@
                     hx-include="#routine-filter-form"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     搜索
-                </button>
-                <button 
-                    hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#indicators-wrapper"
-                    hx-swap="outerHTML"
-                    @click="filterType = ''"
-                    class="ml-3 px-4 lg:px-6 py-1.5 bg-gray-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
-                    重置
                 </button>
             </div>
              {% if is_default_view %}
@@ -119,7 +110,9 @@
                         <td class="p-2 border border-slate-200 bg-slate-50 font-medium min-w-20">是否服药</td>
                         {% for record in medication_data %}
                         <td class="p-1 border border-slate-200 min-w-[30px]">
-                            {% if record.taken %}
+                            {% if record.date > current_date %}
+                            <div class="w-6 h-6 bg-transparent rounded-full mx-auto"></div>
+                            {% elif record.taken %}
                             <div class="w-6 h-6 bg-green-500 rounded-full text-white flex items-center justify-center mx-auto">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                             </div>
@@ -135,7 +128,7 @@
                         <td class="p-2 border border-slate-200 bg-slate-50 font-medium">日期</td>
                         {% for record in medication_data %}
                         <td class="p-1 border border-slate-200 text-xs text-slate-500">
-                            {{ record.date }}
+                            {{ record.display_date }}
                         </td>
                         {% endfor %}
                     </tr>

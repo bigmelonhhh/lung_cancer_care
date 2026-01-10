@@ -62,7 +62,7 @@
                 <select name="cycle_id" 
                         :disabled="filterType !== 'cycle'"
                         @change="updateDatesFromCycle($event)"
-                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[200px]">
+                        class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 max-w-[300px]">
                     <option value="">全部疗程</option>
                     {% for cycle in treatment_cycles %}
                     <option value="{{ cycle.id }}" 
@@ -97,17 +97,6 @@
                     hx-on:htmx:response-error="alert('数据加载失败，请稍后重试。')"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     搜索
-                </button>
-                <button 
-                    hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#questionnaire-container"
-                    hx-select="#questionnaire-container"
-                    hx-swap="outerHTML"
-                    hx-indicator="#questionnaire-loading"
-                    hx-on:htmx:response-error="alert('数据加载失败，请稍后重试。')"
-                    @click="filterType = ''"
-                    class="ml-3 px-4 lg:px-6 py-1.5 bg-gray-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
-                    重置
                 </button>
             </div>
              {% if is_default_view %}

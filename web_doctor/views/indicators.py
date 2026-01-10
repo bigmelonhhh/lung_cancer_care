@@ -21,18 +21,36 @@ def build_indicators_context(
 ) -> dict:
     """
     构建“患者指标”Tab 所需的上下文数据：
-    - 查询近30天数据
-    - 获取疗程列表
+    - 默认查询当前进行中的疗程（若无则取最近一个）
+    - 支持按日期筛选
     """
     today = timezone.localdate()
     
-    # 默认值：近30天
-    start_date = today - timedelta(days=29)
-    end_date = today
+    # 1. 获取疗程列表
+    cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
+    treatment_cycles = cycles_page.object_list
     
-    is_default_view = True
+    # 确定默认显示的疗程（当前进行中 或 最近一个）
+    active_cycle = None
+    if treatment_cycles:
+        # 优先找当前进行中的
+        for cycle in treatment_cycles:
+            # 判断逻辑：start_date <= today <= end_date (或 end_date is None)
+            c_end = cycle.end_date if cycle.end_date else today
+            if cycle.start_date <= today and (cycle.end_date is None or cycle.end_date >= today):
+                active_cycle = cycle
+                break
+        
+        # 如果没有进行中的，取最近一个（treatment_cycles 通常按开始时间倒序排列）
+        if not active_cycle and treatment_cycles:
+            active_cycle = treatment_cycles[0]
     
-    # 根据 filter_type 决定优先级
+    # 初始化日期范围
+    start_date = None
+    end_date = None
+    is_default_view = False
+    
+    # 逻辑分支
     if filter_type == 'cycle':
         # 即使 cycle_id 为空（全部疗程），也视为 cycle 模式，但使用默认日期
         if cycle_id:
@@ -44,10 +62,13 @@ def build_indicators_context(
             except (TreatmentCycle.DoesNotExist, ValueError):
                 pass
         else:
-             # cycle_id 为空 -> "全部疗程" -> 默认30天，但需要保持 filter_type='cycle'
-             # is_default_view = True (UI上可能需要根据 filter_type 判断)
-             pass
-             
+            # cycle_id 为空 -> "全部疗程" -> 这里的处理可能需要明确业务需求
+            # 暂时回退到 active_cycle
+            if active_cycle:
+                start_date = active_cycle.start_date
+                end_date = active_cycle.end_date if active_cycle.end_date else today
+                cycle_id = str(active_cycle.id)
+
     elif filter_type == 'date':
         if start_date_str and end_date_str:
             try:
@@ -57,9 +78,9 @@ def build_indicators_context(
             except ValueError:
                 pass
     
-    # 兼容旧逻辑（如果 filter_type 未传，尝试推断）
-    elif not filter_type:
-        # 1. 优先使用自定义日期范围
+    # 默认视图或未指定 filter_type
+    if not start_date or not end_date:
+        # 1. 优先使用自定义日期范围 (兼容旧逻辑)
         if start_date_str and end_date_str:
             try:
                 start_date = date.fromisoformat(start_date_str)
@@ -69,16 +90,20 @@ def build_indicators_context(
             except ValueError:
                 pass 
         
-        # 2. 其次使用疗程范围
-        elif cycle_id:
-            try:
-                cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
-                start_date = cycle.start_date
-                end_date = cycle.end_date if cycle.end_date else today
-                is_default_view = False
-                filter_type = 'cycle'
-            except (TreatmentCycle.DoesNotExist, ValueError):
-                pass
+        # 2. 其次使用 active_cycle
+        elif active_cycle:
+            start_date = active_cycle.start_date
+            end_date = active_cycle.end_date if active_cycle.end_date else today
+            cycle_id = str(active_cycle.id)
+            filter_type = 'cycle'
+            is_default_view = True
+        
+        # 3. 兜底：如果没有疗程，默认30天
+        else:
+            start_date = today - timedelta(days=29)
+            end_date = today
+            is_default_view = True
+            filter_type = 'cycle' # 默认
 
     # 3. 校验跨度（最大1年 = 366天）
     delta_days = (end_date - start_date).days
@@ -105,10 +130,6 @@ def build_indicators_context(
         date_fmt = "%Y-%m-%d"
         
     date_strs = [(start_date + timedelta(days=i)).strftime(date_fmt) for i in range(delta_days + 1)]
-
-    # 1. 获取疗程列表
-    cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
-    treatment_cycles = cycles_page.object_list
 
     # 2. 获取各指标数据
     charts = {}
@@ -141,8 +162,8 @@ def build_indicators_context(
         "title": "静息血氧 SpO2 (%)",
         "dates": date_strs,
         "series": [{"name": "静息血氧", "data": spo2_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 200
+        "y_min": 80,
+        "y_max": 100
     }
 
     # BP (需要主值和副值)
@@ -156,8 +177,8 @@ def build_indicators_context(
             {"name": "收缩压", "data": bp_sbp, "color": "#3b82f6"},
             {"name": "舒张压", "data": bp_dbp, "color": "#10b981"}
         ],
-        "y_min": 0,
-        "y_max": 300
+        "y_min": 40,
+        "y_max": 220
     }
 
     # Heart Rate
@@ -167,8 +188,8 @@ def build_indicators_context(
         "title": "静息心率 (次/min)",
         "dates": date_strs,
         "series": [{"name": "静息心率", "data": hr_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 200
+        "y_min": 40,
+        "y_max": 180
     }
 
     # Weight
@@ -178,8 +199,8 @@ def build_indicators_context(
         "title": "体重 (KG)",
         "dates": date_strs,
         "series": [{"name": "体重", "data": weight_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 100
+        "y_min": 30,
+        "y_max": 150
     }
 
     # Temperature
@@ -189,8 +210,8 @@ def build_indicators_context(
         "title": "体温 (℃)",
         "dates": date_strs,
         "series": [{"name": "体温", "data": temp_data, "color": "#3b82f6"}],
-        "y_min": 0,
-        "y_max": 45
+        "y_min": 34,
+        "y_max": 42
     }
 
     # Steps
@@ -221,12 +242,18 @@ def build_indicators_context(
 
     medication_data = []
     med_count = 0
-    for d in date_strs:
-        taken = med_map.get(d, False)
+    # 重构 medication_data 循环，同时生成 display_date 和 real_date
+    for i in range(delta_days + 1):
+        day_date = start_date + timedelta(days=i)
+        d_str = day_date.strftime(date_fmt)
+        
+        taken = med_map.get(d_str, False)
         if taken:
             med_count += 1
+            
         medication_data.append({
-            "date": d,
+            "date": day_date, # 真实日期对象，用于比较
+            "display_date": d_str, # 显示用的格式化日期
             "taken": taken
         })
     
@@ -292,7 +319,7 @@ def build_indicators_context(
     # 4. 随访问卷指标处理 (Questionnaire Indicators - Real Data)
     # ==========================================
     
-    def fetch_chart_data(code, title, y_max, series_name, color="#3b82f6"):
+    def fetch_chart_data(code, title, y_min, y_max,series_name, color="#3b82f6"):
         try:
             results = QuestionnaireSubmissionService.list_daily_questionnaire_scores(
                 patient=patient,
@@ -300,7 +327,6 @@ def build_indicators_context(
                 end_date=end_date,
                 questionnaire_code=code,
             )
-            print(f"{results}")
             # Map results to date_strs
             score_map = {res['date'].strftime(date_fmt): res['score'] for res in results}
             data = [float(score_map.get(d, 0)) for d in date_strs]
@@ -318,18 +344,18 @@ def build_indicators_context(
             "title": title,
             "dates": date_strs,
             "series": [{"name": series_name, "data": data, "color": color}],
-            "y_min": 0,
+            "y_min": y_min,
             "y_max": y_max
         }
 
     # 4.1 体能 (Q_PHYSICAL)
-    charts['physical'] = fetch_chart_data(QuestionnaireCode.Q_PHYSICAL, "体能评估", 50, "体能评分")
+    charts['physical'] = fetch_chart_data(QuestionnaireCode.Q_PHYSICAL, "体能评估", 0,4, "体能评分")
 
     # 4.2 呼吸 (Q_BREATH)
-    charts['breath'] = fetch_chart_data(QuestionnaireCode.Q_BREATH, "呼吸评估", 50, "呼吸评分")
+    charts['breath'] = fetch_chart_data(QuestionnaireCode.Q_BREATH, "呼吸评估", 0,4, "呼吸评分")
 
     # 4.3 咳嗽与痰色 (Q_COUGH)
-    charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 50, "咳嗽评分")
+    charts['cough'] = fetch_chart_data(QuestionnaireCode.Q_COUGH, "", 0,15, "咳嗽评分")
     
     # TODO 4.3.1 咯血表格 需要根据筛选日期去查询获取数据，按照回答的答案分值格式化数据-0-无，3-血丝，5-少量，9-大量
     blood_table_row = []
@@ -356,23 +382,24 @@ def build_indicators_context(
     }
 
     # 4.4 食欲评估 (Q_APPETITE)
-    charts['appetite'] = fetch_chart_data(QuestionnaireCode.Q_APPETITE, "食欲评估", 50, "食欲评分")
+    charts['appetite'] = fetch_chart_data(QuestionnaireCode.Q_APPETITE, "食欲评估", 0,20, "食欲评分")
 
     # 4.5 疼痛量表 (Q_PAIN)
-    charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 50, "身体疼痛评分")
+    charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 0,36, "身体疼痛评分")
 
     # 4.6 睡眠质量 (Q_SLEEP)
-    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 50, "睡眠质量评分")
+    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 30,80, "睡眠质量评分")
 
     # 4.7 抑郁评估 (Q_DEPRESSIVE) -> Mapped to 'psych' key
-    charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 50, "抑郁评分")
+    charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 0,27, "抑郁评分")
     # Override id to match template expectation if necessary (template uses chart-psych?)
     charts['psych']['id'] = "chart-psych"
 
     # 4.8 焦虑评估 (Q_ANXIETY)
-    charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 50, "焦虑评分")
+    charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 0,21, "焦虑评分")
 
     return {
+        "current_date": today, # 当前日期，用于模板比较
         "medication_data": medication_data,
         "medication_stats": {
             "count": med_count,
