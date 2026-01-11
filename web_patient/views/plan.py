@@ -5,12 +5,32 @@ from users.decorators import auto_wechat_login, check_patient
 from core.service.treatment_cycle import get_active_treatment_cycle
 from core.service.plan_item import PlanItemService
 from core.models import TreatmentCycle, choices
+from core.service.tasks import get_daily_plan_summary
+from health_data.services.health_metric import HealthMetricService
+from health_data.models import MetricType
+from django.utils import timezone
+
+def is_today_data(metric_info: dict) -> bool:
+    """
+    判断指标数据的measured_at是否为今日（年月日匹配）
+    :param metric_info: 指标字典（如steps、blood_pressure），需包含measured_at字段
+    :return: True=今日数据，False=非今日数据
+    """
+    if not metric_info or 'measured_at' not in metric_info:
+        return False
+    # 1. 提取UTC时间并转换为本地时区（Django配置的TIME_ZONE，如Asia/Shanghai）
+    utc_time = metric_info['measured_at']
+    local_time = timezone.localtime(utc_time)
+    # 2. 获取当前本地时间的年月日
+    today = timezone.localdate()
+    # 3. 对比年月日是否一致
+    return local_time.date() == today
 
 @auto_wechat_login
 @check_patient
 def management_plan(request: HttpRequest) -> HttpResponse:
     """
-    【页面说明】管理计划页面 `/p/plan/`
+    【页面说明】TODO 管理计划页面 `/p/plan/`
     【功能逻辑】
     1. 展示医嘱用药计划。
     2. 展示每日体征监测计划。
@@ -21,19 +41,93 @@ def management_plan(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     
     patient_id = patient.id or None
+
+    # 获取今日计划数据
+    daily_plans = []
+    try:
+        daily_plans = get_daily_plan_summary(patient)
+    except Exception:
+        daily_plans = []
+
+    # 获取今日指标数据
+    metric_data = {}
+    if patient_id:
+        try:
+            metric_data = HealthMetricService.query_last_metric(int(patient_id))
+        except Exception:
+            metric_data = {}
     
     # 1. 医嘱用药计划
-    medication_plan = [
-        {"title": "按时用药", "status": "completed", "status_text": "已完成", "icon": "medication"}
+    medication_plan = []
+    # 查找是否有MEDICATION类型的任务或标题包含"用药"
+    med_task = next((p for p in daily_plans if p.get('task_type') == 'MEDICATION' or "用药" in p.get('title', "")), None)
+    
+    if med_task:
+        # status 0 = pending, 1 = completed
+        status = "completed" if med_task.get('status') == 1 else "incomplete"
+        status_text = "已完成" if status == "completed" else "未完成"
+        medication_plan.append({
+            "title": med_task.get('title', "按时用药"),
+            "status": status,
+            "status_text": status_text,
+            "icon": "medication"
+        })
+
+    # 2. 常规监测计划
+    MONITORING_CONFIG = [
+        {"type": "spo2", "title": "测量血氧", "metric_type": MetricType.BLOOD_OXYGEN, "icon": "spo2"},
+        {"type": "bp_hr", "title": "测量血压/心率", "metric_type": [MetricType.BLOOD_PRESSURE, MetricType.HEART_RATE], "icon": "bp_hr"},
+        {"type": "temperature", "title": "测量体温", "metric_type": MetricType.BODY_TEMPERATURE, "icon": "temperature"},
+        {"type": "weight", "title": "测量体重", "metric_type": MetricType.WEIGHT, "icon": "weight"},
+        {"type": "step", "title": "测量步数", "metric_type": MetricType.STEPS, "icon": "step"},
     ]
 
-    # 2. 每日体征监测计划
-    monitoring_plan = [
-        {"title": "测量体温", "status": "incomplete", "status_text": "未完成", "icon": "thermometer"},
-        {"title": "测量血氧", "status": "incomplete", "status_text": "未完成", "icon": "spo2"},
-        {"title": "测量血压/心率", "status": "incomplete", "status_text": "未完成", "icon": "bp"},
-        {"title": "测量体重", "status": "incomplete", "status_text": "未完成", "icon": "weight"},
-    ]
+    monitoring_plan = []
+    for item in MONITORING_CONFIG:
+        # 检查是否在今日计划中
+        in_plan = False
+        
+        # 定义关键字映射
+        keywords = []
+        if item['type'] == 'spo2': keywords = ["血氧"]
+        elif item['type'] == 'bp_hr': keywords = ["血压", "心率"]
+        elif item['type'] == 'temperature': keywords = ["体温"]
+        elif item['type'] == 'weight': keywords = ["体重"]
+        elif item['type'] == 'step': keywords = ["步数"]
+        
+        for task in daily_plans:
+            title = task.get('title', "")
+            if any(k in title for k in keywords):
+                in_plan = True
+                break
+        
+        status = ""
+        status_text = "今日无计划"
+        
+        if in_plan:
+            # 检查是否有今日数据
+            has_data = False
+            m_types = item['metric_type'] if isinstance(item['metric_type'], list) else [item['metric_type']]
+            
+            for mt in m_types:
+                data_info = metric_data.get(mt)
+                if is_today_data(data_info):
+                    has_data = True
+                    break
+            
+            if has_data:
+                status = "completed"
+                status_text = "已完成"
+            else:
+                status = "incomplete"
+                status_text = "未完成"
+                
+        monitoring_plan.append({
+            "title": item['title'],
+            "status": status,
+            "status_text": status_text,
+            "icon": item['icon']
+        })
 
     # 3. 随访问卷与复查计划
     treatment_courses = [
@@ -145,7 +239,6 @@ def my_medication(request: HttpRequest) -> HttpResponse:
                 "end_date": cycle.end_date.strftime("%Y-%m-%d") if cycle.end_date else "--",
                 "drugs": drugs
             })
-    print(f"{history_medications}")
     context = {
         "patient_id": patient_id,
         "current_medications": current_medications,

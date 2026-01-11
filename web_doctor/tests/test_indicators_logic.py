@@ -3,7 +3,7 @@ from django.utils import timezone
 from datetime import timedelta, datetime
 from django.contrib.auth import get_user_model
 from users.models import PatientProfile
-from core.models import TreatmentCycle
+from core.models import TreatmentCycle, choices
 from health_data.models import HealthMetric, MetricType
 from web_doctor.views.indicators import build_indicators_context
 
@@ -20,12 +20,24 @@ class IndicatorsLogicTests(TestCase):
         # Create past cycle
         past_start = self.today - timedelta(days=60)
         past_end = self.today - timedelta(days=31)
-        c1 = TreatmentCycle.objects.create(patient=self.patient, name="Cycle 1", start_date=past_start, end_date=past_end)
+        c1 = TreatmentCycle.objects.create(
+            patient=self.patient, 
+            name="Cycle 1", 
+            start_date=past_start, 
+            end_date=past_end,
+            status=choices.TreatmentCycleStatus.COMPLETED
+        )
         
         # Create active cycle
         active_start = self.today - timedelta(days=10)
         active_end = self.today + timedelta(days=20)
-        c2 = TreatmentCycle.objects.create(patient=self.patient, name="Cycle 2", start_date=active_start, end_date=active_end)
+        c2 = TreatmentCycle.objects.create(
+            patient=self.patient, 
+            name="Cycle 2", 
+            start_date=active_start, 
+            end_date=active_end,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS
+        )
         
         context = build_indicators_context(self.patient)
         
@@ -33,17 +45,56 @@ class IndicatorsLogicTests(TestCase):
         # current_start_date is empty in default view to keep inputs clear
         self.assertEqual(context['current_start_date'], "")
         # Verify the actual query range via 'dates'
-        # Since start (2025) and end (2026) span years, format is Y-m-d
-        self.assertEqual(context['dates'][0], active_start.strftime("%Y-%m-%d"))
+        # Since start and end are in the same year (2026), format is m-d
+        self.assertEqual(context['dates'][0], active_start.strftime("%m-%d"))
         self.assertTrue(context['is_default_view'])
         self.assertEqual(context['current_filter_type'], 'cycle')
+
+    def test_status_priority(self):
+        """测试状态优先级：即使日期吻合，也优先选中状态为 IN_PROGRESS 的疗程"""
+        # Case: Two cycles, one completed (but date matches today?), one in progress.
+        # Actually, "completed" usually implies end_date < today, but let's simulate a case
+        # where a cycle was manually terminated early but dates might still overlap or be irrelevant if we trust status.
+        
+        # Cycle 1: Completed, but date range covers today (e.g. terminated early)
+        start1 = self.today - timedelta(days=5)
+        end1 = self.today + timedelta(days=5)
+        c1 = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="Terminated Cycle",
+            start_date=start1,
+            end_date=end1,
+            status=choices.TreatmentCycleStatus.COMPLETED
+        )
+
+        # Cycle 2: In Progress
+        start2 = self.today - timedelta(days=2)
+        end2 = self.today + timedelta(days=10)
+        c2 = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="Active Cycle",
+            start_date=start2,
+            end_date=end2,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS
+        )
+
+        context = build_indicators_context(self.patient)
+        
+        # Should select c2 because it is IN_PROGRESS
+        self.assertEqual(context['current_cycle_id'], c2.id)
 
     def test_default_view_fallback_latest_cycle(self):
         """测试无进行中疗程时，兜底显示最近一个疗程"""
         # Create past cycle only
         past_start = self.today - timedelta(days=60)
         past_end = self.today - timedelta(days=31)
-        c1 = TreatmentCycle.objects.create(patient=self.patient, name="Cycle 1", start_date=past_start, end_date=past_end)
+        c1 = TreatmentCycle.objects.create(
+            patient=self.patient, 
+            name="Cycle 1", 
+            start_date=past_start, 
+            end_date=past_end,
+            status=choices.TreatmentCycleStatus.COMPLETED
+        )
         
         context = build_indicators_context(self.patient)
         

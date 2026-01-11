@@ -17,7 +17,7 @@
 
             <!-- 列表内容 -->
             <div class="flex-1 overflow-y-auto p-6 bg-gray-50 scroll-smooth" id="modules-container">
-                <div class="mx-auto space-y-6 max-w-5xl">
+                <div class="mx-auto space-y-6 ">
                     {% if questionnaires %}
                         {% for data_obj in questionnaires %}
                         <div id="questionnaire-module-{{ data_obj.questionnaire_id }}" class="questionnaire-module bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-24">

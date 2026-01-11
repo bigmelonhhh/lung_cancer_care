@@ -38,7 +38,11 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 record_time_str = record_time.replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                record_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 1. 解析 naive datetime
+                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 2. 转换为 aware datetime
+                record_time = timezone.make_aware(record_time_naive)
+                
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.BODY_TEMPERATURE,
@@ -94,8 +98,11 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 record_time_str = record_time.replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 解析为datetime对象
-                record_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 1. 解析 naive datetime
+                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 2. 转换为 aware datetime
+                record_time = timezone.make_aware(record_time_naive)
+
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.BLOOD_PRESSURE,
@@ -154,7 +161,11 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 record_time_str = record_time.replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                record_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 1. 解析 naive datetime
+                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 2. 转换为 aware datetime
+                record_time = timezone.make_aware(record_time_naive)
+
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.BLOOD_OXYGEN,

@@ -122,7 +122,7 @@ def build_home_context(patient: PatientProfile) -> dict:
             "items": items
         }
 
-    # 5. 模拟复查诊疗时间轴数据（当前月+前11个月）
+    # 5. TODO 模拟复查诊疗时间轴数据（当前月+前11个月）
     from datetime import date, timedelta
     
     today = date.today()

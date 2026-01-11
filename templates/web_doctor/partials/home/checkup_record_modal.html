@@ -1,0 +1,242 @@
+<div x-data="{
+    isOpen: false,
+    isSaving: false,
+    formData: {
+        record_type: '',
+        report_date: '',
+        hospital: '',
+        remarks: ''
+    },
+    files: [],
+    errors: {},
+
+    init() {
+        const today = new Date().toISOString().split('T')[0];
+        this.formData.report_date = today;
+    },
+
+    openModal(type) {
+        this.isOpen = true;
+        this.resetForm();
+        this.formData.record_type = type;
+        const today = new Date().toISOString().split('T')[0];
+        this.formData.report_date = today;
+    },
+
+    resetForm() {
+        this.formData = {
+            record_type: '',
+            report_date: '',
+            hospital: '',
+            remarks: ''
+        };
+        this.files = [];
+        this.errors = {};
+        this.isSaving = false;
+    },
+
+    handleFileSelect(event) {
+        const selectedFiles = Array.from(event.target.files);
+        
+        selectedFiles.forEach(file => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                this.files.push({
+                    file: file,
+                    preview: e.target.result
+                });
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        event.target.value = '';
+        
+        if (this.errors.images) {
+            delete this.errors.images;
+        }
+    },
+
+    removeFile(index) {
+        this.files.splice(index, 1);
+    },
+
+    validate() {
+        this.errors = {};
+        let isValid = true;
+
+        if (!this.formData.record_type) {
+            this.errors.record_type = '必须选择记录类型';
+            isValid = false;
+        }
+        if (!this.formData.report_date) {
+            this.errors.report_date = '必须选择报告日期';
+            isValid = false;
+        }
+        if (!this.formData.hospital || !this.formData.hospital.trim()) {
+            this.errors.hospital = '输入内容不能为空';
+            isValid = false;
+        }
+        if (!this.formData.remarks || !this.formData.remarks.trim()) {
+            this.errors.remarks = '内容不能为空';
+            isValid = false;
+        }
+        if (this.files.length === 0) {
+            this.errors.images = '至少上传一张图片';
+            isValid = false;
+        }
+
+        return isValid;
+    },
+
+    save() {
+        if (!this.validate()) return;
+
+        this.isSaving = true;
+
+        setTimeout(() => {
+            const submissionData = {
+                ...this.formData,
+                images: this.files.map(f => f.file.name)
+            };
+            
+            console.log('=== 模拟保存接口调用 ===');
+            console.log('表单数据:', submissionData);
+            
+            this.isOpen = false;
+            this.isSaving = false;
+        }, 1000);
+    }
+}" 
+     x-show="isOpen" 
+     @open-record-modal.window="openModal($event.detail.type)"
+     class="relative z-50" 
+     aria-labelledby="modal-title" 
+     role="dialog" 
+     aria-modal="true"
+     style="display: none;">
+    
+    <!-- Background backdrop -->
+    <div x-show="isOpen" 
+         x-transition:enter="ease-out duration-300"
+         x-transition:enter-start="opacity-0"
+         x-transition:enter-end="opacity-100"
+         x-transition:leave="ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"></div>
+
+    <div class="fixed inset-0 z-10 w-screen overflow-y-auto">
+        <div class="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <!-- Modal panel -->
+            <div x-show="isOpen"
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl">
+                
+                <!-- Header -->
+                <div class="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-0 border-b border-transparent">
+                    <h3 class="text-xl font-bold leading-6 text-slate-800 text-center mb-4" id="modal-title">新增记录</h3>
+                    <div class="border-b border-slate-200 w-full"></div>
+                </div>
+
+                <!-- Body -->
+                <div class="bg-white px-4 py-6 sm:p-6">
+                    
+                    <!-- Top Row: Type, Date, Hospital -->
+                    <div class="flex flex-wrap gap-x-6 gap-y-4 items-start mb-6 border-b border-slate-100 pb-6">
+                        <!-- Record Type -->
+                        <div class="flex items-center gap-2">
+                            <label for="record_type" class="text-sm font-bold text-slate-700 whitespace-nowrap">记录类型：</label>
+                            <div class="relative">
+                                <select id="record_type" x-model="formData.record_type" 
+                                        :class="{'border-red-500': errors.record_type}"
+                                        class="block w-32 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-1.5 px-3 border">
+                                    <option value="">请选择</option>
+                                    <option value="outpatient">门诊记录</option>
+                                    <option value="inpatient">住院记录</option>
+                                </select>
+                                <p x-show="errors.record_type" class="absolute left-0 -bottom-5 text-xs text-red-500 whitespace-nowrap" x-text="errors.record_type"></p>
+                            </div>
+                        </div>
+
+                        <!-- Report Date -->
+                        <div class="flex items-center gap-2">
+                            <label for="report_date" class="text-sm font-bold text-slate-700 whitespace-nowrap">报告日期：</label>
+                            <div class="relative">
+                                <input type="date" id="report_date" x-model="formData.report_date"
+                                       :class="{'border-red-500': errors.report_date}"
+                                       class="block w-40 rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-1.5 px-3 border">
+                                <p x-show="errors.report_date" class="absolute left-0 -bottom-5 text-xs text-red-500 whitespace-nowrap" x-text="errors.report_date"></p>
+                            </div>
+                        </div>
+
+                        <!-- Hospital -->
+                        <div class="flex items-center gap-2 flex-grow">
+                            <label for="hospital" class="text-sm font-bold text-slate-700 whitespace-nowrap">医院：</label>
+                            <div class="relative w-full">
+                                <input type="text" id="hospital" x-model="formData.hospital"
+                                       :class="{'border-red-500': errors.hospital}"
+                                       class="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-1.5 px-3 border">
+                                <p x-show="errors.hospital" class="absolute left-0 -bottom-5 text-xs text-red-500 whitespace-nowrap" x-text="errors.hospital"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Images -->
+                    <div class="mb-6">
+                        <div class="flex items-center gap-2 mb-3">
+                            <label class="text-sm font-bold text-slate-700 whitespace-nowrap">报告图片：</label>
+                            <button type="button" @click="$refs.fileInput.click()" class="inline-flex items-center px-4 py-1.5 border border-slate-300 shadow-sm text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none transition-colors">
+                                上传图片
+                            </button>
+                            <input type="file" x-ref="fileInput" @change="handleFileSelect" multiple accept="image/*" class="hidden">
+                            <span x-show="errors.images" class="text-xs text-red-500 ml-2" x-text="errors.images"></span>
+                        </div>
+
+                        <!-- Previews -->
+                        <div class="flex flex-wrap gap-4 min-h-[100px]" x-show="files.length > 0">
+                            <template x-for="(file, index) in files" :key="index">
+                                <div class="relative group w-24 flex flex-col gap-1">
+                                    <div class="aspect-w-1 aspect-h-1 w-full overflow-hidden rounded bg-slate-100 border border-slate-200">
+                                        <img :src="file.preview" class="h-24 w-24 object-cover object-center">
+                                    </div>
+                                    <button @click="removeFile(index)" type="button" class="text-center text-xs text-slate-400 hover:text-red-600 transition-colors">
+                                        删除
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Remarks -->
+                    <div class="mb-2">
+                        <label for="remarks" class="block text-sm font-bold text-slate-700 mb-2">备注：</label>
+                        <div class="relative">
+                            <textarea id="remarks" rows="4" x-model="formData.remarks"
+                                      :class="{'border-red-500': errors.remarks}"
+                                      class="block w-full rounded-md border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3 border bg-slate-50 resize-none"></textarea>
+                            <p x-show="errors.remarks" class="absolute left-0 -bottom-5 text-xs text-red-500" x-text="errors.remarks"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="bg-white px-4 py-3 sm:flex sm:flex-row-reverse sm:px-6 border-t border-slate-100 gap-3">
+                    <button type="button" @click="save" :disabled="isSaving"
+                            class="inline-flex w-full justify-center rounded border border-transparent bg-white px-6 py-1.5 text-sm font-medium text-slate-700 shadow-sm ring-1 ring-inset ring-slate-300 hover:bg-slate-50 sm:w-auto transition-colors">
+                        <span x-show="!isSaving">保存</span>
+                        <span x-show="isSaving">保存中...</span>
+                    </button>
+                    <button type="button" @click="isOpen = false" 
+                            class="mt-3 inline-flex w-full justify-center rounded border border-slate-300 bg-white px-6 py-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 sm:mt-0 sm:w-auto transition-colors">
+                        取消
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
