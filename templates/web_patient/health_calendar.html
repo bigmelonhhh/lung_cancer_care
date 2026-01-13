@@ -318,5 +318,17 @@
            window.location.href = url + sep + "patient_id={{ patient.id }}";
       }
   }
+
+  // --- 5. Data Refresh on Back ---
+  window.addEventListener('pageshow', function() {
+      if (localStorage.getItem('refresh_flag') === 'true') {
+          if (fpInstance && fpInstance.selectedDates.length > 0) {
+              const currentDate = fpInstance.selectedDates[0];
+              const dateStr = flatpickr.formatDate(currentDate, "Y-m-d");
+              fetchTasks(dateStr);
+          }
+          localStorage.removeItem('refresh_flag');
+      }
+  });
 </script>
 {% endblock %}

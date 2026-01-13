@@ -117,13 +117,13 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                 if "用药" in title_val:
                     plan_data.update({
                         "type": "medication",
-                        "subtitle": "您今天还未服药" if status_val == 0 else "今日已服药",
+                        "subtitle": item.get("subtitle") or ("您今天还未服药" if status_val == 0 else "今日已服药"),
                         "action_text": "去服药"
                     })
                 elif "体温" in title_val:
                     plan_data.update({
                         "type": "temperature",
-                        "subtitle": "请记录今日体温",
+                        "subtitle": item.get("subtitle") or "请记录今日体温",
                         "action_text": "去填写"
                     })
                 elif "血压" in title_val or "心率" in title_val:
@@ -135,19 +135,19 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     plan_data.update({
                         "type": "bp_hr",
                         "title": "血压/心率监测",  # 合并后的标题
-                        "subtitle": "请记录今日血压心率情况",
+                        "subtitle": item.get("subtitle") or "请记录今日血压心率情况",
                         "action_text": "去填写"
                     })
                 elif "血氧" in title_val:
                     plan_data.update({
                         "type": "spo2",
-                        "subtitle": "请记录今日血氧饱和度",
+                        "subtitle": item.get("subtitle") or "请记录今日血氧饱和度",
                         "action_text": "去填写"
                     })
                 elif "体重" in title_val:
                     plan_data.update({
                         "type": "weight",
-                        "subtitle": "请记录今日体重",
+                        "subtitle": item.get("subtitle") or "请记录今日体重",
                         "action_text": "去填写"
                     })
                 elif "随访" in title_val or "问卷" in title_val:
@@ -160,14 +160,14 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     
                     plan_data.update({
                         "type": "followup",
-                        "subtitle": "请及时完成您的随访任务" if status_val == 0 else "今日已完成",
+                        "subtitle": item.get("subtitle") or ("请及时完成您的随访任务" if status_val == 0 else "今日已完成"),
                         "action_text": "去完成",
                         "url": action_url
                     })
                 elif "复查" in title_val:
                     plan_data.update({
                         "type": "checkup",
-                        "subtitle": "请及时完成您的复查任务" if status_val == 0 else "今日已完成",
+                        "subtitle": item.get("subtitle") or ("请及时完成您的复查任务" if status_val == 0 else "今日已完成"),
                         "action_text": "去完成"
                     })
                 # 去除呼吸、咳嗽、疼痛等映射
@@ -272,6 +272,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
+            print("f{listData}")
             if MetricType.STEPS in listData and listData[MetricType.STEPS] is not None:
                 steps_info = listData[MetricType.STEPS]
                 # 仅当步数是今日数据时才更新，否则保持0

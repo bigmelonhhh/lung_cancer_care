@@ -393,7 +393,7 @@ def build_indicators_context(
     charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 0,36, "身体疼痛评分")
 
     # 4.6 睡眠质量 (Q_SLEEP)
-    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 30,80, "睡眠质量评分")
+    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 0,80, "睡眠质量评分")
 
     # 4.7 抑郁评估 (Q_DEPRESSIVE) -> Mapped to 'psych' key
     charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 0,27, "抑郁评分")

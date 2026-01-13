@@ -22,6 +22,7 @@ urlpatterns = [
     path("record/sputum/", views.record_sputum, name="record_sputum"),
     path("record/pain/", views.record_pain, name="record_pain"),
     path("record/checkup/", views.record_checkup, name="record_checkup"),
+    path("api/last_metric/", views.query_last_metric, name="query_last_metric"),
     path("followup/daily/", views.daily_survey, name="daily_survey"),
     path("followup/my/", views.my_followup, name="my_followup"),
     path("examination/my/", views.my_examination, name="my_examination"),

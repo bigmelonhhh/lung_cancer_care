@@ -101,8 +101,55 @@
 
         errorMsg.classList.add('hidden');
         
-         // 提交表单
-        document.getElementById('temperature-form').submit();
+        // AJAX 提交逻辑
+        const form = document.getElementById('temperature-form');
+        const formData = new FormData(form);
+        const submitBtn = document.querySelector('button[onclick="submitTemperature()"]');
+        const originalText = submitBtn.innerText;
+        
+        submitBtn.disabled = true;
+        submitBtn.innerText = '提交中...';
+        
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                // 1. 设置刷新标记
+                localStorage.setItem('refresh_flag', 'true');
+                
+                // 2. 显示成功反馈 (可选)
+                submitBtn.innerText = '提交成功';
+                
+                // 3. 返回上一页
+                setTimeout(() => {
+                    if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+                        history.back();
+                    } else {
+                        window.location.href = "{% url 'web_patient:patient_home' %}";
+                    }
+                }, 300);
+            } else {
+                alert('提交失败: ' + (data.message || '未知错误'));
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalText;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('网络错误，请稍后重试');
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalText;
+        });
     }
     
     // Simple date picker handler to update display (Mock)

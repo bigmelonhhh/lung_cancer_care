@@ -92,8 +92,50 @@
 
         errorMsg.classList.add('hidden');
         
-        // 提交表单
-        document.getElementById('weight-form').submit();
+        // AJAX 提交逻辑
+        const form = document.getElementById('weight-form');
+        const formData = new FormData(form);
+        const submitBtn = document.querySelector('button[onclick="submitWeight()"]');
+        const originalText = submitBtn.innerText;
+        
+        submitBtn.disabled = true;
+        submitBtn.innerText = '提交中...';
+        
+        fetch(form.action, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+            },
+            body: formData
+        })
+        .then(response => {
+            if (!response.ok) throw new Error('Network response was not ok');
+            return response.json();
+        })
+        .then(data => {
+            if (data.status === 'success') {
+                localStorage.setItem('refresh_flag', 'true');
+                submitBtn.innerText = '提交成功';
+                setTimeout(() => {
+                    if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+                        history.back();
+                    } else {
+                        window.location.href = "{% url 'web_patient:patient_home' %}";
+                    }
+                }, 300);
+            } else {
+                alert('提交失败: ' + (data.message || '未知错误'));
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalText;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('网络错误，请稍后重试');
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalText;
+        });
     }
     
     // 日期选择器变更事件：同步显示格式

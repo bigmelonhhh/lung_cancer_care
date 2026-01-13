@@ -102,7 +102,14 @@ def submit_surveys(request: HttpRequest) -> JsonResponse:
                 questionnaire_id=q_id,
                 answers_data=answers
             )
-            return JsonResponse({"success": True, "submission_id": submission.id})
+            # 返回 metric_data 供前端刷新首页状态
+            return JsonResponse({
+                "success": True, 
+                "submission_id": submission.id,
+                "metric_data": {
+                    "followup": "completed"
+                }
+            })
         except ValidationError as e:
             return JsonResponse({"error": f"提交失败: {e.message}"}, status=400)
 

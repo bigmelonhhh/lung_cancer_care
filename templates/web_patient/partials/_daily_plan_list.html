@@ -139,14 +139,14 @@
       
       <div>
         <h4 class="font-bold text-slate-800 text-base">{{ plan.title }}</h4>
-        <p class="text-sm text-slate-500 mt-1 {% if plan.status == 'completed' %}text-emerald-600 font-medium{% endif %}">
+        <p id="plan-subtitle-{{ plan.type }}" class="text-sm text-slate-500 mt-1 {% if plan.status == 'completed' %}text-emerald-600 font-medium{% endif %}">
           {{ plan.subtitle }}
         </p>
       </div>
     </div>
 
     <!-- Status Action -->
-    <div>
+    <div id="plan-action-{{ plan.type }}">
       {% if plan.status == 'completed' %}
       <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
