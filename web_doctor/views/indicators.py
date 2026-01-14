@@ -33,11 +33,10 @@ def build_indicators_context(
     # 确定默认显示的疗程（当前进行中 或 最近一个）
     active_cycle = None
     if treatment_cycles:
-        # 优先找当前进行中的
+        # 优先找当前进行中的 (status='in_progress')
         for cycle in treatment_cycles:
-            # 判断逻辑：start_date <= today <= end_date (或 end_date is None)
-            c_end = cycle.end_date if cycle.end_date else today
-            if cycle.start_date <= today and (cycle.end_date is None or cycle.end_date >= today):
+            # 判断逻辑：优先使用 status 字段判断
+            if cycle.status == choices.TreatmentCycleStatus.IN_PROGRESS:
                 active_cycle = cycle
                 break
         
@@ -394,7 +393,7 @@ def build_indicators_context(
     charts['pain'] = fetch_chart_data(QuestionnaireCode.Q_PAIN, "身体疼痛评估", 0,36, "身体疼痛评分")
 
     # 4.6 睡眠质量 (Q_SLEEP)
-    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 30,80, "睡眠质量评分")
+    charts['sleep'] = fetch_chart_data(QuestionnaireCode.Q_SLEEP, "睡眠质量评估", 0,80, "睡眠质量评分")
 
     # 4.7 抑郁评估 (Q_DEPRESSIVE) -> Mapped to 'psych' key
     charts['psych'] = fetch_chart_data(QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估", 0,27, "抑郁评分")

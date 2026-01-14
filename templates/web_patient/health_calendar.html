@@ -1,0 +1,334 @@
+{% extends "layouts/base_portal.html" %} 
+{% block extra_head %}
+<!-- Flatpickr CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+<!-- Axios -->
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<!-- Flatpickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+
+<style>
+  /* Custom Flatpickr Styling to match Blue Theme */
+  .flatpickr-calendar {
+    background: transparent !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  .flatpickr-months .flatpickr-month {
+    color: #fff !important;
+    fill: #fff !important;
+  }
+  .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month {
+    color: #fff !important;
+    fill: #fff !important;
+  }
+  .flatpickr-months .flatpickr-prev-month:hover svg, .flatpickr-months .flatpickr-next-month:hover svg {
+    fill: #bfdbfe !important;
+  }
+  .flatpickr-current-month .flatpickr-monthDropdown-months {
+    background: transparent !important;
+    color: #fff !important;
+    font-weight: bold;
+  }
+  .flatpickr-current-month input.cur-year {
+    color: #fff !important;
+    font-weight: bold;
+  }
+  .flatpickr-weekdays .flatpickr-weekday {
+    color: rgba(255,255,255,0.8) !important;
+  }
+  .flatpickr-day {
+    color: #fff !important;
+    border-radius: 50%;
+  }
+  .flatpickr-day.today {
+    border-color: rgba(255,255,255,0.5) !important;
+  }
+  .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange, .flatpickr-day.selected.inRange, .flatpickr-day.startRange.inRange, .flatpickr-day.endRange.inRange, .flatpickr-day.selected:focus, .flatpickr-day.startRange:focus, .flatpickr-day.endRange:focus, .flatpickr-day.selected:hover, .flatpickr-day.startRange:hover, .flatpickr-day.endRange:hover, .flatpickr-day.selected.prevMonthDay, .flatpickr-day.startRange.prevMonthDay, .flatpickr-day.endRange.prevMonthDay, .flatpickr-day.selected.nextMonthDay, .flatpickr-day.startRange.nextMonthDay, .flatpickr-day.endRange.nextMonthDay {
+    background: #fff !important;
+    color: #0F4C81 !important;
+    border-color: #fff !important;
+    font-weight: bold;
+  }
+  .flatpickr-day:hover {
+    background: rgba(255,255,255,0.2) !important;
+    border-color: transparent !important;
+  }
+  .flatpickr-day.prevMonthDay, .flatpickr-day.nextMonthDay {
+    color: rgba(255,255,255,0.3) !important;
+  }
+  
+  /* Loading Overlay */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    border-radius: 1rem;
+    backdrop-filter: blur(2px);
+  }
+  /* Force hide even if display:flex is set by .loading-overlay class */
+  .loading-overlay.hidden {
+    display: none !important;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-white pb-24 relative font-sans">
+  
+  <!-- Header with Calendar -->
+  <div class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-10 px-4 relative rounded-b-[2.5rem] shadow-lg transition-all duration-300">
+    
+    <!-- Top Nav -->
+    <div class="relative z-10 pt-4 mb-4 flex items-center justify-between">
+      <button onclick="goBack()" class="flex items-center gap-1 text-white/90 hover:text-white active:scale-95 transition px-2 py-1 -ml-2 rounded-lg hover:bg-white/10">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" />
+        </svg>
+        <span class="font-bold text-lg">返回</span>
+      </button>
+      
+      <h1 class="text-xl font-bold text-white tracking-wide absolute left-1/2 -translate-x-1/2 pointer-events-none">健康日历</h1>
+      
+      <div class="w-16"></div> <!-- Spacer for centering -->
+    </div>
+
+    <!-- Calendar Container -->
+    <div class="relative min-h-[300px] flex justify-center">
+      <div id="inline-calendar"></div>
+    </div>
+    
+  </div>
+
+  <!-- Plan List Container -->
+  <div class="px-4 -mt-8 relative z-20 space-y-6">
+    <div class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-100 min-h-[400px] relative transition-all duration-300">
+      
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="w-1.5 h-5 bg-blue-600 rounded-full"></span>
+          <h3 class="text-lg font-bold text-slate-800" id="plan-title">
+            {% if target_date == today %}今日计划{% else %}当日记录{% endif %}
+          </h3>
+        </div>
+        <span class="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded-md" id="current-date-display">
+          {{ target_date|date:"Y-m-d" }}
+        </span>
+      </div>
+
+      <!-- Loading Spinner (Hidden by default) -->
+      <div id="loading-indicator" class="loading-overlay hidden">
+        <div class="flex flex-col items-center">
+          <svg class="animate-spin h-8 w-8 text-blue-600 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="text-sm text-blue-600 font-medium">加载中...</span>
+        </div>
+      </div>
+
+      <!-- Content Area -->
+      <div id="daily-plan-container">
+        {% include "web_patient/partials/_daily_plan_list.html" %}
+      </div>
+      
+    </div>
+  </div>
+</div>
+
+<!-- Medication Modal (Reused) -->
+<div id="medication-modal" class="fixed inset-0 z-50" style="display: none; background: rgba(0, 0, 0, 0.9)">
+  <div class="relative min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="w-full max-w-[300px] bg-white rounded-3xl p-6 shadow-2xl relative animate-bounce-in flex flex-col items-center">
+      <div class="absolute left-1/2 -translate-x-1/2" style="top: -30px">
+        <div class="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-200 border-4">
+          <svg class="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 24 24">
+             <path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
+      </div>
+      <div class="text-center mt-12 mb-6">
+        <p class="text-slate-600 text-lg font-semibold leading-relaxed">请确认已完成今日用药</p>
+      </div>
+      <button onclick="submitMedication()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-full shadow-lg transition">我已服药</button>
+      <div class="mt-6">
+        <button onclick="closeMedicationModal()" class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- 1. Navigation Logic ---
+  function goBack() {
+    // 优先尝试返回上一页
+    if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+      history.back();
+    } else {
+      // 兜底跳转到 Dashboard
+      window.location.href = "{% url 'web_patient:patient_dashboard' %}";
+    }
+  }
+
+  // --- 2. Calendar Logic ---
+  let fpInstance;
+  const todayStr = "{{ today|date:'Y-m-d' }}";
+  const initialDate = "{{ target_date|date:'Y-m-d' }}";
+
+  document.addEventListener('DOMContentLoaded', function() {
+    fpInstance = flatpickr("#inline-calendar", {
+      inline: true,
+      locale: "zh",
+      defaultDate: initialDate,
+      // maxDate: "today", // Removed to allow future date selection for empty state demo
+      disableMobile: true, // Force custom UI on mobile
+      onChange: function(selectedDates, dateStr, instance) {
+        if (dateStr) {
+          updatePageContent(dateStr);
+        }
+      }
+    });
+
+    // Handle Browser Back/Forward
+    window.onpopstate = function(event) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dateParam = urlParams.get('date') || todayStr;
+      
+      // Update Calendar Selection without triggering onChange loop
+      fpInstance.setDate(dateParam, false); 
+      // Update Content
+      fetchTasks(dateParam);
+    };
+  });
+
+  // --- 3. Axios & Data Fetching ---
+  let cancelTokenSource;
+
+  function updatePageContent(dateStr) {
+    // 1. Update URL (History API) - Use replaceState to avoid history pollution
+    const newUrl = `${window.location.pathname}?date=${dateStr}`;
+    window.history.replaceState({ path: newUrl }, '', newUrl);
+
+    // 2. Fetch Data
+    fetchTasks(dateStr);
+  }
+
+  function fetchTasks(dateStr) {
+    const container = document.getElementById('daily-plan-container');
+    const loader = document.getElementById('loading-indicator');
+    const titleEl = document.getElementById('plan-title');
+    const dateDisplayEl = document.getElementById('current-date-display');
+
+    // Cancel previous request if exists
+    if (cancelTokenSource) {
+      cancelTokenSource.cancel('Operation canceled due to new request.');
+    }
+    cancelTokenSource = axios.CancelToken.source();
+
+    // Show loading
+    loader.classList.remove('hidden');
+    container.style.opacity = '0.3';
+
+    axios.get(`?date=${dateStr}&ajax=1`, {
+      cancelToken: cancelTokenSource.token,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    })
+    .then(function (response) {
+      // Update DOM
+      container.innerHTML = response.data;
+      
+      // Update Titles
+      titleEl.textContent = (dateStr === todayStr) ? '今日计划' : '当日记录';
+      dateDisplayEl.textContent = dateStr;
+      
+      // Re-initialize any plugins if needed (e.g. tooltips)
+    })
+    .catch(function (error) {
+      if (axios.isCancel(error)) {
+        console.log('Request canceled', error.message);
+      } else {
+        console.error('Error fetching data:', error);
+        container.innerHTML = '<div class="text-center py-10 text-red-500">加载失败，请重试</div>';
+      }
+    })
+    .finally(function () {
+      loader.classList.add('hidden');
+      container.style.opacity = '1';
+    });
+  }
+
+  // --- 4. Task Action Logic (Reused) ---
+  function openMedicationModal() {
+      document.getElementById('medication-modal').style.display = 'block';
+  }
+  function closeMedicationModal() {
+      document.getElementById('medication-modal').style.display = 'none';
+  }
+
+  function submitMedication() {
+      const patientId = "{{ patient.id|default:'' }}";
+      if (!patientId) return alert('未找到患者信息');
+
+      fetch("{% url 'web_patient:submit_medication' %}", {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: new URLSearchParams({'patient_id': patientId})
+      })
+      .then(r => r.json())
+      .then(data => {
+          if (data.success) {
+            // Refresh current date view
+            const currentDate = fpInstance.selectedDates[0];
+            const dateStr = flatpickr.formatDate(currentDate, "Y-m-d");
+            fetchTasks(dateStr);
+            closeMedicationModal();
+          }
+          else alert(data.message || '提交失败');
+      })
+      .catch(e => alert('提交出错'));
+  }
+
+  function handleTaskClick(title, type, specificUrl) {
+      if(title.includes('用药')) {
+          openMedicationModal();
+          return;
+      }
+      const menuUrls = {{ menuUrl|safe }};
+      let url = specificUrl || menuUrls[type];
+      if (url) {
+           const sep = url.includes('?') ? '&' : '?';
+           window.location.href = url + sep + "patient_id={{ patient.id }}";
+      }
+  }
+
+  // --- 5. Data Refresh on Back ---
+  window.addEventListener('pageshow', function() {
+      if (localStorage.getItem('refresh_flag') === 'true') {
+          if (fpInstance && fpInstance.selectedDates.length > 0) {
+              const currentDate = fpInstance.selectedDates[0];
+              const dateStr = flatpickr.formatDate(currentDate, "Y-m-d");
+              fetchTasks(dateStr);
+          }
+          localStorage.removeItem('refresh_flag');
+      }
+  });
+</script>
+{% endblock %}

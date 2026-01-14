@@ -1,0 +1,135 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F7FA] flex flex-col">
+    <!-- Header -->
+    <div class="bg-white sticky top-0 z-30 border-b border-gray-100 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center gap-3">
+            <a href="javascript:history.back()" class="text-gray-500 hover:text-gray-700">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+            </a>
+            <h1 class="text-lg font-bold text-gray-900">新增报告</h1>
+        </div>
+    </div>
+
+    <form method="post" enctype="multipart/form-data" class="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+        {% csrf_token %}
+        <div class="p-4 space-y-4 flex-1">
+            <!-- Date Input -->
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <label class="block text-sm font-medium text-gray-500 mb-2">上传日期</label>
+                <div class="flex items-center  border-gray-200 pb-1">
+                    <input type="date" name="report_date" value="{{ today }}" class=" w-full border p-0 rounded-sm text-gray-900 focus:ring-0 text-lg bg-transparent font-medium" required>
+                </div>
+            </div>
+
+            <!-- Image Upload -->
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <p class="text-sm font-medium text-gray-500 mb-3">报告图片</p>
+                <div class="grid grid-cols-3 sm:grid-cols-4 gap-3" id="image-preview-container">
+                    <!-- Upload Button -->
+                    <label class="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition active:scale-95 text-gray-400 hover:text-gray-600 hover:border-gray-300">
+                        <svg class="w-8 h-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                        </svg>
+                        <input type="file" name="images" multiple accept="image/*" class="hidden" onchange="handleImageSelect(this)">
+                    </label>
+                </div>
+                <p class="text-xs text-gray-400 mt-3">支持上传多张图片，每张不超过 10MB</p>
+            </div>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="p-4 bg-white border-t border-gray-100 sticky bottom-0 z-20">
+            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-[0.98] transition flex items-center justify-center gap-2">
+                <span>提交</span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function handleImageSelect(input) {
+    if (input.files && input.files.length > 0) {
+        const container = document.getElementById('image-preview-container');
+        // Insert before the upload button (last element)
+        const uploadBtn = container.lastElementChild;
+        
+        Array.from(input.files).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const div = document.createElement('div');
+                div.className = 'aspect-square bg-gray-100 rounded-xl overflow-hidden relative group border border-gray-200';
+                
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.className = 'w-full h-full object-cover';
+                
+                // Optional: Delete button for preview (visual only for now, complex to sync with input)
+                // For simple implementation, we just show preview. 
+                // To support removing files from input, we'd need a DataTransfer object and reset input.files.
+                
+                div.appendChild(img);
+                container.insertBefore(div, uploadBtn);
+            };
+            reader.readAsDataURL(file);
+        });
+        
+        // Note: This simple implementation appends files visually. 
+        // The input keeps the files. If user selects more, the input value is replaced by new selection in some browsers, 
+        // or we need to handle "add to existing". 
+        // Standard <input type="file"> replaces selection.
+        // To support "add more", we usually hide the old input and create a new one, or use AJAX.
+        // Given "simulate submit", we'll stick to simple standard behavior: 
+        // User selects all files at once, or if they select again, it might replace. 
+        // BUT, visually we are appending. This is misleading if the input replaces.
+        // Let's check standard behavior: selecting again replaces `input.files`.
+        
+        // To fix this for a better UX without complex JS:
+        // We can't easily append to `input.files` (read-only).
+        // Strategy: 
+        // 1. Hide the current input (move it to a hidden container).
+        // 2. Create a new input for the "+" button.
+        // 3. On submit, all inputs with name="images" are sent.
+        
+        // Let's implement that strategy.
+        
+        // 1. Clone the input logic
+        // The current input is inside the label. We should move it out or handle it.
+        
+        // Better approach:
+        // Create a hidden input for the *current* batch of files, move it to a hidden form container, 
+        // and reset the label's input for next batch.
+        
+        const hiddenInputsContainer = document.createElement('div');
+        hiddenInputsContainer.className = 'hidden';
+        document.querySelector('form').appendChild(hiddenInputsContainer);
+        
+        // Clone the input (with files)
+        const newInput = input.cloneNode(true);
+        // Remove onchange to avoid recursion/issues if triggered manually, though clone won't copy listeners usually if added via JS, but inline yes.
+        newInput.removeAttribute('onchange'); 
+        newInput.removeAttribute('class'); // Remove hidden class to be sure (though it's inside hidden div)
+        // Actually, we can just move the input element itself if we want, but we need a new one for the label.
+        
+        // Move the input to hidden container
+        // We need to swap the input in the label with a fresh one.
+        const freshInput = document.createElement('input');
+        freshInput.type = 'file';
+        freshInput.name = 'images';
+        freshInput.multiple = true;
+        freshInput.accept = 'image/*';
+        freshInput.className = 'hidden';
+        freshInput.onchange = function() { handleImageSelect(this); };
+        
+        // Replace old input in label with fresh input
+        input.parentNode.replaceChild(freshInput, input);
+        
+        // Add old input to form
+        hiddenInputsContainer.appendChild(input);
+    }
+}
+</script>
+{% endblock %}

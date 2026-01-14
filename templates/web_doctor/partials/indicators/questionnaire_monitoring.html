@@ -1,4 +1,4 @@
-<div id="questionnaire-container" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4 mt-6 relative">
+<div id="questionnaire-container" class="bg-white rounded-b-xl shadow-sm border border-slate-200 overflow-hidden p-4  relative">
      <style>
         #questionnaire-loading {
             opacity: 0;
@@ -27,7 +27,7 @@
             </a>
         </div>
         <!-- 筛选表单区域 -->
-        <form id="questionnaire-filter-form" 
+        {% comment %} <form id="questionnaire-filter-form" 
               class="flex items-center gap-4 text-sm relative" 
               onsubmit="return false;"
               x-data="{ 
@@ -46,7 +46,7 @@
                   }
               }"
         >
-            <!-- 筛选条件选择 --> 
+          
             <div class="flex items-center gap-2">
                 <input type="hidden" name="filter_type" x-model="filterType">
                 <span class="text-slate-600">筛选条件:</span>
@@ -57,7 +57,7 @@
                 </select>
             </div>
 
-            <!-- 按疗程选择 -->
+           
             <div class="flex items-center gap-2" x-show="filterType === 'cycle'" x-cloak>
                 <select name="cycle_id" 
                         :disabled="filterType !== 'cycle'"
@@ -75,7 +75,7 @@
                 </select>
             </div>
             
-            <!-- 按日期查看 -->
+           
             <div class="flex items-center gap-2" x-show="filterType === 'date'" x-cloak>
                 <div class="flex items-center border border-slate-300 rounded px-2 py-1 bg-white">
                                         <input placeholder="开始日期" type="date" name="start_date" id="questionnaire_start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
@@ -85,7 +85,7 @@
                 </div>
             </div>
 
-            <!-- 按钮组 -->
+           
             <div class="flex items-center gap-2" x-show="filterType !== ''" x-cloak>
                 <button 
                     hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
@@ -99,12 +99,8 @@
                     搜索
                 </button>
             </div>
-             {% if is_default_view %}
-        <div class="absolute top-0 right-4 mt-14 text-indigo-600 font-medium hover:text-indigo-800" x-show="filterType === ''">
-            最近30天
-        </div>
-        {% endif %}
-        </form>
+         
+        </form> {% endcomment %}
     </div>
 
     <!-- Charts Grid -->

@@ -1,5 +1,5 @@
-<div id="indicators-container" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden p-4">
-    <div class="flex items-center justify-between mb-6 relative">
+<div id="indicators-container" class="bg-white rounded-t-xl shadow-sm border border-slate-200 overflow-hidden p-4">
+        <div class="flex items-center justify-between mb-6 relative">
         <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">常规监测指标</h3>
         
         <!-- 筛选表单区域 -->
@@ -38,7 +38,6 @@
                         :disabled="filterType !== 'cycle'"
                         @change="updateDatesFromCycle($event)"
                         class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 min-w-[300px]">
-                    <option value="">全部疗程</option>
                     {% for cycle in treatment_cycles %}
                     <option value="{{ cycle.id }}" 
                             data-start="{{ cycle.start_date|date:'Y-m-d' }}" 

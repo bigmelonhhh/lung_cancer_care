@@ -2,11 +2,13 @@ from django.urls import path
 
 from . import views
 from .views import chat_api
+from .views import my_report
 
 app_name = "web_patient"
 
 urlpatterns = [
     path("dashboard/", views.patient_dashboard, name="patient_dashboard"),
+    path("health_calendar/", views.health_calendar, name="health_calendar"),
     path("home/", views.patient_home, name="patient_home"),
     path("plan/", views.management_plan, name="management_plan"),
     path("medication/", views.my_medication, name="my_medication"),
@@ -20,7 +22,14 @@ urlpatterns = [
     path("record/sputum/", views.record_sputum, name="record_sputum"),
     path("record/pain/", views.record_pain, name="record_pain"),
     path("record/checkup/", views.record_checkup, name="record_checkup"),
+    path("api/last_metric/", views.query_last_metric, name="query_last_metric"),
     path("followup/daily/", views.daily_survey, name="daily_survey"),
+    path("followup/my/", views.my_followup, name="my_followup"),
+    path("examination/my/", views.my_examination, name="my_examination"),
+    path("examination/detail/<int:task_id>/", views.examination_detail, name="examination_detail"),
+    path("examination/reports/", my_report.my_examination, name="report_list"),
+    path("examination/reports/upload/", my_report.upload_report, name="report_upload"),
+    path("examination/reports/delete/", my_report.delete_report, name="report_delete"),
     path("api/survey/<int:survey_id>/", views.get_survey_detail, name="get_survey_detail"),
     path("api/survey/submit/", views.submit_surveys, name="submit_surveys"),
     path("family/", views.family_management, name="family_management"),

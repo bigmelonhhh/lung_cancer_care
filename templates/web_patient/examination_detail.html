@@ -1,0 +1,86 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block body %}
+<div class="min-h-screen bg-white pb-6">
+  <!-- 顶部导航栏 -->
+  <div class="sticky top-0 z-40 bg-white border-b border-slate-100">
+    <div class="max-w-3xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="javascript:history.back()" class="w-8 h-8 flex items-center justify-center -ml-2 text-slate-600 active:scale-90 transition">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </a>
+        <h1 class="text-lg font-bold text-slate-900">复查详情</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="max-w-3xl mx-auto px-6 mt-6">
+    <!-- 日期 -->
+    <div class="mb-8">
+        <h2 class="text-lg font-bold text-slate-900">本次复查日期</h2>
+        <p class="text-2xl font-normal text-slate-600 mt-2 font-mono">
+            {{ task.task_date|date:"Y-m-d" }}
+        </p>
+    </div>
+
+    <!-- 复查项目 -->
+    <div>
+        <h2 class="text-lg font-bold text-slate-900 mb-6">本次复查项目：</h2>
+        
+        <div class="space-y-8">
+            {% for report in reports %}
+            <div>
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="text-lg font-medium text-slate-800">{{ forloop.counter }}、 {{ report.get_report_type_display|default:"未分类检查" }}</span>
+                </div>
+                
+                <!-- 图片网格 -->
+                {% if report.image_urls %}
+                <div class="grid grid-cols-3 gap-3">
+                    {% for img_url in report.image_urls %}
+                    <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden relative group cursor-pointer" onclick="previewImage('{{ img_url }}')">
+                        <img src="{{ img_url }}" alt="检查单" class="w-full h-full object-cover">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="bg-slate-50 rounded-lg p-4 text-center text-slate-400 text-sm">
+                    暂无上传图片
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="text-slate-500">
+                暂无具体的检查报告数据。
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+  </div>
+</div>
+
+<!-- 简单的图片预览 Modal -->
+<div id="image-preview-modal" class="fixed inset-0 z-50 bg-black/90 hidden flex items-center justify-center p-4" onclick="closePreview()">
+    <img id="preview-img" src="" class="max-w-full max-h-full object-contain" onclick="event.stopPropagation()">
+    <button class="absolute top-4 right-4 text-white p-2" onclick="closePreview()">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+</div>
+
+<script>
+    function previewImage(url) {
+        document.getElementById('preview-img').src = url;
+        document.getElementById('image-preview-modal').classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closePreview() {
+        document.getElementById('image-preview-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+</script>
+{% endblock %}

@@ -45,21 +45,21 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
             "bg": "bg-purple-100",
             "text": "text-purple-600",
             "path": "M5 12h14M12 5l7 7-7 7",
-            "url": "#",
+            "url": reverse("web_patient:my_examination"),
         },
         {
             "title": "我的用药",
             "bg": "bg-blue-100",
             "text": "text-blue-600",
             "path": "M7 5h10v14H7z",
-            "url": "#",
+            "url": reverse("web_patient:my_medication"),
         },
         {
             "title": "健康档案",
             "bg": "bg-teal-100",
             "text": "text-teal-600",
             "path": "M4 6h16v12H4z",
-            "url": "#",
+            "url": reverse("web_patient:health_records"),
         },
     ]
 
@@ -69,10 +69,10 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         {"title": "我的订单", "url": generate_menu_auth_url("web_patient:orders")},
         {"title": "智能设备", "url": generate_menu_auth_url("web_patient:device_list")},
         {"title": "工作室", "url": generate_menu_auth_url("web_patient:my_studio")},
-        {"title": "检查报告", "url": "#"},
+        {"title": "上传报告", "url": reverse("web_patient:report_list")},
         {"title": "提醒设置", "url": "#"},
         {"title": "亲情账号", "url": generate_menu_auth_url("web_patient:family_management")},
-        {"title": "健康日历", "url": "#"},
+        {"title": "健康日历", "url": reverse("web_patient:health_calendar")},
         {"title": "设置", "url": "#"},
         {"title": "意见反馈", "url": generate_menu_auth_url("web_patient:feedback")},
     ]

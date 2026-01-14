@@ -272,12 +272,20 @@
             
             // All success
             submitStatusText.textContent = '提交完成！';
+            
+            // 存储刷新标记和数据
+            localStorage.setItem('refresh_flag', 'true');
+            // 存储最新的指标数据（可选，首页会通过接口重新拉取）
+            localStorage.setItem('metric_data', JSON.stringify({ "followup": "completed" }));
+
             setTimeout(() => {
-                submitModal.classList.add('hidden');
-                surveyForm.classList.add('hidden');
-                finishView.classList.remove('hidden');
-                window.scrollTo(0, 0);
-            }, 500);
+                // 返回上一页
+                if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
+                    history.back();
+                } else {
+                    window.location.href = "{% url 'web_patient:patient_home' %}";
+                }
+            }, 800);
         }
     });
 </script>

@@ -18,14 +18,8 @@
         {# 顶部操作栏 #}
         <div class="flex items-center justify-between mb-8">
             <div class="flex gap-4">
-                <button class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2">
-                    <span class="text-lg leading-none">+</span> 新增复查记录
-                </button>
-                <button class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-amber-500 hover:text-amber-600 transition-colors flex items-center gap-2">
-                    <span class="text-lg leading-none">+</span> 新增门诊记录
-                </button>
-                <button class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-purple-500 hover:text-purple-600 transition-colors flex items-center gap-2">
-                    <span class="text-lg leading-none">+</span> 新增住院记录
+                <button @click="$dispatch('open-record-modal', { type: '' })" class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2 shadow-sm">
+                    <span class="text-lg leading-none">+</span> 新增记录
                 </button>
             </div>
             
@@ -143,3 +137,5 @@
         </div>
     </div>
 </div>
+
+{% include "web_doctor/partials/home/checkup_record_modal.html" %}

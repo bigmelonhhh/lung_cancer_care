@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
@@ -33,13 +34,20 @@ def questionnaire_detail(request, patient_id):
     cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
     cycles = cycles_page.object_list
     
+    logger = logging.getLogger(__name__)
+
     for cycle in cycles:
         # 获取该疗程时间范围内的提交日期
+        logger.info(f"Processing Cycle ID={cycle.id} Name={cycle.name} Range={cycle.start_date}~{cycle.end_date}")
+        
         dates = QuestionnaireSubmissionService.get_submission_dates(
             patient=patient,
             start_date=cycle.start_date,
             end_date=cycle.end_date
         )
+        
+        logger.info(f"  啊啊啊-> Found {len(dates)} submission dates: {dates}")
+        
         history.append({
             "name": cycle.name,
             "is_current": False, 
@@ -63,7 +71,7 @@ def questionnaire_detail(request, patient_id):
             patient_id=patient.id,
             target_date=selected_date
         )
-        print(f'{summaries}')
+      
         
         for summary in summaries:
             submission_id = summary['submission_id']
@@ -108,7 +116,6 @@ def questionnaire_detail(request, patient_id):
                 "ai_summary": "" # 暂无 AI 摘要接口，置空
             }
             questionnaires.append(questionnaire_data)
-
     context = {
         "patient": patient,
         "selected_date": selected_date,

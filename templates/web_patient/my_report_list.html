@@ -1,0 +1,122 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F7FA] pb-20">
+    <!-- Header -->
+    <div class="bg-white sticky top-0 z-30 border-b border-gray-100 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <a href="{% url 'web_patient:patient_dashboard' %}" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </a>
+                <h1 class="text-lg font-bold text-gray-900">检查报告</h1>
+            </div>
+            <a href="{% url 'web_patient:report_upload' %}" class="flex items-center gap-1 text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-full active:bg-blue-100 transition">
+                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                新增报告
+            </a>
+        </div>
+    </div>
+
+    <!-- List -->
+    <div class="max-w-4xl mx-auto p-4 space-y-4">
+        {% for group in grouped_reports %}
+        <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            <div class="flex items-center justify-between mb-3 border-b border-gray-50 pb-2">
+                <span class="text-gray-700 font-medium">上传日期：{{ group.date|date:"Y-m-d" }}</span>
+            </div>
+            
+            <div class="grid grid-cols-3 sm:grid-cols-4 gap-2 mb-3">
+                {% for image_url in group.images %}
+                <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 relative group">
+                    <img src="{{ image_url }}" class="w-full h-full object-cover transition duration-300 group-hover:scale-105" onclick="viewImage('{{ image_url }}')">
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="flex justify-end">
+                <button onclick="deleteReportGroup({{ group.ids }})" class="text-sm text-red-500 flex items-center gap-1 px-2 py-1 -ml-2 rounded bg-gray-50 transition">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    删除
+                </button>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center py-16">
+            <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400">
+                <svg class="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </div>
+            <p class="text-gray-500 font-medium">暂无检查报告</p>
+            <p class="text-sm text-gray-400 mt-1">点击右上角上传您的第一份报告</p>
+        </div>
+        {% endfor %}
+
+        <!-- Pagination -->
+        {% if page_obj.paginator.num_pages > 1 %}
+        <div class="flex justify-center mt-6 gap-2">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1 bg-white border border-gray-200 rounded text-gray-600 hover:bg-gray-50">上一页</a>
+            {% endif %}
+            <span class="px-3 py-1 text-gray-500">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1 bg-white border border-gray-200 rounded text-gray-600 hover:bg-gray-50">下一页</a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Image Viewer Modal (Simple) -->
+<div id="image-modal" class="fixed inset-0 z-50 bg-black/90 hidden flex items-center justify-center p-4" onclick="closeImage()">
+    <img id="modal-image" src="" class="max-w-full max-h-full rounded-lg shadow-2xl">
+    <button class="absolute top-4 right-4 text-white p-2" onclick="closeImage()">
+        <svg class="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+</div>
+
+<script>
+function deleteReportGroup(ids) {
+    if (!confirm('确定要删除这些报告吗？此操作无法撤销。')) return;
+    
+    fetch('{% url "web_patient:report_delete" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ ids: ids })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            alert('删除失败: ' + (data.message || '未知错误'));
+        }
+    })
+    .catch(err => {
+        alert('网络错误');
+        console.error(err);
+    });
+}
+
+function viewImage(url) {
+    document.getElementById('modal-image').src = url;
+    document.getElementById('image-modal').classList.remove('hidden');
+}
+
+function closeImage() {
+    document.getElementById('image-modal').classList.add('hidden');
+}
+</script>
+{% endblock %}

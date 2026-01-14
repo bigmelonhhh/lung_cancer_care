@@ -1,18 +1,130 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.models import MetricType
 from core.models import QuestionnaireCode
 from patient_alerts.services.todo_list import TodoListService
+from core.service.tasks import get_daily_plan_summary
 import os
 from decimal import Decimal
 from datetime import datetime
 from django.contrib import messages
 from users.decorators import auto_wechat_login, check_patient
 import logging
+
+
+@auto_wechat_login
+@check_patient
+def query_last_metric(request: HttpRequest) -> JsonResponse:
+    """
+    API: 查询今日最新健康指标状态
+    """
+    patient = request.patient
+    if not patient:
+        return JsonResponse({"error": "No patient info"}, status=400)
+    
+    # 1. 获取今日计划摘要 (包含完成状态)
+    summary_list = get_daily_plan_summary(patient)
+    
+    # 2. 获取最新指标数据 (用于显示数值)
+    last_metrics = HealthMetricService.query_last_metric(patient.id)
+    
+    # 3. 组装返回数据
+    # 我们需要返回一个列表，或者以 type 为 key 的字典
+    # 前端需要根据 type 更新 subtitle 和 status
+    
+    result = {}
+    
+    # 辅助函数：判断数据是否为今日
+    def is_today(metric_info):
+        if not metric_info or 'measured_at' not in metric_info:
+            return False
+        utc_time = metric_info['measured_at']
+        local_time = timezone.localtime(utc_time)
+        return local_time.date() == timezone.localdate()
+
+    # 处理计划列表
+    for item in summary_list:
+        title = item.get("title", "")
+        status_val = item.get("status", 0) # 0=pending, 1=completed
+        
+        # 映射 type
+        # 简单映射逻辑，需与 patient_home 保持一致
+        plan_type = "unknown"
+        if "用药" in title: plan_type = "medication"
+        elif "体温" in title: plan_type = "temperature"
+        elif "血压" in title or "心率" in title: plan_type = "bp_hr"
+        elif "血氧" in title: plan_type = "spo2"
+        elif "体重" in title: plan_type = "weight"
+        elif "随访" in title or "问卷" in title: plan_type = "followup"
+        elif "复查" in title: plan_type = "checkup"
+        
+        if plan_type == "unknown": continue
+        
+        # Determine default subtitle based on type (Logic from home.py)
+        default_subtitle = ""
+        if plan_type == "medication":
+            default_subtitle = "您今天还未服药" if status_val == 0 else "今日已服药"
+        elif plan_type == "temperature":
+            default_subtitle = "请记录今日体温"
+        elif plan_type == "bp_hr":
+            default_subtitle = "请记录今日血压心率情况"
+        elif plan_type == "spo2":
+            default_subtitle = "请记录今日血氧饱和度"
+        elif plan_type == "weight":
+            default_subtitle = "请记录今日体重"
+        elif plan_type == "followup":
+            default_subtitle = "请及时完成您的随访任务" if status_val == 0 else "今日已完成"
+        elif plan_type == "checkup":
+            default_subtitle = "请及时完成您的复查任务" if status_val == 0 else "今日已完成"
+
+        plan_data = {
+            "type": plan_type,
+            "status": "completed" if status_val == 1 else "pending",
+            "subtitle": item.get("subtitle") or default_subtitle
+        }
+        
+        # 获取数值展示，仅当状态为 completed 时更新 subtitle
+        if status_val == 1:
+            if plan_type == "temperature" and MetricType.BODY_TEMPERATURE in last_metrics:
+                info = last_metrics[MetricType.BODY_TEMPERATURE]
+                if is_today(info):
+                    plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
+            
+            elif plan_type == "bp_hr":
+                # 血压心率特殊处理
+                bp_info = last_metrics.get(MetricType.BLOOD_PRESSURE)
+                hr_info = last_metrics.get(MetricType.HEART_RATE)
+                if bp_info and is_today(bp_info):
+                    bp_str = bp_info['value_display']
+                    hr_str = hr_info['value_display'] if (hr_info and is_today(hr_info)) else "--"
+                    plan_data["subtitle"] = f"今日已记录：血压{bp_str}mmHg，心率{hr_str}"
+            
+            elif plan_type == "spo2" and MetricType.BLOOD_OXYGEN in last_metrics:
+                info = last_metrics[MetricType.BLOOD_OXYGEN]
+                if is_today(info):
+                    plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
+                    
+            elif plan_type == "weight" and MetricType.WEIGHT in last_metrics:
+                info = last_metrics[MetricType.WEIGHT]
+                if is_today(info):
+                    plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
+            
+            elif plan_type == "medication":
+                 plan_data["subtitle"] = "今日已服药"
+
+            elif plan_type == "followup":
+                 plan_data["subtitle"] = "今日已完成"
+                     
+            elif plan_type == "checkup":
+                 plan_data["subtitle"] = "今日已完成"
+
+        result[plan_type] = plan_data
+
+    return JsonResponse({"success": True, "plans": result})
 
 
 @auto_wechat_login
@@ -38,7 +150,11 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 record_time_str = record_time.replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                record_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 1. 解析 naive datetime
+                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 2. 转换为 aware datetime
+                record_time = timezone.make_aware(record_time_naive)
+                
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.BODY_TEMPERATURE,
@@ -48,13 +164,27 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 logging.info(
                     f"体温数据保存成功: patient_id={patient_id}, weight={weight_val}"
                 )
+                
+                # AJAX 请求返回 JSON
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse({
+                        "status": "success",
+                        "redirect_url": "",
+                        "metric_data": {
+                            "temperature": {
+                                "value": weight_val,
+                                "status": "completed"
+                            }
+                        }
+                    })
+
                 next_url = request.GET.get("next") or request.POST.get("next")
                 if next_url:
                     return redirect(next_url)
-                redirect_url = reverse("web_patient:patient_home")
-                return redirect(
-                    f"{redirect_url}?temperature=true&patient_id={patient_id}"
-                )
+                
+                # 移除强制跳转首页逻辑，改为刷新当前页并提示成功
+                messages.success(request, "体温记录成功")
+                return redirect(request.path)
             except Exception as e:
                 logging.info(f"保存体重数据失败: {e}")
                 return redirect(request.path_info)
@@ -94,8 +224,11 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 record_time_str = record_time.replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 解析为datetime对象
-                record_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 1. 解析 naive datetime
+                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 2. 转换为 aware datetime
+                record_time = timezone.make_aware(record_time_naive)
+
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.BLOOD_PRESSURE,
@@ -110,13 +243,29 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                     measured_at=record_time,
                 )
                 logging.info(f"血氧数据保存成功: patient_id={patient_id}")
+                
+                # AJAX 请求返回 JSON
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse({
+                        "status": "success",
+                        "redirect_url": "",
+                        "metric_data": {
+                            "bp_hr": {
+                                "ssy": ssy_val,
+                                "szy": szy_val,
+                                "heart": heart_val,
+                                "status": "completed"
+                            }
+                        }
+                    })
+
                 next_url = request.GET.get("next") or request.POST.get("next")
                 if next_url:
                     return redirect(next_url)
 
-                # 显式跳转并带参数，确保首页回显
-                redirect_url = reverse("web_patient:patient_home")
-                return redirect(f"{redirect_url}?bp_hr=true&patient_id={patient_id}")
+                # 移除强制跳转首页逻辑，改为刷新当前页并提示成功
+                messages.success(request, "血压心率记录成功")
+                return redirect(request.path)
             except Exception as e:
                 logging.info(f"保存体重数据失败: {e}")
                 return redirect(request.path_info)
@@ -154,7 +303,11 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 record_time_str = record_time.replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                record_time = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 1. 解析 naive datetime
+                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
+                # 2. 转换为 aware datetime
+                record_time = timezone.make_aware(record_time_naive)
+
                 HealthMetricService.save_manual_metric(
                     patient_id=int(patient_id),
                     metric_type=MetricType.BLOOD_OXYGEN,
@@ -164,13 +317,27 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 logging.info(
                     f"血氧数据保存成功: patient_id={patient_id}, weight={weight_val}"
                 )
+
+                # AJAX 请求返回 JSON
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse({
+                        "status": "success",
+                        "redirect_url": "",
+                        "metric_data": {
+                            "spo2": {
+                                "value": weight_val,
+                                "status": "completed"
+                            }
+                        }
+                    })
+
                 next_url = request.GET.get("next") or request.POST.get("next")
                 if next_url:
                     return redirect(next_url)
 
-                # 显式跳转并带参数，确保首页回显
-                redirect_url = reverse("web_patient:patient_home")
-                return redirect(f"{redirect_url}?spo2=true&patient_id={patient_id}")
+                # 移除强制跳转首页逻辑，改为刷新当前页并提示成功
+                messages.success(request, "血氧记录成功")
+                return redirect(request.path)
             except Exception as e:
                 return redirect(request.path_info)
 
@@ -223,13 +390,27 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 logging.info(
                     f"体重数据保存成功: patient_id={patient_id}, weight={weight_val}"
                 )
+
+                # AJAX 请求返回 JSON
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse({
+                        "status": "success",
+                        "redirect_url": "",
+                        "metric_data": {
+                            "weight": {
+                                "value": weight_val,
+                                "status": "completed"
+                            }
+                        }
+                    })
+
                 next_url = request.GET.get("next") or request.POST.get("next")
                 if next_url:
                     return redirect(next_url)
 
-                # 显式跳转并带参数，确保首页回显
-                redirect_url = reverse("web_patient:patient_home")
-                return redirect(f"{redirect_url}?weight=true&patient_id={patient_id}")
+                # 移除强制跳转首页逻辑，改为刷新当前页并提示成功
+                messages.success(request, "体重记录成功")
+                return redirect(request.path)
             except Exception as e:
                 messages.error(request, f"提交失败：{str(e)}")
                 return redirect(request.path_info)

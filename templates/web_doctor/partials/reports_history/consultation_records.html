@@ -1,0 +1,371 @@
+<div class="space-y-4" x-data="{
+    filters: {
+        recordType: 'all',
+        reportDateStart: '',
+        reportDateEnd: '',
+        archivedDateStart: '',
+        archivedDateEnd: '',
+        archiver: ''
+    }
+}">
+    {# 1. 顶部筛选区域 #}
+    <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+        <div class="flex flex-wrap items-center gap-4">
+            {# 记录类型 #}
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">记录类型：</label>
+                <select x-model="filters.recordType" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1">
+                    <option value="all">全部</option>
+                    <option value="门诊">门诊</option>
+                    <option value="住院">住院</option>
+                    <option value="复查">复查</option>
+                </select>
+            </div>
+
+            {# 报告日期 #}
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">报告日期：</label>
+                <div class="flex items-center gap-1">
+                    <input type="date" x-model="filters.reportDateStart" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                    <span class="text-slate-400">-</span>
+                    <input type="date" x-model="filters.reportDateEnd" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                </div>
+            </div>
+
+            {# 归档日期 #}
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">归档日期：</label>
+                <div class="flex items-center gap-1">
+                    <input type="date" x-model="filters.archivedDateStart" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                    <span class="text-slate-400">-</span>
+                    <input type="date" x-model="filters.archivedDateEnd" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                </div>
+            </div>
+
+            {# 归档人 #}
+            <div class="flex items-center gap-2">
+                <label class="text-sm font-medium text-slate-700">归档人：</label>
+                <input type="text" placeholder="请输入姓名" x-model="filters.archiver" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-24">
+            </div>
+            
+            {# 搜索按钮 #}
+            <button class="px-4 py-1 bg-indigo-600 text-white rounded  text-sm font-medium transition-colors">
+                搜索
+            </button>
+        </div>
+    </div>
+
+    {# 2. 功能按钮区 #}
+    <div class="flex justify-end">
+        <button 
+            @click="$dispatch('open-record-modal', { type: '' })" 
+            class="px-4 py-1.5 bg-blue-600 text-white rounded text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-1 shadow-sm"
+        >
+            <span class="text-lg leading-none">+</span> 新增记录
+        </button>
+    </div>
+
+    {# 3. 表格列表展示 #}
+    <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        {# 表头 #}
+        <div class="grid grid-cols-12 gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 font-bold text-sm text-slate-700">
+            <div class="col-span-2">记录类型</div>
+            <div class="col-span-3">报告日期</div>
+            <div class="col-span-2 text-center">图片数量</div>
+            <div class="col-span-2 text-center">归档人</div>
+            <div class="col-span-3 text-right pr-8">归档日期</div>
+        </div>
+
+        {# 列表内容 #}
+        <div class="divide-y divide-slate-100">
+            {% for report in reports_page %}
+            <div x-data="{ 
+                expanded: false, 
+                editing: false,
+                saving: false,
+                recordType: '{{ report.record_type }}',
+                subCategory: '{{ report.sub_category|default:'' }}',
+                interpretation: '{{ report.interpretation|escapejs }}',
+                
+                // Constants for categories
+                categories: ['门诊', '住院', '复查'],
+                subcategories: [
+                    '血常规', '血生化', '胸部CT', '骨扫描', '头颅MR', 
+                    '心脏彩超', '心电图', '凝血功能', '甲状腺功能', 
+                    '肿瘤评估', '肿瘤标志物', '其他'
+                ],
+
+                async saveChanges() {
+                    if (this.saving) return;
+                    this.saving = true;
+                    
+                    const updates = [];
+                    // 收集图片分类更新
+                    const hiddenInputs = $el.querySelectorAll('input[type=hidden][data-image-id]');
+                    hiddenInputs.forEach(input => {
+                        updates.push({
+                            image_id: input.dataset.imageId,
+                            category: input.value
+                        });
+                    });
+
+                    try {
+                        const response = await fetch('{% url 'web_doctor:patient_report_update' patient.id report.id %}?page={{ history_page.number }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify({ 
+                                image_updates: updates,
+                                record_type: this.recordType,
+                                sub_category: this.subCategory
+                            })
+                        });
+
+                        if (response.ok) {
+                            const html = await response.text();
+                            const container = document.querySelector('#patient-content');
+                            if (container) {
+                                container.innerHTML = html;
+                                htmx.process(container);
+                            }
+                            // 提示成功
+                        } else {
+                            alert('保存失败，请重试');
+                            this.saving = false;
+                        }
+                    } catch (error) {
+                        console.error('Save failed:', error);
+                        alert('网络错误，请重试');
+                        this.saving = false;
+                    }
+                },
+                
+                confirmDelete() {
+                    if(confirm('确认删除此条档案吗？此操作不可恢复。')) {
+                        // 模拟删除，实际应调用后端接口
+                        $el.remove();
+                    }
+                }
+            }" class="group transition-colors hover:bg-slate-50/50">
+                
+                {# 摘要行 (点击展开) #}
+                <div class="grid grid-cols-12 gap-4 px-6 py-4 cursor-pointer items-center" @click="if(!editing) expanded = !expanded">
+                    {# 记录类型列 #}
+                    <div class="col-span-2 flex items-center gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium" 
+                                  :class="{
+                                      'text-green-600': recordType === '复查',
+                                      'text-amber-500': recordType === '门诊',
+                                      'text-purple-600': recordType === '住院'
+                                  }">
+                                <i class="fas fa-file-medical mr-1"></i>
+                                <span x-text="recordType"></span>
+                            </span>
+                            <span x-show="subCategory" class="text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded" x-text="subCategory"></span>
+                        </div>
+                    </div>
+
+                    <div class="col-span-3 text-sm text-slate-600">{{ report.date }}</div>
+                    <div class="col-span-2 text-center text-sm text-slate-600">{{ report.image_count }}</div>
+                    <div class="col-span-2 text-center text-sm text-slate-600">{{ report.archiver }}</div>
+                    <div class="col-span-3 flex items-center justify-end gap-2 pr-2">
+                        <span class="text-sm text-slate-600">{{ report.archived_date }}</span>
+                        <button class="text-slate-400 hover:text-slate-600 ml-2 flex items-center group/btn" 
+                                @click.stop="expanded = !expanded; if(!expanded) editing = false;">
+                            <span class="text-xs mr-1" x-text="expanded ? '收起详情' : '展开详情'"></span>
+                            <svg class="w-4 h-4 transition-transform duration-300 ease-in-out" 
+                                 :class="expanded ? 'rotate-180' : ''"
+                                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                {# 详情区域 (展开显示) #}
+                <div x-show="expanded" 
+                     x-collapse
+                     class="px-6 pb-6 border-t border-slate-50 bg-slate-50/30"
+                     style="display: none;">
+                    
+                    {# 图片列表 #}
+                    <div class="flex flex-wrap gap-6 mt-4 mb-4">
+                        {% for img in report.images %}
+                        <div class="flex flex-col gap-2 w-[180px] relative" 
+                             x-data="{
+                                catPopoverOpen: false,
+                                currentCat: '{{ img.category }}',
+                                tempCat: '',
+                                tempSub: '',
+                                searchQuery: '',
+                                searchOpen: false,
+                                
+                                init() {
+                                    this.syncTemp();
+                                },
+                                
+                                syncTemp() {
+                                    const parts = this.currentCat.split('-');
+                                    this.tempCat = parts[0];
+                                    this.tempSub = parts.length > 1 ? parts[1] : '';
+                                },
+                                
+                                saveSelection() {
+                                    if(this.tempCat === '复查' && this.tempSub) {
+                                        this.currentCat = this.tempCat + '-' + this.tempSub;
+                                    } else {
+                                        this.currentCat = this.tempCat;
+                                    }
+                                    this.catPopoverOpen = false;
+                                }
+                             }"
+                             @click.outside="catPopoverOpen = false"
+                        >
+                            <input type="hidden" data-image-id="{{ img.id }}" :value="currentCat">
+                            
+                            {# 图片 #}
+                            <div class="w-full h-[120px] relative bg-white rounded border border-slate-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow group/img"
+                                 @click="$dispatch('show-preview', '{{ img.url }}')">
+                                <img src="{{ img.url }}" class="w-full h-full object-cover">
+                                <div class="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
+                                     <svg class="w-6 h-6 text-white opacity-0 group-hover/img:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                                </div>
+                            </div>
+
+                            {# 类目信息 #}
+                            <div class="flex text-xs gap-1 items-center">
+                                <span class="text-slate-500 font-medium shrink-0 mr-1">类目:</span>
+                                <div class="flex-1 min-w-0 flex justify-between" 
+                                     :class="editing ? 'pt-2 pb-2 cursor-pointer text-indigo-600 bg-indigo-50 rounded px-1 -mx-1 transition-colors' : 'text-slate-700'"
+                                     @click="if(editing) { catPopoverOpen = true; syncTemp(); }">
+                                    <span x-text="currentCat || '未分类'" class="break-words"></span>
+                                    <span x-show="editing" class="inline-block ml-1 text-indigo-400">
+                                        <svg t="1768219867953" class="icon w-3 h-3" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4219" width="32" height="32"><path d="M183.168 332.501333a42.666667 42.666667 0 0 1 57.621333-2.496l2.709334 2.496L512 600.96l268.501333-268.48a42.666667 42.666667 0 0 1 57.621334-2.496l2.709333 2.496a42.666667 42.666667 0 0 1 2.496 57.621333l-2.496 2.709334-298.666667 298.666666a42.666667 42.666667 0 0 1-57.621333 2.496l-2.709333-2.496-298.666667-298.666666a42.666667 42.666667 0 0 1 0-60.330667z" fill="#000000" p-id="4220"></path></svg>
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            {# 上传人信息 #}
+                            <div class="text-slate-500 font-medium text-xs">
+                                上传人: {{ report.patient_info.name }}
+                            </div>
+
+                            {# 类目选择 Popover #}
+                            <div x-show="catPopoverOpen" 
+                                 class="absolute top-full left-0 z-20 w-56 bg-white rounded-lg shadow-xl border border-slate-200 p-3 mt-1"
+                                 style="display: none;"
+                                 x-transition:enter="transition ease-out duration-200"
+                                 x-transition:enter-start="opacity-0 translate-y-1"
+                                 x-transition:enter-end="opacity-100 translate-y-0"
+                            >
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-500 mb-1">一级分类</label>
+                                        <select x-model="tempCat" class="border w-full text-xs border-slate-300 rounded py-1">
+                                            <template x-for="cat in categories" :key="cat">
+                                                <option :value="cat" x-text="cat"></option>
+                                            </template>
+                                        </select>
+                                    </div>
+                                    
+                                    <div x-show="tempCat === '复查'">
+                                        <label class="block text-xs font-medium text-slate-500 mb-1">二级分类</label>
+                                        <div class="relative">
+                                            <input type="text" 
+                                                   x-model="tempSub"
+                                                   @focus="searchOpen = true"
+                                                   @click="searchOpen = true"
+                                                   class="w-full border text-xs border-slate-300 rounded py-1 pr-6"
+                                                   placeholder="选择或搜索...">
+                                            
+                                            {# 下拉选单 #}
+                                            <ul x-show="searchOpen" @click.outside="searchOpen = false" 
+                                                class="absolute z-30 w-full max-h-32 overflow-y-auto bg-white border border-slate-200 rounded mt-1 shadow-lg text-xs">
+                                                <template x-for="sub in subcategories.filter(s => s.includes(tempSub))" :key="sub">
+                                                    <li @click="tempSub = sub; searchOpen = false" 
+                                                        class="px-2 py-1.5 hover:bg-indigo-50 cursor-pointer"
+                                                        x-text="sub"></li>
+                                                </template>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex justify-end pt-1">
+                                        <button @click="saveSelection()" class="px-3 py-1 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700">确定</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    {# 报告备注与解读 #}
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">报告备注与解读</label>
+                        <textarea 
+                            x-model="interpretation"
+                            :disabled="!editing"
+                            class="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
+                            rows="3"
+                            placeholder="暂无解读内容..."
+                        ></textarea>
+                    </div>
+
+                    {# 底部操作按钮 #}
+                    <div class="flex justify-between items-center pt-2">
+                        <button 
+                            @click="confirmDelete"
+                            class="px-4 py-1.5 bg-gray-400 text-white rounded-full text-sm hover:bg-gray-500 transition-colors"
+                        >
+                            删除此条档案
+                        </button>
+
+                        <button 
+                            @click="if(editing) { saveChanges(); } else { editing = true; }"
+                            class="px-6 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm"
+                            :class="editing ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-600 text-white hover:bg-blue-700'"
+                        >
+                            <span x-text="editing ? '保存' : '编辑'"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="p-8 text-center text-slate-500 text-sm">暂无诊疗记录</div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    {# 分页 (复用现有逻辑) #}
+    {% if reports_page.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-center gap-2 mt-6">
+        {% if reports_page.has_previous %}
+        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records&records_page={{ reports_page.previous_page_number }}&images_page={{ archives_page.number }}" hx-target="#patient-content">
+            <
+        </button>
+        {% endif %}
+        
+        {% for i in reports_page.paginator.page_range %}
+            <button 
+                class="px-3 py-1 text-sm border rounded hover:bg-slate-50 {% if i == reports_page.number %}bg-slate-100 font-bold border-slate-300{% else %}border-slate-200{% endif %}" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records&records_page={{ i }}&images_page={{ archives_page.number }}" 
+                hx-target="#patient-content">
+                {{ i }}
+            </button>
+        {% endfor %}
+
+        {% if reports_page.has_next %}
+        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records&records_page={{ reports_page.next_page_number }}&images_page={{ archives_page.number }}" hx-target="#patient-content">
+            >
+        </button>
+        {% endif %}
+    </div>
+    {% endif %}
+    
+    {# 包含 Modal 组件 #}
+    {% include "web_doctor/partials/home/checkup_record_modal.html" %}
+</div>

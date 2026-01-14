@@ -566,13 +566,15 @@
                   d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              {% endif %}
+              {% endif %} 
             </div>
             <div>
               <h4 class="font-bold text-slate-800 text-sm">{{ plan.title }}</h4>
-              <p class="text-sm text-slate-500 mt-0.5">{{ plan.subtitle }}</p>
+              <p id="plan-subtitle-{{ plan.type }}" class="text-sm text-slate-500 mt-0.5">{{ plan.subtitle }}</p>
             </div>
           </div>
+          
+          <div id="plan-action-{{ plan.type }}">
           {% if plan.status != 'completed' %}
 
           <button
@@ -583,6 +585,7 @@
           </button>
 
           {% endif %}
+          </div>
         </div>
         {% endfor %}
       </div>
@@ -745,6 +748,40 @@
               // 可以在这里添加默认跳转或提示
          }
       }
+  }
+
+  // --- Data Refresh Logic ---
+  window.addEventListener('pageshow', function(event) {
+    if (localStorage.getItem('refresh_flag') === 'true') {
+        refreshMetricData();
+        localStorage.removeItem('refresh_flag');
+    }
+  });
+
+  function refreshMetricData() {
+    fetch("{% url 'web_patient:query_last_metric' %}")
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.plans) {
+                updateMetricDisplay(data.plans);
+            }
+        })
+        .catch(error => console.error('Error refreshing metrics:', error));
+  }
+
+  function updateMetricDisplay(plans) {
+    for (const [type, plan] of Object.entries(plans)) {
+        const subtitleEl = document.getElementById(`plan-subtitle-${type}`);
+        const actionEl = document.getElementById(`plan-action-${type}`);
+        
+        if (subtitleEl) {
+            subtitleEl.textContent = plan.subtitle;
+        }
+        
+        if (actionEl && plan.status === 'completed') {
+            actionEl.innerHTML = ''; // Hide button
+        }
+    }
   }
 </script>
 {% endblock %}
