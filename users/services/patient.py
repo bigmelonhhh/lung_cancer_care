@@ -432,7 +432,21 @@ class PatientService:
         doctor_id: Optional[int],
         sales_user: CustomUser,
     ) -> PatientProfile:
-        """为患者设置主治医生。"""
+        """
+        【功能说明】
+        - 为患者设置主治医生，并同步更新工作室归属记录。
+
+        【使用方法】
+        - patient_service.assign_doctor(patient, doctor_id, sales_user)
+
+        【参数说明】
+        - patient: PatientProfile 实例。
+        - doctor_id: int | None，绑定医生 ID。
+        - sales_user: CustomUser，执行绑定的销售账号。
+
+        【返回值说明】
+        - PatientProfile 实例。
+        """
 
         if not hasattr(sales_user, "sales_profile"):
             raise ValidationError("当前账号无销售档案")
@@ -445,8 +459,19 @@ class PatientService:
             if doctor is None:
                 raise ValidationError("医生不存在或无权绑定")
 
-        patient.doctor = doctor
-        patient.save(update_fields=["doctor", "updated_at"])
+        with transaction.atomic():
+            patient.doctor = doctor
+            patient.save(update_fields=["doctor", "updated_at"])
+
+            if doctor and doctor.studio:
+                from chat.services.chat import ChatService
+
+                ChatService().transfer_patient_to_studio(
+                    patient=patient,
+                    target_studio=doctor.studio,
+                    operator=sales_user,
+                    reason="绑定主治医生",
+                )
         return patient
 
     def get_active_studio_assignment(self, patient: PatientProfile):

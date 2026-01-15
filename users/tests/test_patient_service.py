@@ -5,7 +5,15 @@ from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from users import choices
-from users.models import CustomUser, PatientProfile, DoctorProfile, PatientRelation
+from chat.models import PatientStudioAssignment
+from users.models import (
+    CustomUser,
+    DoctorProfile,
+    DoctorStudio,
+    PatientProfile,
+    PatientRelation,
+    SalesProfile,
+)
 from users.services.patient import PatientService
 
 
@@ -23,6 +31,13 @@ class PatientServiceTests(TestCase):
         self.doctor_profile = DoctorProfile.objects.create(
             user=self.doctor_user, name="Dr. House", hospital="Test Hospital"
         )
+        self.studio = DoctorStudio.objects.create(
+            name="Doctor Studio",
+            code="STU100",
+            owner_doctor=self.doctor_profile,
+        )
+        self.doctor_profile.studio = self.studio
+        self.doctor_profile.save(update_fields=["studio"])
 
         # 2. Create a Patient, and assign the doctor
         self.patient_user = CustomUser.objects.create_user(
@@ -58,6 +73,11 @@ class PatientServiceTests(TestCase):
             phone="13900139000",
             wx_nickname="Sales Sam",
         )
+        self.sales_profile = SalesProfile.objects.create(
+            user=self.unauthorized_user,
+            name="Sales Sam",
+        )
+        self.sales_profile.doctors.add(self.doctor_profile)
 
         # 5. Create an unclaimed profile for claim tests
         self.unclaimed_profile = PatientProfile.objects.create(
@@ -75,6 +95,11 @@ class PatientServiceTests(TestCase):
             user=self.other_patient_user,
             phone="18600000003",
             name="Other Patient"
+        )
+
+        self.unassigned_patient = PatientProfile.objects.create(
+            phone="18600000004",
+            name="Unassigned Patient",
         )
 
 
@@ -206,6 +231,19 @@ class PatientServiceTests(TestCase):
         self.assertEqual(new_profile.phone, "18600009999")
         self.assertEqual(new_profile.source, choices.PatientSource.SELF)
         self.assertEqual(new_profile.remark, "首次建档备注")
+
+    def test_assign_doctor_creates_studio_assignment(self):
+        """绑定医生时应创建患者工作室归属记录。"""
+        self.service.assign_doctor(
+            patient=self.unassigned_patient,
+            doctor_id=self.doctor_profile.id,
+            sales_user=self.unauthorized_user,
+        )
+        assignment = PatientStudioAssignment.objects.filter(
+            patient=self.unassigned_patient, end_at__isnull=True
+        ).first()
+        self.assertIsNotNone(assignment)
+        self.assertEqual(assignment.studio_id, self.studio.id)
 
     def test_claim_profile_already_bound_fails(self):
         """Attempting to claim a profile already bound to another user fails."""
