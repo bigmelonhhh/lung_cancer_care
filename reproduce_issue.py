@@ -14,7 +14,6 @@ from core.service.treatment_cycle import create_treatment_cycle
 
 def reproduce():
     # 1. Setup Data
-    print("Setting up data...")
     user, _ = CustomUser.objects.get_or_create(username="test_patient_history", user_type=1)
     patient, _ = PatientProfile.objects.get_or_create(user=user, name="Test History Patient", birth_date=date(1990, 1, 1))
     
@@ -59,23 +58,18 @@ def reproduce():
     s2.created_at = timezone.make_aware(datetime(2025, 2, 5, 10, 0, 0))
     s2.save()
     
-    print(f"Total Submissions: {QuestionnaireSubmission.objects.filter(patient_id=patient.id).count()}")
-    for s in QuestionnaireSubmission.objects.filter(patient_id=patient.id):
-        print(f"Submission: {s.created_at}")
+   
     
     # 2. Run Logic
-    print("Running view logic...")
     cycles = [cycle2, cycle1] # reverse order usually
     
     history = []
     for cycle in cycles:
-        print(f"Processing {cycle.name}: {cycle.start_date} - {cycle.end_date}")
         dates = QuestionnaireSubmissionService.get_submission_dates(
             patient=patient,
             start_date=cycle.start_date,
             end_date=cycle.end_date
         )
-        print(f"  Dates found: {dates}")
         history.append({
             "name": cycle.name,
             "dates": dates
@@ -85,15 +79,13 @@ def reproduce():
     cycle1_dates = next(item['dates'] for item in history if item['name'] == "Cycle 1")
     cycle2_dates = next(item['dates'] for item in history if item['name'] == "Cycle 2")
     
-    print("\nResults:")
-    print(f"Cycle 1 Dates: {cycle1_dates}")
-    print(f"Cycle 2 Dates: {cycle2_dates}")
+
     
     if len(cycle1_dates) == 1 and cycle1_dates[0] == date(2025, 1, 5) and \
        len(cycle2_dates) == 1 and cycle2_dates[0] == date(2025, 2, 5):
-        print("SUCCESS: Dates are correctly separated.")
+        pass
     else:
-        print("FAILURE: Dates are mixed or incorrect.")
+       pass
 
 from datetime import datetime
 if __name__ == "__main__":

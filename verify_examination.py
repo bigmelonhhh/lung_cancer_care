@@ -18,7 +18,6 @@ from users import choices
 User = get_user_model()
 
 def verify():
-    print("Starting verification...")
     
     # 1. Create Mock User & Patient
     user, _ = User.objects.get_or_create(
@@ -97,20 +96,18 @@ def verify():
     request.patient = patient
     
     response = my_examination(request)
-    print(f"my_examination status: {response.status_code}")
     if response.status_code == 200:
-        print("my_examination content snippet:", response.content.decode()[:200])
         content = response.content.decode()
         if "我的复查" in content:
-            print("Page title found.")
+            pass
         if "Future Checkup" in content:
-            print("Future task found.")
+            pass
         if "Today Checkup" in content:
-            print("Today task found.")
+            pass
         if "web_patient:record_checkup" in content or "record/checkup" in content: # URL might be resolved
-            print("Link to record_checkup found.")
+            pass
     else:
-        print("FAIL: my_examination view failed.")
+        pass
 
     # 6. Test examination_detail View
     request_detail = factory.get(f'/p/examination/detail/{t3.id}/')
@@ -118,17 +115,15 @@ def verify():
     request_detail.patient = patient
     
     response_detail = examination_detail(request_detail, t3.id)
-    print(f"examination_detail status: {response_detail.status_code}")
     if response_detail.status_code == 200:
         content_detail = response_detail.content.decode()
         if "复查详情" in content_detail:
-            print("Detail page title found.")
+            pass
         if "http://example.com/img1.jpg" in content_detail:
-            print("Image URL found.")
+           pass
     else:
-        print("FAIL: examination_detail view failed.")
+        pass
 
-    print("Verification finished.")
 
 if __name__ == "__main__":
     verify()

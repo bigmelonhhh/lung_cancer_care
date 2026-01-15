@@ -84,7 +84,7 @@ class ConsultationChatLogicTest(TestCase):
             # Assuming M2M field 'doctors' exists on AssistantProfile
             self.assistant_profile.doctors.add(self.doctor_profile)
         except AttributeError:
-            print("Warning: 'doctors' field not found on AssistantProfile, skipping explicit link setup.")
+            pass
 
         # Setup: Assign Patient to Studio (Required for chat to work)
         PatientStudioAssignment.objects.create(
@@ -96,7 +96,6 @@ class ConsultationChatLogicTest(TestCase):
         # Verify Assistant is a studio member (Backend Logic)
         is_member = self.chat_service._is_user_studio_member(self.assistant_user, self.studio)
         self.assertTrue(is_member, "Assistant should be considered a studio member")
-        print("Verified: Assistant is recognized as Studio Member")
         
         # Simulate Patient accessing Chat Page
         request = self.factory.get('/api/chat/messages/')
@@ -105,7 +104,6 @@ class ConsultationChatLogicTest(TestCase):
         
         response = list_messages(request)
         self.assertEqual(response.status_code, 200)
-        print("Verified: Chat API returns success for Patient")
 
     def test_case_3_patient_association(self):
         """
@@ -114,7 +112,6 @@ class ConsultationChatLogicTest(TestCase):
         - 验证患者前台显示正确关联了"李白"医生和"肺部康复管理工作室"
         - 检查患者进入聊天页面时是否正常显示，不应出现showNoStudioError布局提醒
         """
-        print("\n--- Running Test Case 3: Patient Association ---")
         
         # Setup: Assign Patient to Studio
         PatientStudioAssignment.objects.create(
@@ -126,7 +123,6 @@ class ConsultationChatLogicTest(TestCase):
         # Verify active assignment
         assignment = self.patient_service.get_active_studio_assignment(self.patient_profile)
         self.assertEqual(assignment.studio.name, "肺部康复管理工作室")
-        print(f"Verified: Patient actively associated with {assignment.studio.name}")
         
         # Verify Chat Logic
         # 1. API Call (Happy Path)
@@ -136,17 +132,14 @@ class ConsultationChatLogicTest(TestCase):
         
         response = list_messages(request)
         self.assertEqual(response.status_code, 200)
-        print("Verified: Chat API returns success")
         
         # 2. Verify Conversation Creation
         conversation = self.chat_service.get_or_create_patient_conversation(self.patient_profile)
         self.assertEqual(conversation.studio, self.studio)
-        print("Verified: Conversation created with correct Studio")
         
         # 3. Simulate Error Condition (No Assignment)
         # Delete assignment to simulate unassigned state
         assignment.delete()
-        print("Simulating: Patient unassigned (No Studio)")
         
         # Call API again
         response_error = list_messages(request)
@@ -155,7 +148,5 @@ class ConsultationChatLogicTest(TestCase):
         
         # Check if error message triggers the frontend logic
         # Frontend: if (res.status === 400 && data.message && data.message.includes("工作室"))
-        print(f"API Error Response: {data_error['message']}")
         self.assertIn("工作室", data_error['message'])
-        print("Verified: API returns 400 with '工作室' in message, triggering showNoStudioError")
 

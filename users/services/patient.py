@@ -42,7 +42,6 @@ class PatientService:
 
         【使用示例】
         >>> served_days, remaining_days = patient_service.get_guard_days(patient)
-        >>> print(f"已守护 {served_days} 天，剩余权益 {remaining_days} 天")
         """
         from market.models import Order  # 避免在模块顶层引入引起不必要耦合
 

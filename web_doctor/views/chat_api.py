@@ -1,4 +1,5 @@
 import json
+import logging
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_GET, require_POST
 from django.contrib.auth.decorators import login_required
@@ -81,7 +82,7 @@ def get_chat_context(request: HttpRequest):
                     internal_unread_count = chat_service.get_unread_count(i_conv, user)
                     
                 except Exception as e:
-                    print(f"Error creating conversation: {e}")
+                    logging.info(f"Error creating conversation: {e}")
 
                 if is_director:
                     # 主任视角

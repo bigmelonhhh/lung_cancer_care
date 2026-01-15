@@ -17,7 +17,6 @@ class MedicalHistoryServiceTest(TestCase):
             password="password",
             wx_openid="mock_doc_openid",
         )
-        print("Created doctor user:", self.doctor.username)
         
         # 2. 创建一个患者用户和对应的 Profile
         self.patient_user = User.objects.create_user(

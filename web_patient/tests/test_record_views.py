@@ -31,12 +31,11 @@ class RecordViewTests(TestCase):
         })
         
         # 1. 验证重定向
-        # 期望重定向到 patient_home 且包含 temperature=true
+        # 期望重定向回当前页面 (刷新)
         self.assertEqual(response.status_code, 302)
         target_url = response.url
-        self.assertIn(reverse('web_patient:patient_home'), target_url)
-        self.assertIn('temperature=true', target_url)
-
+        self.assertEqual(target_url, url)
+        
         # 2. 验证数据库存储的时间是否为 Aware
         metric = HealthMetric.objects.filter(
             patient=self.patient, 
@@ -67,7 +66,7 @@ class RecordViewTests(TestCase):
         
         self.assertEqual(response.status_code, 302)
         target_url = response.url
-        self.assertIn('bp_hr=true', target_url)
+        self.assertEqual(target_url, url)
         
         # 检查血压记录
         bp_metric = HealthMetric.objects.filter(
@@ -96,7 +95,7 @@ class RecordViewTests(TestCase):
         
         self.assertEqual(response.status_code, 302)
         target_url = response.url
-        self.assertIn('spo2=true', target_url)
+        self.assertEqual(target_url, url)
         
         metric = HealthMetric.objects.filter(
             patient=self.patient,

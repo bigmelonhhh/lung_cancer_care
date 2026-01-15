@@ -19,6 +19,5 @@ def run():
                 start_at=timezone.now(),
                 reason="Auto-assigned by script"
             )
-            print(f"Assigned {patient.name} to {doctor.studio.name}")
+            
             count += 1
-    print(f"Total assigned: {count}")

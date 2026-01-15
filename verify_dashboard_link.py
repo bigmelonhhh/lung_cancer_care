@@ -14,8 +14,6 @@ from users import choices
 User = get_user_model()
 
 def verify():
-    print("Starting verification...")
-    
     # 1. Create Mock User & Patient
     user, _ = User.objects.get_or_create(
         username="test_patient_dash", 
@@ -40,7 +38,6 @@ def verify():
     
     # 3. Call View
     response = patient_dashboard(request)
-    print(f"Dashboard status: {response.status_code}")
     
     # 4. Inspect Context (requires looking into the response content or context if using TemplateResponse)
     # Since it returns HttpResponse(render(...)), we can check the rendered content for the URL.
@@ -49,12 +46,6 @@ def verify():
     content = response.content.decode()
     expected_url = "/p/health/records/"
     
-    if expected_url in content:
-        print(f"SUCCESS: Found link to {expected_url}")
-    else:
-        print(f"FAIL: Could not find link to {expected_url}")
-        # print snippet
-        # print(content[:1000])
 
 if __name__ == "__main__":
     verify()

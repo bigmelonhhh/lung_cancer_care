@@ -39,7 +39,6 @@ def get_treatment_cycles(
     >>> from core.service.treatment_cycle import get_treatment_cycles
     >>> page = get_treatment_cycles(patient)  # 默认第一页，每页 10 条
     >>> for cycle in page.object_list:
-    ...     print(cycle.name, cycle.start_date)
     """
 
     qs = TreatmentCycle.objects.filter(patient=patient).order_by("-start_date")
@@ -171,7 +170,6 @@ def get_cycle_confirmer(cycle_id: int) -> tuple[Optional[CustomUser], Optional[d
     【使用示例】
     >>> user, confirmed_at = get_cycle_confirmer(cycle_id=1)
     >>> if user and confirmed_at:
-    ...     print(user.display_name, confirmed_at)
     """
     plan = (
         PlanItem.objects.filter(cycle_id=cycle_id, updated_by__isnull=False)

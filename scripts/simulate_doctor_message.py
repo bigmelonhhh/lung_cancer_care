@@ -6,7 +6,6 @@ def run():
     # Find a patient
     patient = PatientProfile.objects.first()
     if not patient:
-        print("No patient found")
         return
 
     # Find conversation
@@ -15,7 +14,6 @@ def run():
         conversation = service.get_or_create_patient_conversation(patient)
         studio = conversation.studio
         if not studio:
-            print("Studio not found")
             return
             
         # Create a Platform Doctor (if not exists)
@@ -23,7 +21,6 @@ def run():
         pf_doctor = DoctorProfile.objects.filter(studio=studio).exclude(id=studio.owner_doctor_id).first()
         
         if not pf_doctor:
-            print("Creating new Platform Doctor...")
             # Create user
             username = 'pf_doctor_test'
             user = CustomUser.objects.filter(username=username).first()
@@ -32,7 +29,6 @@ def run():
             
             pf_doctor = DoctorProfile.objects.create(user=user, name='Dr Platform', studio=studio)
         
-        print(f"Sending message from Platform Doctor {pf_doctor.name} to Patient {patient.name} in Studio {studio.name}")
         
         # Send Text Message
         msg = service.create_text_message(
@@ -40,7 +36,6 @@ def run():
             sender=pf_doctor.user,
             content="你好，这是医生发送的测试消息。\n第二行测试换行。\n😊表情测试。"
         )
-        print(f"Sent text message: {msg.id}")
         
     except Exception as e:
-        print(f"Error: {e}")
+        pass

@@ -102,7 +102,7 @@ class ManagementPlanViewTests(TestCase):
         self.assertEqual(temp_task['status'], 'completed')
         
         # BP: In plan + No Data = Incomplete
-        bp_task = next((t for t in monitoring_plan if t['title'] == '测量血压'), None)
+        bp_task = next((t for t in monitoring_plan if t['title'] == '测量血压/心率'), None)
         self.assertIsNotNone(bp_task)
         self.assertEqual(bp_task['status'], 'incomplete')
         
