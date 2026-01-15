@@ -169,3 +169,22 @@ class TodoPatientBindingTests(TestCase):
             headers={'HX-Request': 'true'}
         )
         self.assertContains(response_paged, f'patient_id={self.patient1.id}')
+
+    def test_patient_todo_sidebar_view(self):
+        """Test the new patient_todo_sidebar view for partial refresh"""
+        url = reverse('web_doctor:patient_todo_sidebar', args=[self.patient1.id])
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        
+        # Check OOB attributes
+        self.assertIn('hx-swap-oob="true"', content)
+        self.assertIn('id="patient-todo-list"', content)
+        
+        # Check data
+        self.assertIn('Patient One的待办', content)
+        self.assertIn('P1 Alert 1', content)
+        
+        # Check data-patient-id attribute (Task 3 verification)
+        self.assertIn(f'data-patient-id="{self.patient1.id}"', content)

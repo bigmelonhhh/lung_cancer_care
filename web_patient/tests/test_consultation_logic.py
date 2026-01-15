@@ -46,7 +46,6 @@ class ConsultationChatLogicTest(TestCase):
         - 验证医生登录后能正确显示患者"张鹏"的数据 (模拟后台关联)
         - 检查聊天页面是否正常显示，不应出现showNoStudioError布局提醒
         """
-        print("\n--- Running Test Case 1: Doctor Association ---")
         
         # Setup: Assign Patient to Studio (模拟医生后台关联操作)
         PatientStudioAssignment.objects.create(
@@ -59,7 +58,6 @@ class ConsultationChatLogicTest(TestCase):
         assignment = self.patient_service.get_active_studio_assignment(self.patient_profile)
         self.assertIsNotNone(assignment, "Patient should be assigned to a studio")
         self.assertEqual(assignment.studio, self.studio, "Patient should be assigned to Li Bai's studio")
-        print(f"Verified: Patient {self.patient_profile.name} is assigned to {assignment.studio.name}")
 
         # Simulate Patient accessing Chat Page (API call)
         # Note: We test the Patient's view because that's where the error logic resides
@@ -72,8 +70,6 @@ class ConsultationChatLogicTest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.content)
         self.assertEqual(data['status'], 'success')
-        print("Verified: Chat API returns success (no error)")
-        print("Verified: showNoStudioError will NOT be triggered")
 
     def test_case_2_assistant_association(self):
         """
@@ -82,13 +78,11 @@ class ConsultationChatLogicTest(TestCase):
         - 验证医助登录后能正确显示患者"张鹏"的数据
         - 检查聊天页面是否正常显示，不应出现showNoStudioError布局提醒
         """
-        print("\n--- Running Test Case 2: Assistant Association ---")
         
         # Setup: Link Assistant to Doctor
         try:
             # Assuming M2M field 'doctors' exists on AssistantProfile
             self.assistant_profile.doctors.add(self.doctor_profile)
-            print("Verified: Assistant linked to Doctor")
         except AttributeError:
             print("Warning: 'doctors' field not found on AssistantProfile, skipping explicit link setup.")
 

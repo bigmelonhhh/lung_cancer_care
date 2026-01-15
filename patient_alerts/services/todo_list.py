@@ -221,6 +221,7 @@ class TodoListService:
             "event_content": alert.event_content,
             "handle_content": alert.handle_content,
             "patient_name": patient_name,
+            "patient_id": alert.patient_id,
             "status_display": _STATUS_DISPLAY.get(alert.status, ""),
         }
 

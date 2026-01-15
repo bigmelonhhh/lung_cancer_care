@@ -216,93 +216,119 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
     - 通过 URL 中的 section 动态切 Tab
     - 当前仅实现 settings（管理设置）Tab，其它 Tab 使用占位模版
     """
-    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    try:
+        patient = get_object_or_404(PatientProfile, pk=patient_id)
 
-    # 权限校验：确保该患者在当前登录账号“可管理的患者集合”里
-    allowed_patients = _get_workspace_patients(request.user, query=None).values_list("id", flat=True)
-    if patient.id not in allowed_patients:
-        raise Http404("未找到患者")
+        # 权限校验：确保该患者在当前登录账号“可管理的患者集合”里
+        allowed_patients = _get_workspace_patients(request.user, query=None).values_list("id", flat=True)
+        if patient.id not in allowed_patients:
+            raise Http404("未找到患者")
 
-    context = {
-        "patient": patient,
-        "active_tab": section,  # 确保 Tab 高亮正确
-    }
-    template_name = "web_doctor/partials/sections/placeholder.html"
+        context = {
+            "patient": patient,
+            "active_tab": section,  # 确保 Tab 高亮正确
+        }
+        template_name = "web_doctor/partials/sections/placeholder.html"
 
-    if section == "settings":
-        template_name = "web_doctor/partials/settings/main.html"
-        selected_cycle_raw = request.GET.get("cycle_id")
-        try:
-            selected_cycle_id = int(selected_cycle_raw) if selected_cycle_raw else None
-        except (TypeError, ValueError):
-            selected_cycle_id = None
-        context.update(
-            _build_settings_context(
-                patient,
-                tc_page=request.GET.get("tc_page"),
-                selected_cycle_id=selected_cycle_id,
+        if section == "settings":
+            template_name = "web_doctor/partials/settings/main.html"
+            selected_cycle_raw = request.GET.get("cycle_id")
+            try:
+                selected_cycle_id = int(selected_cycle_raw) if selected_cycle_raw else None
+            except (TypeError, ValueError):
+                selected_cycle_id = None
+            context.update(
+                _build_settings_context(
+                    patient,
+                    tc_page=request.GET.get("tc_page"),
+                    selected_cycle_id=selected_cycle_id,
+                )
             )
-        )
-    elif section == "medical_history":
-        template_name = "web_doctor/partials/medical_history/list.html"
-        try:
-            page = int(request.GET.get("page", 1))
-        except (TypeError, ValueError):
-            page = 1
-        
-        history_page = MedicalHistoryService.get_medical_history_list(patient, page=page, page_size=10)
-        context.update({
-            "history_page": history_page,
-            "patient": patient
-        })
-    elif section == "home":
-        template_name = "web_doctor/partials/home/home.html"
-        context.update(build_home_context(patient))
-    elif section == "checkup_history":
-        from web_doctor.views.home import handle_checkup_history_section
-        return render(
-            request,
-            handle_checkup_history_section(request, context),
-            context
-        )
+        elif section == "medical_history":
+            template_name = "web_doctor/partials/medical_history/list.html"
+            try:
+                page = int(request.GET.get("page", 1))
+            except (TypeError, ValueError):
+                page = 1
+            
+            history_page = MedicalHistoryService.get_medical_history_list(patient, page=page, page_size=10)
+            context.update({
+                "history_page": history_page,
+                "patient": patient
+            })
+        elif section == "home":
+            template_name = "web_doctor/partials/home/home.html"
+            context.update(build_home_context(patient))
+        elif section == "checkup_history":
+            from web_doctor.views.home import handle_checkup_history_section
+            return render(
+                request,
+                handle_checkup_history_section(request, context),
+                context
+            )
 
-    elif section == "medication_history":
-        from web_doctor.views.home import handle_medication_history_section
-        return render(
-            request,
-            handle_medication_history_section(request, context),
-            context
-        )
+        elif section == "medication_history":
+            from web_doctor.views.home import handle_medication_history_section
+            return render(
+                request,
+                handle_medication_history_section(request, context),
+                context
+            )
 
-    elif section == "reports_history" or section == "reports":
-        from web_doctor.views.reports_history_data import handle_reports_history_section
-        # 确保 active_tab 正确设置为 'reports'，以便 tab 高亮
-        context["active_tab"] = "reports"
-        return render(
-            request,
-            handle_reports_history_section(request, context),
-            context
-        )
-    elif section == "indicators":
-        from web_doctor.views.indicators import build_indicators_context
-        template_name = "web_doctor/partials/indicators/indicators.html"
-        context.update(build_indicators_context(
-            patient,
-            cycle_id=request.GET.get("cycle_id"),
-            start_date_str=request.GET.get("start_date"),
-            end_date_str=request.GET.get("end_date"),
-            filter_type=request.GET.get("filter_type")
-        ))
+        elif section == "reports_history" or section == "reports":
+            from web_doctor.views.reports_history_data import handle_reports_history_section
+            # 确保 active_tab 正确设置为 'reports'，以便 tab 高亮
+            context["active_tab"] = "reports"
+            return render(
+                request,
+                handle_reports_history_section(request, context),
+                context
+            )
+        elif section == "indicators":
+            from web_doctor.views.indicators import build_indicators_context
+            template_name = "web_doctor/partials/indicators/indicators.html"
+            context.update(build_indicators_context(
+                patient,
+                cycle_id=request.GET.get("cycle_id"),
+                start_date_str=request.GET.get("start_date"),
+                end_date_str=request.GET.get("end_date"),
+                filter_type=request.GET.get("filter_type")
+            ))
 
-    elif section == "statistics":
-        from web_doctor.views.management_stats import ManagementStatsView
-        view = ManagementStatsView()
-        pkg_id = request.GET.get("package_id")
-        selected_package_id = int(pkg_id) if pkg_id and pkg_id.isdigit() else None
-        context.update(view.get_context_data(patient, selected_package_id=selected_package_id))
-        template_name = "web_doctor/partials/management_stats/management_stats.html"
+        elif section == "statistics":
+            from web_doctor.views.management_stats import ManagementStatsView
+            view = ManagementStatsView()
+            pkg_id = request.GET.get("package_id")
+            selected_package_id = int(pkg_id) if pkg_id and pkg_id.isdigit() else None
+            context.update(view.get_context_data(patient, selected_package_id=selected_package_id))
+            template_name = "web_doctor/partials/management_stats/management_stats.html"
 
-    return render(request, template_name, context)
+        return render(request, template_name, context)
+
+    except Exception as e:
+        logger.error(f"Error loading patient workspace section '{section}' for patient {patient_id}: {e}", exc_info=True)
+        # 返回友好的错误提示 HTML
+        error_html = f"""
+        <div class="flex flex-col items-center justify-center h-full p-12 text-center text-slate-500 min-h-[400px]">
+            <svg class="w-16 h-16 mb-4 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <h3 class="text-lg font-medium text-slate-900">加载失败</h3>
+            <p class="mt-2 text-sm text-slate-600">无法加载模块内容，请稍后重试。</p>
+            <div class="mt-6">
+                <button 
+                    hx-get="{request.get_full_path()}" 
+                    hx-target="#patient-content" 
+                    hx-swap="innerHTML" 
+                    hx-indicator="#workspace-loading-overlay"
+                    class="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                >
+                    重试
+                </button>
+            </div>
+        </div>
+        """
+        return HttpResponse(error_html)
 
 
 def _build_settings_context(

@@ -272,7 +272,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if patient_id:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
-            print("f{listData}")
             if MetricType.STEPS in listData and listData[MetricType.STEPS] is not None:
                 steps_info = listData[MetricType.STEPS]
                 # 仅当步数是今日数据时才更新，否则保持0

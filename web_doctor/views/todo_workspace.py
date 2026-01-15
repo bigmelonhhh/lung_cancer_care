@@ -130,3 +130,32 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
         return render(request, "web_doctor/partials/todo_list/todo_list_table.html", context)
         
     return render(request, "web_doctor/partials/todo_list/todo_list.html", context)
+
+
+@login_required
+@check_doctor_or_assistant
+def patient_todo_sidebar(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    获取指定患者的待办事项侧边栏（局部刷新用）。
+    """
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    todo_page = TodoListService.get_todo_page(
+        user=request.user,
+        patient_id=patient.id,
+        status="pending",
+        page=1,
+        size=5
+    )
+    
+    return render(
+        request,
+        "web_doctor/partials/todo_list_sidebar.html",
+        {
+            "todo_list": todo_page.object_list,
+            "current_patient": patient,
+        },
+    )

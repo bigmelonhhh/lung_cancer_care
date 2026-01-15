@@ -111,9 +111,17 @@
                              channel.postMessage({ type: 'todo-updated' });
                              channel.close();
                         } 
-                        // 2. 如果在首页，刷新页面或触发特定的局部刷新（目前首页直接刷新页面最简单，或者不做操作等待下次加载）
+                        // 2. 如果在首页，尝试局部刷新侧边栏
                         else {
-                            window.location.reload();
+                            if (itemData.patient_id) {
+                                // 使用 HTMX 请求侧边栏局部视图
+                                // 由于视图返回了 OOB 内容，这里不需要指定 target，或者指定 swap:none
+                                const url = `/doctor/workspace/patient/${itemData.patient_id}/todo-sidebar/`;
+                                htmx.ajax('GET', url, {swap: 'none'});
+                            } else {
+                                // 如果没有 patient_id（理论上首页选中患者后会有），回退到刷新页面
+                                window.location.reload();
+                            }
                         }
                     } else {
                         alert('保存失败: ' + data.message);
@@ -156,7 +164,8 @@
             title: dataset.todoTitle,
             content: dataset.todoContent,
             status: dataset.todoStatus,
-            handle_content: dataset.todoHandleContent
+            handle_content: dataset.todoHandleContent,
+            patient_id: dataset.patientId
         };
         
         showTodoModal(itemData, isEditMode, function(data) {

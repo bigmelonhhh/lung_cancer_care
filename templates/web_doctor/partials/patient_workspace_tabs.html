@@ -11,6 +11,9 @@
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
             hx-target="#patient-content"
             hx-swap="innerHTML"
+            hx-indicator="#workspace-loading-overlay"
+            hx-disabled-elt="this"
+            hx-request='{"timeout": 10000}'
         >
             患者主页
         </a>
@@ -28,6 +31,9 @@
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
             hx-target="#patient-content"
             hx-swap="innerHTML"
+            hx-indicator="#workspace-loading-overlay"
+            hx-disabled-elt="this"
+            hx-request='{"timeout": 10000}'
         >
             患者指标
         </a>
@@ -45,6 +51,9 @@
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'statistics' %}"
             hx-target="#patient-content"
             hx-swap="innerHTML"
+            hx-indicator="#workspace-loading-overlay"
+            hx-disabled-elt="this"
+            hx-request='{"timeout": 10000}'
         >
             管理统计
         </a>
@@ -62,6 +71,9 @@
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'settings' %}"
             hx-target="#patient-content"
             hx-swap="innerHTML"
+            hx-indicator="#workspace-loading-overlay"
+            hx-disabled-elt="this"
+            hx-request='{"timeout": 10000}'
         >
             管理设置
         </a>
@@ -70,7 +82,7 @@
     {# 检查报告 #}
     {% if active_tab == 'reports' %}
         <span class="text-indigo-600 border-b-2 border-indigo-500 font-medium h-full flex items-center px-4">
-            检查报告
+            诊疗记录
         </span>
     {% else %}
         <a
@@ -79,10 +91,40 @@
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}"
             hx-target="#patient-content"
             hx-swap="innerHTML"
+            hx-indicator="#workspace-loading-overlay"
+            hx-disabled-elt="this"
+            hx-request='{"timeout": 10000}'
         >
-            检查报告
+            诊疗记录
         </a>
     {% endif %}
+</div>
+
+<!-- 全局 Loading 遮罩层 -->
+<style>
+    #workspace-loading-overlay {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease-in-out;
+    }
+    #workspace-loading-overlay.htmx-request {
+        opacity: 1;
+        pointer-events: auto;
+    }
+</style>
+<div id="workspace-loading-overlay" class="htmx-indicator fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+    <div class="flex flex-col items-center justify-center text-center px-6 py-10 text-slate-500">
+        <svg class="w-16 h-16 mb-4 text-indigo-500" viewBox="0 0 120 120" aria-hidden="true">
+            <circle cx="60" cy="60" r="40" fill="none" stroke="currentColor" stroke-width="1" class="opacity-20" />
+            <path d="M60,20 C80,20 100,40 100,60 C100,80 80,100 60,100 C40,100 20,80 20,60 C20,40 40,20 60,20 Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <animateTransform attributeName="transform" type="rotate" from="0 60 60" to="360 60 60" dur="4s" repeatCount="indefinite" />
+            </path>
+            <circle cx="60" cy="20" r="3" fill="currentColor">
+                <animateTransform attributeName="transform" type="rotate" from="0 60 60" to="360 60 60" dur="2s" repeatCount="indefinite" />
+            </circle>
+        </svg>
+        <p class="text-sm font-medium text-slate-600">加载中...</p>
+    </div>
 </div>
 
 <script>
