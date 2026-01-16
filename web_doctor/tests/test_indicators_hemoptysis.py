@@ -87,7 +87,8 @@ class IndicatorsHemoptysisTests(TestCase):
             self.assertEqual(val, "-")
 
     @patch('web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags')
-    def test_hemoptysis_error_handling(self, mock_list_flags):
+    @patch('web_doctor.views.indicators.logger.error')
+    def test_hemoptysis_error_handling(self, mock_logger, mock_list_flags):
         """测试咯血数据集成：异常处理"""
         mock_list_flags.side_effect = Exception("Service error")
         

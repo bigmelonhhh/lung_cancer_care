@@ -218,62 +218,83 @@ LOGIN_URL = 'web_doctor:login'
 LOGIN_REDIRECT_URL = 'web_doctor:doctor_dashboard'
 LOGOUT_REDIRECT_URL = 'web_doctor:login'
 
+# LOGGING = {
+#     "version": 1,
+#     "disable_existing_loggers": False,
+#     "formatters": {
+#         "json": {
+#             "()": "lung_cancer_care.logging_utils.JsonFormatter",
+#         },
+#     },
+#     "handlers": {
+#         "console": {
+#             "class": "logging.StreamHandler",
+#             "formatter": "json",
+#         },
+#         "file": {
+#             "class": "logging.handlers.TimedRotatingFileHandler",
+#             "filename": LOG_DIR / "lung_cancer_care.log",
+#             "when": "midnight",
+#             "interval": 1,
+#             "backupCount": 20,
+#             "formatter": "json",
+#             "encoding": "utf-8", # 建议加上编码
+#         },
+#     },
+#     "root": {  # 新增
+#         "handlers": ["console", "file"],
+#         "level": "INFO",
+#     },
+#     "loggers": {
+#         "django": {
+#             "handlers": ["console", "file"],
+#             "level": "INFO",
+#             "propagate": False,
+#         },
+#         "django.server": {
+#             "handlers": ["console", "file"],
+#             "level": "WARNING",
+#             "propagate": False,
+#         },
+#         "django.request": {
+#             "handlers": ["console", "file"],
+#             "level": "ERROR",
+#             "propagate": False,
+#         },
+#         "lung_cancer_care": {
+#             "handlers": ["console", "file"],
+#             "level": "INFO",
+#             "propagate": False,
+#         },
+#         "lung_cancer_care.request": {
+#             "handlers": ["console", "file"],
+#             "level": "INFO",
+#             "propagate": False,
+#         },
+#         # 【新增】专门打印 SQL 语句的配置
+#         "django.db.backends": {
+#             "handlers": ["console"],
+#             "level": "INFO",
+#             "propagate": False,
+#         },
+#     },
+# }
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "formatters": {
-        "json": {
-            "()": "lung_cancer_care.logging_utils.JsonFormatter",
-        },
-    },
     "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "json",
-        },
         "file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
-            "filename": LOG_DIR / "lung_cancer_care.log",
-            "when": "midnight",
-            "interval": 1,
-            "backupCount": 20,
-            "formatter": "json",
-            "encoding": "utf-8", # 建议加上编码
+            "level": "INFO",
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": BASE_DIR / "logs/lung_cancer_care.log",
+            "maxBytes": 10 * 1024 * 1024,  # 10MB
+            "backupCount": 10,
+            "encoding": "utf-8",
         },
-    },
-    "root": {  # 新增
-        "handlers": ["console", "file"],
-        "level": "INFO",
     },
     "loggers": {
-        "django": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.server": {
-            "handlers": ["console", "file"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "django.request": {
-            "handlers": ["console", "file"],
-            "level": "ERROR",
-            "propagate": False,
-        },
         "lung_cancer_care": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "lung_cancer_care.request": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        # 【新增】专门打印 SQL 语句的配置
-        "django.db.backends": {
-            "handlers": ["console"],
+            "handlers": ["file"],
             "level": "INFO",
             "propagate": False,
         },

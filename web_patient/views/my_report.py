@@ -12,8 +12,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from django.urls import reverse
 from django.core.paginator import Paginator
+from django.db import transaction
 
-from health_data.models.test_report import TestReport
+from health_data.models.report_upload import ReportUpload, ReportImage, UploadSource, UploaderRole
+from health_data.services.report_service import ReportUploadService
 from users.decorators import auto_wechat_login, check_patient
 
 logger = logging.getLogger(__name__)
@@ -26,12 +28,19 @@ def my_examination(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     
-    # 获取所有报告，按日期倒序
-    reports = TestReport.objects.filter(patient=patient).order_by("-report_date", "-created_at")
+    # 使用 Service 获取所有报告，按日期倒序
+    # 默认只展示个人中心上传的？根据需求，这里展示"我的报告"，通常包含自己上传的。
+    # 如果想展示所有的，可以不传 upload_source。
+    # 为了保持与"上传"对应，这里暂时只展示 PERSONAL_CENTER，或者全部。
+    # 考虑到用户可能想看所有上传记录，我们查询该患者所有的上传批次。
+    uploads_queryset = ReportUploadService.list_uploads(
+        patient=patient,
+        upload_source=UploadSource.PERSONAL_CENTER
+    )
     
     # 分页
     page_number = request.GET.get('page', 1)
-    paginator = Paginator(reports, 20) # 每页20条
+    paginator = Paginator(uploads_queryset, 20) # 每页20条
     page_obj = paginator.get_page(page_number)
     
     # 分组逻辑 (按日期分组)
@@ -39,44 +48,36 @@ def my_examination(request: HttpRequest) -> HttpResponse:
     current_date = None
     current_group = None
     
-    # 注意：分页是对 reports 进行的，所以我们只能对当前页的数据进行分组
-    # 如果跨页导致同一天的报告被切分，这是分页的常见妥协。
-    # 或者我们应该对"日期"进行分页？通常对 item 分页比较简单。
-    
-    for report in page_obj:
-        # 处理图片URL
-        images = report.image_urls
-        if isinstance(images, str):
-            try:
-                images = json.loads(images)
-            except json.JSONDecodeError:
-                images = []
-        elif not images:
-            images = []
+    for upload in page_obj:
+        # 获取该批次下的所有图片
+        images = upload.images.all()
+        if not images.exists():
+            continue
             
-        # 展示所有图片
-        preview_images = images
+        # 确定该批次的显示日期
+        # 优先使用第一张图片的 report_date，如果没有则使用 upload.created_at
+        first_img = images.first()
+        report_date = first_img.report_date if first_img and first_img.report_date else upload.created_at.date()
         
-        if report.report_date != current_date:
+        # 提取所有图片 URL
+        preview_images = [img.image_url for img in images]
+        
+        if report_date != current_date:
             if current_group:
                 grouped_reports.append(current_group)
             
-            current_date = report.report_date
+            current_date = report_date
             current_group = {
                 "date": current_date,
-                "reports": [],
+                "reports": [], # 保留结构兼容
                 "images": [], 
                 "ids": [] 
             }
         
-        current_group["reports"].append(report)
-        # 这里我们将同一天的所有报告的图片都收集起来展示在这一天的卡片里？
-        # 或者是每个 report 是一个独立的卡片？
-        # 根据 UI 图 (Image 1)，似乎是按日期分组，然后显示一堆图片。
-        # "上传日期: 2025-12-09" 下面有几张图。
-        # 所以应该是按日期分组显示。
+        # 将图片添加到当前日期组
         current_group["images"].extend(preview_images)
-        current_group["ids"].append(report.id)
+        # 记录 ReportUpload ID 用于删除
+        current_group["ids"].append(upload.id)
         
     if current_group:
         grouped_reports.append(current_group)
@@ -107,36 +108,51 @@ def upload_report(request: HttpRequest) -> HttpResponse:
                 report_date = timezone.now().date()
         
         # 处理图片上传
+        # 注意：前端可能传 images 或 images[]，Django request.FILES.getlist 处理多文件
         image_files = request.FILES.getlist("images")
-        image_urls = []
         
         if image_files:
-            # 存储路径: examination_reports/patient_id/date/uuid.ext
-            upload_dir = f"examination_reports/{patient.id}/{report_date}"
-            
-            for image_file in image_files:
-                ext = os.path.splitext(image_file.name)[1]
-                filename = f"{uuid.uuid4()}{ext}"
-                file_path = f"{upload_dir}/{filename}"
-                
-                # 使用 default_storage 保存
-                saved_path = default_storage.save(file_path, ContentFile(image_file.read()))
-                # 获取 URL (假设配置了 MEDIA_URL)
-                image_url = default_storage.url(saved_path)
-                image_urls.append(image_url)
+            try:
+                with transaction.atomic():
+                    # 准备调用 Service 的 payload
+                    image_payloads = []
+                    
+                    # 存储路径: examination_reports/patient_id/date/uuid.ext
+                    # 注意：这里使用 report_date 作为目录可能更好归档
+                    upload_dir = f"examination_reports/{patient.id}/{report_date}"
+                    
+                    for image_file in image_files:
+                        ext = os.path.splitext(image_file.name)[1].lower()
+                        filename = f"{uuid.uuid4()}{ext}"
+                        file_path = f"{upload_dir}/{filename}"
+                        
+                        # 保存文件
+                        saved_path = default_storage.save(file_path, ContentFile(image_file.read()))
+                        image_url = default_storage.url(saved_path)
+                        
+                        image_payloads.append({
+                            "image_url": image_url,
+                            "record_type": ReportImage.RecordType.OUTPATIENT, # 默认为门诊/其他
+                            "report_date": report_date
+                        })
+                    
+                    if image_payloads:
+                        # 调用 Service 创建
+                        ReportUploadService.create_upload(
+                            patient=patient,
+                            images=image_payloads,
+                            uploader=request.user,
+                            upload_source=UploadSource.PERSONAL_CENTER,
+                            uploader_role=UploaderRole.PATIENT
+                        )
+                        
+                        return redirect("web_patient:report_list")
+                        
+            except Exception as e:
+                logger.error(f"Failed to upload report: {e}")
+                # 可以添加错误消息提示给用户
+                # messages.error(request, "上传失败")
         
-        if image_urls:
-            # 创建报告
-            # 这里我们假设一次上传创建一个 Report 对象，包含多张图
-            TestReport.objects.create(
-                patient=patient,
-                report_date=report_date,
-                image_urls=image_urls, # JSONField
-                report_type=None # 用户未指定类型
-            )
-            # 模拟提交常规后回到列表页面，并且重新查询页面，分页参数重置查询
-            return redirect("web_patient:report_list")
-
     context = {
         "today": timezone.now().date().strftime("%Y-%m-%d"),
         "page_title": "新增报告"
@@ -148,22 +164,27 @@ def upload_report(request: HttpRequest) -> HttpResponse:
 @check_patient
 def delete_report(request: HttpRequest) -> JsonResponse:
     """
-    删除指定报告
+    删除指定报告 (ReportUpload)
     """
     patient = request.patient
     try:
         data = json.loads(request.body)
-        report_ids = data.get("ids", [])
+        upload_ids = data.get("ids", [])
         
         # 允许删除单个或多个
-        if not isinstance(report_ids, list):
-            report_ids = [report_ids]
+        if not isinstance(upload_ids, list):
+            upload_ids = [upload_ids]
             
-        if report_ids:
-            TestReport.objects.filter(
-                id__in=report_ids,
+        if upload_ids:
+            # 查询待删除的记录，确保属于当前患者
+            uploads = ReportUpload.objects.filter(
+                id__in=upload_ids,
                 patient=patient
-            ).delete()
+            )
+            
+            # 逐个调用 Service 进行删除 (支持软删除逻辑)
+            for upload in uploads:
+                ReportUploadService.delete_upload(upload)
             
         return JsonResponse({"status": "success"})
     except Exception as e:

@@ -14,14 +14,17 @@
         </div>
     </div>
 
-    <form method="post" enctype="multipart/form-data" class="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+    <form id="upload-form" class="flex-1 flex flex-col max-w-4xl mx-auto w-full">
         {% csrf_token %}
         <div class="p-4 space-y-4 flex-1">
+            <!-- Error/Status Message Area -->
+            <div id="status-message" class="hidden w-full p-3 rounded-lg text-sm font-medium mb-4 text-center"></div>
+
             <!-- Date Input -->
             <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                 <label class="block text-sm font-medium text-gray-500 mb-2">上传日期</label>
-                <div class="flex items-center  border-gray-200 pb-1">
-                    <input type="date" name="report_date" value="{{ today }}" class=" w-full border p-0 rounded-sm text-gray-900 focus:ring-0 text-lg bg-transparent font-medium" required>
+                <div class="flex items-center border-gray-200 pb-1">
+                    <input type="date" name="report_date" value="{{ today }}" class="w-full border p-2 rounded text-gray-900 focus:ring-blue-500 focus:border-blue-500 text-lg bg-transparent font-medium" required>
                 </div>
             </div>
 
@@ -29,12 +32,14 @@
             <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
                 <p class="text-sm font-medium text-gray-500 mb-3">报告图片</p>
                 <div class="grid grid-cols-3 sm:grid-cols-4 gap-3" id="image-preview-container">
+                    <!-- Images will be inserted here -->
+                    
                     <!-- Upload Button -->
-                    <label class="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition active:scale-95 text-gray-400 hover:text-gray-600 hover:border-gray-300">
+                    <label class="aspect-square bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-100 transition active:scale-95 text-gray-400 hover:text-gray-600 hover:border-gray-300" id="upload-btn">
                         <svg class="w-8 h-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
-                        <input type="file" name="images" multiple accept="image/*" class="hidden" onchange="handleImageSelect(this)">
+                        <input type="file" id="file-input" multiple accept="image/*" class="hidden" onchange="handleFileChange(event)">
                     </label>
                 </div>
                 <p class="text-xs text-gray-400 mt-3">支持上传多张图片，每张不超过 10MB</p>
@@ -43,7 +48,7 @@
 
         <!-- Submit Button -->
         <div class="p-4 bg-white border-t border-gray-100 sticky bottom-0 z-20">
-            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-[0.98] transition flex items-center justify-center gap-2">
+            <button type="button" onclick="submitReport()" class="w-full bg-blue-600 text-white font-bold py-3.5 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 active:scale-[0.98] transition flex items-center justify-center gap-2">
                 <span>提交</span>
             </button>
         </div>
@@ -51,84 +56,243 @@
 </div>
 
 <script>
-function handleImageSelect(input) {
-    if (input.files && input.files.length > 0) {
-        const container = document.getElementById('image-preview-container');
-        // Insert before the upload button (last element)
-        const uploadBtn = container.lastElementChild;
-        
-        Array.from(input.files).forEach(file => {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const div = document.createElement('div');
-                div.className = 'aspect-square bg-gray-100 rounded-xl overflow-hidden relative group border border-gray-200';
+// State to store uploaded files
+let uploads = [];
+
+// Image compression config
+const COMPRESS_CONFIG = {
+    maxWidth: 1920,
+    maxHeight: 1920,
+    quality: 0.8,
+    type: 'image/jpeg'
+};
+
+// Compress image function
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function(e) {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = function() {
+                let width = img.width;
+                let height = img.height;
                 
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                img.className = 'w-full h-full object-cover';
+                // Calculate scale ratio
+                if (width > COMPRESS_CONFIG.maxWidth || height > COMPRESS_CONFIG.maxHeight) {
+                    const ratio = Math.max(width / COMPRESS_CONFIG.maxWidth, height / COMPRESS_CONFIG.maxHeight);
+                    width = Math.floor(width / ratio);
+                    height = Math.floor(height / ratio);
+                } else {
+                    width = Math.floor(width);
+                    height = Math.floor(height);
+                }
                 
-                // Optional: Delete button for preview (visual only for now, complex to sync with input)
-                // For simple implementation, we just show preview. 
-                // To support removing files from input, we'd need a DataTransfer object and reset input.files.
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
                 
-                div.appendChild(img);
-                container.insertBefore(div, uploadBtn);
+                canvas.toBlob(function(blob) {
+                    if (!blob || blob.size > file.size) {
+                        resolve(file);
+                    } else {
+                        const newFile = new File([blob], file.name, {
+                            type: COMPRESS_CONFIG.type,
+                            lastModified: Date.now()
+                        });
+                        resolve(newFile);
+                    }
+                }, COMPRESS_CONFIG.type, COMPRESS_CONFIG.quality);
             };
-            reader.readAsDataURL(file);
-        });
-        
-        // Note: This simple implementation appends files visually. 
-        // The input keeps the files. If user selects more, the input value is replaced by new selection in some browsers, 
-        // or we need to handle "add to existing". 
-        // Standard <input type="file"> replaces selection.
-        // To support "add more", we usually hide the old input and create a new one, or use AJAX.
-        // Given "simulate submit", we'll stick to simple standard behavior: 
-        // User selects all files at once, or if they select again, it might replace. 
-        // BUT, visually we are appending. This is misleading if the input replaces.
-        // Let's check standard behavior: selecting again replaces `input.files`.
-        
-        // To fix this for a better UX without complex JS:
-        // We can't easily append to `input.files` (read-only).
-        // Strategy: 
-        // 1. Hide the current input (move it to a hidden container).
-        // 2. Create a new input for the "+" button.
-        // 3. On submit, all inputs with name="images" are sent.
-        
-        // Let's implement that strategy.
-        
-        // 1. Clone the input logic
-        // The current input is inside the label. We should move it out or handle it.
-        
-        // Better approach:
-        // Create a hidden input for the *current* batch of files, move it to a hidden form container, 
-        // and reset the label's input for next batch.
-        
-        const hiddenInputsContainer = document.createElement('div');
-        hiddenInputsContainer.className = 'hidden';
-        document.querySelector('form').appendChild(hiddenInputsContainer);
-        
-        // Clone the input (with files)
-        const newInput = input.cloneNode(true);
-        // Remove onchange to avoid recursion/issues if triggered manually, though clone won't copy listeners usually if added via JS, but inline yes.
-        newInput.removeAttribute('onchange'); 
-        newInput.removeAttribute('class'); // Remove hidden class to be sure (though it's inside hidden div)
-        // Actually, we can just move the input element itself if we want, but we need a new one for the label.
-        
-        // Move the input to hidden container
-        // We need to swap the input in the label with a fresh one.
-        const freshInput = document.createElement('input');
-        freshInput.type = 'file';
-        freshInput.name = 'images';
-        freshInput.multiple = true;
-        freshInput.accept = 'image/*';
-        freshInput.className = 'hidden';
-        freshInput.onchange = function() { handleImageSelect(this); };
-        
-        // Replace old input in label with fresh input
-        input.parentNode.replaceChild(freshInput, input);
-        
-        // Add old input to form
-        hiddenInputsContainer.appendChild(input);
+            img.onerror = function(err) {
+                console.warn('Image load failed, using original file', err);
+                resolve(file);
+            };
+        };
+        reader.onerror = function(err) {
+            console.warn('FileReader failed, using original file', err);
+            resolve(file);
+        };
+    });
+}
+
+function handleFileChange(event) {
+    const fileList = event.target.files;
+    if (!fileList || fileList.length === 0) return;
+    
+    const files = Array.from(fileList);
+    event.target.value = ''; // Reset input
+    
+    showStatus('正在处理图片...', 'info');
+
+    const processPromises = files.map(async file => {
+        if (!file.type.startsWith('image/')) {
+            showStatus(`文件 ${file.name} 格式不支持`, 'error');
+            return null;
+        }
+
+        if (file.size > 20 * 1024 * 1024) {
+             showStatus(`文件 ${file.name} 超过20MB限制`, 'error');
+             return null;
+        }
+
+        try {
+            const compressedFile = await compressImage(file);
+            const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            uploads.push({ id: fileId, file: compressedFile });
+            
+            const previewUrl = URL.createObjectURL(compressedFile);
+            addPreviewElement(previewUrl, fileId);
+            
+            return fileId;
+        } catch (err) {
+            console.error('Image processing error:', err);
+            showStatus(`图片 ${file.name} 处理失败`, 'error');
+            return null;
+        }
+    });
+
+    Promise.all(processPromises).then(() => {
+        const statusEl = document.getElementById('status-message');
+        if (statusEl && statusEl.textContent === '正在处理图片...') {
+             statusEl.classList.add('hidden');
+        }
+    });
+}
+
+function addPreviewElement(url, fileId) {
+    const container = document.getElementById('image-preview-container');
+    const uploadBtn = document.getElementById('upload-btn');
+    
+    const div = document.createElement('div');
+    div.id = `preview-${fileId}`;
+    div.className = 'aspect-square bg-gray-100 rounded-xl overflow-hidden relative group border border-gray-200';
+    
+    const img = document.createElement('img');
+    img.src = url;
+    img.className = 'w-full h-full object-cover';
+    
+    // Delete Button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10';
+    deleteBtn.innerHTML = '<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
+    deleteBtn.onclick = function(e) {
+        e.stopPropagation();
+        removeFile(fileId);
+    };
+    
+    div.appendChild(img);
+    div.appendChild(deleteBtn);
+    
+    container.insertBefore(div, uploadBtn);
+}
+
+function removeFile(fileId) {
+    if (confirm("确定要移除这张图片吗？")) {
+        uploads = uploads.filter(item => item.id !== fileId);
+        const wrapper = document.getElementById(`preview-${fileId}`);
+        if (wrapper) {
+            const img = wrapper.querySelector('img');
+            if (img && img.src) URL.revokeObjectURL(img.src);
+            wrapper.remove();
+        }
+    }
+}
+
+function submitReport() {
+    if (uploads.length === 0) {
+        alert("请至少上传一张图片");
+        return;
+    }
+    
+    const reportDate = document.querySelector('input[name="report_date"]').value;
+    if (!reportDate) {
+        alert("请选择上传日期");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('report_date', reportDate);
+    
+    uploads.forEach(u => {
+        formData.append('images', u.file);
+    });
+    
+    const submitBtn = document.querySelector('button[onclick="submitReport()"]');
+    const originalText = submitBtn.innerText;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        提交中...
+    `;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    fetch("{% url 'web_patient:report_upload' %}", {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrfToken
+        },
+        body: formData
+    })
+    .then(response => {
+        if (response.redirected) {
+            window.location.href = response.url;
+            return;
+        }
+        // Handle JSON response if we changed view to return JSON (which we haven't strictly, but redirect works via 302)
+        // Actually, fetch follows redirects automatically. 
+        // If the view returns redirect, fetch follows it and returns the page content of list page.
+        // We should check response.url
+        if (response.ok) {
+            showStatus('上传成功', 'success');
+            
+            // 设置刷新标志，用于上一页数据刷新
+            localStorage.setItem('refresh_report_list', 'true');
+            
+            setTimeout(() => {
+                // 优先返回上一页
+                if (document.referrer && document.referrer.includes(window.location.host)) {
+                    history.back();
+                } else {
+                    window.location.href = "{% url 'web_patient:report_list' %}";
+                }
+            }, 500);
+        } else {
+            throw new Error('Upload failed');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showStatus('上传失败，请重试', 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerText = originalText;
+    });
+}
+
+function showStatus(message, type) {
+    const statusEl = document.getElementById('status-message');
+    statusEl.textContent = message;
+    statusEl.className = `w-full p-3 rounded-lg text-sm font-medium mb-4 text-center ${
+        type === 'error' ? 'bg-red-100 text-red-700 border border-red-200' : 
+        type === 'success' ? 'bg-green-100 text-green-700 border border-green-200' : 
+        'bg-blue-100 text-blue-700 border border-blue-200'
+    }`;
+    statusEl.classList.remove('hidden');
+    
+    if (type !== 'info') {
+        setTimeout(() => {
+            statusEl.classList.add('hidden');
+        }, 3000);
     }
 }
 </script>

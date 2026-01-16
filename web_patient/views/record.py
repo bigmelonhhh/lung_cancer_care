@@ -817,25 +817,206 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     3. 支持图片上传（前端模拟预览）。
     4. 提交按钮（前端校验每个项目至少有一张图片）。
     """
+    from core.models import DailyTask
+    from core.models.choices import PlanItemCategory, TaskStatus, ReportType
+    from health_data.models.report_upload import ReportUpload, ReportImage, UploadSource, UploaderRole
+    from health_data.services.report_service import ReportUploadService
+    from core.models.checkup import CheckupLibrary
+    from django.core.files.storage import default_storage
+    from django.core.files.base import ContentFile
+    import uuid
+
+    from django.db import transaction
 
     patient = request.patient
     patient_id = patient.id or None
+    today = timezone.now().date()
 
-    # TODO 待联调复查上报接口 模拟数据
-    checkup_date = "2025-12-29"
-    checkup_items = [
-        {"id": 1, "name": "血常规"},
-        {"id": 2, "name": "血生化"},
-        {"id": 3, "name": "骨扫描"},
-    ]
+    # 查询今日复查任务
+    tasks = DailyTask.objects.filter(
+        patient=patient,
+        task_date=today,
+        task_type=PlanItemCategory.CHECKUP
+    )
+
+    if request.method == "POST":
+        try:
+            with transaction.atomic():
+                # 校验：是否所有展示的任务都上传了图片
+                # 这里我们只检查 PENDING 状态的任务，或者页面上展示的任务
+                # 假设页面展示所有今日任务
+                
+                uploaded_tasks_count = 0
+                
+                for task in tasks:
+                    files = request.FILES.getlist(f'images_{task.id}')
+                    if not files and task.status == TaskStatus.PENDING:
+                        # 如果是待完成任务且没有上传图片，返回错误
+                        # 注意：前端应该已经做过校验，这里是双重保障
+                        # 也可以选择忽略未上传的任务，只处理上传了的
+                        continue
+    
+                    if files:
+                        # 预先筛选有效文件
+                        valid_files = []
+                        for f in files:
+                            if f.size > 10 * 1024 * 1024:
+                                logging.warning(f"File {f.name} too large: {f.size}")
+                                continue
+                            ext = os.path.splitext(f.name)[1].lower()
+                            if ext in ['.jpg', '.jpeg', '.png']:
+                                valid_files.append(f)
+                            else:
+                                logging.warning(f"Invalid file type: {f.name}")
+                        
+                        if not valid_files:
+                            logging.info(f"No valid files for task {task.id}")
+                            continue
+
+                        # 尝试匹配 CheckupLibrary
+                        # 优先从 interaction_payload 获取 checkup_code 或 checkup_id
+                        checkup_item = None
+                        checkup_id = task.interaction_payload.get('checkup_id')
+                        if checkup_id:
+                            checkup_item = CheckupLibrary.objects.filter(id=checkup_id).first()
+                        
+                        # 降级：通过标题匹配
+                        if not checkup_item:
+                             checkup_item = CheckupLibrary.objects.filter(name=task.title).first()
+
+                        # 准备图片数据列表
+                        image_payloads = []
+                        for f in valid_files:
+                            # 保存文件
+                            file_path = f"checkup_reports/{patient.id}/{today}/{uuid.uuid4()}{os.path.splitext(f.name)[1].lower()}"
+                            saved_path = default_storage.save(file_path, ContentFile(f.read()))
+                            
+                            # 获取 URL
+                            # 如果 default_storage 是本地文件系统，url() 返回 /media/path
+                            # 如果配置了 MEDIA_URL，通常没问题
+                            # 为了保险，如果 image_url 是相对路径，我们可以考虑是否需要 request.build_absolute_uri
+                            # 但 ReportImage.image_url 是 URLField，通常存储完整 URL 或绝对路径
+                            image_url = default_storage.url(saved_path)
+                            
+                            # 确保 image_url 是可访问的。如果是相对路径且不是完整 URL，可能需要处理。
+                            # 多数情况下，/media/... 是可以直接使用的。
+                            # 假设 image_url 已经是 /media/... 或者是完整 URL (云存储)
+                            
+                            payload = {
+                                "image_url": image_url,
+                                "record_type": ReportImage.RecordType.CHECKUP,
+                                "report_date": today
+                            }
+                            # Explicitly set checkup_item
+                            if checkup_item:
+                                payload["checkup_item"] = checkup_item
+                            
+                            image_payloads.append(payload)
+
+                        # 调用 Service 统一创建记录
+                        ReportUploadService.create_upload(
+                            patient=patient,
+                            images=image_payloads,
+                            uploader=request.user,
+                            upload_source=UploadSource.CHECKUP_PLAN,
+                            uploader_role=UploaderRole.PATIENT,
+                            related_task=task
+                        )
+                        
+                        # 更新任务状态
+                        task.mark_completed()
+                        uploaded_tasks_count += 1
+                
+                if uploaded_tasks_count > 0:
+                     # AJAX 请求返回 JSON
+                    if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                        return JsonResponse({
+                            "status": "success",
+                            "redirect_url": reverse('web_patient:patient_home')
+                        })
+                    
+                    messages.success(request, "复查报告上传成功")
+                    return redirect('web_patient:patient_home')
+                else:
+                     if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                        return JsonResponse({"status": "error", "message": "未检测到有效的图片上传"}, status=400)
+    
+        except Exception as e:
+            logging.error(f"复查上报失败: {e}", exc_info=True)
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse({"status": "error", "message": str(e)}, status=500)
+            messages.error(request, "上传失败，请重试")
+            return redirect(request.path)
+
+    # 构造前端所需的数据结构
+    checkup_items = []
+    for task in tasks:
+        # 获取该任务已上传的图片
+        uploaded_images = []
+        # 查找关联的 ReportUpload
+        uploads = ReportUpload.objects.filter(related_task=task)
+        for upload in uploads:
+            images = ReportImage.objects.filter(upload=upload)
+            for img in images:
+                uploaded_images.append({
+                    "id": img.id,
+                    "url": img.image_url,
+                    "date": img.report_date.strftime("%Y-%m-%d") if img.report_date else ""
+                })
+
+        checkup_items.append({
+            "id": task.id,
+            "name": task.title,
+            "is_completed": task.status == TaskStatus.COMPLETED,
+            "existing_images": uploaded_images
+        })
 
     context = {
         "patient_id": patient_id,
-        "checkup_date": checkup_date,
+        "checkup_date": today.strftime("%Y-%m-%d"),
         "checkup_items": checkup_items,
     }
 
     return render(request, "web_patient/record_checkup.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def delete_report_image(request: HttpRequest, image_id: int) -> JsonResponse:
+    """
+    删除复查图片接口
+    POST /p/record/image/<id>/delete/
+    """
+    from health_data.models.report_upload import ReportImage
+    
+    if request.method != "POST":
+        return JsonResponse({"status": "error", "message": "Method not allowed"}, status=405)
+        
+    try:
+        image = ReportImage.objects.get(id=image_id)
+        
+        # 权限校验：确保是当前患者的图片
+        if image.upload.patient != request.patient:
+            return JsonResponse({"status": "error", "message": "无权删除此图片"}, status=403)
+            
+        # 物理删除文件 (Optional, Django FileField usually handles this via signals or manual delete)
+        if image.image_url:
+             # 注意：image_url 可能是 URL 路径，需要转换为 storage path
+             # 这里简单处理，依赖 storage backend
+             pass
+
+        # 删除数据库记录
+        image.delete()
+        
+        logging.info(f"User {request.user.id} deleted ReportImage {image_id}")
+        
+        return JsonResponse({"status": "success"})
+        
+    except ReportImage.DoesNotExist:
+        return JsonResponse({"status": "error", "message": "图片不存在"}, status=404)
+    except Exception as e:
+        logging.error(f"删除图片失败: {e}", exc_info=True)
+        return JsonResponse({"status": "error", "message": "删除失败，请重试"}, status=500)
 
 
 @auto_wechat_login

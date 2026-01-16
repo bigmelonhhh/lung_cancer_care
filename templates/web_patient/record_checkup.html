@@ -3,6 +3,11 @@
 
 {% block body %}
 <div class="min-h-screen bg-gray-50 pb-24 relative">
+    <!-- Explicit CSRF Token -->
+    {% csrf_token %}
+    
+    <!-- Error/Status Message Area -->
+    <div id="status-message" class="hidden fixed top-4 left-1/2 transform -translate-x-1/2 w-11/12 max-w-md p-4 rounded-lg shadow-lg z-50 text-center text-sm font-medium transition-all duration-300"></div>
     <!-- Header -->
     <div class="bg-white sticky top-0 z-40 border-b border-gray-100">
         <div class="flex items-center px-4 h-12">
@@ -32,13 +37,39 @@
                 <div class="space-y-8">
                     {% for item in checkup_items %}
                     <div class="checkup-item" data-id="{{ item.id }}" data-name="{{ item.name }}">
-                        <h3 class="text-base font-normal text-gray-800 mb-3">{{ forloop.counter }}、{{ item.name }}</h3>
-                        
-                        <!-- Upload Area -->
-                        <div class="flex flex-wrap gap-3" id="preview-container-{{ item.id }}">
-                            <!-- Previews will be inserted here -->
-                            
-                            <!-- Upload Button -->
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-lg font-bold text-gray-800">{{ item.name }}</h3>
+                            {% if item.is_completed %}
+                            <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已完成</span>
+                            {% else %}
+                            <span class="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">待上传</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- 现有图片展示区域 -->
+                        {% if item.existing_images %}
+                        <div class="mb-4">
+                            <p class="text-xs text-gray-500 mb-2">已上传图片：</p>
+                            <div class="flex gap-2 overflow-x-auto pb-2" id="existing-container-{{ item.id }}">
+                                {% for img in item.existing_images %}
+                                <div class="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 relative group shrink-0" id="existing-img-{{ img.id }}">
+                                    <img src="{{ img.url }}" class="w-full h-full object-cover">
+                                    <button type="button" 
+                                            onclick="deleteExistingImage({{ img.id }}, '{{ item.id }}')"
+                                            class="absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10">
+                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    </button>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- 图片预览区域 -->
+                        <div id="preview-container-{{ item.id }}" class="flex gap-2 overflow-x-auto pb-2 min-h-[6rem]">
+                            <!-- 添加按钮 -->
                             <div onclick="triggerUpload('{{ item.id }}')" class="flex flex-col w-24 h-24 bg-gray-50 border border-gray-200 rounded-lg  items-center justify-center cursor-pointer active:bg-gray-100 transition shrink-0">
                                 <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -132,30 +163,98 @@ let isScrolledToBottom = false; // 是否滚动到底部
 const modalContent = document.getElementById('modal-content');
 const btnTextEl = document.getElementById('btn-text');
 const confirmBtn = document.getElementById('modal-confirm-btn');
+const confirmBtnContainer = document.getElementById('instructions-modal'); 
 
 // 监听模态框内容滚动事件
-modalContent.addEventListener('scroll', function() {
-    // 判断是否滚动到底部（容差10px，避免精度问题）
-    const isBottom = (this.scrollTop + this.clientHeight) >= (this.scrollHeight - 10);
-    if (isBottom && !isScrolledToBottom) {
-        isScrolledToBottom = true;
-        // 直接启用按钮
-        confirmBtn.disabled = false;
-        // 切换按钮样式（恢复可点击状态）
-        confirmBtn.classList.remove('bg-gray-200', 'text-gray-500', 'cursor-not-allowed');
-        confirmBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
-        // 切换按钮文本
-        btnTextEl.textContent = '我已知晓，立即上传';
-    }
-});
+if (modalContent) {
+    modalContent.addEventListener('scroll', function() {
+        // 判断是否滚动到底部（容差10px，避免精度问题）
+        const isBottom = (this.scrollTop + this.clientHeight) >= (this.scrollHeight - 10);
+        if (isBottom && !isScrolledToBottom) {
+            isScrolledToBottom = true;
+            // 直接启用按钮
+            confirmBtn.disabled = false;
+            // 切换按钮样式（恢复可点击状态）
+            confirmBtn.classList.remove('bg-gray-200', 'text-gray-500', 'cursor-not-allowed');
+            confirmBtn.classList.add('text-blue-600', 'hover:bg-blue-50');
+            // 切换按钮文本
+            btnTextEl.textContent = '我已知晓，立即上传';
+        }
+    });
+}
 
 function triggerUpload(itemId) {
     document.getElementById(`file-input-${itemId}`).click();
 }
 
+// 图片压缩配置
+const COMPRESS_CONFIG = {
+    maxWidth: 1920,
+    maxHeight: 1920,
+    quality: 0.8,
+    type: 'image/jpeg'
+};
+
+// 图片压缩函数
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = function(e) {
+            const img = new Image();
+            img.src = e.target.result;
+            img.onload = function() {
+                let width = img.width;
+                let height = img.height;
+                
+                // 计算缩放比例
+                if (width > COMPRESS_CONFIG.maxWidth || height > COMPRESS_CONFIG.maxHeight) {
+                    const ratio = Math.max(width / COMPRESS_CONFIG.maxWidth, height / COMPRESS_CONFIG.maxHeight);
+                    width = Math.floor(width / ratio);
+                    height = Math.floor(height / ratio);
+                } else {
+                    width = Math.floor(width);
+                    height = Math.floor(height);
+                }
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob(function(blob) {
+                    // 如果压缩后比原图大，或者压缩失败，则返回原文件
+                    if (!blob || blob.size > file.size) {
+                        resolve(file);
+                    } else {
+                        // 重新封装为 File 对象以保持文件名等信息
+                        const newFile = new File([blob], file.name, {
+                            type: COMPRESS_CONFIG.type,
+                            lastModified: Date.now()
+                        });
+                        resolve(newFile);
+                    }
+                }, COMPRESS_CONFIG.type, COMPRESS_CONFIG.quality);
+            };
+            img.onerror = function(err) {
+                console.warn('Image load failed, using original file', err);
+                resolve(file); // Fallback to original file
+            };
+        };
+        reader.onerror = function(err) {
+            console.warn('FileReader failed, using original file', err);
+            resolve(file); // Fallback to original file
+        };
+    });
+}
+
 function handleFileChange(event, itemId) {
-    const file = event.target.files[0];
-    if (!file) return;
+    const fileList = event.target.files;
+    if (!fileList || fileList.length === 0) return;
+    
+    // Convert to array IMMEDIATELY to preserve references before resetting input
+    const files = Array.from(fileList);
     
     // Reset input value so same file can be selected again
     event.target.value = '';
@@ -165,22 +264,55 @@ function handleFileChange(event, itemId) {
         uploads[itemId] = [];
     }
     
-    // Generate unique ID
-    const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-    
-    // Add file to state
-    uploads[itemId].push({ id: fileId, file: file });
-    
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        const previewUrl = e.target.result;
-        addPreviewElement(itemId, previewUrl, fileId);
-        
-        // Clear error if exists
-        document.getElementById(`error-${itemId}`).classList.add('hidden');
-    };
-    reader.readAsDataURL(file);
+    // 显示上传中状态（可选）
+    showStatus('正在处理图片...', 'info');
+
+    const processPromises = files.map(async file => {
+        // Validate type (Allow all images)
+        if (!file.type.startsWith('image/')) {
+            showStatus(`文件 ${file.name} 格式不支持，请上传图片`, 'error');
+            return null;
+        }
+
+        // Validate size (Original size check, 20MB limit before compression)
+        if (file.size > 20 * 1024 * 1024) {
+             showStatus(`文件 ${file.name} 超过20MB限制`, 'error');
+             return null;
+        }
+
+        try {
+            // Compress image
+            const compressedFile = await compressImage(file);
+            
+            // Generate unique ID
+            const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            // Add file to state
+            uploads[itemId].push({ id: fileId, file: compressedFile });
+            
+            // Create preview using createObjectURL for better performance
+            const previewUrl = URL.createObjectURL(compressedFile);
+            addPreviewElement(itemId, previewUrl, fileId);
+            
+            // Clear error if exists
+            const errorEl = document.getElementById(`error-${itemId}`);
+            if (errorEl) errorEl.classList.add('hidden');
+            
+            return fileId;
+        } catch (err) {
+            console.error('Image processing error:', err);
+            showStatus(`图片 ${file.name} 处理失败`, 'error');
+            return null;
+        }
+    });
+
+    Promise.all(processPromises).then(() => {
+        // Hide status after processing
+        const statusEl = document.getElementById('status-message');
+        if (statusEl && statusEl.textContent === '正在处理图片...') {
+             statusEl.classList.add('hidden');
+        }
+    });
 }
 
 function addPreviewElement(itemId, url, fileId) {
@@ -196,10 +328,10 @@ function addPreviewElement(itemId, url, fileId) {
     img.className = 'w-full h-full object-cover';
     wrapper.appendChild(img);
     
-    // Delete Button
+    // Delete Button (UI spec: 20x20, red, top-right 10px - using absolute positioning relative to wrapper)
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'absolute top-0 right-0 bg-red-500 text-white p-0.5 rounded-bl-lg opacity-80 hover:opacity-100 transition';
-    deleteBtn.innerHTML = '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
+    deleteBtn.className = 'absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10';
+    deleteBtn.innerHTML = '<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
     deleteBtn.onclick = function(e) {
         e.stopPropagation(); // Prevent bubbling
         removeFile(itemId, fileId);
@@ -211,16 +343,59 @@ function addPreviewElement(itemId, url, fileId) {
 }
 
 function removeFile(itemId, fileId) {
-    // Remove from state
-    if (uploads[itemId]) {
-        uploads[itemId] = uploads[itemId].filter(item => item.id !== fileId);
+    if (confirm("确定要移除这张待上传的图片吗？")) {
+        // Remove from state
+        if (uploads[itemId]) {
+            uploads[itemId] = uploads[itemId].filter(item => item.id !== fileId);
+        }
+        
+        // Remove from DOM
+        const wrapper = document.getElementById(`preview-${fileId}`);
+        if (wrapper) {
+            // Revoke ObjectURL to free memory
+            const img = wrapper.querySelector('img');
+            if (img && img.src) {
+                URL.revokeObjectURL(img.src);
+            }
+            wrapper.remove();
+        }
+        console.log(`Removed preview file ${fileId} from item ${itemId}`);
     }
-    
-    // Remove from DOM
-    const wrapper = document.getElementById(`preview-${fileId}`);
-    if (wrapper) {
-        wrapper.remove();
+}
+
+// 删除已上传图片
+function deleteExistingImage(imageId, itemId) {
+    if (!confirm("确定要删除这张已上传的图片吗？此操作无法撤销。")) {
+        return;
     }
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const url = `/p/record/image/${imageId}/delete/`;
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const wrapper = document.getElementById(`existing-img-${imageId}`);
+            if (wrapper) {
+                wrapper.remove();
+            }
+            showStatus("图片删除成功", "success");
+            console.log(`Deleted existing image ${imageId}`);
+        } else {
+            showStatus(data.message || "删除失败", "error");
+        }
+    })
+    .catch(error => {
+        console.error("Delete error:", error);
+        showStatus("网络错误，删除失败", "error");
+    });
 }
 
 function closeModal() {
@@ -231,38 +406,125 @@ function closeModal() {
 function submitCheckup() {
     const items = document.querySelectorAll('.checkup-item');
     let isValid = true;
+    const formData = new FormData();
+    let hasUploads = false;
     
-    items.forEach(item => {
-        const itemId = item.getAttribute('data-id');
-        const itemUploads = uploads[itemId];
-        
-        if (!itemUploads || itemUploads.length === 0) {
-            document.getElementById(`error-${itemId}`).classList.remove('hidden');
-            isValid = false;
-        }
-    });
-    
-    if (!isValid) {
-        // Optional: Scroll to top or show toast
-        return;
-    }
-    
-    // Simulate submission: Log files
-    console.log('Submitting Checkup Data:');
     items.forEach(item => {
         const itemId = item.getAttribute('data-id');
         const itemName = item.getAttribute('data-name');
-        const fileCount = uploads[itemId] ? uploads[itemId].length : 0;
-        console.log(`Item: ${itemName} (ID: ${itemId}), Files: ${fileCount}`);
-        // Log details if needed
-        if(uploads[itemId]) {
-             uploads[itemId].forEach(u => console.log(`  - File: ${u.file.name} (${u.file.size} bytes)`));
+        const itemUploads = uploads[itemId];
+        
+        // 检查是否有新上传的图片
+        if (itemUploads && itemUploads.length > 0) {
+            hasUploads = true;
+            itemUploads.forEach(u => {
+                // 直接使用 File 对象 (FormData 会自动处理为二进制流)
+                formData.append(`images_${itemId}`, u.file);
+            });
         }
+        
+        // 校验：如果是必须完成但未完成且无上传，提示错误
+        // 注意：这里需要根据业务逻辑调整。如果允许只传部分项目的图片，可以放宽。
+        // 目前逻辑：如果该项目既没有已上传图片(existing_images为空，需后端配合判断，前端这里简化判断)，也没有新上传，则报错
+        // 简单起见，只要总共有图片上传即可，具体每个项目的校验由后端或更细致的前端逻辑控制
+        // 这里暂时保留原有逻辑：只要有文件在 uploads 里就算有效。
+        // 如果需要强制每个项目都有图片：
+        /*
+        const hasExisting = document.getElementById(`existing-container-${itemId}`)?.children.length > 0;
+        if ((!itemUploads || itemUploads.length === 0) && !hasExisting) {
+             document.getElementById(`error-${itemId}`).classList.remove('hidden');
+             isValid = false;
+        }
+        */
     });
     
-    // Redirect
-    const openid = "{{ openid }}";
-    window.location.replace("{% url 'web_patient:patient_home' %}?checkup_completed=true");
+    if (!hasUploads) {
+        // 再次检查是否真的没有任何新文件（可能是用户只想删除旧文件？）
+        // 如果是纯删除操作，不需要 submitCheckup，直接在删除按钮触发。
+        // 所以这里 submit 主要是为了提交新文件。
+        alert("请至少上传一张新图片");
+        return;
+    }
+
+    // CSRF Token - Get from input
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    // Disable button to prevent double submit
+    const submitBtn = document.querySelector('button[onclick="submitCheckup()"]');
+    const originalText = submitBtn.innerText;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        提交中...
+    `;
+
+    fetch("{% url 'web_patient:record_checkup' %}", {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': csrfToken
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            submitBtn.innerText = "上传成功";
+            submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+            submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+            showStatus('上传成功，即将返回...', 'success');
+            
+            // 设置刷新标志，用于上一页数据刷新
+            localStorage.setItem('refresh_flag', 'true');
+            
+            setTimeout(() => {
+                // 优先返回上一页
+                if (document.referrer && document.referrer.includes(window.location.host)) {
+                    history.back();
+                } else {
+                    window.location.replace(data.redirect_url);
+                }
+            }, 500);
+        } else {
+            showStatus(data.message || '上传失败，请重试', 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalText;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showStatus('网络错误，请检查网络连接后重试', 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerText = originalText;
+    });
+}
+
+function showStatus(message, type) {
+    const statusEl = document.getElementById('status-message');
+    if (!statusEl) return;
+    
+    statusEl.textContent = message;
+    statusEl.classList.remove('hidden', 'bg-red-100', 'text-red-700', 'bg-green-100', 'text-green-700', 'bg-blue-100', 'text-blue-700', 'border-red-200', 'border-green-200', 'border-blue-200');
+    
+    if (type === 'error') {
+        statusEl.classList.add('bg-red-100', 'text-red-700', 'border', 'border-red-200');
+    } else if (type === 'success') {
+        statusEl.classList.add('bg-green-100', 'text-green-700', 'border', 'border-green-200');
+    } else {
+        statusEl.classList.add('bg-blue-100', 'text-blue-700', 'border', 'border-blue-200');
+    }
+    
+    statusEl.classList.remove('hidden');
+    
+    // Auto hide after 3 seconds if error or success
+    if (type === 'error' || type === 'success') {
+        setTimeout(() => {
+            statusEl.classList.add('hidden');
+        }, 3000);
+    }
 }
 </script>
 {% endblock %}

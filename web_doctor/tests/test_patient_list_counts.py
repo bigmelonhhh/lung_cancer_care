@@ -82,7 +82,8 @@ class PatientListCountsTest(TestCase):
 
     @patch('web_doctor.views.workspace.TodoListService')
     @patch('web_doctor.views.workspace.ChatService')
-    def test_enrich_patients_exception_handling(self, MockChatService, MockTodoListService):
+    @patch('web_doctor.views.workspace.logger.error')
+    def test_enrich_patients_exception_handling(self, mock_logger, MockChatService, MockTodoListService):
         """测试接口异常时的容错处理"""
         # Mock exceptions
         MockTodoListService.get_todo_page.side_effect = Exception("Todo Error")
@@ -148,8 +149,14 @@ class PatientListCountsTest(TestCase):
         
         self.assertIn('(0)', content)
 
-    def test_polling_trigger_exists(self):
+    @patch('web_doctor.views.workspace.enrich_patients_with_counts')
+    def test_polling_trigger_exists(self, mock_enrich):
         """测试是否包含轮询触发器"""
+        # Mock return value to avoid ChatService error
+        self.patient.todo_count = 0
+        self.patient.consult_count = 0
+        mock_enrich.return_value = [self.patient]
+
         self.client.force_login(self.user)
         url = reverse('web_doctor:doctor_workspace_patient_list')
         response = self.client.get(url)

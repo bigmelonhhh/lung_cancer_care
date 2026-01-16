@@ -85,8 +85,19 @@
 </div>
 
 <script>
+// Check for refresh flag on page load
+window.addEventListener('pageshow', function(event) {
+    // If navigating back from upload page or if persisted flag is set
+    if (event.persisted || localStorage.getItem('refresh_report_list') === 'true') {
+        localStorage.removeItem('refresh_report_list');
+        window.location.reload();
+    }
+});
+
 function deleteReportGroup(ids) {
-    if (!confirm('确定要删除这些报告吗？此操作无法撤销。')) return;
+    if (!confirm('确定要删除此报告吗？')) return;
+    
+    // Show loading state (optional, or disable button)
     
     fetch('{% url "web_patient:report_delete" %}', {
         method: 'POST',
@@ -99,13 +110,14 @@ function deleteReportGroup(ids) {
     .then(res => res.json())
     .then(data => {
         if (data.status === 'success') {
+            alert('删除成功'); // Show success message
             window.location.reload();
         } else {
             alert('删除失败: ' + (data.message || '未知错误'));
         }
     })
     .catch(err => {
-        alert('网络错误');
+        alert('网络错误，请稍后重试');
         console.error(err);
     });
 }

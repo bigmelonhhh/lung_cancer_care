@@ -1,4 +1,5 @@
 import json
+import logging
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -82,9 +83,13 @@ class ChatApiTests(TestCase):
          # If service allows empty, this test might fail. 
          # But usually chat services require content.
          # Let's check with a None content which usually fails validation.
-         response = self.client.post(
-            self.send_url,
-            json.dumps({'content': None}), 
-            content_type='application/json'
-        )
-         self.assertNotEqual(response.status_code, 200)
+         logging.disable(logging.CRITICAL)
+         try:
+             response = self.client.post(
+                self.send_url,
+                json.dumps({'content': None}), 
+                content_type='application/json'
+            )
+             self.assertNotEqual(response.status_code, 200)
+         finally:
+             logging.disable(logging.NOTSET)
