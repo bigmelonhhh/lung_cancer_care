@@ -90,6 +90,11 @@ urlpatterns = [
         name="patient_home_remark_update",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/checkup/create/",
+        home.create_checkup_record,
+        name="patient_checkup_create",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/medication/stop/",
         home.patient_medication_stop,
         name="patient_medication_stop",

@@ -1,6 +1,7 @@
 <div x-data="{
     isOpen: false,
     isSaving: false,
+    submitUrl: '{% url 'web_doctor:patient_checkup_create' patient.id %}',
     formData: {
         record_type: '',
         report_date: '',
@@ -117,10 +118,11 @@
         }
 
         // 3. Remarks (Required + Length Limit)
-        if (!this.formData.remarks || !this.formData.remarks.trim()) {
-            this.errors.remarks = '内容不能为空';
-            isValid = false;
-        } else if (this.formData.remarks.length > 500) {
+        // if (!this.formData.remarks || !this.formData.remarks.trim()) {
+        //     this.errors.remarks = '内容不能为空';
+        //     isValid = false;
+        // } else 
+        if (this.formData.remarks && this.formData.remarks.length > 500) {
             this.errors.remarks = '备注内容不能超过500字符';
             isValid = false;
         }
@@ -158,30 +160,79 @@
         return isValid;
     },
 
-    save() {
+    getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    },
+
+    async save() {
         if (!this.validate()) return;
 
         this.isSaving = true;
+        
+        const payload = new FormData();
+        payload.append('record_type', this.formData.record_type);
+        payload.append('report_date', this.formData.report_date);
+        payload.append('hospital', this.formData.hospital);
+        payload.append('remarks', this.formData.remarks);
+        
+        // Append files
+        this.files.forEach(f => {
+            payload.append('files[]', f.file);
+        });
+        
+        // Append metadata
+        const metadata = this.files.map(f => ({
+            name: f.file.name,
+            category: f.category,
+            subcategory: f.subcategory
+        }));
+        payload.append('file_metadata', JSON.stringify(metadata));
 
-        setTimeout(() => {
-            const submissionData = {
-                ...this.formData,
-                images: this.files.map(f => ({
-                    name: f.file.name,
-                    category: f.category,
-                    subcategory: f.subcategory
-                }))
-            };
+        try {
+            const response = await fetch(this.submitUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCookie('csrftoken')
+                },
+                body: payload
+            });
             
-            console.log('=== 模拟保存接口调用 ===');
-            console.log('表单数据:', submissionData);
+            const result = await response.json();
             
-            // Show success message (optional, or just close)
-            // alert('保存成功！');
-            
-            this.isOpen = false;
+            if (response.ok && result.status === 'success') {
+                // Success
+                this.isOpen = false;
+                
+                // 局部刷新时间轴区域
+                // 使用当前 URL (patient workspace home) 重新获取，但只选择 #checkup-timeline-container 部分
+                htmx.ajax('GET', window.location.href, {
+                    target: '#checkup-timeline-container', 
+                    select: '#checkup-timeline-container',
+                    swap: 'outerHTML'
+                });
+
+                // 显示成功提示 (可选，如果需要)
+                // alert('创建成功');
+            } else {
+                alert(result.message || '保存失败');
+            }
+        } catch (e) {
+            console.error('Submission failed', e);
+            alert('网络错误，请稍后重试');
+        } finally {
             this.isSaving = false;
-        }, 1000);
+        }
     }
 }" 
      x-show="isOpen" 

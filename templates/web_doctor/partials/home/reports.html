@@ -4,7 +4,7 @@
         <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">检查报告</h3>
         <button 
             class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports_history' %}"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports_history' %}?tab=images"
             hx-target="#patient-content"
         >
             所有报告
@@ -48,7 +48,7 @@
         x-transition:leave="transition ease-in duration-200"
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
-        style="display: none;"
+        style="display: none;z-index: 99999;"
     >
         <div class="relative max-w-4xl max-h-full" @click.outside="showPreview = false">
             <button 

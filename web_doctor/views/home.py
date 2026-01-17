@@ -1,21 +1,34 @@
 import logging
-from django.http import HttpRequest, HttpResponse, Http404
-from django.shortcuts import render
+import random
+import json
+import os
+import uuid
+from datetime import date, timedelta, datetime
+from typing import List, Dict, Any
+
+from django.http import HttpRequest, HttpResponse, Http404, JsonResponse
+from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+from django.db.models import Count
+from django.db.models.functions import TruncMonth
 
 from users.models import PatientProfile
 from users.decorators import check_doctor_or_assistant
 from users.services.patient import PatientService
 from users import choices as user_choices
 from health_data.services.medical_history_service import MedicalHistoryService
+from health_data.services.report_service import ReportArchiveService, ReportUploadService
+from health_data.models import ClinicalEvent, ReportImage, ReportUpload, UploadSource
 from core.service.treatment_cycle import (
     get_active_treatment_cycle,
     get_cycle_confirmer,
     get_treatment_cycles,
 )
-from core.models import TreatmentCycle, choices
+from core.models import TreatmentCycle, choices, CheckupLibrary
 from core.service.plan_item import PlanItemService
 
 logger = logging.getLogger(__name__)
@@ -175,33 +188,55 @@ def build_home_context(patient: PatientProfile) -> dict:
             "hospitalization_count": hospitalization_count
         })
 
+    # 获取患者最新的检查报告数据
+    # NOTE: 仅获取个人中心上传的报告，以保持与患者端 "我的报告" 列表一致
+    # 并且需要聚合"最新一天"的所有上传记录（处理同一天分多次上传的情况）
+    recent_uploads = ReportUploadService.list_uploads(patient, upload_source=UploadSource.PERSONAL_CENTER)[:20]
+    
+    latest_images = []
+    latest_date_str = "--"
+    
+    if recent_uploads:
+        first_group_date = None
+        
+        for upload in recent_uploads:
+            images = upload.images.all()
+            if not images.exists():
+                continue
+                
+            first_img = images.first()
+            # 确定该批次的显示日期 (逻辑同 web_patient/views/my_report.py)
+            report_date = first_img.report_date if first_img and first_img.report_date else upload.created_at.date()
+            
+            if first_group_date is None:
+                first_group_date = report_date
+                latest_date_str = report_date.strftime("%Y-%m-%d")
+            
+            if report_date == first_group_date:
+                # 同一天的记录，收集图片
+                # 注意：这里按倒序遍历，收集到的图片可能是 2.jpg, 1.jpg
+                # 前端展示顺序可能需要考虑，不过通常时间倒序展示也没问题
+                current_batch_images = [img.image_url for img in images]
+                latest_images.extend(current_batch_images)
+            else:
+                # 日期变化，说明最新一天的记录已收集完毕
+                break
+    
+    latest_reports = {
+        "upload_date": latest_date_str,
+        "images": latest_images
+    }
     return {
         "served_days": served_days,
         "remaining_days": remaining_days,
         "doctor_info": doctor_info,
         "medical_info": medical_info,
         "patient": patient,
-        "compliance": "用药依从率86%，数据监测完成率68%",
+        "compliance": "用药依从率0%，数据监测完成率80%",
         "current_medication": current_medication,
         "timeline_data": timeline_data,
         "current_month": today.strftime("%Y-%m"),
-        "latest_reports": {
-            "upload_date": "2025-11-12 14:22",
-            "images": [
-                "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-                 "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-                 "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-                 "https://placehold.co/200x200?text=Report+1",
-                "https://placehold.co/200x200?text=Report+2",
-                "https://placehold.co/200x200?text=Report+3",
-            ]
-        }
+        "latest_reports": latest_reports
     }
 
 def get_checkup_history_data(filters: dict) -> list:
@@ -260,7 +295,7 @@ def handle_checkup_history_section(request: HttpRequest, context: dict) -> str:
         "operator": request.GET.get("operator", ""),
     }
     
-    history_list = get_checkup_history_data(filters)
+    history_list = get_checkup_history_data(context["patient"], filters)
         
     paginator = Paginator(history_list, 10)
     try:
@@ -313,7 +348,7 @@ def handle_medication_history_section(request: HttpRequest, context: dict) -> st
         plan_view = PlanItemService.get_cycle_plan_view(cycle.id)
         active_meds = [m for m in plan_view["medications"] if m["is_active"]]
         
-        items = []
+        items = [] 
         for med in active_meds:
             items.append({
                 "name": med["name"],
@@ -407,3 +442,134 @@ def patient_medication_stop(request: HttpRequest, patient_id: int) -> HttpRespon
             alert('用药方案已停止');
         </script>
     """)
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def create_checkup_record(request: HttpRequest, patient_id: int) -> JsonResponse:
+    """
+    新增诊疗记录接口
+    """
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    
+    # 1. 解析表单基本数据
+    record_type_str = request.POST.get("record_type")
+    report_date_str = request.POST.get("report_date")
+    hospital = request.POST.get("hospital", "")
+    remarks = request.POST.get("remarks", "")
+    
+    if not record_type_str or not report_date_str:
+        return JsonResponse({"status": "error", "message": "缺少必填参数"}, status=400)
+        
+    # 映射记录类型
+    type_map = {"门诊": 1, "住院": 2, "复查": 3}
+    event_type = type_map.get(record_type_str)
+    if not event_type:
+        return JsonResponse({"status": "error", "message": "无效的记录类型"}, status=400)
+        
+    try:
+        event_date = datetime.strptime(report_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return JsonResponse({"status": "error", "message": "日期格式错误"}, status=400)
+        
+    # 2. 解析文件及其元数据
+    # 前端传递 files[] 数组和 file_metadata JSON 字符串
+    # file_metadata 结构: [{"name": "filename", "category": "...", "subcategory": "..."}, ...]
+    file_metadata_json = request.POST.get("file_metadata")
+    if not file_metadata_json:
+        return JsonResponse({"status": "error", "message": "缺少文件元数据"}, status=400)
+        
+    try:
+        file_metadata_list = json.loads(file_metadata_json)
+        # 转为以文件名(或索引)为key的字典，方便查找
+        # 这里假设 metadata 顺序与 files 顺序一致，或者通过 name 匹配
+        metadata_map = {m["name"]: m for m in file_metadata_list}
+    except json.JSONDecodeError:
+        return JsonResponse({"status": "error", "message": "元数据格式错误"}, status=400)
+        
+    files = request.FILES.getlist("files[]")
+    if not files:
+        # 尝试 'files' key
+        files = request.FILES.getlist("files")
+        
+    if not files:
+         return JsonResponse({"status": "error", "message": "请上传至少一张图片"}, status=400)
+         
+    # 3. 处理文件上传并构造 Service 参数
+    image_payloads = []
+    upload_dir = f"examination_reports/{patient.id}/{event_date}"
+    
+    # 预加载复查项目库，减少数据库查询
+    checkup_libs = {lib.name: lib for lib in CheckupLibrary.objects.all()}
+    
+    try:
+        for file in files:
+            # 获取对应的元数据
+            meta = metadata_map.get(file.name)
+            if not meta:
+                # 如果找不到名字匹配，尝试按顺序匹配（这就要求前端必须严格有序）
+                # 暂时报错处理
+                logger.warning(f"Missing metadata for file: {file.name}")
+                continue
+                
+            category = meta.get("category")
+            subcategory = meta.get("subcategory")
+            
+            # 保存文件
+            ext = os.path.splitext(file.name)[1].lower()
+            filename = f"{uuid.uuid4()}{ext}"
+            file_path = f"{upload_dir}/{filename}"
+            
+            saved_path = default_storage.save(file_path, ContentFile(file.read()))
+            image_url = default_storage.url(saved_path)
+            
+            payload = {
+                "image_url": image_url,
+            }
+            
+            # 处理复查项目逻辑
+            if event_type == 3: # 复查
+                if category == "复查" and subcategory:
+                    lib_item = checkup_libs.get(subcategory)
+                    if lib_item:
+                        payload["checkup_item"] = lib_item
+                    else:
+                        # 如果找不到对应的复查项目，可能需要创建一个或者报错
+                        # 这里暂时忽略或设为空，但 Service 层可能会校验
+                        # Service check: if record_type == CHECKUP and not checkup_item: raise ValidationError
+                        # 所以我们必须提供 checkup_item。如果名字匹配不上，可能是一个新项目？
+                        # 为防止报错，如果找不到，我们可以尝试查找 "其他"
+                        payload["checkup_item"] = checkup_libs.get("其他")
+                else:
+                    # 如果分类不是复查，但 event_type 是复查，这在业务逻辑上有点冲突
+                    # 但 ReportArchiveService create_record_with_images 要求：
+                    # if event_type == CHECKUP and not checkup_item: raise ValidationError
+                    # 所以必须有 checkup_item
+                    payload["checkup_item"] = checkup_libs.get("其他")
+            
+            image_payloads.append(payload)
+            
+        if not image_payloads:
+             return JsonResponse({"status": "error", "message": "文件处理失败"}, status=400)
+
+        # 4. 调用 Service
+        doctor_profile = request.user.doctor_profile if hasattr(request.user, "doctor_profile") else None
+        
+        ReportArchiveService.create_record_with_images(
+            patient=patient,
+            created_by_doctor=doctor_profile,
+            event_type=event_type,
+            event_date=event_date,
+            images=image_payloads,
+            hospital_name=hospital,
+            interpretation=remarks,
+            uploader=request.user
+        )
+        
+        return JsonResponse({"status": "success", "message": "创建成功"})
+        
+    except ValidationError as e:
+        return JsonResponse({"status": "error", "message": str(e)}, status=400)
+    except Exception as e:
+        logger.exception(f"Create checkup record failed: {e}")
+        return JsonResponse({"status": "error", "message": "系统错误"}, status=500)

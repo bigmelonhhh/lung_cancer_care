@@ -1,14 +1,19 @@
 import random
 from typing import List, Dict, Any
+from datetime import datetime
 
 from django.http import HttpRequest, HttpResponse, Http404
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
+from django.db.models import Prefetch
 
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
+from health_data.services.report_service import ReportUploadService, ReportArchiveService
+from health_data.models import ReportImage, ClinicalEvent, ReportUpload
+from core.models import CheckupLibrary
 
 # 预设图片分类
 REPORT_IMAGE_CATEGORIES = [
@@ -221,15 +226,119 @@ def get_report_image_categories():
     """获取所有可用的图片分类"""
     return REPORT_IMAGE_CATEGORIES
 
+def _get_archives_data(patient: PatientProfile) -> List[Dict[str, Any]]:
+    """
+    获取真实的图片档案数据 (替换 get_mock_archives_data)
+    """
+    # 1. 获取该患者所有上传记录，并预加载图片和关联的诊疗记录/归档人
+    uploads_queryset = ReportUploadService.list_uploads(
+        patient=patient,
+        include_deleted=False
+    ).prefetch_related(
+        Prefetch(
+            'images',
+            queryset=ReportImage.objects.select_related('clinical_event', 'checkup_item', 'archived_by', 'archived_by__user').order_by('id')
+        )
+    )
+    
+    # 2. 遍历上传记录，按日期聚合图片
+    # 使用字典按日期分组，key 为日期字符串 (YYYY-MM-DD)
+    grouped_archives: Dict[str, Dict[str, Any]] = {}
+    
+    for upload in uploads_queryset:
+        # 遍历图片
+        upload_images = list(upload.images.all())
+        if not upload_images:
+            continue
+            
+        first_img = upload_images[0]
+        # 使用第一张图片的日期作为默认显示日期，或上传日期
+        display_date = first_img.report_date or upload.created_at.date()
+        display_date_str = display_date.strftime("%Y-%m-%d")
+        
+        # 初始化该日期的分组数据
+        if display_date_str not in grouped_archives:
+            grouped_archives[display_date_str] = {
+                "id": f"group-{display_date_str}", # 使用日期作为分组ID
+                "date": display_date_str,
+                "images": [],
+                "image_count": 0,
+                "patient_info": {"name": patient.name, "age": patient.age},
+                "upload_source": upload.get_upload_source_display(), # 默认使用第一个遇到的 source
+                "is_archived": True, # 初始为 True，后续根据图片状态更新
+                "archiver": None,
+                "archived_date": None,
+                "record_type": "",
+                "sub_category": "",
+            }
+            
+        current_group = grouped_archives[display_date_str]
+        
+        # 检查每个图片的归档状态，更新分组状态
+        for img in upload_images:
+            # 构建分类字符串
+            category_str = ""
+            if img.record_type:
+                # 映射 RecordType 枚举到中文
+                type_map = {
+                    ReportImage.RecordType.OUTPATIENT: "门诊",
+                    ReportImage.RecordType.INPATIENT: "住院",
+                    ReportImage.RecordType.CHECKUP: "复查",
+                }
+                cat_name = type_map.get(img.record_type, "")
+                category_str = cat_name
+                
+                if img.record_type == ReportImage.RecordType.CHECKUP and img.checkup_item:
+                    category_str = f"{cat_name}-{img.checkup_item.name}"
+            
+            # 检查归档状态
+            if not img.clinical_event:
+                current_group["is_archived"] = False
+            else:
+                # 如果已归档，提取归档信息 (取第一张有归档信息的即可)
+                if not current_group["archiver"] and img.archived_by:
+                    current_group["archiver"] = img.archived_by.name or img.archived_by.user.username
+                if not current_group["archived_date"] and img.archived_at:
+                    current_group["archived_date"] = img.archived_at.strftime("%Y-%m-%d")
+                
+                # 记录类型信息 (用于展示整个批次的概要，取第一张有信息的)
+                if not current_group["record_type"] and category_str:
+                    parts = category_str.split("-")
+                    current_group["record_type"] = parts[0]
+                    if len(parts) > 1:
+                        current_group["sub_category"] = parts[1]
+
+            current_group["images"].append({
+                "id": img.id,
+                "name": f"图片-{img.id}", # 暂时没有真实文件名，用ID代替
+                "url": img.image_url,
+                "category": category_str,
+                "report_date": img.report_date.strftime("%Y-%m-%d") if img.report_date else "",
+                # 前端可能还需要知道这张图是否已归档
+                "is_archived": bool(img.clinical_event)
+            })
+            
+    # 更新每个分组的图片计数并转为列表
+    for group in grouped_archives.values():
+        group["image_count"] = len(group["images"])
+        
+    # 按日期倒序排列
+    archives_list = sorted(grouped_archives.values(), key=lambda x: x["date"], reverse=True)
+        
+    return archives_list
+
+
 def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     """
     处理检查报告历史记录板块
     """
     template_name = "web_doctor/partials/reports_history/list.html"
     
+    patient = context.get("patient")
+    if not patient:
+        return template_name # Should not happen
+
     active_tab = request.GET.get("tab", "records")
-    
-    # 根据 Tab 获取不同的数据源 (同时处理两个分页)
     
     # 获取页码参数
     try:
@@ -242,13 +351,13 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     except (TypeError, ValueError):
         images_page_num = 1
     
-    # 处理诊疗记录数据
+    # 处理诊疗记录数据 (Reports) - 暂时仍使用 Mock，后续任务处理
     reports_list = get_mock_reports_data()
     reports_paginator = Paginator(reports_list, 10)
     reports_page = reports_paginator.get_page(records_page_num)
     
-    # 处理图片档案数据
-    archives_list = get_mock_archives_data()
+    # 处理图片档案数据 (Archives) - 切换为真实数据
+    archives_list = _get_archives_data(patient)
     archives_paginator = Paginator(archives_list, 15)
     archives_page = archives_paginator.get_page(images_page_num)
 
@@ -296,8 +405,69 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     if not updates:
         return HttpResponse("参数不完整", status=400)
         
+    # 准备调用 Service 的数据列表
+    service_updates = []
+    
+    # 预加载所有 checkup library items
+    checkup_libs = {lib.name: lib.id for lib in CheckupLibrary.objects.all()}
+    
+    for update in updates:
+        img_id = update.get("image_id")
+        category_str = update.get("category")
+        report_date_str = update.get("report_date")
+        
+        if not img_id or not category_str or not report_date_str:
+            continue
+            
+        # 解析分类字符串
+        parts = category_str.split("-")
+        type_name = parts[0]
+        sub_name = parts[1] if len(parts) > 1 else None
+        
+        # 映射 RecordType
+        record_type = None
+        if type_name == "门诊":
+            record_type = ReportImage.RecordType.OUTPATIENT
+        elif type_name == "住院":
+            record_type = ReportImage.RecordType.INPATIENT
+        elif type_name == "复查":
+            record_type = ReportImage.RecordType.CHECKUP
+        
+        if record_type is None:
+            continue
+            
+        # 获取 checkup_item_id
+        checkup_item_id = None
+        if record_type == ReportImage.RecordType.CHECKUP:
+            if sub_name:
+                checkup_item_id = checkup_libs.get(sub_name)
+                # 如果找不到，可以尝试 default 或报错，这里暂时忽略
+        
+        # 解析日期
+        try:
+            report_date = datetime.strptime(report_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+            
+        service_updates.append({
+            "image_id": img_id,
+            "record_type": record_type,
+            "report_date": report_date,
+            "checkup_item_id": checkup_item_id
+        })
+        
+    if not service_updates:
+        return HttpResponse("无有效更新数据", status=400)
+        
     # 执行归档
-    archive_report_images(updates, request.user.doctor_profile.name if hasattr(request.user, 'doctor_profile') else "医生")
+    doctor_profile = getattr(request.user, "doctor_profile", None)
+    if not doctor_profile:
+         return HttpResponse("非医生账号无法归档", status=403)
+         
+    try:
+        ReportArchiveService.archive_images(doctor_profile, service_updates)
+    except Exception as e:
+        return HttpResponse(f"归档失败: {str(e)}", status=400)
     
     patient = get_object_or_404(PatientProfile, pk=patient_id)
     context = {"patient": patient}

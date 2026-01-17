@@ -810,7 +810,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
 @check_patient
 def record_checkup(request: HttpRequest) -> HttpResponse:
     """
-    【页面说明】复查上报页面 `/p/record/checkup/`
+    【页面说明】复查上报页面 `/p/record/checkup/` 
     【功能逻辑】
     1. 接收 openid 参数标识用户。
     2. 展示本次复查日期和复查项目。

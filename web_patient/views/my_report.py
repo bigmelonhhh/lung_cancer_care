@@ -132,7 +132,7 @@ def upload_report(request: HttpRequest) -> HttpResponse:
                         
                         image_payloads.append({
                             "image_url": image_url,
-                            "record_type": ReportImage.RecordType.OUTPATIENT, # 默认为门诊/其他
+                            "record_type": '其他', # 默认为门诊/其他
                             "report_date": report_date
                         })
                     

@@ -1,3 +1,4 @@
+import logging
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpRequest, HttpResponse
@@ -91,7 +92,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         # 调用接口获取今日计划数据
         try:
             summary_list = get_daily_plan_summary(patient)
-            
+            print(f"{summary_list}")
             # 将接口数据转换为前端需要的格式
             for item in summary_list:
                 task_type_val = item.get("task_type")
