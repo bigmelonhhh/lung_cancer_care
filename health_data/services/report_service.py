@@ -6,6 +6,7 @@ from datetime import date
 from typing import Iterable, List, Dict, Optional
 
 from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
 from django.utils import timezone
 
@@ -90,6 +91,38 @@ class ReportUploadService:
 
         【使用方法】
         - ReportUploadService.create_upload(patient, images, uploader=user)
+        - 示例：包含 record_type
+          >>> from datetime import date
+          >>> from health_data.models import ReportImage, UploadSource
+          >>> upload = ReportUploadService.create_upload(
+          ...     patient=patient,
+          ...     images=[
+          ...         {
+          ...             "image_url": "https://example.com/report-a.jpg",
+          ...             "record_type": ReportImage.RecordType.CHECKUP,
+          ...             "report_date": date(2025, 1, 18),
+          ...             "checkup_item_id": 12,
+          ...         },
+          ...         {
+          ...             "image_url": "https://example.com/report-b.jpg",
+          ...             "record_type": ReportImage.RecordType.OUTPATIENT,
+          ...             "report_date": date(2025, 1, 18),
+          ...         },
+          ...     ],
+          ...     uploader=user,
+          ...     upload_source=UploadSource.PERSONAL_CENTER,
+          ... )
+        - 示例：不包含 record_type（类型未知）
+          >>> from health_data.models import UploadSource
+          >>> upload = ReportUploadService.create_upload(
+          ...     patient=patient,
+          ...     images=[
+          ...         "https://example.com/unknown-1.jpg",
+          ...         {"image_url": "https://example.com/unknown-2.jpg"},
+          ...     ],
+          ...     uploader=user,
+          ...     upload_source=UploadSource.PERSONAL_CENTER,
+          ... )
 
         【参数说明】
         - patient: PatientProfile，患者档案。
@@ -153,16 +186,23 @@ class ReportUploadService:
         upload_source: Optional[int] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        page: int = 1,
+        page_size: int = 10,
     ):
         """
         【功能说明】
-        - 获取上传批次列表，支持按日期与入口过滤。
+        - 获取上传批次列表，支持按日期与入口过滤，并分页返回。
 
         【参数说明】
         - patient: PatientProfile。
         - include_deleted: 是否包含已删除记录。
         - upload_source: UploadSource 枚举值，可空。
         - start_date/end_date: 日期范围，可空。
+        - page: 页码，从 1 开始。
+        - page_size: 每页数量，默认 10。
+
+        【返回值说明】
+        - Django Page 对象，page.object_list 为当前页上传批次列表。
         """
         queryset = ReportUpload.objects.filter(patient=patient)
         if not include_deleted:
@@ -173,7 +213,8 @@ class ReportUploadService:
             queryset = queryset.filter(created_at__date__gte=start_date)
         if end_date is not None:
             queryset = queryset.filter(created_at__date__lte=end_date)
-        return queryset.order_by("-created_at")
+        paginator = Paginator(queryset.order_by("-created_at"), page_size)
+        return paginator.get_page(page)
 
     @staticmethod
     def delete_upload(upload: ReportUpload) -> bool:
@@ -196,6 +237,35 @@ class ReportUploadService:
 
 class ReportArchiveService:
     """报告归档服务，负责图片归档与诊疗记录管理。"""
+
+    @staticmethod
+    def list_clinical_events(
+        patient: PatientProfile,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        page: int = 1,
+        page_size: int = 10,
+    ):
+        """
+        【功能说明】
+        - 获取诊疗记录列表，支持日期范围过滤并分页。
+
+        【参数说明】
+        - patient: PatientProfile。
+        - start_date/end_date: 发生日期范围，可空。
+        - page: 页码，从 1 开始。
+        - page_size: 每页数量，默认 10。
+
+        【返回值说明】
+        - Django Page 对象，page.object_list 为当前页 ClinicalEvent 列表。
+        """
+        queryset = ClinicalEvent.objects.filter(patient=patient)
+        if start_date is not None:
+            queryset = queryset.filter(event_date__gte=start_date)
+        if end_date is not None:
+            queryset = queryset.filter(event_date__lte=end_date)
+        paginator = Paginator(queryset.order_by("-event_date", "-created_at"), page_size)
+        return paginator.get_page(page)
 
     @staticmethod
     def create_clinical_event(

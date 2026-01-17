@@ -62,8 +62,31 @@ class ReportServiceTest(TestCase):
         )
         image = upload.images.first()
         self.assertEqual(upload.uploader_role, UploaderRole.DOCTOR)
+        self.assertEqual(image.record_type, ReportImage.RecordType.CHECKUP)
         self.assertEqual(image.checkup_item, self.checkup_item)
         self.assertEqual(image.report_date, date(2025, 1, 1))
+
+    def test_create_upload_with_record_type(self):
+        upload = self._create_upload(
+            images=[
+                {
+                    "image_url": "https://example.com/d.png",
+                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "report_date": date(2025, 1, 18),
+                }
+            ]
+        )
+        image = upload.images.first()
+        self.assertEqual(image.record_type, ReportImage.RecordType.OUTPATIENT)
+        self.assertEqual(image.report_date, date(2025, 1, 18))
+        self.assertIsNone(image.checkup_item)
+
+    def test_create_upload_without_record_type(self):
+        upload = self._create_upload(images=["https://example.com/e.png"])
+        image = upload.images.first()
+        self.assertIsNone(image.record_type)
+        self.assertIsNone(image.report_date)
+        self.assertIsNone(image.checkup_item)
 
     def test_create_upload_requires_images(self):
         with self.assertRaises(ValidationError):
@@ -110,6 +133,21 @@ class ReportServiceTest(TestCase):
             end_date=base_time.date(),
         )
         self.assertEqual(list(qs), [upload1])
+
+    def test_list_uploads_pagination(self):
+        upload1 = self._create_upload()
+        upload2 = self._create_upload()
+
+        base_time = timezone.now() - timedelta(days=2)
+        ReportUpload.objects.filter(id=upload1.id).update(created_at=base_time)
+        ReportUpload.objects.filter(id=upload2.id).update(created_at=base_time + timedelta(days=1))
+
+        page1 = ReportUploadService.list_uploads(self.patient, page=1, page_size=1)
+        page2 = ReportUploadService.list_uploads(self.patient, page=2, page_size=1)
+
+        self.assertEqual(list(page1), [upload2])
+        self.assertEqual(list(page2), [upload1])
+        self.assertEqual(page1.paginator.count, 2)
 
     def test_delete_upload_hard_delete(self):
         upload = self._create_upload(images=["https://example.com/a.png"])
