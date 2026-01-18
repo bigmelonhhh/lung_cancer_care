@@ -89,11 +89,7 @@
                 
                 // Constants for categories
                 categories: ['门诊', '住院', '复查'],
-                subcategories: [
-                    '血常规', '血生化', '胸部CT', '骨扫描', '头颅MR', 
-                    '心脏彩超', '心电图', '凝血功能', '甲状腺功能', 
-                    '肿瘤评估', '肿瘤标志物', '其他'
-                ],
+                subcategories: {{ checkup_subcategories|safe }},
 
                 async saveChanges() {
                     if (this.saving) return;

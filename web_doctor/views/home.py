@@ -32,6 +32,7 @@ from core.service.treatment_cycle import (
 from core.models import TreatmentCycle, choices, CheckupLibrary
 from core.service.plan_item import PlanItemService
 from core.service.checkup import get_active_checkup_library
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
         events_by_month[m_key].append({
             "type": type_code_map.get(event['event_type'], "other"),
             "type_display": type_map.get(event['event_type'], "其他"),
-            "date": e_date.strftime("%Y-%m-%d"),
+            "date": timezone.localtime(event['created_at']).strftime("%Y-%m-%d %H:%M:%S") if event.get('created_at') else e_date.strftime("%Y-%m-%d 00:00:00"),
             "created_at": event['created_at']
         })
 
