@@ -95,6 +95,11 @@ urlpatterns = [
         name="patient_checkup_create",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/checkup/timeline/",
+        home.patient_checkup_timeline,
+        name="patient_checkup_timeline",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/medication/stop/",
         home.patient_medication_stop,
         name="patient_medication_stop",

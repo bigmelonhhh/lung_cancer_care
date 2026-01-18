@@ -317,6 +317,42 @@ def build_home_context(patient: PatientProfile) -> dict:
         "checkup_subcategories": checkup_subcategories,
     }
 
+@login_required
+@check_doctor_or_assistant
+def patient_checkup_timeline(request: HttpRequest, patient_id: int) -> HttpResponse:
+    """
+    Partial view to refresh the checkup timeline.
+    """
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    timeline_result = _get_checkup_timeline_data(patient)
+    timeline_data = timeline_result["timeline_data"]
+    start_date, end_date = timeline_result["date_range"]
+    
+    # Logic for default selected month (same as build_home_context)
+    today = date.today()
+    if start_date and end_date and start_date <= today <= end_date:
+        current_month_str = today.strftime("%Y-%m")
+    elif timeline_data:
+        current_month_str = timeline_data[-1]["month_label"]
+    else:
+        current_month_str = today.strftime("%Y-%m")
+    
+    # 获取复查分类二级数据
+    try:
+        checkup_lib = get_active_checkup_library()
+        checkup_subcategories = [item['name'] for item in checkup_lib]
+    except Exception as e:
+        logger.error(f"Failed to load checkup library: {e}")
+        checkup_subcategories = []
+
+    context = {
+        "timeline_data": timeline_data,
+        "current_month": current_month_str,
+        "patient": patient,
+        "checkup_subcategories": checkup_subcategories,
+    }
+    return render(request, "web_doctor/partials/home/checkup_timeline.html", context)
+
 def get_checkup_history_data(filters: dict) -> list:
     """
     获取复查/诊疗历史记录模拟数据
@@ -514,9 +550,9 @@ def patient_medication_stop(request: HttpRequest, patient_id: int) -> HttpRespon
     return HttpResponse("""
         <script>
             document.getElementById('stop-medication-modal').close();
-            // 可选：刷新页面或局部刷新
-            // location.reload(); 
-            // 或者弹出提示
+            # // 可选：刷新页面或局部刷新
+            # // location.reload(); 
+            # // 或者弹出提示
             alert('用药方案已停止');
         </script>
     """)
