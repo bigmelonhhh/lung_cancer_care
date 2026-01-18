@@ -378,7 +378,19 @@ class ReportArchiveService:
         event_cache: Dict[tuple, ClinicalEvent] = {}
 
         for payload in updates:
-            image_id = payload.get("image_id")
+            raw_image_id = payload.get("image_id")
+            if not raw_image_id:
+                continue
+
+            try:
+                image_id = int(raw_image_id)
+            except (ValueError, TypeError):
+                raise ValidationError(f"无效的图片ID: {raw_image_id}")
+
+            if image_id not in image_map:
+                # 理论上前面的校验已覆盖，但为了健壮性
+                continue
+
             record_type = _coerce_record_type(payload.get("record_type"))
             report_date = _ensure_report_date(payload.get("report_date"))
             checkup_item_id = payload.get("checkup_item_id")

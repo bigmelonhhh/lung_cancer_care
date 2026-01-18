@@ -553,14 +553,35 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     if not service_updates:
         return HttpResponse("无有效更新数据", status=400)
         
-    # 执行归档
+    # 执行归档 (支持医生和助理)
     doctor_profile = getattr(request.user, "doctor_profile", None)
-    if not doctor_profile:
-         return HttpResponse("非医生账号无法归档", status=403)
+    assistant_profile = getattr(request.user, "assistant_profile", None)
+    
+    archiver = None
+    
+    if doctor_profile:
+        archiver = doctor_profile
+    elif assistant_profile:
+        # 助理角色：尝试获取关联的主任医生
+        # 暂时策略：获取第一个关联的医生作为归档人
+        # 理想情况：前端应在上下文中明确当前操作的是哪个医生的患者，或者助理选择代表哪个医生
+        # 但 batch_archive_images 目前只接收 patient_id
+        # 如果 patient 是某个医生的病人，我们可以尝试通过 patient -> doctor 关系反查？
+        # 但 PatientProfile 没有直接绑定 doctor (除了 created_by 等)
+        # 这里简化处理：取助理关联的第一个医生。如果助理绑定多个医生，可能需要前端传参。
+        related_doctors = assistant_profile.doctors.all()
+        if related_doctors.exists():
+            archiver = related_doctors.first()
+        else:
+            return HttpResponse("助理账号未关联任何医生，无法归档", status=403)
+    else:
+         return HttpResponse("非医生/助理账号无法归档", status=403)
          
     try:
-        ReportArchiveService.archive_images(doctor_profile, service_updates)
+        ReportArchiveService.archive_images(archiver, service_updates)
     except Exception as e:
+        import traceback
+        print(traceback.format_exc()) # Log error
         return HttpResponse(f"归档失败: {str(e)}", status=400)
     
     patient = get_object_or_404(PatientProfile, pk=patient_id)

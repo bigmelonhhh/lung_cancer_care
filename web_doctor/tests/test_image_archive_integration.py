@@ -10,6 +10,8 @@ from health_data.models import ReportUpload, ReportImage, ClinicalEvent, UploadS
 from core.models import CheckupLibrary
 from web_doctor.views.reports_history_data import handle_reports_history_section, batch_archive_images
 
+from django.core.exceptions import PermissionDenied
+
 User = get_user_model()
 
 class ImageArchiveIntegrationTest(TestCase):
@@ -211,6 +213,89 @@ class ImageArchiveIntegrationTest(TestCase):
         # Should return 400 because no valid updates could be parsed
         self.assertEqual(response.status_code, 400)
         self.assertIn(b'\xe6\x97\xa0\xe6\x9c\x89\xe6\x95\x88\xe6\x9b\xb4\xe6\x96\xb0\xe6\x95\xb0\xe6\x8d\xae', response.content) # "无有效更新数据" in utf-8 bytes
+
+    def test_archive_permission_denied(self):
+        """
+        Integration Test: Verify permission denied for non-doctor users.
+        """
+        payload = {
+            "updates": [
+                {
+                    "image_id": self.img1.id,
+                    "category": "门诊",
+                    "report_date": "2023-05-01"
+                }
+            ]
+        }
+        
+        request = self.factory.post(
+            f'/doctor/workspace/patient/{self.patient.id}/reports/archive/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        # Use patient user instead of doctor
+        request.user = self.patient_user
+        
+        # Check_doctor_or_assistant decorator should redirect or return 403/302 depending on implementation
+        # Usually redirects to login or returns 403.
+        # The decorator raises PermissionDenied exception which Django handles as 403.
+        # But in unit test calling view directly, we catch exception.
+        # The previous attempt failed because response assignment was outside the assertRaises block
+        with self.assertRaises(PermissionDenied):
+             batch_archive_images(request, self.patient.id)
+
+    def test_archive_empty_payload(self):
+        """
+        Integration Test: Verify handling of empty payload.
+        """
+        payload = {"updates": []}
+        
+        request = self.factory.post(
+            '/archive/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        request.user = self.doctor_user
+        
+        response = batch_archive_images(request, self.patient.id)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b'\xe5\x8f\x82\xe6\x95\xb0\xe4\xb8\x8d\xe5\xae\x8c\xe6\x95\xb4', response.content) # "参数不完整"
+
+    def test_archive_partial_invalid(self):
+        """
+        Integration Test: Verify behavior when some updates are invalid.
+        """
+        payload = {
+            "updates": [
+                {
+                    "image_id": self.img1.id,
+                    "category": "门诊",
+                    "report_date": "2023-05-01"
+                },
+                {
+                    "image_id": 99999, # Invalid ID
+                    "category": "复查-胸部CT",
+                    "report_date": "2023-05-02"
+                }
+            ]
+        }
+        
+        request = self.factory.post(
+            '/archive/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        request.user = self.doctor_user
+        
+        # Currently, if service.archive_images is called, it validates IDs.
+        # ReportArchiveService.archive_images logic:
+        # image_map = {img.id: img for img in images}
+        # if len(image_map) != len(image_ids): raise ValidationError("存在无效的图片 ID。")
+        # So it should fail completely.
+        
+        response = batch_archive_images(request, self.patient.id)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(b'\xe5\xbd\x92\xe6\xa1\xa3\xe5\xa4\xb1\xe8\xb4\xa5', response.content) # "归档失败"
 
     def test_archive_filtering(self):
         """

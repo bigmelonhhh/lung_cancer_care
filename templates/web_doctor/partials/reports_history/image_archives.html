@@ -8,7 +8,7 @@
     
     // Helper Data
     categories: ['门诊', '住院', '复查'],
-    subcategories: {{ recheck_sub_categories|safe|default:"[]" }}
+    subcategories: {{ checkup_subcategories|safe|default:"[]" }}
 }">
 
     {# 1. 顶部筛选 #}
@@ -34,7 +34,7 @@
                 <option value="门诊">门诊</option>
                 <option value="住院">住院</option>
                 <option value="复查">复查</option>
-                <option value="未归档">未归档</option>
+                {% comment %} <option value="未归档">未归档</option> {% endcomment %}
             </select>
         </div>
         
@@ -131,8 +131,13 @@
                                  container.innerHTML = html;
                                  htmx.process(container);
                              }
+                             // Manually trigger toast since fetch doesn't handle HTMX headers automatically
+                             document.body.dispatchEvent(new CustomEvent('show-toast', {
+                                 detail: { message: '归档保存成功', type: 'success' }
+                             }));
                          } else {
-                             alert('保存失败');
+                             const errorMsg = await response.text();
+                             alert(errorMsg || '保存失败');
                              this.isSaving = false;
                          }
                      } catch(e) {
@@ -177,6 +182,7 @@
                              searchOpen: false,
                              searchQuery: ''
                          }"
+                         @reset-edit.window="tempCat = '{{ img.category }}'.split('-')[0] || ''; tempSub = '{{ img.category }}'.split('-')[1] || ''; tempDate = '{{ img.report_date }}'"
                     >
                         {# 图片本体 #}
                         <div class="w-full h-[160px] bg-slate-100 rounded-lg border border-slate-200 overflow-hidden relative cursor-pointer group/img"
@@ -244,7 +250,7 @@
                 </div>
                 
                 {# 底部操作栏 #}
-                <div class="mt-6 pt-4 border-t border-slate-100 flex justify-end">
+                <div class="mt-6 pt-4 border-t border-slate-100 flex justify-end gap-2">
                     <button 
                         @click="if(isGroupEditing) { saveGroup(); } else { isGroupEditing = true; }"
                         class="px-6 py-2 rounded text-sm font-medium transition-colors shadow-sm min-w-[100px]"
@@ -254,6 +260,13 @@
                         <span x-show="!isSaving" x-text="isGroupEditing ? '提交归档' : '编辑归档'"></span>
                         <span x-show="isSaving">保存中...</span>
                     </button>
+                    <button 
+                        @click="isGroupEditing = false; $dispatch('reset-edit')" 
+                        x-show="isGroupEditing" 
+                        style="display: none;"
+                        class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm">
+                        取消
+                    </button>
                 </div>
             </div>
         </div>
@@ -261,7 +274,7 @@
         {# 空状态 #}
         <div class="py-16 text-center bg-white rounded-lg border border-slate-200 border-dashed">
             <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-slate-100 mb-4 text-slate-400">
-                <i class="fas fa-images text-2xl"></i>
+                <svg  node-id="1" sillyvg="true"  version="1.1" viewBox="0 0 1630 1024" width="1630" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs node-id="21"></defs><g node-id="23"><path d="M 543.42 923.77 C 575.23 988.78 1063.10 925.55 1157.30 893.02 C 1391.31 812.20 1501.00 821.01 1501.00 625.87 C 1501.00 492.38 1455.92 344.84 1346.87 274.86 C 1232.33 201.37 1049.00 208.79 848.89 208.79 C 654.59 208.79 437.97 79.07 296.39 148.40 C 153.31 218.47 98.97 304.54 147.19 438.98 C 214.22 625.87 372.13 573.63 543.42 923.77 Z" fill="#f0f1f9" fill-rule="evenodd" group-id="1" id="椭圆形备份-22" node-id="6" stroke="none" target-height="909.7122" target-width="1402.0345" target-x="98.96551" target-y="79.07135"/><path d="M 420.11 76.83 L 369.28 362.03 L 420.11 335.76 L 997.35 283.19 L 1179.10 76.83 Z" fill="#f4f4f4" fill-rule="evenodd" group-id="1" id="路径-28" node-id="7" stroke="#555555" stroke-linecap="butt" stroke-width="8.460701" target-height="285.2046" target-width="809.81213" target-x="369.2838" target-y="76.825455"/><path d="M 1181.78 76.23 L 1345.33 939.48 L 575.22 939.48 L 425.14 76.23 L 1181.78 76.23 Z" fill="#ffffff" fill-rule="evenodd" group-id="1" id="矩形备份-9" node-id="8" stroke="#555555" stroke-linecap="butt" stroke-width="8.460701" target-height="863.2469" target-width="920.19763" target-x="425.13657" target-y="76.23035"/><path d="M 451.62 210.58 L 1208.93 190.71 L 1208.59 199.70 L 451.28 219.58 Z" fill="#5b5b5d" fill-rule="nonzero" group-id="1" id="路径-2备份-3" node-id="9" stroke="none" target-height="28.87645" target-width="757.6447" target-x="451.28107" target-y="190.70514"/><path d="M 1136.78 529.13 C 1136.78 603.90 1076.16 664.50 1001.37 664.50 C 926.59 664.50 865.97 603.90 865.97 529.13 C 865.97 454.37 926.59 393.76 1001.37 393.76 C 1076.16 393.76 1136.78 454.37 1136.78 529.13 Z" fill="#ffffff" fill-rule="evenodd" group-id="1" id="椭圆形" node-id="10" stroke="none" target-height="270.7424" target-width="270.81476" target-x="865.96625" target-y="393.762"/><g node-id="24"><path d="M 524.07 116.17 C 523.08 116.19 522.08 116.25 521.06 116.35 C 514.86 116.95 509.07 119.80 504.82 124.36 C 495.23 134.63 495.80 150.66 506.09 160.16 L 507.44 161.30 C 517.21 168.73 535.55 168.19 544.58 162.26 C 564.93 148.93 550.39 115.73 524.07 116.17 Z M 540.30 155.77 C 533.89 159.97 519.16 160.41 512.35 155.23 L 511.28 154.33 C 504.29 147.87 503.89 136.76 510.54 129.64 C 513.49 126.48 517.50 124.51 521.80 124.09 C 522.61 124.01 523.40 123.96 524.17 123.95 C 543.26 123.63 553.53 147.10 540.30 155.77 Z" fill="#555555" fill-rule="nonzero" group-id="1,2" id="路径-3备份-10" node-id="11" stroke="none" target-height="53.001884" target-width="69.69589" target-x="495.23056" target-y="115.72523"/></g><g node-id="25"><path d="M 667.94 116.17 C 666.95 116.19 665.95 116.25 664.94 116.35 C 658.73 116.95 652.95 119.80 648.69 124.36 C 639.10 134.63 639.67 150.66 649.96 160.16 L 651.31 161.30 C 661.08 168.73 679.42 168.19 688.45 162.26 C 708.80 148.93 694.26 115.73 667.94 116.17 Z M 684.17 155.77 C 677.76 159.97 663.03 160.41 656.22 155.23 L 655.15 154.33 C 648.16 147.87 647.77 136.76 654.41 129.64 C 657.36 126.48 661.37 124.51 665.67 124.09 C 666.48 124.01 667.27 123.96 668.04 123.95 C 687.13 123.63 697.40 147.10 684.17 155.77 Z" fill="#555555" fill-rule="nonzero" group-id="1,3" id="路径-3备份-11" node-id="12" stroke="none" target-height="53.001877" target-width="69.6958" target-x="639.10095" target-y="115.725235"/></g><g node-id="26"><path d="M 820.27 116.17 C 819.29 116.19 818.29 116.25 817.27 116.35 C 811.06 116.95 805.28 119.80 801.02 124.36 C 791.43 134.63 792.00 150.66 802.29 160.16 L 803.65 161.30 C 813.41 168.73 831.75 168.19 840.79 162.26 C 861.13 148.93 846.60 115.73 820.27 116.17 Z M 836.50 155.77 C 830.10 159.97 815.37 160.41 808.55 155.23 L 807.48 154.33 C 800.49 147.87 800.10 136.76 806.74 129.64 C 809.69 126.48 813.70 124.51 818.00 124.09 C 818.82 124.01 819.61 123.96 820.38 123.95 C 839.46 123.63 849.73 147.10 836.50 155.77 Z" fill="#555555" fill-rule="nonzero" group-id="1,4" id="路径-3备份-12" node-id="13" stroke="none" target-height="53.001877" target-width="69.69592" target-x="791.43427" target-y="115.725235"/></g><g node-id="27"><path d="M 640.98 825.46 L 640.98 884.38 L 582.79 935.70 L 1351.66 939.47 L 1389.45 896.76 L 1389.45 825.46 L 640.98 825.46 Z" fill="#3681fd" fill-rule="evenodd" group-id="1,5" id="路径-25备份-3" node-id="14" stroke="#555555" stroke-linecap="butt" stroke-width="8.460701" target-height="114.00348" target-width="806.655" target-x="582.7905" target-y="825.46436"/></g><g node-id="28"><path d="M 656.05 400.34 C 656.05 400.34 519.31 571.73 461.67 489.29 C 444.35 464.51 454.37 412.40 482.91 408.20 C 501.87 405.41 511.14 400.78 548.83 426.03 C 586.99 451.60 529.92 566.44 465.43 562.46 C 422.43 559.82 383.88 551.75 349.78 538.26" fill="none" group-id="1,6" id="路径-5备份-3" node-id="15" stroke="#555555" stroke-dasharray="39.74125 39.74125" stroke-linecap="butt" stroke-opacity="0.2" stroke-width="8.174652" target-height="171.38953" target-width="306.2785" target-x="349.77582" target-y="400.33838"/></g><path d="M 1001.37 351.46 C 1099.53 351.46 1179.10 431.01 1179.10 529.13 C 1179.10 627.26 1099.53 706.81 1001.37 706.81 C 903.22 706.81 823.65 627.26 823.65 529.13 C 823.65 431.01 903.22 351.46 1001.37 351.46 Z M 1001.37 402.22 C 931.26 402.22 874.43 459.04 874.43 529.13 C 874.43 599.22 931.26 656.04 1001.37 656.04 C 1071.48 656.04 1128.32 599.22 1128.32 529.13 C 1128.32 459.04 1071.48 402.22 1001.37 402.22 Z" fill="#3681fd" fill-rule="nonzero" group-id="1" id="椭圆形" node-id="16" stroke="none" target-height="355.34946" target-width="355.44452" target-x="823.6514" target-y="351.45847"/><path d="M 1108.27 609.49 L 1219.89 721.08 L 1183.99 756.98 L 1072.37 645.38 Z" fill="#3681fd" fill-rule="nonzero" group-id="1" id="路径-29" node-id="17" stroke="none" target-height="147.49042" target-width="147.52979" target-x="1072.365" target-y="609.4892"/><path d="M 905.76 536.29 C 905.85 475.79 956.04 432.64 1003.91 434.84 C 1004.03 437.17 1004.26 439.55 1004.26 441.90 C 1004.32 448.89 1004.29 455.89 1004.29 462.79 C 958.40 466.91 935.42 499.25 933.24 536.29 L 905.76 536.29 Z" fill="#3681fd" fill-rule="nonzero" group-id="1" id="路径备份-13" node-id="18" stroke="none" target-height="103.64929" target-width="98.5625" target-x="905.7618" target-y="432.6435"/><g node-id="29"><path d="M 451.12 665.09 L 386.35 604.10 L 313.49 630.79 L 367.65 586.43 L 301.29 538.71 L 203.17 677.02 Z" fill="#3681fd" fill-rule="evenodd" group-id="1,7" id="路径-4备份-3" node-id="19" stroke="none" target-height="138.30518" target-width="247.94576" target-x="203.17284" target-y="538.7104"/></g></g></svg>
             </div>
             <h3 class="text-lg font-medium text-slate-900 mb-1">暂无图片档案记录</h3>
             <p class="text-slate-500 text-sm mb-6">患者尚未上传任何影像资料，或没有匹配的搜索结果。</p>
