@@ -9,10 +9,13 @@ from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db.models import Prefetch
 
+from django.utils import timezone
+
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 from health_data.services.report_service import ReportUploadService, ReportArchiveService
 from health_data.models import ReportImage, ClinicalEvent, ReportUpload
+from core.service.checkup import get_active_checkup_library
 from core.models import CheckupLibrary
 
 # 预设图片分类
@@ -26,7 +29,7 @@ REPORT_IMAGE_CATEGORIES = [
 # 记录类型定义
 RECORD_TYPES = ["门诊", "住院", "复查"]
 
-# 复查二级分类定义
+# 复查二级分类定义 (Mock for fallback, but we will use dynamic data)
 RECHECK_SUB_CATEGORIES = [
     "血常规", "血生化", "胸部CT", "骨扫描", "头颅MR", "心脏彩超",
     "心电图", "凝血功能", "甲状腺功能", "肿瘤评估", "肿瘤标志物", "其他"
@@ -226,53 +229,95 @@ def get_report_image_categories():
     """获取所有可用的图片分类"""
     return REPORT_IMAGE_CATEGORIES
 
-def _get_archives_data(patient: PatientProfile) -> List[Dict[str, Any]]:
+def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 10, start_date=None, end_date=None, category=None) -> Dict[str, Any]:
     """
     获取真实的图片档案数据 (替换 get_mock_archives_data)
     """
-    # 1. 获取该患者所有上传记录，并预加载图片和关联的诊疗记录/归档人
-    uploads_queryset = ReportUploadService.list_uploads(
+    # 日期转换
+    start_date_obj = None
+    if start_date:
+        if isinstance(start_date, str):
+            try:
+                start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        else:
+            start_date_obj = start_date
+
+    end_date_obj = None
+    if end_date:
+        if isinstance(end_date, str):
+            try:
+                end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        else:
+            end_date_obj = end_date
+
+    # 1. 调用 Service 获取分页后的上传记录
+    uploads_page = ReportUploadService.list_uploads(
         patient=patient,
-        include_deleted=False
-    ).prefetch_related(
+        include_deleted=False,
+        start_date=start_date_obj,
+        end_date=end_date_obj,
+        page=page,
+        page_size=page_size
+    )
+    
+    # 优化：预加载当前页关联的图片和诊疗记录
+    # 提取当前页的 IDs
+    upload_ids = [u.id for u in uploads_page.object_list]
+    
+    # 重新查询以支持 Prefetch (ReportUploadService 返回的是 Page 对象，无法直接 prefetch)
+    uploads_with_data = ReportUpload.objects.filter(id__in=upload_ids).prefetch_related(
         Prefetch(
             'images',
             queryset=ReportImage.objects.select_related('clinical_event', 'checkup_item', 'archived_by', 'archived_by__user').order_by('id')
         )
-    )
+    ).order_by("-created_at")
     
     # 2. 遍历上传记录，按日期聚合图片
-    # 使用字典按日期分组，key 为日期字符串 (YYYY-MM-DD)
-    grouped_archives: Dict[str, Dict[str, Any]] = {}
+    # 使用字典按 (日期, 来源) 分组，key 为 tuple (日期字符串, 来源ID)
+    grouped_archives: Dict[tuple, Dict[str, Any]] = {}
     
-    for upload in uploads_queryset:
+    for upload in uploads_with_data:
         # 遍历图片
         upload_images = list(upload.images.all())
         if not upload_images:
             continue
             
         first_img = upload_images[0]
-        # 使用第一张图片的日期作为默认显示日期，或上传日期
-        display_date = first_img.report_date or upload.created_at.date()
-        display_date_str = display_date.strftime("%Y-%m-%d")
+        # 获取本地时间的 created_at
+        local_created_at = timezone.localtime(upload.created_at)
+        
+        # 分组 Key 依然按天 (为了聚合同一天的上传)
+        # 优先使用 report_date (如果有)，否则使用上传日期的天
+        if first_img.report_date:
+            group_date_key = first_img.report_date.strftime("%Y-%m-%d")
+            display_date_str = local_created_at.strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            group_date_key = local_created_at.strftime("%Y-%m-%d")
+            display_date_str = local_created_at.strftime("%Y-%m-%d %H:%M:%S")
+
+        group_key = (group_date_key, upload.upload_source)
         
         # 初始化该日期的分组数据
-        if display_date_str not in grouped_archives:
-            grouped_archives[display_date_str] = {
-                "id": f"group-{display_date_str}", # 使用日期作为分组ID
-                "date": display_date_str,
+        if group_key not in grouped_archives:
+            grouped_archives[group_key] = {
+                "id": f"group-{group_date_key}-{upload.upload_source}", 
+                "date": display_date_str, 
                 "images": [],
                 "image_count": 0,
                 "patient_info": {"name": patient.name, "age": patient.age},
-                "upload_source": upload.get_upload_source_display(), # 默认使用第一个遇到的 source
-                "is_archived": True, # 初始为 True，后续根据图片状态更新
+                "upload_source": upload.get_upload_source_display(), 
+                "is_archived": True, 
                 "archiver": None,
                 "archived_date": None,
                 "record_type": "",
                 "sub_category": "",
             }
             
-        current_group = grouped_archives[display_date_str]
+        current_group = grouped_archives[group_key]
         
         # 检查每个图片的归档状态，更新分组状态
         for img in upload_images:
@@ -307,25 +352,46 @@ def _get_archives_data(patient: PatientProfile) -> List[Dict[str, Any]]:
                     current_group["record_type"] = parts[0]
                     if len(parts) > 1:
                         current_group["sub_category"] = parts[1]
+            
+            # 如果图片还未归档，尝试推断其 record_type (用于过滤)
+            if not current_group["record_type"] and category_str:
+                 parts = category_str.split("-")
+                 current_group["record_type"] = parts[0]
 
             current_group["images"].append({
                 "id": img.id,
-                "name": f"图片-{img.id}", # 暂时没有真实文件名，用ID代替
+                "name": f"图片-{img.id}", 
                 "url": img.image_url,
                 "category": category_str,
                 "report_date": img.report_date.strftime("%Y-%m-%d") if img.report_date else "",
-                # 前端可能还需要知道这张图是否已归档
                 "is_archived": bool(img.clinical_event)
             })
             
     # 更新每个分组的图片计数并转为列表
+    # 同时应用分类过滤 (category)
+    final_archives = []
+    
     for group in grouped_archives.values():
         group["image_count"] = len(group["images"])
         
-    # 按日期倒序排列
-    archives_list = sorted(grouped_archives.values(), key=lambda x: x["date"], reverse=True)
+        # 分类过滤逻辑
+        if category and category != "all":
+            if category == "未归档":
+                if group["is_archived"]: 
+                     continue
+            elif category in ["门诊", "住院", "复查"]:
+                if group["record_type"] != category:
+                    continue
+            
+        final_archives.append(group)
         
-    return archives_list
+    # 按日期倒序排列
+    archives_list = sorted(final_archives, key=lambda x: (x["date"], x["id"]), reverse=True)
+    
+    return {
+        "archives_list": archives_list,
+        "page_obj": uploads_page
+    }
 
 
 def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
@@ -350,6 +416,11 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
         images_page_num = int(request.GET.get("images_page", 1))
     except (TypeError, ValueError):
         images_page_num = 1
+        
+    # 获取筛选参数
+    start_date = request.GET.get("startDate")
+    end_date = request.GET.get("endDate")
+    category = request.GET.get("category", "all")
     
     # 处理诊疗记录数据 (Reports) - 暂时仍使用 Mock，后续任务处理
     reports_list = get_mock_reports_data()
@@ -357,17 +428,40 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     reports_page = reports_paginator.get_page(records_page_num)
     
     # 处理图片档案数据 (Archives) - 切换为真实数据
-    archives_list = _get_archives_data(patient)
-    archives_paginator = Paginator(archives_list, 15)
-    archives_page = archives_paginator.get_page(images_page_num)
+    archives_data = _get_archives_data(
+        patient, 
+        page=images_page_num,
+        page_size=10,
+        start_date=start_date, 
+        end_date=end_date, 
+        category=category
+    )
+    
+    archives_list = archives_data["archives_list"]
+    archives_page_obj = archives_data["page_obj"]
+
+    # 动态获取复查二级分类
+    try:
+        checkup_lib = get_active_checkup_library()
+        # 转换为字符串列表
+        recheck_sub_categories = [item['name'] for item in checkup_lib]
+    except Exception:
+        # 降级使用硬编码数据
+        recheck_sub_categories = RECHECK_SUB_CATEGORIES
 
     context.update({
         "reports_page": reports_page,
-        "archives_page": archives_page,
-        "image_categories": get_report_image_categories(),
+        "archives_list": archives_list,
+        "archives_page_obj": archives_page_obj,
+        "image_categories": get_report_image_categories(),  
         "record_types": RECORD_TYPES,
-        "recheck_sub_categories": RECHECK_SUB_CATEGORIES,
+        "checkup_subcategories": recheck_sub_categories, # 使用动态数据
         "active_tab": active_tab, # 传递当前 tab
+        "filters": {
+            "startDate": start_date or "",
+            "endDate": end_date or "",
+            "category": category
+        }
     })
     return template_name
 

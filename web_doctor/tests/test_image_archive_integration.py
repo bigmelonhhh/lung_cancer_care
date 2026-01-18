@@ -39,6 +39,10 @@ class ImageArchiveIntegrationTest(TestCase):
             patient=self.patient,
             upload_source=UploadSource.PERSONAL_CENTER
         )
+        # Fix created_at for consistent testing
+        fixed_time = timezone.datetime(2023, 1, 1, 0, 0, 0, tzinfo=timezone.get_current_timezone())
+        ReportUpload.objects.filter(pk=self.upload.pk).update(created_at=fixed_time)
+        
         self.img1 = ReportImage.objects.create(
             upload=self.upload,
             image_url="http://test.com/1.jpg",
@@ -60,17 +64,18 @@ class ImageArchiveIntegrationTest(TestCase):
         context = {"patient": self.patient}
         handle_reports_history_section(request, context)
         
-        archives_page = context.get('archives_page')
-        self.assertIsNotNone(archives_page)
+        # archives_page changed to archives_list in view
+        archives_list = context.get('archives_list')
+        self.assertIsNotNone(archives_list)
         
         # Check if grouping logic works (2 images, same date -> 1 group)
-        self.assertEqual(len(archives_page.object_list), 1)
+        self.assertEqual(len(archives_list), 1)
         
-        group_data = archives_page.object_list[0]
-        self.assertEqual(group_data['date'], "2023-01-01")
+        group_data = archives_list[0]
+        self.assertEqual(group_data['date'], "2023-01-01 00:00:00")
         self.assertEqual(group_data['image_count'], 2)
         self.assertEqual(len(group_data['images']), 2)
-        
+
         # Check image fields
         img_data = group_data['images'][0]
         self.assertEqual(img_data['id'], self.img1.id)
@@ -87,6 +92,9 @@ class ImageArchiveIntegrationTest(TestCase):
             patient=self.patient,
             upload_source=UploadSource.PERSONAL_CENTER
         )
+        dt2 = timezone.datetime(2023, 1, 2, 0, 0, 0, tzinfo=timezone.get_current_timezone())
+        ReportUpload.objects.filter(pk=upload2.pk).update(created_at=dt2)
+        
         ReportImage.objects.create(
             upload=upload2,
             image_url="http://test.com/3.jpg",
@@ -99,18 +107,18 @@ class ImageArchiveIntegrationTest(TestCase):
         context = {"patient": self.patient}
         handle_reports_history_section(request, context)
         
-        archives_page = context.get('archives_page')
+        archives_list = context.get('archives_list')
         
         # Should have 2 groups now (2023-01-02 and 2023-01-01)
-        self.assertEqual(len(archives_page.object_list), 2)
+        self.assertEqual(len(archives_list), 2)
         
         # Sort order is reverse date (newest first)
-        group1 = archives_page.object_list[0]
-        self.assertEqual(group1['date'], "2023-01-02")
+        group1 = archives_list[0]
+        self.assertEqual(group1['date'], "2023-01-02 00:00:00")
         self.assertEqual(group1['image_count'], 1)
         
-        group2 = archives_page.object_list[1]
-        self.assertEqual(group2['date'], "2023-01-01")
+        group2 = archives_list[1]
+        self.assertEqual(group2['date'], "2023-01-01 00:00:00")
         self.assertEqual(group2['image_count'], 2)
 
     def test_batch_archive_flow(self):
@@ -166,7 +174,7 @@ class ImageArchiveIntegrationTest(TestCase):
         request_get.user = self.doctor_user
         handle_reports_history_section(request_get, context)
         
-        updated_archives = context['archives_page'].object_list[0]
+        updated_archives = context['archives_list'][0]
         self.assertTrue(updated_archives['is_archived'])
         self.assertEqual(updated_archives['archiver'], "Dr. Test")
         
@@ -203,3 +211,42 @@ class ImageArchiveIntegrationTest(TestCase):
         # Should return 400 because no valid updates could be parsed
         self.assertEqual(response.status_code, 400)
         self.assertIn(b'\xe6\x97\xa0\xe6\x9c\x89\xe6\x95\x88\xe6\x9b\xb4\xe6\x96\xb0\xe6\x95\xb0\xe6\x8d\xae', response.content) # "无有效更新数据" in utf-8 bytes
+
+    def test_archive_filtering(self):
+        """
+        Integration Test: Verify date and category filtering logic.
+        """
+        # Create test data
+        u1 = ReportUpload.objects.create(patient=self.patient)
+        # Update created_at to Jan 1
+        dt1 = timezone.datetime(2023, 1, 1, 10, 0, 0, tzinfo=timezone.get_current_timezone())
+        ReportUpload.objects.filter(pk=u1.pk).update(created_at=dt1)
+        ReportImage.objects.create(upload=u1, image_url="u1.jpg", record_type=ReportImage.RecordType.OUTPATIENT, report_date=date(2023, 1, 1))
+        
+        u2 = ReportUpload.objects.create(patient=self.patient)
+        # Update created_at to Feb 1
+        dt2 = timezone.datetime(2023, 2, 1, 10, 0, 0, tzinfo=timezone.get_current_timezone())
+        ReportUpload.objects.filter(pk=u2.pk).update(created_at=dt2)
+        ReportImage.objects.create(upload=u2, image_url="u2.jpg", record_type=ReportImage.RecordType.INPATIENT, report_date=date(2023, 2, 1))
+        
+        request = self.factory.get('/?tab=images')
+        request.user = self.doctor_user
+        context = {"patient": self.patient}
+        
+        # Case 1: Filter by Date
+        request.GET = {"tab": "images", "startDate": "2023-01-01", "endDate": "2023-01-31"}
+        handle_reports_history_section(request, context)
+        archives = context['archives_list']
+        self.assertEqual(len(archives), 1)
+        
+        # Case 2: Filter by Category (住院)
+        request.GET = {"tab": "images", "category": "住院"}
+        handle_reports_history_section(request, context)
+        archives = context['archives_list']
+        self.assertEqual(len(archives), 1)
+        
+        # Case 3: Filter by Category (Mismatch)
+        request.GET = {"tab": "images", "category": "复查"}
+        handle_reports_history_section(request, context)
+        archives = context['archives_list']
+        self.assertEqual(len(archives), 0)

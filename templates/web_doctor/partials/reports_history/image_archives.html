@@ -1,50 +1,58 @@
 <div class="space-y-4" x-data="{
     // Filters
     archiveFilters: {
-        dateStart: '',
-        dateEnd: '',
-        category: 'all'
+        dateStart: '{{ filters.startDate|default:"" }}',
+        dateEnd: '{{ filters.endDate|default:"" }}',
+        category: '{{ filters.category|default:"all" }}'
     },
     
     // Helper Data
     categories: ['门诊', '住院', '复查'],
-    subcategories: [
-        '血常规', '血生化', '胸部CT', '骨扫描', '头颅MR', 
-        '心脏彩超', '心电图', '凝血功能', '甲状腺功能', 
-        '肿瘤评估', '肿瘤标志物', '其他'
-    ]
+    subcategories: {{ recheck_sub_categories|safe|default:"[]" }}
 }">
 
     {# 1. 顶部筛选 #}
-    <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap items-center gap-4">
+    <form class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap items-center gap-4"
+          hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images"
+          hx-target="#patient-content"
+          hx-indicator="#search-loading"
+          hx-trigger="submit delay:300ms"
+          @submit.prevent="if(archiveFilters.dateStart && archiveFilters.dateEnd && archiveFilters.dateStart > archiveFilters.dateEnd) { alert('开始日期不能晚于结束日期'); return; } $el.requestSubmit()">
         <div class="flex items-center gap-2">
             <label class="text-sm font-medium text-slate-700">上传日期：</label>
             <div class="flex items-center gap-1">
-                <input type="date" x-model="archiveFilters.dateStart" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                <input type="date" name="startDate" x-model="archiveFilters.dateStart" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
                 <span class="text-slate-400">-</span>
-                <input type="date" x-model="archiveFilters.dateEnd" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                <input type="date" name="endDate" x-model="archiveFilters.dateEnd" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
             </div>
         </div>
         
         <div class="flex items-center gap-2">
             <label class="text-sm font-medium text-slate-700">类目类型：</label>
-            <select x-model="archiveFilters.category" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+            <select name="category" x-model="archiveFilters.category" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
                 <option value="all">全部</option>
                 <option value="门诊">门诊</option>
                 <option value="住院">住院</option>
                 <option value="复查">复查</option>
-                <option value="未分类">未分类</option>
+                <option value="未归档">未归档</option>
             </select>
         </div>
         
-        <button class="px-4 py-1 bg-slate-200 text-slate-700 rounded hover:bg-slate-300 text-sm font-medium transition-colors">
-            查询
-        </button>
-    </div>
+        <div class="flex items-center gap-2">
+            <button type="submit" class="px-4 py-1 bg-indigo-600 text-white rounded  text-sm font-medium transition-colors flex items-center">
+              搜索
+            </button>
+            <button type="button" 
+                    @click="archiveFilters.dateStart=''; archiveFilters.dateEnd=''; archiveFilters.category='all'; $nextTick(() => $el.closest('form').requestSubmit())"
+                    class="px-4 py-1 bg-white border border-slate-300 text-slate-700 rounded hover:bg-slate-50 text-sm font-medium transition-colors">
+                重置
+            </button>
+        </div>
+    </form>
 
     {# 2. 图片列表容器 #}
     <div class="space-y-4">
-        {% for report in archives_page %}
+        {% for report in archives_list %}
         <div class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden transition-colors"
              x-data="{
                  isGroupEditing: false,
@@ -191,7 +199,7 @@
                         {# 展示态信息 #}
                         <div x-show="!isGroupEditing" class="text-xs space-y-1 px-1">
                             <div class="font-medium truncate" :class="'{{ img.category }}' === '' ? 'text-red-500' : 'text-slate-700'">
-                                {{ img.category|default:"未分类" }}
+                                {{ img.category|default:"未归档" }}
                             </div>
                             <div class="text-slate-400">
                                 日期: {{ img.report_date }}
@@ -257,34 +265,51 @@
             </div>
             <h3 class="text-lg font-medium text-slate-900 mb-1">暂无图片档案记录</h3>
             <p class="text-slate-500 text-sm mb-6">患者尚未上传任何影像资料，或没有匹配的搜索结果。</p>
-            <button class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm">
-                上传新图片
-            </button>
         </div>
         {% endfor %}
     </div>
     
     {# 分页 #}
-    {% if archives_page.paginator.num_pages > 1 %}
+    {% if archives_page_obj.paginator.num_pages > 1 %}
     <div class="flex items-center justify-center gap-2 mt-8">
-        {% if archives_page.has_previous %}
-        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page.previous_page_number }}&records_page={{ reports_page.number }}" hx-target="#patient-content">
-            <
+        {# 首页 #}
+        {% if archives_page_obj.number > 1 %}
+        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page=1&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-target="#patient-content">
+            首页
+        </button>
+        {% endif %}
+
+        {# 上一页 #}
+        {% if archives_page_obj.has_previous %}
+        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.previous_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-target="#patient-content">
+            上一页
         </button>
         {% endif %}
         
-        {% for i in archives_page.paginator.page_range %}
-            <button 
-                class="px-3 py-1 text-sm border rounded hover:bg-slate-50 {% if i == archives_page.number %}bg-slate-100 font-bold border-slate-300{% else %}border-slate-200{% endif %}" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ i }}&records_page={{ reports_page.number }}" 
-                hx-target="#patient-content">
-                {{ i }}
-            </button>
-        {% endfor %}
+        {# 页码信息 #}
+        <span class="px-3 py-1 text-sm text-slate-600 font-medium">
+            第 {{ archives_page_obj.number }} / {{ archives_page_obj.paginator.num_pages }} 页
+        </span>
 
-        {% if archives_page.has_next %}
-        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page.next_page_number }}&records_page={{ reports_page.number }}" hx-target="#patient-content">
-            >
+        {# 下一页 #}
+        {% if archives_page_obj.has_next %}
+        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.next_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-target="#patient-content">
+            下一页
+        </button>
+        {% endif %}
+
+        {# 末页 #}
+        {% if archives_page_obj.number < archives_page_obj.paginator.num_pages %}
+        <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.paginator.num_pages }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}&category={{ filters.category }}" 
+                hx-target="#patient-content">
+            末页
         </button>
         {% endif %}
     </div>

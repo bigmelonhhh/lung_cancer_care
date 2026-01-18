@@ -28,20 +28,17 @@ def my_examination(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     
-    # 使用 Service 获取所有报告，按日期倒序
-    # 默认只展示个人中心上传的？根据需求，这里展示"我的报告"，通常包含自己上传的。
-    # 如果想展示所有的，可以不传 upload_source。
-    # 为了保持与"上传"对应，这里暂时只展示 PERSONAL_CENTER，或者全部。
-    # 考虑到用户可能想看所有上传记录，我们查询该患者所有的上传批次。
-    uploads_queryset = ReportUploadService.list_uploads(
-        patient=patient,
-        upload_source=UploadSource.PERSONAL_CENTER
-    )
-    
-    # 分页
+    # 使用 Service 获取所有报告，按日期倒序（已分页）
     page_number = request.GET.get('page', 1)
-    paginator = Paginator(uploads_queryset, 20) # 每页20条
-    page_obj = paginator.get_page(page_number)
+    
+    # 考虑到用户可能想看所有上传记录，我们查询该患者所有的上传批次。
+    # ReportUploadService.list_uploads 返回的是 Page 对象
+    page_obj = ReportUploadService.list_uploads(
+        patient=patient,
+        upload_source=UploadSource.PERSONAL_CENTER,
+        page=page_number,
+        page_size=20
+    )
     
     # 分组逻辑 (按日期分组)
     grouped_reports = []
@@ -132,7 +129,7 @@ def upload_report(request: HttpRequest) -> HttpResponse:
                         
                         image_payloads.append({
                             "image_url": image_url,
-                            "record_type": '其他', # 默认为门诊/其他
+                            # "record_type": '其他', # 默认为门诊/其他
                             "report_date": report_date
                         })
                     

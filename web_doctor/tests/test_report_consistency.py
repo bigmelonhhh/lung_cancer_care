@@ -22,17 +22,21 @@ class ReportConsistencyTest(TestCase):
         # 1. Personal Center Upload (Patient sees, Doctor should see)
         self.upload_personal = ReportUpload.objects.create(
             patient=self.patient,
-            upload_source=UploadSource.PERSONAL_CENTER,
-            created_at=timezone.now() - timezone.timedelta(days=1)
+            upload_source=UploadSource.PERSONAL_CENTER
         )
+        self.upload_personal.created_at = timezone.now() - timezone.timedelta(days=1)
+        self.upload_personal.save()
+        
         ReportImage.objects.create(upload=self.upload_personal, image_url="http://p.com/1.jpg")
 
         # 2. Doctor Backend Upload (Patient NOT see, Doctor currently sees)
         self.upload_doctor = ReportUpload.objects.create(
             patient=self.patient,
-            upload_source=UploadSource.DOCTOR_BACKEND,
-            created_at=timezone.now()
+            upload_source=UploadSource.DOCTOR_BACKEND
         )
+        self.upload_doctor.created_at = timezone.now()
+        self.upload_doctor.save()
+        
         ReportImage.objects.create(upload=self.upload_doctor, image_url="http://d.com/1.jpg")
 
     def test_doctor_view_consistency_with_patient(self):
@@ -58,9 +62,11 @@ class ReportConsistencyTest(TestCase):
         
         upload_2 = ReportUpload.objects.create(
             patient=self.patient,
-            upload_source=UploadSource.PERSONAL_CENTER,
-            created_at=same_day + timezone.timedelta(hours=1)
+            upload_source=UploadSource.PERSONAL_CENTER
         )
+        upload_2.created_at = same_day + timezone.timedelta(hours=1)
+        upload_2.save()
+        
         ReportImage.objects.create(upload=upload_2, image_url="http://p.com/2.jpg")
         
         # Now we have two uploads on 'same_day'.
@@ -81,11 +87,12 @@ class ReportConsistencyTest(TestCase):
         """
         Simulate Patient view logic (from my_report.py)
         """
-        patient_uploads = ReportUploadService.list_uploads(
+        patient_uploads_page = ReportUploadService.list_uploads(
             patient=self.patient,
             upload_source=UploadSource.PERSONAL_CENTER
         )
         
         # Patient only sees PERSONAL_CENTER
-        self.assertEqual(patient_uploads.count(), 1)
-        self.assertEqual(patient_uploads.first(), self.upload_personal)
+        # list_uploads returns a Page object
+        self.assertEqual(patient_uploads_page.paginator.count, 1)
+        self.assertEqual(patient_uploads_page.object_list[0], self.upload_personal)

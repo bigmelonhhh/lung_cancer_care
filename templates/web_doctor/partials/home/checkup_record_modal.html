@@ -14,11 +14,7 @@
     
     // Constants
     categories: ['门诊', '住院', '复查'],
-    subcategories: [
-        '血常规', '血生化', '胸部CT', '骨扫描', '头颅MR', 
-        '心脏彩超', '心电图', '凝血功能', '甲状腺功能', 
-        '肿瘤评估', '肿瘤标志物', '其他'
-    ],
+    subcategories: {{ checkup_subcategories|safe|default:"[]" }},
     searchQuery: '', // For secondary select filtering
 
     init() {
@@ -349,7 +345,7 @@
                         </div>
 
                         <!-- Image List -->
-                        <div class="flex flex-col gap-4 max-h-[400px] overflow-y-auto pr-2" x-show="files.length > 0">
+                        <div class="flex flex-col gap-4 pr-2" x-show="files.length > 0">
                             <template x-for="(file, index) in files" :key="index">
                                 <div class="flex flex-col sm:flex-row gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200 relative group transition-all duration-200"
                                      :class="{'border-red-300 bg-red-50': errors.images && (!file.category || (file.category === '复查' && !file.subcategory))}">
@@ -398,7 +394,7 @@
                                                         x-model="file.subcategory"
                                                         @focus="file.searchOpen = true; file.searchText = ''"
                                                         @input="file.searchOpen = true; file.searchText = $event.target.value"
-                                                        class="block w-full rounded border-slate-300 text-sm py-1.5 pl-2 pr-8 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                                                        class="border block w-full rounded border-slate-300 text-sm py-1.5 pl-2 pr-8 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
                                                         :class="{'border-red-300 ring-1 ring-red-300': errors.images && !file.subcategory}"
                                                     >
                                                     <div class="absolute inset-y-0 right-0 flex items-center px-2 pointer-events-none">

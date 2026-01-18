@@ -30,6 +30,7 @@ from core.service.treatment_cycle import (
 )
 from core.models import TreatmentCycle, choices, CheckupLibrary
 from core.service.plan_item import PlanItemService
+from core.service.checkup import get_active_checkup_library
 
 logger = logging.getLogger(__name__)
 
@@ -191,7 +192,13 @@ def build_home_context(patient: PatientProfile) -> dict:
     # 获取患者最新的检查报告数据
     # NOTE: 仅获取个人中心上传的报告，以保持与患者端 "我的报告" 列表一致
     # 并且需要聚合"最新一天"的所有上传记录（处理同一天分多次上传的情况）
-    recent_uploads = ReportUploadService.list_uploads(patient, upload_source=UploadSource.PERSONAL_CENTER)[:20]
+    # ReportUploadService.list_uploads 返回 Page 对象，我们请求第一页共20条
+    recent_uploads_page = ReportUploadService.list_uploads(
+        patient, 
+        page=1,
+        page_size=20
+    )
+    recent_uploads = recent_uploads_page.object_list
     
     latest_images = []
     latest_date_str = "--"
@@ -226,17 +233,29 @@ def build_home_context(patient: PatientProfile) -> dict:
         "upload_date": latest_date_str,
         "images": latest_images
     }
+
+    # 7. 获取复查分类二级数据
+    try:
+        checkup_lib = get_active_checkup_library()
+        # 转换为前端友好的格式
+        # get_active_checkup_library 返回 TypedDict，需用 key 访问
+        checkup_subcategories = [item['name'] for item in checkup_lib]
+    except Exception as e:
+        logger.error(f"Failed to load checkup library: {e}")
+        checkup_subcategories = []
+
     return {
         "served_days": served_days,
         "remaining_days": remaining_days,
         "doctor_info": doctor_info,
         "medical_info": medical_info,
         "patient": patient,
-        "compliance": "用药依从率0%，数据监测完成率80%",
+        "compliance": "用药依从率80%，数据监测完成率80%",
         "current_medication": current_medication,
         "timeline_data": timeline_data,
         "current_month": today.strftime("%Y-%m"),
-        "latest_reports": latest_reports
+        "latest_reports": latest_reports,
+        "checkup_subcategories": checkup_subcategories,
     }
 
 def get_checkup_history_data(filters: dict) -> list:
