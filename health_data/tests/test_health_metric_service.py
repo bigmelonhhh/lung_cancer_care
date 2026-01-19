@@ -293,6 +293,37 @@ class HealthMetricServiceTest(TestCase):
             patient_id=self.patient_id, metric_type=MetricType.WEIGHT
         )
 
+    def test_query_metrics_by_type_end_date_inclusive(self):
+        patient = PatientProfile.objects.create(phone="13800138003")
+        tz = timezone.get_current_timezone()
+        start_dt = timezone.make_aware(datetime(2025, 1, 1, 0, 0), tz)
+        end_dt = timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        next_day = timezone.make_aware(datetime(2025, 2, 1, 0, 0), tz)
+
+        in_range = HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.WEIGHT,
+            measured_at=end_dt,
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.WEIGHT,
+            measured_at=next_day,
+        )
+
+        page = HealthMetricService.query_metrics_by_type(
+            patient_id=patient.id,
+            metric_type=MetricType.WEIGHT,
+            start_date=start_dt,
+            end_date=end_dt,
+            page=1,
+            page_size=10,
+            sort_order="asc",
+        )
+
+        ids = [item.id for item in page.object_list]
+        self.assertEqual(ids, [in_range.id])
+
     @patch("health_data.models.HealthMetric.objects.get")
     def test_update_manual_metric_success_partial_fields(self, mock_get):
         """
@@ -395,6 +426,32 @@ class HealthMetricServiceTest(TestCase):
 
         self.assertEqual(count, 2)
 
+    def test_count_metric_uploads_end_date_inclusive_excludes_next_day(self):
+        patient = PatientProfile.objects.create(phone="13800138004")
+        tz = timezone.get_current_timezone()
+        end_dt = timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        next_day = timezone.make_aware(datetime(2025, 2, 1, 0, 0), tz)
+
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=end_dt,
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=next_day,
+        )
+
+        count = HealthMetricService.count_metric_uploads(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+        )
+
+        self.assertEqual(count, 1)
+
     def test_count_metric_uploads_monitoring_all_excludes_non_monitoring(self):
         """
         综合监测上传次数：仅统计六类监测指标，忽略非监测与无效记录。
@@ -432,6 +489,32 @@ class HealthMetricServiceTest(TestCase):
         )
 
         self.assertEqual(count, 2)
+
+    def test_list_monitoring_metric_types_for_patient_end_date_inclusive(self):
+        patient = PatientProfile.objects.create(phone="13800138005")
+        tz = timezone.get_current_timezone()
+        end_dt = timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        next_day = timezone.make_aware(datetime(2025, 2, 1, 0, 0), tz)
+
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=end_dt,
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.HEART_RATE,
+            measured_at=next_day,
+        )
+
+        types = HealthMetricService.list_monitoring_metric_types_for_patient(
+            patient=patient,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+        )
+
+        self.assertIn(MetricType.BLOOD_PRESSURE, types)
+        self.assertNotIn(MetricType.HEART_RATE, types)
 
     def test_count_metric_uploads_by_month_fills_missing_months(self):
         """
@@ -483,6 +566,35 @@ class HealthMetricServiceTest(TestCase):
                 {"month": "2025-02", "count": 1},
                 {"month": "2025-03", "count": 0},
             ],
+        )
+
+    def test_count_metric_uploads_by_month_end_date_inclusive(self):
+        patient = PatientProfile.objects.create(phone="13800138006")
+        tz = timezone.get_current_timezone()
+        jan_end = timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        feb_start = timezone.make_aware(datetime(2025, 2, 1, 0, 0), tz)
+
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=jan_end,
+        )
+        HealthMetric.objects.create(
+            patient=patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=feb_start,
+        )
+
+        result = HealthMetricService.count_metric_uploads_by_month(
+            patient=patient,
+            metric_types=[MetricType.BLOOD_PRESSURE],
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 31),
+        )
+
+        self.assertEqual(
+            result[MetricType.BLOOD_PRESSURE],
+            [{"month": "2025-01", "count": 1}],
         )
 
     def test_count_metric_uploads_by_month_rejects_monitoring_all(self):

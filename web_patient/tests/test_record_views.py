@@ -1,9 +1,12 @@
+import datetime
+from decimal import Decimal
+
 from django.test import TestCase, Client
 from django.urls import reverse
-from users.models import CustomUser, PatientProfile
-from health_data.models import HealthMetric, MetricType
 from django.utils import timezone
-import datetime
+
+from health_data.models import HealthMetric, MetricType
+from users.models import CustomUser, PatientProfile
 
 class RecordViewTests(TestCase):
     def setUp(self):
@@ -102,3 +105,36 @@ class RecordViewTests(TestCase):
             metric_type=MetricType.BLOOD_OXYGEN
         ).last()
         self.assertTrue(timezone.is_aware(metric.measured_at))
+
+    def test_health_record_detail_end_date_inclusive(self):
+        tz = timezone.get_current_timezone()
+        month = "2025-01"
+        month_end = timezone.make_aware(
+            datetime.datetime(2025, 1, 31, 23, 59, 59), tz
+        )
+        boundary_next_month = timezone.make_aware(
+            datetime.datetime(2025, 2, 1, 0, 0), tz
+        )
+
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BODY_TEMPERATURE,
+            measured_at=month_end,
+            value_main=Decimal("36.5"),
+        )
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BODY_TEMPERATURE,
+            measured_at=boundary_next_month,
+            value_main=Decimal("36.9"),
+        )
+
+        response = self.client.get(
+            reverse("web_patient:health_record_detail"),
+            {"type": "temperature", "title": "体温", "month": month},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        records = response.context["records"]
+        dates = sorted(item["date"] for item in records)
+        self.assertEqual(dates, ["2025-01-31", "2025-02-01"])

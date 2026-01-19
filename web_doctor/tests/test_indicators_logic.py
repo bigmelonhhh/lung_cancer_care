@@ -1,6 +1,9 @@
+from datetime import timedelta, datetime
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from django.test import TestCase
 from django.utils import timezone
-from datetime import timedelta, datetime
 from django.contrib.auth import get_user_model
 from users.models import PatientProfile
 from core.models import TreatmentCycle, choices
@@ -151,3 +154,20 @@ class IndicatorsLogicTests(TestCase):
         self.assertFalse(yesterday_rec['date'] > current_date)
         self.assertFalse(today_rec['date'] > current_date)
         self.assertTrue(tomorrow_rec['date'] > current_date)
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_indicators_query_end_date_inclusive(self, mock_query):
+        start_date = self.today - timedelta(days=1)
+        end_date = self.today
+        mock_query.return_value = SimpleNamespace(object_list=[])
+
+        build_indicators_context(
+            self.patient,
+            start_date_str=start_date.isoformat(),
+            end_date_str=end_date.isoformat(),
+            filter_type="date",
+        )
+
+        _, kwargs = mock_query.call_args
+        self.assertEqual(kwargs["end_date"].date(), end_date + timedelta(days=1))
+        self.assertEqual(kwargs["end_date"].time(), datetime.min.time())

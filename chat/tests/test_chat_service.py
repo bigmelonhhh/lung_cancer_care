@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from unittest import mock
 
 from django.core.exceptions import ValidationError
@@ -444,3 +444,36 @@ class ChatServiceTests(TestCase):
                 "21-24": 1,
             },
         )
+
+    def test_get_patient_chat_session_stats_end_date_inclusive(self):
+        conversation = self.service.get_or_create_patient_conversation(
+            self.patient_profile
+        )
+        tz = timezone.get_current_timezone()
+        end_of_day = timezone.make_aware(datetime(2025, 1, 1, 23, 59, 59), tz)
+        next_day = timezone.make_aware(datetime(2025, 1, 2, 0, 0), tz)
+
+        ConversationSession.objects.create(
+            conversation=conversation,
+            patient=self.patient_profile,
+            conversation_type=ConversationType.PATIENT_STUDIO,
+            start_at=end_of_day,
+            end_at=end_of_day,
+            message_count=1,
+        )
+        ConversationSession.objects.create(
+            conversation=conversation,
+            patient=self.patient_profile,
+            conversation_type=ConversationType.PATIENT_STUDIO,
+            start_at=next_day,
+            end_at=next_day,
+            message_count=1,
+        )
+
+        stats = self.service.get_patient_chat_session_stats(
+            patient=self.patient_profile,
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 1),
+        )
+
+        self.assertEqual(stats["total"], 1)

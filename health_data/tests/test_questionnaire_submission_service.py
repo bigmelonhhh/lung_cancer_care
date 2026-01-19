@@ -227,6 +227,34 @@ class QuestionnaireSubmissionServiceTest(TestCase):
 
         self.assertEqual(dates, [date(2025, 1, 10), date(2025, 1, 8)])
 
+    def test_get_submission_dates_end_date_inclusive(self):
+        tz = timezone.get_current_timezone()
+        end_date = date(2025, 1, 31)
+
+        in_range = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+        )
+        out_of_range = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+        )
+
+        QuestionnaireSubmission.objects.filter(id=in_range.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=out_of_range.id).update(
+            created_at=timezone.make_aware(datetime(2025, 2, 1, 0, 0), tz)
+        )
+
+        dates = QuestionnaireSubmissionService.get_submission_dates(
+            patient=self.patient,
+            start_date=end_date,
+            end_date=end_date,
+        )
+
+        self.assertEqual(dates, [end_date])
+
     def test_list_daily_questionnaire_summaries_latest_per_questionnaire(self):
         """
         查询指定日期摘要：每份问卷仅保留当天最新提交，上一份不含当日。
@@ -301,6 +329,43 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         self.assertEqual(q2_summary["submission_id"], q2_current.id)
         self.assertEqual(q2_summary["prev_submission_id"], q2_prev.id)
 
+    def test_list_daily_questionnaire_summaries_end_date_inclusive(self):
+        tz = timezone.get_current_timezone()
+        prev = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("1.00"),
+        )
+        early = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("2.00"),
+        )
+        late = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("3.00"),
+        )
+
+        QuestionnaireSubmission.objects.filter(id=prev.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 30, 9, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=early.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 31, 10, 0), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=late.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        )
+
+        summaries = QuestionnaireSubmissionService.list_daily_questionnaire_summaries(
+            patient_id=self.patient.id,
+            target_date=date(2025, 1, 31),
+        )
+
+        self.assertEqual(len(summaries), 1)
+        self.assertEqual(summaries[0]["submission_id"], late.id)
+        self.assertEqual(summaries[0]["prev_submission_id"], prev.id)
+
     def test_list_daily_questionnaire_scores_fill_missing_and_latest(self):
         """
         按日返回问卷分数：缺失日期补 0，同日多次提交取最新。
@@ -365,6 +430,40 @@ class QuestionnaireSubmissionServiceTest(TestCase):
                 {"date": date(2025, 1, 2), "score": Decimal("0")},
                 {"date": date(2025, 1, 3), "score": Decimal("3.00")},
             ],
+        )
+
+    def test_list_daily_questionnaire_scores_end_date_inclusive(self):
+        tz = timezone.get_current_timezone()
+        end_date = date(2025, 1, 31)
+
+        in_range = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("7.00"),
+        )
+        out_of_range = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("9.00"),
+        )
+
+        QuestionnaireSubmission.objects.filter(id=in_range.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        )
+        QuestionnaireSubmission.objects.filter(id=out_of_range.id).update(
+            created_at=timezone.make_aware(datetime(2025, 2, 1, 0, 0), tz)
+        )
+
+        results = QuestionnaireSubmissionService.list_daily_questionnaire_scores(
+            patient=self.patient,
+            start_date=end_date,
+            end_date=end_date,
+            questionnaire_code=self.questionnaire.code,
+        )
+
+        self.assertEqual(
+            results,
+            [{"date": end_date, "score": Decimal("7.00")}],
         )
 
     def test_list_daily_questionnaire_scores_invalid_code(self):
@@ -504,6 +603,65 @@ class QuestionnaireSubmissionServiceTest(TestCase):
                 {"date": date(2025, 1, 4), "has_hemoptysis": True},
                 {"date": date(2025, 1, 5), "has_hemoptysis": False},
             ],
+        )
+
+    def test_list_daily_cough_hemoptysis_flags_end_date_inclusive(self):
+        tz = timezone.get_current_timezone()
+        end_date = date(2025, 1, 31)
+        questionnaire = Questionnaire.objects.filter(code=QuestionnaireCode.Q_COUGH).first()
+        if not questionnaire:
+            questionnaire = Questionnaire.objects.create(
+                name="咳嗽与痰色评估",
+                code=QuestionnaireCode.Q_COUGH,
+            )
+
+        question = QuestionnaireQuestion.objects.filter(
+            id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID
+        ).first()
+        if not question:
+            question = QuestionnaireQuestion.objects.create(
+                id=QuestionnaireSubmissionService.COUGH_BLOOD_QUESTION_ID,
+                questionnaire=questionnaire,
+                text="咳嗽或痰中是否带血？",
+                seq=1,
+                is_required=True,
+            )
+        elif question.questionnaire_id != questionnaire.id:
+            question.questionnaire = questionnaire
+            question.save(update_fields=["questionnaire"])
+
+        option = QuestionnaireOption.objects.filter(question=question, seq=3).first()
+        if not option:
+            option = QuestionnaireOption.objects.create(
+                question=question,
+                text="少量",
+                value="5",
+                score=Decimal("5"),
+                seq=3,
+            )
+
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+        QuestionnaireSubmission.objects.filter(id=submission.id).update(
+            created_at=timezone.make_aware(datetime(2025, 1, 31, 23, 59, 59), tz)
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=question,
+            option=option,
+        )
+
+        results = QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags(
+            patient=self.patient,
+            start_date=end_date,
+            end_date=end_date,
+        )
+
+        self.assertEqual(
+            results,
+            [{"date": end_date, "has_hemoptysis": True}],
         )
 
     def test_get_questionnaire_comparison_returns_question_details(self):

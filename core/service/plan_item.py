@@ -17,14 +17,6 @@ from core.models import (
     TreatmentCycle,
     choices,
 )
-
-
-
-
-# TODO 患者指标： 默认最近30天。最多选一年。
-
-
-
 class PlanItemService:
     """Service layer for CRUD-like interactions on plan items."""
 

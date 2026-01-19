@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from django.test import TestCase
 from django.utils import timezone
@@ -71,6 +71,40 @@ class TodoListServiceTests(TestCase):
         self.assertIn(self.pending_alert.id, ids)
         self.assertNotIn(self.completed_alert.id, ids)
 
+    def test_get_todo_page_end_date_inclusive(self):
+        end_date = timezone.localdate()
+        end_dt = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+        next_day_dt = end_dt + timedelta(microseconds=1)
+
+        in_range_alert = PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="血压异常",
+            event_content="血压偏高",
+            event_time=end_dt,
+            status=AlertStatus.PENDING,
+        )
+        PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="血压异常(次日)",
+            event_content="血压偏高",
+            event_time=next_day_dt,
+            status=AlertStatus.PENDING,
+        )
+
+        page = TodoListService.get_todo_page(
+            user=self.doctor_user,
+            start_date=end_date.strftime("%Y-%m-%d"),
+            end_date=end_date.strftime("%Y-%m-%d"),
+        )
+        ids = {item["id"] for item in page.object_list}
+        self.assertIn(in_range_alert.id, ids)
+
     def test_get_todo_page_returns_expected_fields(self):
         page = TodoListService.get_todo_page(user=self.doctor_user)
         item = page.object_list[0]
@@ -124,6 +158,45 @@ class TodoListServiceTests(TestCase):
             start_date=timezone.localdate() - timedelta(days=1),
             end_date=timezone.localdate(),
             type=QuestionnaireCode.Q_COUGH,
+        )
+
+        self.assertEqual(count, 1)
+
+    def test_count_abnormal_events_end_date_inclusive(self):
+        end_date = timezone.localdate()
+        end_dt = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))
+        next_day_dt = end_dt + timedelta(microseconds=1)
+
+        PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="体温异常",
+            event_content="体温 38.5",
+            event_time=end_dt,
+            status=AlertStatus.PENDING,
+            source_type="metric",
+            source_payload={"metric_type": MetricType.BODY_TEMPERATURE},
+        )
+        PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="体温异常(次日)",
+            event_content="体温 39.0",
+            event_time=next_day_dt,
+            status=AlertStatus.PENDING,
+            source_type="metric",
+            source_payload={"metric_type": MetricType.BODY_TEMPERATURE},
+        )
+
+        count = TodoListService.count_abnormal_events(
+            patient=self.patient,
+            start_date=end_date,
+            end_date=end_date,
+            type=MetricType.BODY_TEMPERATURE,
         )
 
         self.assertEqual(count, 1)
