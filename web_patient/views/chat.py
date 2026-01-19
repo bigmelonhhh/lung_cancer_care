@@ -1,7 +1,10 @@
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
 from users.decorators import auto_wechat_login, check_patient
-
+def get_patient_chat_title(patient) -> str:
+    if patient and getattr(patient, "doctor", None) and getattr(patient.doctor, "studio", None):
+        return patient.doctor.studio.name
+    return "医患咨询"
 @auto_wechat_login
 @check_patient
 def consultation_chat(request: HttpRequest) -> HttpResponse:
@@ -15,5 +18,6 @@ def consultation_chat(request: HttpRequest) -> HttpResponse:
     context = {
         "patient": patient,
         "patient_id": patient_id,
+        "chat_title": get_patient_chat_title(patient),
     }
     return render(request, "web_patient/consultation_chat.html", context)

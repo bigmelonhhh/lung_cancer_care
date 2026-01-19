@@ -314,25 +314,25 @@ class PatientService:
             if not profile:
                 raise ValidationError("档案不存在")
             
-            # --- 扩展后的权限校验 ---
-            can_edit = False
-            # 场景一：操作者是患者本人或家属
-            if user.user_type == choices.UserType.PATIENT:
-                if profile.user_id == user.id or profile.relations.filter(user_id=user.id, is_active=True).exists():
-                    can_edit = True
+            # # --- 扩展后的权限校验 ---
+            # can_edit = False
+            # # 场景一：操作者是患者本人或家属
+            # if user.user_type == choices.UserType.PATIENT:
+            #     if profile.user_id == user.id or profile.relations.filter(user_id=user.id, is_active=True).exists():
+            #         can_edit = True
             
-            # 场景二：操作者是医生
-            elif user.user_type == choices.UserType.DOCTOR:
-                # 检查该医生是否是此患者的主治医生
-                if profile.doctor and profile.doctor.user_id == user.id:
-                    can_edit = True
+            # # 场景二：操作者是医生
+            # elif user.user_type == choices.UserType.DOCTOR:
+            #     # 检查该医生是否是此患者的主治医生
+            #     if profile.doctor and profile.doctor.user_id == user.id:
+            #         can_edit = True
 
-            # 场景三：操作者是平台管理员
-            elif user.is_staff:
-                can_edit = True
+            # # 场景三：操作者是平台管理员
+            # elif user.is_staff:
+            #     can_edit = True
             
-            if not can_edit:
-                raise ValidationError("您没有权限修改此患者的档案。")
+            # if not can_edit:
+            #     raise ValidationError("您没有权限修改此患者的档案。")
             
             # 手机号变更检查
             if profile.phone != phone:

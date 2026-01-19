@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from chat.services.chat import ChatService
 from chat.models import MessageContentType
 from users.decorators import check_patient, auto_wechat_login
+from web_patient.views.chat import get_patient_chat_title
 
 @require_GET
 @auto_wechat_login
@@ -36,7 +37,7 @@ def list_messages(request: HttpRequest):
                 'id': msg.id,
                 'sender_id': msg.sender_id,
                 'sender_role': msg.sender_role_snapshot,
-                'sender_name': msg.sender_display_name_snapshot,
+                'sender_name': get_patient_chat_title(patient),
                 'studio_name': msg.studio_name_snapshot,
                 'content_type': content_type_str,
                 'text_content': msg.text_content or "",
