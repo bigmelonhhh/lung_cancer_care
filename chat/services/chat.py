@@ -602,9 +602,8 @@ class ChatService:
     def _build_date_range(
         self, start_date: date, end_date: date
     ) -> tuple[datetime, datetime]:
-        query_end_date = end_date + timedelta(days=1)
         start_dt = datetime.combine(start_date, datetime.min.time())
-        end_dt = datetime.combine(query_end_date, datetime.min.time())
+        end_dt = datetime.combine(end_date, datetime.max.time())
 
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -663,7 +662,7 @@ class ChatService:
             patient=patient,
             conversation_type__in=types,
             start_at__gte=start_dt,
-            start_at__lt=end_dt,
+            start_at__lte=end_dt,
         )
 
         total = sessions.count()

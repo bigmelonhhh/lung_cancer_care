@@ -293,7 +293,7 @@ class QuestionnaireSubmissionService:
         created_times = QuestionnaireSubmission.objects.filter(
             patient_id=patient.id,
             created_at__gte=start_dt,
-            created_at__lt=end_dt,
+            created_at__lte=end_dt,
         ).values_list("created_at", flat=True)
 
         local_dates: set[date] = set()
@@ -363,7 +363,7 @@ class QuestionnaireSubmissionService:
                 patient_id=patient.id,
                 questionnaire__code=questionnaire_code,
                 created_at__gte=start_dt,
-                created_at__lt=end_dt,
+                created_at__lte=end_dt,
             )
             .only("created_at", "total_score")
             .order_by("-created_at")
@@ -449,7 +449,7 @@ class QuestionnaireSubmissionService:
                 patient_id=patient.id,
                 questionnaire__code=QuestionnaireCode.Q_COUGH,
                 created_at__gte=start_dt,
-                created_at__lt=end_dt,
+                created_at__lte=end_dt,
             )
             .order_by("-created_at")
             .prefetch_related(
@@ -543,7 +543,7 @@ class QuestionnaireSubmissionService:
             QuestionnaireSubmission.objects.filter(
                 patient_id=patient_id,
                 created_at__gte=start_dt,
-                created_at__lt=end_dt,
+                created_at__lte=end_dt,
             )
             .select_related("questionnaire")
             .order_by("-created_at")
@@ -871,9 +871,8 @@ class QuestionnaireSubmissionService:
 
     @staticmethod
     def _build_date_range(start_date: date, end_date: date) -> tuple[datetime, datetime]:
-        query_end_date = end_date + timedelta(days=1)
         start_dt = datetime.combine(start_date, datetime.min.time())
-        end_dt = datetime.combine(query_end_date, datetime.min.time())
+        end_dt = datetime.combine(end_date, datetime.max.time())
 
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)

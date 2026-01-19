@@ -375,7 +375,7 @@ class HealthMetricService:
         :param page: 页码，从 1 开始，默认 1。
         :param page_size: 每页数量，默认 10；为防止单页过大，最大限制为 100。
         :param start_date: 起始时间（包含），用于按测量时间过滤。
-        :param end_date: 结束时间（不包含），用于按测量时间过滤。
+        :param end_date: 结束时间（包含），用于按测量时间过滤。
         :param sort_order: 排序方式，"asc" 或 "desc"，按 measured_at 字段排序。
 
         【返回值】
@@ -433,7 +433,7 @@ class HealthMetricService:
         if start_date:
             qs = qs.filter(measured_at__gte=start_date)
         if end_date:
-            qs = qs.filter(measured_at__lt=end_date)
+            qs = qs.filter(measured_at__lte=end_date)
 
         # 排序
         order_field = "measured_at" if sort_order == "asc" else "-measured_at"
@@ -551,8 +551,8 @@ class HealthMetricService:
 
         start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
         end_dt = datetime.datetime.combine(
-            end_date + datetime.timedelta(days=1),
-            datetime.datetime.min.time(),
+            end_date,
+            datetime.datetime.max.time(),
         )
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -563,7 +563,7 @@ class HealthMetricService:
                 patient_id=patient.id,
                 metric_type__in=task_service.MONITORING_ADHERENCE_TYPES,
                 measured_at__gte=start_dt,
-                measured_at__lt=end_dt,
+                measured_at__lte=end_dt,
             )
             .values_list("metric_type", flat=True)
             .distinct()
@@ -618,8 +618,8 @@ class HealthMetricService:
 
         start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
         end_dt = datetime.datetime.combine(
-            end_date + datetime.timedelta(days=1),
-            datetime.datetime.min.time(),
+            end_date,
+            datetime.datetime.max.time(),
         )
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -630,7 +630,7 @@ class HealthMetricService:
                 patient_id=patient.id,
                 metric_type__in=target_types,
                 measured_at__gte=start_dt,
-                measured_at__lt=end_dt,
+                measured_at__lte=end_dt,
             )
             .count()
         )
@@ -708,8 +708,8 @@ class HealthMetricService:
 
         start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
         end_dt = datetime.datetime.combine(
-            end_date + datetime.timedelta(days=1),
-            datetime.datetime.min.time(),
+            end_date,
+            datetime.datetime.max.time(),
         )
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -720,7 +720,7 @@ class HealthMetricService:
                 patient_id=patient.id,
                 metric_type__in=normalized_types,
                 measured_at__gte=start_dt,
-                measured_at__lt=end_dt,
+                measured_at__lte=end_dt,
             )
             .annotate(
                 month=TruncMonth(

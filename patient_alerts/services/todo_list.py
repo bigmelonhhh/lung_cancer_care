@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
@@ -102,7 +102,7 @@ class TodoListService:
         if start_dt:
             qs = qs.filter(event_time__gte=start_dt)
         if end_dt:
-            qs = qs.filter(event_time__lt=end_dt)
+            qs = qs.filter(event_time__lte=end_dt)
 
         qs = qs.select_related("patient", "handler").order_by("-event_time", "-id")
 
@@ -186,7 +186,7 @@ class TodoListService:
         else:
             raise ValidationError("type 无效。")
 
-        qs = qs.filter(event_time__gte=start_dt, event_time__lt=end_dt)
+        qs = qs.filter(event_time__gte=start_dt, event_time__lte=end_dt)
         return qs.count()
 
     @staticmethod
@@ -236,7 +236,7 @@ class TodoListService:
         if start:
             start_dt = datetime.combine(start, datetime.min.time())
         if end:
-            end_dt = datetime.combine(end + timedelta(days=1), datetime.min.time())
+            end_dt = datetime.combine(end, datetime.max.time())
         if start_dt and timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
         if end_dt and timezone.is_aware(timezone.now()):
