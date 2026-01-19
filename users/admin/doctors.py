@@ -260,9 +260,3 @@ class DoctorProfileAdmin(admin.ModelAdmin):
 
         return redirect("admin:users_doctorprofile_changelist")
 
-
-@admin.register(DoctorStudio)
-class DoctorStudioAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "owner_doctor", "created_at")
-    search_fields = ("name", "code", "owner_doctor__name")
-    readonly_fields = ("code",)

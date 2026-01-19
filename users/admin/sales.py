@@ -8,10 +8,44 @@ import string
 
 from django import forms
 from django.contrib import admin
+from django.contrib.admin.views.main import ChangeList
 from django.db import transaction
+from django.db.models import Count
+from django.urls import reverse
+from django.utils.html import format_html
 
 from users import choices
 from users.models import CustomUser, SalesProfile
+
+
+class SalesProfileFilterForm(forms.Form):
+    name = forms.CharField(label="姓名", required=False)
+    registered_start = forms.DateField(
+        label="注册开始",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    registered_end = forms.DateField(
+        label="注册结束",
+        required=False,
+        widget=forms.DateInput(attrs={"type": "date"}),
+    )
+    work_phone = forms.CharField(label="工作电话", required=False)
+    studio = forms.CharField(label="服务工作室", required=False)
+
+
+class SalesProfileChangeList(ChangeList):
+    """Ignore custom query params for filtering."""
+
+    def get_filters_params(self, params=None):
+        lookup_params = super().get_filters_params(params=params)
+        lookup_params.pop("sales_id", None)
+        lookup_params.pop("name", None)
+        lookup_params.pop("registered_start", None)
+        lookup_params.pop("registered_end", None)
+        lookup_params.pop("work_phone", None)
+        lookup_params.pop("studio", None)
+        return lookup_params
 
 
 class SalesCreationForm(forms.ModelForm):
@@ -113,11 +147,26 @@ class SalesChangeForm(forms.ModelForm):
 
 @admin.register(SalesProfile)
 class SalesProfileAdmin(admin.ModelAdmin):
-    list_display = ("name", "user_phone", "region", "invite_code", "user_is_active", "user_joined")
+    change_list_template = "admin/users/salesprofile/change_list.html"
+    list_display = (
+        "crc_name",
+        "registered_phone",
+        "status_display",
+        "registered_date",
+        "work_phone",
+        "studio_display",
+        "doctor_display",
+        "patient_count_display",
+        "edit_action",
+    )
+    list_display_links = None
     search_fields = ("name", "user__phone", "user__username")
     list_filter = ("user__is_active", "region")
     readonly_fields = ("invite_code", "user_username", "user_joined", "user_type_display")
     actions = ["disable_accounts"]
+
+    def get_changelist(self, request, **kwargs):
+        return SalesProfileChangeList
 
     def get_form(self, request, obj=None, **kwargs):
         if obj:
@@ -126,10 +175,85 @@ class SalesProfileAdmin(admin.ModelAdmin):
             kwargs["form"] = SalesCreationForm
         return super().get_form(request, obj, **kwargs)
 
+    def get_filter_form(self, request):
+        if not hasattr(request, "_salesprofile_filter_form"):
+            request._salesprofile_filter_form = SalesProfileFilterForm(request.GET or None)
+        return request._salesprofile_filter_form
+
     def get_readonly_fields(self, request, obj=None):
         if obj:
             return self.readonly_fields
         return ()
+
+    def get_queryset(self, request):
+        qs = (
+            super()
+            .get_queryset(request)
+            .select_related("user")
+            .prefetch_related("doctors__studio")
+            .annotate(patient_count=Count("doctors__patients", distinct=True))
+        )
+        form = self.get_filter_form(request)
+        if form.is_valid():
+            data = form.cleaned_data
+            if data.get("name"):
+                qs = qs.filter(name__icontains=data["name"])
+            if data.get("registered_start"):
+                qs = qs.filter(user__date_joined__date__gte=data["registered_start"])
+            if data.get("registered_end"):
+                qs = qs.filter(user__date_joined__date__lte=data["registered_end"])
+            if data.get("work_phone"):
+                qs = qs.filter(user__phone__icontains=data["work_phone"])
+            if data.get("studio"):
+                qs = qs.filter(doctors__studio__name__icontains=data["studio"])
+        return qs
+
+    def changelist_view(self, request, extra_context=None):
+        form = self.get_filter_form(request)
+        selected_id = request.GET.get("sales_id")
+        extra_context = extra_context or {}
+        extra_context.update(
+            {
+                "filter_form": form,
+                "selected_sales_id": selected_id,
+                "title": "CRC管理",
+            }
+        )
+        response = super().changelist_view(request, extra_context=extra_context)
+        if hasattr(response, "context_data"):
+            context = response.context_data
+            context["filter_form"] = form
+            selected_sales = None
+            selected_studios_display = "-"
+            selected_doctors_display = "-"
+            selected_patient_count = "-"
+            if selected_id:
+                cl = context.get("cl")
+                if cl:
+                    selected_sales = next(
+                        (obj for obj in cl.result_list if str(obj.pk) == str(selected_id)),
+                        None,
+                    )
+                if not selected_sales:
+                    selected_sales = self.get_queryset(request).filter(pk=selected_id).first()
+                if selected_sales:
+                    selected_studios_display = self._studio_names(selected_sales)
+                    selected_doctors_display = self._doctor_names(selected_sales)
+                    selected_patient_count = getattr(selected_sales, "patient_count", None)
+                    if selected_patient_count is None:
+                        selected_patient_count = (
+                            selected_sales.doctors.values("patients__id").distinct().count()
+                        )
+            context.update(
+                {
+                    "selected_sales": selected_sales,
+                    "selected_studios_display": selected_studios_display,
+                    "selected_doctors_display": selected_doctors_display,
+                    "selected_patient_count": selected_patient_count,
+                    "selected_sales_id": selected_id,
+                }
+            )
+        return response
 
     def user_phone(self, obj):
         return obj.user.phone
@@ -157,6 +281,47 @@ class SalesProfileAdmin(admin.ModelAdmin):
 
     user_type_display.short_description = "用户类型"
 
+    @admin.display(description="操作")
+    def edit_action(self, obj):
+        url = reverse("admin:users_salesprofile_change", args=[obj.pk])
+        return format_html('<a href="{}">编辑</a>', url)
+
+    @admin.display(description="姓名", ordering="name")
+    def crc_name(self, obj):
+        url = f"?sales_id={obj.pk}"
+        return format_html('<a href="{}">{}</a>', url, obj.name or "-")
+
+    @admin.display(description="注册手机号", ordering="user__phone")
+    def registered_phone(self, obj):
+        return obj.user.phone
+
+    @admin.display(description="在职状态", ordering="user__is_active")
+    def status_display(self, obj):
+        return "在职" if obj.user.is_active else "停用"
+
+    @admin.display(description="注册日期", ordering="user__date_joined")
+    def registered_date(self, obj):
+        return obj.user.date_joined
+
+    @admin.display(description="工作电话")
+    def work_phone(self, obj):
+        return obj.user.phone
+
+    @admin.display(description="服务工作室")
+    def studio_display(self, obj):
+        return self._studio_names(obj)
+
+    @admin.display(description="关联医院主任")
+    def doctor_display(self, obj):
+        return self._doctor_names(obj)
+
+    @admin.display(description="关联患者数量", ordering="patient_count")
+    def patient_count_display(self, obj):
+        count = getattr(obj, "patient_count", None)
+        if count is None:
+            return "-"
+        return count
+
     def has_delete_permission(self, request, obj=None):
         return False
 
@@ -166,3 +331,18 @@ class SalesProfileAdmin(admin.ModelAdmin):
             profile.user.is_active = False
             profile.user.save(update_fields=["is_active"])
         self.message_user(request, "已禁用所选账号。")
+
+    def _studio_names(self, obj):
+        names = []
+        for doctor in obj.doctors.all():
+            if doctor.studio and doctor.studio.name:
+                names.append(doctor.studio.name)
+        if not names:
+            return "-"
+        return ", ".join(sorted(set(names)))
+
+    def _doctor_names(self, obj):
+        names = [doctor.name for doctor in obj.doctors.all() if doctor.name]
+        if not names:
+            return "-"
+        return ", ".join(sorted(set(names)))

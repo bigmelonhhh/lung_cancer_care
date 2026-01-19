@@ -1,0 +1,197 @@
+{% extends "admin/change_list.html" %}
+{% load admin_list %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .studio-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .studio-main {
+    flex: 3;
+    min-width: 0;
+  }
+
+  .studio-sidebar {
+    flex: 1;
+    position: sticky;
+    top: 20px;
+  }
+
+  .studio-card {
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--hairline-color, #ccc);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 20px;
+    padding: 15px;
+  }
+
+  .studio-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+    align-items: end;
+  }
+
+  .studio-form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .studio-form-group label {
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: var(--body-fg, #333);
+  }
+
+  .studio-form-group input {
+    padding: 4px 6px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .studio-filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .studio-section {
+    margin-bottom: 16px;
+  }
+
+  .studio-section h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+
+  .studio-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 6px 0;
+  }
+
+  .studio-field .label {
+    color: #666;
+    min-width: 80px;
+  }
+
+  .studio-empty {
+    color: #666;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .results table {
+    width: 100%;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="studio-layout">
+    <div class="studio-main">
+      <div class="studio-card">
+        <form method="get" class="studio-filter-grid">
+          <div class="studio-form-group">
+            {{ filter_form.name.label_tag }}
+            {{ filter_form.name }}
+          </div>
+          <div class="studio-form-group">
+            {{ filter_form.title.label_tag }}
+            {{ filter_form.title }}
+          </div>
+          <div class="studio-form-group">
+            {{ filter_form.hospital.label_tag }}
+            {{ filter_form.hospital }}
+          </div>
+          <div class="studio-form-group">
+            {{ filter_form.department.label_tag }}
+            {{ filter_form.department }}
+          </div>
+          <div class="studio-form-group">
+            {{ filter_form.registered_start.label_tag }}
+            {{ filter_form.registered_start }}
+          </div>
+          <div class="studio-form-group">
+            {{ filter_form.registered_end.label_tag }}
+            {{ filter_form.registered_end }}
+          </div>
+          <div class="studio-filter-actions">
+            <input type="submit" value="检索" class="button button-primary" style="padding: 8px 20px;">
+            <a href="{{ request.path }}" class="button" style="padding: 8px 20px; line-height: 15px;">重置</a>
+          </div>
+        </form>
+      </div>
+      <div class="studio-card">
+        <form id="changelist-form" method="post" novalidate>
+          {% csrf_token %}
+          {% if cl.formset %}
+            <div>{{ cl.formset.management_form }}</div>
+          {% endif %}
+          {% result_list cl %}
+          {% pagination cl %}
+        </form>
+      </div>
+    </div>
+
+    <div class="studio-sidebar">
+      <div class="studio-card">
+        {% if selected_studio %}
+          <div class="studio-section">
+            <h3>专家资料</h3>
+            <div class="studio-field">
+              <span class="label">姓名</span>
+              <span>{{ selected_studio.owner_doctor.name|default:"-" }}</span>
+            </div>
+            <div class="studio-field">
+              <span class="label">所属医院</span>
+              <span>{{ selected_studio.owner_doctor.hospital|default:"-" }}</span>
+            </div>
+            <div class="studio-field">
+              <span class="label">所属科室</span>
+              <span>{{ selected_studio.owner_doctor.department|default:"-" }}</span>
+            </div>
+            <div class="studio-field">
+              <span class="label">职称</span>
+              <span>{{ selected_studio.owner_doctor.title|default:"-" }}</span>
+            </div>
+            <div class="studio-field">
+              <span class="label">销售专员</span>
+              <span>{{ selected_sales_display|default:"-" }}</span>
+            </div>
+            <div class="studio-field">
+              <span class="label">在管患者数</span>
+              <span>{{ selected_patient_count|default:"-" }}</span>
+            </div>
+          </div>
+
+          <div class="studio-section">
+            <h3>工作室信息</h3>
+            <div class="studio-field">
+              <span class="label">工作室名称</span>
+              <span>{{ selected_studio.name|default:"-" }}</span>
+            </div>
+            <div class="studio-field">
+              <span class="label">工作室编码</span>
+              <span>{{ selected_studio.code|default:"-" }}</span>
+            </div>
+          </div>
+        {% else %}
+          <div class="studio-empty">请点击左侧专家姓名查看详情</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

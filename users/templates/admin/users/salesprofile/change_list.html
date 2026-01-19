@@ -1,0 +1,194 @@
+{% extends "admin/change_list.html" %}
+{% load admin_list %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .crc-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .crc-main {
+    flex: 3;
+    min-width: 0;
+  }
+
+  .crc-sidebar {
+    flex: 1;
+    position: sticky;
+    top: 20px;
+  }
+
+  .crc-card {
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--hairline-color, #ccc);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 16px;
+    padding: 12px;
+  }
+
+  .crc-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+    align-items: end;
+  }
+
+  .crc-form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .crc-form-group label {
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: var(--body-fg, #333);
+  }
+
+  .crc-form-group input {
+    padding: 4px 6px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .crc-filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .crc-section {
+    margin-bottom: 14px;
+  }
+
+  .crc-section h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+
+  .crc-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 6px 0;
+  }
+
+  .crc-field .label {
+    color: #666;
+    min-width: 80px;
+  }
+
+  .crc-empty {
+    color: #666;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .results table {
+    width: 100%;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="crc-layout">
+    <div class="crc-main">
+      <div class="crc-card">
+        <form method="get" class="crc-filter-grid">
+          <div class="crc-form-group">
+            {{ filter_form.name.label_tag }}
+            {{ filter_form.name }}
+          </div>
+          <div class="crc-form-group">
+            {{ filter_form.registered_start.label_tag }}
+            {{ filter_form.registered_start }}
+          </div>
+          <div class="crc-form-group">
+            {{ filter_form.registered_end.label_tag }}
+            {{ filter_form.registered_end }}
+          </div>
+          <div class="crc-form-group">
+            {{ filter_form.work_phone.label_tag }}
+            {{ filter_form.work_phone }}
+          </div>
+          <div class="crc-form-group">
+            {{ filter_form.studio.label_tag }}
+            {{ filter_form.studio }}
+          </div>
+          <div class="crc-filter-actions">
+            <input type="submit" value="检索" class="button button-primary" style="padding: 6px 16px;">
+            <a href="{{ request.path }}" class="button" style="padding: 6px 16px; line-height: 15px;">重置</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="crc-card">
+        <form id="changelist-form" method="post" novalidate>
+          {% csrf_token %}
+          {% if cl.formset %}
+            <div>{{ cl.formset.management_form }}</div>
+          {% endif %}
+          {% result_list cl %}
+          {% pagination cl %}
+        </form>
+      </div>
+    </div>
+
+    <div class="crc-sidebar">
+      <div class="crc-card">
+        {% if selected_sales %}
+          <div class="crc-section">
+            <h3>CRC资料</h3>
+            <div class="crc-field">
+              <span class="label">姓名</span>
+              <span>{{ selected_sales.name|default:"-" }}</span>
+            </div>
+            <div class="crc-field">
+              <span class="label">注册手机号</span>
+              <span>{{ selected_sales.user.phone|default:"-" }}</span>
+            </div>
+            <div class="crc-field">
+              <span class="label">工作电话</span>
+              <span>{{ selected_sales.user.phone|default:"-" }}</span>
+            </div>
+            <div class="crc-field">
+              <span class="label">注册日期</span>
+              <span>{{ selected_sales.user.date_joined|date:"Y-m-d" }}</span>
+            </div>
+            <div class="crc-field">
+              <span class="label">在职状态</span>
+              <span>{% if selected_sales.user.is_active %}在职{% else %}停用{% endif %}</span>
+            </div>
+          </div>
+
+          <div class="crc-section">
+            <h3>关联信息</h3>
+            <div class="crc-field">
+              <span class="label">服务工作室</span>
+              <span>{{ selected_studios_display|default:"-" }}</span>
+            </div>
+            <div class="crc-field">
+              <span class="label">关联医院主任</span>
+              <span>{{ selected_doctors_display|default:"-" }}</span>
+            </div>
+            <div class="crc-field">
+              <span class="label">关联患者数量</span>
+              <span>{{ selected_patient_count|default:"-" }}</span>
+            </div>
+          </div>
+        {% else %}
+          <div class="crc-empty">请点击左侧姓名查看详情</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

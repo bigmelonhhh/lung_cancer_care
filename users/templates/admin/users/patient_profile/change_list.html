@@ -1,222 +1,287 @@
 {% extends "admin/change_list.html" %}
-{% load admin_list i18n static %}
+{% load admin_list %}
 
 {% block extrastyle %}
 {{ block.super }}
 <style>
-  /* --- 1. 布局容器 (替代 Bootstrap Grid) --- */
-  .layout-container {
+  .patient-layout {
     display: flex;
     gap: 20px;
-    align-items: flex-start; /* 顶部对齐 */
-  }
-  
-  .layout-main {
-    flex: 3; /* 左侧占 3 份 (约 75%) */
-    min-width: 0; /* 防止表格撑爆容器 */
-  }
-  
-  .layout-sidebar {
-    flex: 1; /* 右侧占 1 份 (约 25%) */
-    position: sticky;
-    top: 20px; /* 简单的吸顶效果 */
+    align-items: flex-start;
   }
 
-  /* --- 2. 卡片样式 (替代 Bootstrap Card) --- */
-  .custom-card {
-    background: var(--body-bg, #fff); /* 适配 Django 深色模式变量 */
+  .patient-main {
+    flex: 3;
+    min-width: 0;
+  }
+
+  .patient-sidebar {
+    flex: 1;
+    position: sticky;
+    top: 20px;
+  }
+
+  .patient-card {
+    background: var(--body-bg, #fff);
     border: 1px solid var(--hairline-color, #ccc);
     border-radius: 4px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    margin-bottom: 20px;
-    padding: 15px;
-  }
-  
-  .card-body {
-    width: 100%;
+    margin-bottom: 16px;
+    padding: 12px;
   }
 
-  /* --- 3. 筛选表单样式 (替代 Bootstrap Form) --- */
-  .filter-form-grid {
+  .patient-filter-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); /* 自动响应式列 */
-    gap: 15px;
-    align-items: end; /* 底部对齐，为了按钮 */
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 8px;
+    align-items: end;
   }
-  
-  .form-group {
+
+  .patient-form-group {
     display: flex;
     flex-direction: column;
   }
-  
-  .form-group label {
+
+  .patient-form-group label {
     font-weight: bold;
-    margin-bottom: 5px;
+    margin-bottom: 2px;
     color: var(--body-fg, #333);
   }
-  
-  .form-group input, 
-  .form-group select {
-    padding: 6px 8px;
+
+  .patient-form-group input,
+  .patient-form-group select {
+    padding: 4px 6px;
     border: 1px solid var(--border-color, #ccc);
     border-radius: 4px;
     width: 100%;
     box-sizing: border-box;
   }
 
-  /* --- 4. 按钮样式 (复用 Django Admin 原生样式) --- */
-  .btn-actions {
-    grid-column: 1 / -1; /* 按钮占满一行 */
+  .patient-filter-actions {
+    grid-column: 1 / -1;
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 4px;
   }
-  
-  /* 强制修正 Django Admin 表格在 flex 容器中的宽度 */
+
+  .patient-section {
+    margin-bottom: 14px;
+  }
+
+  .patient-section h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+
+  .patient-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 6px 0;
+  }
+
+  .patient-field .label {
+    color: #666;
+    min-width: 90px;
+  }
+
+  .patient-empty {
+    color: #666;
+    text-align: center;
+    padding: 40px 0;
+  }
+
   .results table {
     width: 100%;
   }
 </style>
 {% endblock %}
 
-{% block extrahead %}
-{{ block.super }}
-<script src="https://unpkg.com/htmx.org@1.9.10"></script>
-{% endblock %}
+{% block content %}
+<div id="content-main">
+  <div class="patient-layout">
+    <div class="patient-main">
+      <div class="patient-card">
+        <form method="get" class="patient-filter-grid">
+          <div class="patient-form-group">
+            {{ filter_form.name.label_tag }}
+            {{ filter_form.name }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.gender.label_tag }}
+            {{ filter_form.gender }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.birth_start.label_tag }}
+            {{ filter_form.birth_start }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.birth_end.label_tag }}
+            {{ filter_form.birth_end }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.disease.label_tag }}
+            {{ filter_form.disease }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.hospital.label_tag }}
+            {{ filter_form.hospital }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.doctor_name.label_tag }}
+            {{ filter_form.doctor_name }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.registered_start.label_tag }}
+            {{ filter_form.registered_start }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.registered_end.label_tag }}
+            {{ filter_form.registered_end }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.purchase_start.label_tag }}
+            {{ filter_form.purchase_start }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.purchase_end.label_tag }}
+            {{ filter_form.purchase_end }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.membership_level.label_tag }}
+            {{ filter_form.membership_level }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.studio.label_tag }}
+            {{ filter_form.studio }}
+          </div>
+          <div class="patient-form-group">
+            {{ filter_form.sales.label_tag }}
+            {{ filter_form.sales }}
+          </div>
+          <div class="patient-filter-actions">
+            <input type="submit" value="检索" class="button button-primary" style="padding: 6px 16px;">
+            <a href="{{ request.path }}" class="button" style="padding: 6px 16px; line-height: 15px;">重置</a>
+          </div>
+        </form>
+      </div>
 
-{% block change_list %}
-<div class="layout-container">
-  
-  <div class="layout-main">
-    
-    <div class="custom-card">
-      <form method="get" class="filter-form-grid">
-        
-        <div class="form-group">
-          {{ filter_form.q.label_tag }}
-          {{ filter_form.q }}
-        </div>
-        <div class="form-group">
-          {{ filter_form.gender.label_tag }}
-          {{ filter_form.gender }}
-        </div>
-        
-        <div class="form-group">
-          {{ filter_form.doctor_name.label_tag }}
-          {{ filter_form.doctor_name }}
-        </div>
-        <div class="form-group">
-          {{ filter_form.sales_name.label_tag }}
-          {{ filter_form.sales_name }}
-        </div>
-
-        <div class="form-group">
-          {{ filter_form.birth_start.label_tag }}
-          {{ filter_form.birth_start }}
-        </div>
-        <div class="form-group">
-          {{ filter_form.birth_end.label_tag }}
-          {{ filter_form.birth_end }}
-        </div>
-
-        <div class="form-group">
-          {{ filter_form.date_range_start.label_tag }}
-          {{ filter_form.date_range_start }}
-        </div>
-        <div class="form-group">
-          {{ filter_form.date_range_end.label_tag }}
-          {{ filter_form.date_range_end }}
-        </div>
-
-        <div class="form-group">
-          {{ filter_form.purchase_start.label_tag }}
-          {{ filter_form.purchase_start }}
-        </div>
-        <div class="form-group">
-          {{ filter_form.purchase_end.label_tag }}
-          {{ filter_form.purchase_end }}
-        </div>
-
-        <div class="btn-actions">
-          <input type="submit" value="筛选" class="button button-primary" style="padding: 8px 20px;">
-          <a href="{{ request.path }}" class="button" style="padding: 8px 20px; line-height: 15px;">重置</a>
-        </div>
-      </form>
+      <div class="patient-card">
+        <form id="changelist-form" method="post" novalidate>
+          {% csrf_token %}
+          {% if cl.formset %}
+            <div>{{ cl.formset.management_form }}</div>
+          {% endif %}
+          {% result_list cl %}
+          {% pagination cl %}
+        </form>
+      </div>
     </div>
 
-    <div class="custom-card" id="patient-table-wrapper">
-      {% result_list cl %}
-      
-      {# 分页器 #}
-      {% pagination cl %}
-    </div>
-  </div>
+    <div class="patient-sidebar">
+      <div class="patient-card">
+        {% if selected_patient %}
+          <div class="patient-section">
+            <h3>患者资料</h3>
+            <div class="patient-field">
+              <span class="label">姓名</span>
+              <span>{{ selected_patient.name|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">性别</span>
+              <span>{{ selected_patient.get_gender_display }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">出生日期</span>
+              <span>{{ selected_patient.birth_date|date:"Y-m-d"|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">当前病程</span>
+              <span>{{ selected_current_disease|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">注册日期</span>
+              <span>{{ selected_patient.created_at|date:"Y-m-d"|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">会员等级</span>
+              <span>{{ selected_membership_level|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">购买会员日期</span>
+              <span>{{ selected_membership_start|date:"Y-m-d"|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">会员到期日期</span>
+              <span>{{ selected_membership_end|date:"Y-m-d"|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">所在医院</span>
+              <span>{{ selected_hospital|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">绑定工作室</span>
+              <span>{{ selected_studio|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">管理医生</span>
+              <span>{{ selected_doctor|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">CRC专员</span>
+              <span>{{ selected_sales|default:"-" }}</span>
+            </div>
+          </div>
 
-  <div class="layout-sidebar">
-    <div id="patient-detail-panel" class="custom-card" style="min-height: 300px;">
-      <div style="color: #666; text-align: center; margin-top: 50px;">
-        <p>👉 请点击左侧列表查看详情</p>
+          <div class="patient-section">
+            <h3>依从性</h3>
+            <div class="patient-field">
+              <span class="label">按时用药</span>
+              <span>{{ adherence_display.medication|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">指标监测</span>
+              <span>{{ adherence_display.monitoring|default:"-" }}</span>
+            </div>
+            <div class="patient-field">
+              <span class="label">其他监测</span>
+              <span>{{ adherence_display.other|default:"-" }}</span>
+            </div>
+          </div>
+
+          <div class="patient-section">
+            <h3>病情资料</h3>
+            {% if selected_medical_history %}
+              <div class="patient-field">
+                <span class="label">危险因素</span>
+                <span>{{ selected_medical_history.risk_factors|default:"-" }}</span>
+              </div>
+              <div class="patient-field">
+                <span class="label">临床诊断</span>
+                <span>{{ selected_medical_history.clinical_diagnosis|default:"-" }}</span>
+              </div>
+              <div class="patient-field">
+                <span class="label">基因检测</span>
+                <span>{{ selected_medical_history.genetic_test|default:"-" }}</span>
+              </div>
+              <div class="patient-field">
+                <span class="label">既往病史</span>
+                <span>{{ selected_medical_history.past_medical_history|default:"-" }}</span>
+              </div>
+              <div class="patient-field">
+                <span class="label">手术信息</span>
+                <span>{{ selected_medical_history.surgical_information|default:"-" }}</span>
+              </div>
+            {% else %}
+              <div class="patient-empty">暂无病情资料</div>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="patient-empty">请点击左侧姓名查看详情</div>
+        {% endif %}
       </div>
     </div>
   </div>
-
 </div>
-{% endblock %}
-
-{% block footer %}
-{{ block.super }}
-<script>
-(function() {
-  const previewBase = "{{ preview_url_base|default:''|escapejs }}";
-  function initPatientRows() {
-    // 注意：Django Admin 表格行通常是 .row1, .row2，这里选择器需通用
-    const rows = document.querySelectorAll('#result_list tbody tr');
-    rows.forEach(function(row) {
-      // 查找 checkbox 或 link 获取 ID，Django admin 通常在 tr 上没有直接的 data-id
-      // 我们需要依赖之前提示词里让 AI 生成的 data-object-id，或者从第一列的 checkbox value 获取
-      
-      // 尝试从 checkbox 获取 ID (这是 Django admin 的标准结构)
-      let pk = null;
-      const checkbox = row.querySelector('.action-select');
-      if (checkbox) {
-          pk = checkbox.value;
-      } else {
-          // 如果没有 checkbox，尝试从第一列链接获取 ID
-          const firstLink = row.querySelector('th.field-name a, td.field-name a, th a');
-          if (firstLink) {
-              const match = firstLink.getAttribute('href').match(/(\d+)\/change/);
-              if (match) pk = match[1];
-          }
-      }
-
-      if (!pk || !previewBase) return;
-
-      row.setAttribute('hx-get', `${previewBase}/${pk}/`); // 确保 URL 格式正确
-      row.setAttribute('hx-target', '#patient-detail-panel');
-      row.setAttribute('hx-swap', 'innerHTML');
-      row.style.cursor = 'pointer';
-      
-      // 避免点击 checkbox 时触发 HTMX
-      row.querySelectorAll('input, a').forEach(el => {
-          el.addEventListener('click', e => e.stopPropagation());
-      });
-    });
-    
-    // 如果 htmx 没加载，处理一下
-    if (window.htmx) {
-        htmx.process(document.querySelector('#result_list'));
-    }
-  }
-
-  document.addEventListener('DOMContentLoaded', initPatientRows);
-  // 监听 HTMX 交换后的事件（如果是 Ajax 翻页）- Django Admin 默认不是 Ajax 翻页，
-  // 但如果你将来做了 Ajax 翻页，这个监听很有用
-  document.body.addEventListener('htmx:afterSwap', function(evt) {
-    if (evt.target && evt.target.id === 'patient-table-wrapper') {
-      initPatientRows();
-    }
-  });
-})();
-</script>
 {% endblock %}

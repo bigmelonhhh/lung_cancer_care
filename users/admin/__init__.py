@@ -5,7 +5,8 @@ import types
 from django.contrib import admin
 
 from .sales import SalesProfileAdmin
-from .doctors import DoctorProfileAdmin, DoctorStudioAdmin
+from .doctors import DoctorProfileAdmin
+from .doctor_studio import DoctorStudioAdmin
 from .assistants import AssistantProfileAdmin
 from .patients import PatientProfileAdmin
 from .platform import PlatformAdminUserAdmin

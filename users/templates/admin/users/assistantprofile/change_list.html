@@ -1,0 +1,194 @@
+{% extends "admin/change_list.html" %}
+{% load admin_list %}
+
+{% block extrastyle %}
+{{ block.super }}
+<style>
+  .assistant-layout {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+
+  .assistant-main {
+    flex: 3;
+    min-width: 0;
+  }
+
+  .assistant-sidebar {
+    flex: 1;
+    position: sticky;
+    top: 20px;
+  }
+
+  .assistant-card {
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--hairline-color, #ccc);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    margin-bottom: 16px;
+    padding: 12px;
+  }
+
+  .assistant-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 8px;
+    align-items: end;
+  }
+
+  .assistant-form-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .assistant-form-group label {
+    font-weight: bold;
+    margin-bottom: 2px;
+    color: var(--body-fg, #333);
+  }
+
+  .assistant-form-group input {
+    padding: 4px 6px;
+    border: 1px solid var(--border-color, #ccc);
+    border-radius: 4px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .assistant-filter-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .assistant-section {
+    margin-bottom: 14px;
+  }
+
+  .assistant-section h3 {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+
+  .assistant-field {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 6px 0;
+  }
+
+  .assistant-field .label {
+    color: #666;
+    min-width: 80px;
+  }
+
+  .assistant-empty {
+    color: #666;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .results table {
+    width: 100%;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="content-main">
+  <div class="assistant-layout">
+    <div class="assistant-main">
+      <div class="assistant-card">
+        <form method="get" class="assistant-filter-grid">
+          <div class="assistant-form-group">
+            {{ filter_form.name.label_tag }}
+            {{ filter_form.name }}
+          </div>
+          <div class="assistant-form-group">
+            {{ filter_form.registered_start.label_tag }}
+            {{ filter_form.registered_start }}
+          </div>
+          <div class="assistant-form-group">
+            {{ filter_form.registered_end.label_tag }}
+            {{ filter_form.registered_end }}
+          </div>
+          <div class="assistant-form-group">
+            {{ filter_form.work_phone.label_tag }}
+            {{ filter_form.work_phone }}
+          </div>
+          <div class="assistant-form-group">
+            {{ filter_form.studio.label_tag }}
+            {{ filter_form.studio }}
+          </div>
+          <div class="assistant-filter-actions">
+            <input type="submit" value="检索" class="button button-primary" style="padding: 6px 16px;">
+            <a href="{{ request.path }}" class="button" style="padding: 6px 16px; line-height: 15px;">重置</a>
+          </div>
+        </form>
+      </div>
+
+      <div class="assistant-card">
+        <form id="changelist-form" method="post" novalidate>
+          {% csrf_token %}
+          {% if cl.formset %}
+            <div>{{ cl.formset.management_form }}</div>
+          {% endif %}
+          {% result_list cl %}
+          {% pagination cl %}
+        </form>
+      </div>
+    </div>
+
+    <div class="assistant-sidebar">
+      <div class="assistant-card">
+        {% if selected_assistant %}
+          <div class="assistant-section">
+            <h3>助理资料</h3>
+            <div class="assistant-field">
+              <span class="label">姓名</span>
+              <span>{{ selected_assistant.name|default:"-" }}</span>
+            </div>
+            <div class="assistant-field">
+              <span class="label">注册手机号</span>
+              <span>{{ selected_assistant.user.phone|default:"-" }}</span>
+            </div>
+            <div class="assistant-field">
+              <span class="label">工作电话</span>
+              <span>{{ selected_assistant.work_phone|default:"-" }}</span>
+            </div>
+            <div class="assistant-field">
+              <span class="label">注册日期</span>
+              <span>{{ selected_assistant.user.date_joined|date:"Y-m-d" }}</span>
+            </div>
+            <div class="assistant-field">
+              <span class="label">助理状态</span>
+              <span>{{ selected_assistant.get_status_display }}</span>
+            </div>
+          </div>
+
+          <div class="assistant-section">
+            <h3>关联信息</h3>
+            <div class="assistant-field">
+              <span class="label">服务工作室</span>
+              <span>{{ selected_studios_display|default:"-" }}</span>
+            </div>
+            <div class="assistant-field">
+              <span class="label">关联医院主任</span>
+              <span>{{ selected_doctors_display|default:"-" }}</span>
+            </div>
+            <div class="assistant-field">
+              <span class="label">关联患者数量</span>
+              <span>{{ selected_patient_count|default:"-" }}</span>
+            </div>
+          </div>
+        {% else %}
+          <div class="assistant-empty">请点击左侧姓名查看详情</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
