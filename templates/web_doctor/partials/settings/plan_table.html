@@ -1,4 +1,5 @@
 {# 单个疗程的计划视图：用药 + 复查 + 随访 #}
+{% load plan_dates %}
 
 <div id="plan-table-container" class="overflow-x-auto mt-3">
   <table class="w-full text-left border-collapse">
@@ -8,7 +9,17 @@
         <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
         <th class="px-2 py-3 font-semibold w-24">默认频次</th>
         {% for i in "x"|rjust:"21" %}
-        <th class="px-1 py-3 font-medium text-center text-[10px] text-slate-400 w-8">D{{ forloop.counter }}</th>
+        <th class="px-1 py-3 font-medium text-center w-8 {% if forloop.counter == 1 or forloop.counter == 8 or forloop.counter == 15 %}text-sm text-slate-800{% else %}text-[10px] text-slate-400{% endif %} {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}">
+          {% if forloop.counter == 1 or forloop.counter == 8 or forloop.counter == 15 %}
+            {% if cycle and cycle.start_date %}
+              {{ cycle.start_date|add_days:forloop.counter0|date:"m/d" }}
+            {% else %}
+              D{{ forloop.counter }}
+            {% endif %}
+          {% else %}
+            D{{ forloop.counter }}
+          {% endif %}
+        </th>
         {% endfor %}
       </tr>
     </thead>
