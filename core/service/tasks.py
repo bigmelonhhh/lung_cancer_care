@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List
 
+from django.db import models
 from django.utils import timezone
 
 from core.models import DailyTask, MonitoringTemplate, choices
@@ -193,6 +194,30 @@ def complete_daily_medication_tasks(
     return task_id
 
 
+def _get_monitoring_tasks_queryset(
+    *,
+    patient_id: int,
+    metric_type: str,
+    occurred_at: datetime | None,
+) -> tuple[models.QuerySet, datetime]:
+    completed_at = _resolve_completed_at(occurred_at)
+    task_date = _resolve_task_date(completed_at)
+
+    template_ids = list(
+        MonitoringTemplate.objects.filter(code=metric_type).values_list("id", flat=True)
+    )
+    if not template_ids:
+        return DailyTask.objects.none(), completed_at
+
+    tasks = DailyTask.objects.filter(
+        patient_id=patient_id,
+        task_date=task_date,
+        task_type=choices.PlanItemCategory.MONITORING,
+        plan_item__template_id__in=template_ids,
+    )
+    return tasks, completed_at
+
+
 def complete_daily_monitoring_tasks(
     patient_id: int,
     metric_type: str,
@@ -200,7 +225,7 @@ def complete_daily_monitoring_tasks(
 ) -> int:
     """
     【功能说明】
-    - 将患者当天指定监测项的任务标记为已完成。
+    - 将患者当天指定监测项的任务标记为已完成（覆盖当日所有匹配任务）。
 
     【使用方法】
     - `complete_daily_monitoring_tasks(patient_id, MetricType.BODY_TEMPERATURE, measured_at)`。
@@ -213,26 +238,48 @@ def complete_daily_monitoring_tasks(
     【返回值说明】
     - int：实际更新的任务数量。
     """
-    completed_at = _resolve_completed_at(occurred_at)
-    task_date = _resolve_task_date(completed_at)
-
-    template_ids = list(
-        MonitoringTemplate.objects.filter(code=metric_type).values_list("id", flat=True)
-    )
-    if not template_ids:
-        return 0
-
-    tasks = DailyTask.objects.filter(
+    tasks, completed_at = _get_monitoring_tasks_queryset(
         patient_id=patient_id,
-        task_date=task_date,
-        task_type=choices.PlanItemCategory.MONITORING,
-        plan_item__template_id__in=template_ids,
-        status=choices.TaskStatus.PENDING,
+        metric_type=metric_type,
+        occurred_at=occurred_at,
     )
     return tasks.update(
         status=choices.TaskStatus.COMPLETED,
         completed_at=completed_at,
     )
+
+
+def complete_daily_monitoring_tasks_with_latest_task_id(
+    patient_id: int,
+    metric_type: str,
+    occurred_at: datetime | None = None,
+) -> tuple[int, int | None]:
+    """
+    【功能说明】
+    - 将患者当天指定监测项的任务标记为已完成，并返回最新任务 ID。
+
+    【使用方法】
+    - `complete_daily_monitoring_tasks_with_latest_task_id(patient_id, MetricType.BODY_TEMPERATURE, measured_at)`。
+
+    【参数说明】
+    - patient_id: int，患者 ID。
+    - metric_type: str，健康指标类型（对应 MonitoringTemplate.code）。
+    - occurred_at: datetime | None，事件时间，用于定位当日任务及 completed_at。
+
+    【返回值说明】
+    - (updated_count, task_id)：updated_count 为更新数量；task_id 为最新任务 ID（无匹配任务则为 None）。
+    """
+    tasks, completed_at = _get_monitoring_tasks_queryset(
+        patient_id=patient_id,
+        metric_type=metric_type,
+        occurred_at=occurred_at,
+    )
+    latest_task_id = tasks.order_by("-id").values_list("id", flat=True).first()
+    updated_count = tasks.update(
+        status=choices.TaskStatus.COMPLETED,
+        completed_at=completed_at,
+    )
+    return updated_count, latest_task_id
 
 
 def complete_daily_questionnaire_tasks(

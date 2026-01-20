@@ -17,8 +17,9 @@ class HealthMetricServiceTest(TestCase):
         self.patient_id = 1001
         self.measured_at = timezone.now()
 
+    @patch("health_data.services.health_metric.task_service.complete_daily_monitoring_tasks_with_latest_task_id")
     @patch("health_data.models.HealthMetric.objects.create")
-    def test_save_manual_temperature(self, mock_create):
+    def test_save_manual_temperature(self, mock_create, mock_complete_tasks):
         """
         测试手动保存体温指标。
         验证重点：
@@ -29,6 +30,7 @@ class HealthMetricServiceTest(TestCase):
         # 准备数据：体温为 36.5℃
         metric_type = MetricType.BODY_TEMPERATURE
         value = Decimal("36.5")
+        mock_complete_tasks.return_value = (1, 123)
 
         # 调用服务方法
         HealthMetricService.save_manual_metric(
@@ -45,17 +47,20 @@ class HealthMetricServiceTest(TestCase):
             source=MetricSource.MANUAL,  # 核心验证点
             value_main=value,
             value_sub=None,              # 核心验证点
-            measured_at=self.measured_at
+            measured_at=self.measured_at,
+            task_id=123,
         )
 
+    @patch("health_data.services.health_metric.task_service.complete_daily_monitoring_tasks_with_latest_task_id")
     @patch("health_data.models.HealthMetric.objects.create")
-    def test_save_manual_weight_metric(self, mock_create):
+    def test_save_manual_weight_metric(self, mock_create, mock_complete_tasks):
         """
         测试手动保存体重指标。
         """
         # 准备数据：体重 65.5 kg
         metric_type = MetricType.WEIGHT
         value = Decimal("65.5")
+        mock_complete_tasks.return_value = (1, 456)
 
         HealthMetricService.save_manual_metric(
             patient_id=self.patient_id,
@@ -71,7 +76,8 @@ class HealthMetricServiceTest(TestCase):
             source=MetricSource.MANUAL,
             value_main=value,
             value_sub=None,
-            measured_at=self.measured_at
+            measured_at=self.measured_at,
+            task_id=456,
         )
 
     @patch("health_data.models.HealthMetric.objects.create")

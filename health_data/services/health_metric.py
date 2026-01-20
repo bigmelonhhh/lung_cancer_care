@@ -141,11 +141,14 @@ class HealthMetricService:
             source=MetricSource.DEVICE,
         )
         MetricAlertService.process_metric(metric)
-        task_service.complete_daily_monitoring_tasks(
+        _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
             patient_id=context.patient_id,
             metric_type=MetricType.BLOOD_PRESSURE,
             occurred_at=context.measured_at,
         )
+        if task_id:
+            metric.task_id = task_id
+            metric.save(update_fields=["task_id"])
 
     @classmethod
     def save_blood_oxygen(cls, payload: dict) -> None:
@@ -185,11 +188,14 @@ class HealthMetricService:
             source=MetricSource.DEVICE,
         )
         MetricAlertService.process_metric(metric)
-        task_service.complete_daily_monitoring_tasks(
+        _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
             patient_id=context.patient_id,
             metric_type=MetricType.BLOOD_OXYGEN,
             occurred_at=context.measured_at,
         )
+        if task_id:
+            metric.task_id = task_id
+            metric.save(update_fields=["task_id"])
 
     @classmethod
     def save_heart_rate(cls, payload: dict) -> None:
@@ -229,11 +235,14 @@ class HealthMetricService:
             measured_at=context.measured_at,
             source=MetricSource.DEVICE,
         )
-        task_service.complete_daily_monitoring_tasks(
+        _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
             patient_id=context.patient_id,
             metric_type=MetricType.HEART_RATE,
             occurred_at=context.measured_at,
         )
+        if task_id:
+            metric.task_id = task_id
+            metric.save(update_fields=["task_id"])
 
     @classmethod
     def save_steps(cls, payload: dict) -> None:
@@ -342,11 +351,14 @@ class HealthMetricService:
             source=MetricSource.DEVICE,
         )
         MetricAlertService.process_metric(metric)
-        task_service.complete_daily_monitoring_tasks(
+        _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
             patient_id=context.patient_id,
             metric_type=MetricType.WEIGHT,
             occurred_at=context.measured_at,
         )
+        if task_id:
+            metric.task_id = task_id
+            metric.save(update_fields=["task_id"])
 
     
     @classmethod
@@ -829,6 +841,14 @@ class HealthMetricService:
         if measured_at is None:
             raise ValueError("measured_at 不能为空。")
 
+        task_id = None
+        if metric_type in _MONITORING_TASK_TYPES:
+            _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
+                patient_id=patient_id,
+                metric_type=metric_type,
+                occurred_at=measured_at,
+            )
+
         metric = cls._persist_metric(
             patient_id=patient_id,
             metric_type=metric_type,
@@ -837,14 +857,9 @@ class HealthMetricService:
             measured_at=measured_at,
             source=MetricSource.MANUAL,
             questionnaire_submission_id=questionnaire_submission_id,
+            task_id=task_id,
         )
         MetricAlertService.process_metric(metric)
-        if metric_type in _MONITORING_TASK_TYPES:
-            task_service.complete_daily_monitoring_tasks(
-                patient_id=patient_id,
-                metric_type=metric_type,
-                occurred_at=measured_at,
-            )
         return metric
 
     # ============
