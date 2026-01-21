@@ -59,6 +59,49 @@ class TodoListServiceTests(TestCase):
         self.assertEqual(page.object_list[0]["id"], self.pending_alert.id)
         self.assertEqual(page.object_list[0]["status"], "pending")
 
+    def test_get_todo_page_filters_status_list(self):
+        escalated_alert = PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MODERATE,
+            event_title="心率异常",
+            event_content="心率偏高",
+            event_time=timezone.now(),
+            status=AlertStatus.ESCALATED,
+        )
+
+        page = TodoListService.get_todo_page(
+            user=self.doctor_user,
+            status=["pending", "escalate"],
+        )
+        ids = {item["id"] for item in page.object_list}
+        self.assertIn(self.pending_alert.id, ids)
+        self.assertIn(escalated_alert.id, ids)
+        self.assertNotIn(self.completed_alert.id, ids)
+
+    def test_get_todo_page_status_list_all_passthrough(self):
+        escalated_alert = PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MODERATE,
+            event_title="心率异常",
+            event_content="心率偏高",
+            event_time=timezone.now(),
+            status=AlertStatus.ESCALATED,
+        )
+
+        page = TodoListService.get_todo_page(
+            user=self.doctor_user,
+            status=["all"],
+        )
+        ids = {item["id"] for item in page.object_list}
+        self.assertEqual(
+            ids,
+            {self.pending_alert.id, self.completed_alert.id, escalated_alert.id},
+        )
+
     def test_get_todo_page_filters_date_range(self):
         start_date = (timezone.localdate() - timedelta(days=1)).strftime("%Y-%m-%d")
         end_date = timezone.localdate().strftime("%Y-%m-%d")

@@ -65,7 +65,7 @@ class TodoListService:
         user: CustomUser,
         page: int | str = 1,
         size: int | str = 10,
-        status: str = "all",
+        status: str | list[str] | tuple[str, ...] | set[str] = "all",
         start_date: str | date | None = None,
         end_date: str | date | None = None,
         patient_id: int | str | None = None,
@@ -77,7 +77,7 @@ class TodoListService:
         - user: 当前登录用户（医生/助理）。
         - page: 页码。
         - size: 每页数量。
-        - status: 状态筛选（pending/escalate/completed/all）。
+        - status: 状态筛选（pending/escalate/completed/all），支持单值或列表。
         - start_date: 开始日期（包含）。
         - end_date: 结束日期（包含）。
         - patient_id: 指定患者ID筛选。
@@ -95,7 +95,17 @@ class TodoListService:
             if pid:
                 qs = qs.filter(patient_id=pid)
                 
-        if status in _STATUS_VALUE_BY_CODE:
+        if isinstance(status, (list, tuple, set)):
+            # 列表模式：支持多状态筛选；若包含 "all" 则不做状态过滤。
+            if "all" not in status:
+                status_values = [
+                    _STATUS_VALUE_BY_CODE[item]
+                    for item in status
+                    if item in _STATUS_VALUE_BY_CODE
+                ]
+                if status_values:
+                    qs = qs.filter(status__in=status_values)
+        elif status in _STATUS_VALUE_BY_CODE:
             qs = qs.filter(status=_STATUS_VALUE_BY_CODE[status])
 
         start_dt, end_dt = cls._parse_date_range(start_date, end_date)

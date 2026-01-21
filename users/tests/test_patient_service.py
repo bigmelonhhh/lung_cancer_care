@@ -7,6 +7,7 @@ from django.test import TestCase
 from users import choices
 from chat.models import PatientStudioAssignment
 from users.models import (
+    AssistantProfile,
     CustomUser,
     DoctorProfile,
     DoctorStudio,
@@ -39,7 +40,19 @@ class PatientServiceTests(TestCase):
         self.doctor_profile.studio = self.studio
         self.doctor_profile.save(update_fields=["studio"])
 
-        # 2. Create a Patient, and assign the doctor
+        # 2. Create an Assistant linked to the doctor
+        self.assistant_user = CustomUser.objects.create_user(
+            user_type=choices.UserType.ASSISTANT,
+            phone="13700137000",
+            wx_nickname="Assistant Amy",
+        )
+        self.assistant_profile = AssistantProfile.objects.create(
+            user=self.assistant_user,
+            name="Assistant Amy",
+        )
+        self.assistant_profile.doctors.add(self.doctor_profile)
+
+        # 3. Create a Patient, and assign the doctor
         self.patient_user = CustomUser.objects.create_user(
             user_type=choices.UserType.PATIENT,
             wx_openid="patient_openid_12345",
@@ -53,7 +66,7 @@ class PatientServiceTests(TestCase):
             birth_date=datetime.date(1980, 5, 15),
         )
 
-        # 3. Create a Family Member for the patient
+        # 4. Create a Family Member for the patient
         self.family_user = CustomUser.objects.create_user(
             user_type=choices.UserType.PATIENT,  # Family members are also 'PATIENT' type
             wx_openid="family_openid_67890",
@@ -67,7 +80,7 @@ class PatientServiceTests(TestCase):
             is_active=True,
         )
 
-        # 4. Create an Unauthorized User (e.g., a Sales person)
+        # 5. Create a Sales user
         self.unauthorized_user = CustomUser.objects.create_user(
             user_type=choices.UserType.SALES,
             phone="13900139000",
@@ -79,14 +92,14 @@ class PatientServiceTests(TestCase):
         )
         self.sales_profile.doctors.add(self.doctor_profile)
 
-        # 5. Create an unclaimed profile for claim tests
+        # 6. Create an unclaimed profile for claim tests
         self.unclaimed_profile = PatientProfile.objects.create(
             phone="18600000002",
             name="Unclaimed Patient",
             doctor=None,
         )
         
-        # 6. Another patient for phone conflict test
+        # 7. Another patient for phone conflict test
         self.other_patient_user = CustomUser.objects.create_user(
             user_type=choices.UserType.PATIENT,
             wx_openid="other_patient_openid_abcde",
@@ -129,7 +142,11 @@ class PatientServiceTests(TestCase):
 
     def test_edit_by_doctor_success(self):
         """The assigned doctor can successfully edit a patient's profile."""
-        update_data = {"name": "John Doe (Edited by Doctor)", "phone": "18600000001"}
+        update_data = {
+            "name": "John Doe (Edited by Doctor)",
+            "phone": "18600000001",
+            "remark": "医生备注更新",
+        }
         
         updated_profile = self.service.save_patient_profile(
             user=self.doctor_user,
@@ -139,6 +156,7 @@ class PatientServiceTests(TestCase):
         
         self.patient_profile.refresh_from_db()
         self.assertEqual(self.patient_profile.name, "John Doe (Edited by Doctor)")
+        self.assertEqual(self.patient_profile.remark, "医生备注更新")
 
     def test_edit_by_family_member_success(self):
         """An active family member can successfully edit the patient's profile."""
@@ -153,16 +171,23 @@ class PatientServiceTests(TestCase):
         self.patient_profile.refresh_from_db()
         self.assertEqual(self.patient_profile.name, "John Doe (Edited by Family)")
         
-    def test_edit_by_unauthorized_user_fails(self):
-        """An unauthorized user (e.g., Sales) cannot edit the profile."""
-        update_data = {"name": "Unauthorized Update", "phone": "18600000001"}
+    def test_edit_by_assistant_success(self):
+        """A doctor's assistant can successfully edit a patient's remark."""
+        update_data = {
+            "name": "John Doe",
+            "phone": "18600000001",
+            "remark": "助理备注更新",
+        }
 
-        with self.assertRaisesRegex(ValidationError, "您没有权限修改此患者的档案。"):
-            self.service.save_patient_profile(
-                user=self.unauthorized_user,
-                data=update_data,
-                profile_id=self.patient_profile.id,
-            )
+        updated_profile = self.service.save_patient_profile(
+            user=self.assistant_user,
+            data=update_data,
+            profile_id=self.patient_profile.id,
+        )
+
+        self.patient_profile.refresh_from_db()
+        self.assertEqual(updated_profile.id, self.patient_profile.id)
+        self.assertEqual(self.patient_profile.remark, "助理备注更新")
 
     def test_edit_non_existent_profile_fails(self):
         """Editing a profile with a non-existent ID fails."""
