@@ -69,11 +69,11 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         {"title": "我的订单", "url": generate_menu_auth_url("web_patient:orders")},
         {"title": "智能设备", "url": generate_menu_auth_url("web_patient:device_list")},
         {"title": "工作室", "url": generate_menu_auth_url("web_patient:my_studio")},
-        {"title": "上传报告", "url": reverse("web_patient:report_list")},
-        {"title": "提醒设置", "url": "#"},
+        {"title": "上传报告", "url": generate_menu_auth_url("web_patient:report_list")},
+        # {"title": "提醒设置", "url": "#"},
         {"title": "亲情账号", "url": generate_menu_auth_url("web_patient:family_management")},
-        {"title": "健康日历", "url": reverse("web_patient:health_calendar")},
-        {"title": "设置", "url": "#"},
+        {"title": "健康日历", "url": generate_menu_auth_url("web_patient:health_calendar")},
+        # {"title": "设置", "url": "#"},
         {"title": "意见反馈", "url": generate_menu_auth_url("web_patient:feedback")},
     ]
 

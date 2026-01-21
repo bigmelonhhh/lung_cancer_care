@@ -5,7 +5,8 @@ from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from users.models import DoctorProfile, PatientProfile
+from users.models import AssistantProfile, DoctorProfile, PatientProfile
+from users import choices
 from health_data.models import ReportUpload, ReportImage, ClinicalEvent, UploadSource
 from core.models import CheckupLibrary
 from web_doctor.views.reports_history_data import handle_reports_history_section, batch_archive_images
@@ -21,14 +22,22 @@ class ImageArchiveIntegrationTest(TestCase):
         # 1. Setup Users
         self.doctor_user = User.objects.create_user(
             username='doctor', 
-            user_type=2,
+            user_type=choices.UserType.DOCTOR,
             phone="13800000000"
         )
         self.doctor_profile = DoctorProfile.objects.create(user=self.doctor_user, name='Dr. Test')
+
+        self.assistant_user = User.objects.create_user(
+            username="assistant",
+            user_type=choices.UserType.ASSISTANT,
+            phone="13800000001",
+        )
+        self.assistant_profile = AssistantProfile.objects.create(user=self.assistant_user, name="小桃妖")
+        self.assistant_profile.doctors.add(self.doctor_profile)
         
         self.patient_user = User.objects.create_user(
             username='patient', 
-            user_type=1,
+            user_type=choices.UserType.PATIENT,
             wx_openid="test_openid"
         )
         self.patient = PatientProfile.objects.create(user=self.patient_user, name='Test Patient')
@@ -186,6 +195,31 @@ class ImageArchiveIntegrationTest(TestCase):
         img2_display = next(img for img in updated_archives['images'] if img['id'] == self.img2.id)
         self.assertEqual(img2_display['category'], "复查-胸部CT")
 
+    def test_batch_archive_flow_assistant_sets_archiver_name(self):
+        payload = {
+            "updates": [
+                {
+                    "image_id": self.img1.id,
+                    "category": "门诊",
+                    "report_date": "2023-05-01",
+                }
+            ]
+        }
+        request = self.factory.post(
+            f"/doctor/workspace/patient/{self.patient.id}/reports/archive/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        request.user = self.assistant_user
+
+        response = batch_archive_images(request, self.patient.id)
+        self.assertEqual(response.status_code, 200)
+
+        self.img1.refresh_from_db()
+        self.assertIsNotNone(self.img1.clinical_event_id)
+        event = ClinicalEvent.objects.get(id=self.img1.clinical_event_id)
+        self.assertEqual(event.archiver_name, "小桃妖")
+
     def test_archive_error_handling(self):
         """
         Integration Test: Verify error handling for invalid data.
@@ -210,9 +244,8 @@ class ImageArchiveIntegrationTest(TestCase):
         
         response = batch_archive_images(request, self.patient.id)
         
-        # Should return 400 because no valid updates could be parsed
         self.assertEqual(response.status_code, 400)
-        self.assertIn(b'\xe6\x97\xa0\xe6\x9c\x89\xe6\x95\x88\xe6\x9b\xb4\xe6\x96\xb0\xe6\x95\xb0\xe6\x8d\xae', response.content) # "无有效更新数据" in utf-8 bytes
+        self.assertIn("报告日期格式错误".encode("utf-8"), response.content)
 
     def test_archive_permission_denied(self):
         """

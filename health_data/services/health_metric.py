@@ -437,6 +437,12 @@ class HealthMetricService:
         # 2. 每页数量上限，防止单页数据量过大
         page_size = min(page_size, 100)
 
+        tz = timezone.get_current_timezone()
+        if start_date and timezone.is_naive(start_date):
+            start_date = timezone.make_aware(start_date, tz)
+        if end_date and timezone.is_naive(end_date):
+            end_date = timezone.make_aware(end_date, tz)
+
         # 3. 查询数据库
         qs = HealthMetric.objects.filter(
             patient_id=patient_id, metric_type=metric_type

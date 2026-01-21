@@ -257,6 +257,29 @@ class ReportServiceTest(TestCase):
         self.assertEqual(images[0].archived_by, self.doctor_profile)
         self.assertEqual(images[0].clinical_event_id, images[1].clinical_event_id)
         self.assertEqual(images[0].checkup_item, self.checkup_item)
+        event = ClinicalEvent.objects.get(id=images[0].clinical_event_id)
+        self.assertEqual(event.archiver_name, self.doctor_profile.name)
+
+    def test_archive_images_sets_archiver_name(self):
+        upload = self._create_upload(images=["https://example.com/a.png"])
+        image = upload.images.first()
+        updates = [
+            {
+                "image_id": image.id,
+                "record_type": ReportImage.RecordType.OUTPATIENT,
+                "report_date": date(2025, 2, 1),
+            }
+        ]
+        updated = ReportArchiveService.archive_images(
+            self.doctor_profile,
+            updates,
+            archiver_name="小桃妖",
+        )
+        self.assertEqual(updated, 1)
+        image.refresh_from_db()
+        self.assertIsNotNone(image.clinical_event_id)
+        event = ClinicalEvent.objects.get(id=image.clinical_event_id)
+        self.assertEqual(event.archiver_name, "小桃妖")
 
     def test_archive_images_validation(self):
         upload = self._create_upload()
