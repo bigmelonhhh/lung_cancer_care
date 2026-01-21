@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, Http404
 from django.shortcuts import render
 from users.decorators import check_doctor_or_assistant
 from web_doctor.views.workspace import _get_workspace_identities, _get_workspace_patients, get_user_display_name
@@ -157,5 +157,6 @@ def patient_todo_sidebar(request: HttpRequest, patient_id: int) -> HttpResponse:
         {
             "todo_list": todo_page.object_list,
             "current_patient": patient,
+            "todo_total": todo_page.paginator.count,
         },
     )

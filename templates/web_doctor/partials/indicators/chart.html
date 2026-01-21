@@ -114,7 +114,24 @@
                 itemStyle: {
                     color: '{{ s.color }}'
                 },
-                data: {{ s.data|safe }}
+                data: {{ s.data|safe }}{% if s.baseline %},
+                // 基线值存在时，使用 markLine 绘制水平基线（每条 series 独立判断）
+                markLine: {
+                    silent: true,
+                    symbol: ['none', 'none'],
+                    lineStyle: {
+                        type: 'dashed',
+                        width: 1,
+                        opacity: 0.6,
+                        color: '{{ s.color }}'
+                    },
+                    label: {
+                        show: false
+                    },
+                    data: [
+                        { yAxis: {{ s.baseline }} }
+                    ]
+                }{% endif %}
             },
             {% endfor %}
         ];

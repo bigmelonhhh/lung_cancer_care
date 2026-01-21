@@ -83,6 +83,13 @@
   2. 页面加载 -> 检查 storage -> 提示回填。
   3. 提交成功 (Success) -> 务必清除对应的 `localStorage`。
 
+### 3.4 指标图表基线值（ECharts markLine）
+
+- **基线来源**：统一读取 `PatientProfile.baseline_*` 字段（如 `baseline_blood_oxygen`、`baseline_weight` 等；血压为 `baseline_blood_pressure_sbp/dbp`）。
+- **下发方式**：后端在 `build_indicators_context` 中将基线值挂到 `chart.series[].baseline`，与现有图表数据结构保持一致。
+- **渲染方式**：前端折线图使用 ECharts `series.markLine` 绘制水平虚线基线。
+- **显示规则**：每条曲线独立判断；仅当对应 `baseline` 存在时才显示基线（血压两条曲线可分别显示/隐藏）。
+
 ## 4. 特定业务场景规范
 
 ### 4.1 微信生态集成

@@ -153,16 +153,18 @@ class PatientServiceTests(TestCase):
         self.patient_profile.refresh_from_db()
         self.assertEqual(self.patient_profile.name, "John Doe (Edited by Family)")
         
-    def test_edit_by_unauthorized_user_fails(self):
-        """An unauthorized user (e.g., Sales) cannot edit the profile."""
+    def test_edit_by_unauthorized_user_success(self):
+        """当前权限校验已屏蔽：未授权用户也可以编辑档案。"""
         update_data = {"name": "Unauthorized Update", "phone": "18600000001"}
+        updated_profile = self.service.save_patient_profile(
+            user=self.unauthorized_user,
+            data=update_data,
+            profile_id=self.patient_profile.id,
+        )
 
-        with self.assertRaisesRegex(ValidationError, "您没有权限修改此患者的档案。"):
-            self.service.save_patient_profile(
-                user=self.unauthorized_user,
-                data=update_data,
-                profile_id=self.patient_profile.id,
-            )
+        self.patient_profile.refresh_from_db()
+        self.assertEqual(updated_profile.id, self.patient_profile.id)
+        self.assertEqual(self.patient_profile.name, "Unauthorized Update")
 
     def test_edit_non_existent_profile_fails(self):
         """Editing a profile with a non-existent ID fails."""

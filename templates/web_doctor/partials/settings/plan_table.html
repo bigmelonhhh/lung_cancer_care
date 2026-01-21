@@ -1,4 +1,5 @@
 {# 单个疗程的计划视图：用药 + 复查 + 随访 #}
+{% load plan_dates %}
 
 <div id="plan-table-container" class="overflow-x-auto mt-3">
   <table class="w-full text-left border-collapse">
@@ -8,7 +9,14 @@
         <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
         <th class="px-2 py-3 font-semibold w-24">默认频次</th>
         {% for i in "x"|rjust:"21" %}
-        <th class="px-1 py-3 font-medium text-center text-[10px] text-slate-400 w-8">D{{ forloop.counter }}</th>
+        <th
+          class="cursor-pointer px-1 py-3 font-medium text-center w-8 {% if forloop.counter == 1 or forloop.counter == 8 or forloop.counter == 15 %}text-sm text-slate-800{% else %}text-[10px] text-slate-400{% endif %} {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}"
+          data-plan-day="{{ forloop.counter }}"
+          data-plan-label="D{{ forloop.counter }}"
+          data-plan-date="{% if cycle and cycle.start_date %}{{ cycle.start_date|add_days:forloop.counter0|date:'m/d' }}{% endif %}"
+        >
+          D{{ forloop.counter }}
+        </th>
         {% endfor %}
       </tr>
     </thead>
@@ -113,4 +121,166 @@
       {% endwith %}
     </tbody>
   </table>
+
+  <div
+    id="plan-day-tooltip"
+    class="fixed z-50 hidden max-w-[260px] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg opacity-0 translate-y-1 transition-opacity transition-transform duration-150 sm:max-w-[320px] sm:text-sm"
+    role="tooltip"
+    aria-hidden="true"
+  >
+    <div class="flex items-center justify-between gap-3">
+      <div class="font-semibold text-slate-900" data-plan-tooltip-title></div>
+      <div class="text-slate-500 font-medium tabular-nums" data-plan-tooltip-date></div>
+    </div>
+    <div class="mt-1 text-[11px] text-slate-500 sm:text-xs" data-plan-tooltip-desc></div>
+  </div>
 </div>
+
+<script>
+  (function() {
+    if (window.__planDayTooltipBound) return;
+    window.__planDayTooltipBound = true;
+
+    var showDelayMs = 300;
+    var hideAfterMs = 160;
+    var activeTarget = null;
+    var showTimer = null;
+    var hideTimer = null;
+
+    function getTooltipEl() {
+      return document.getElementById('plan-day-tooltip');
+    }
+
+    function clearTimers() {
+      if (showTimer) {
+        clearTimeout(showTimer);
+        showTimer = null;
+      }
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function setTooltipContent(tooltipEl, targetEl) {
+      var label = targetEl.getAttribute('data-plan-label') || '';
+      var date = targetEl.getAttribute('data-plan-date') || '';
+      var titleEl = tooltipEl.querySelector('[data-plan-tooltip-title]');
+      var dateEl = tooltipEl.querySelector('[data-plan-tooltip-date]');
+      var descEl = tooltipEl.querySelector('[data-plan-tooltip-desc]');
+
+      if (titleEl) titleEl.textContent = label;
+      if (dateEl) dateEl.textContent = date ? date : '--/--';
+      if (descEl) descEl.textContent = '基于当前选中的疗程开始日期推算（按天序间隔至结束日期）';
+    }
+
+    function positionTooltip(tooltipEl, targetEl) {
+      var padding = 8;
+      var rect = targetEl.getBoundingClientRect();
+
+      tooltipEl.style.left = '0px';
+      tooltipEl.style.top = '0px';
+      tooltipEl.classList.remove('hidden');
+
+      var tooltipRect = tooltipEl.getBoundingClientRect();
+      var viewportW = window.innerWidth;
+      var viewportH = window.innerHeight;
+
+      var left = rect.left + rect.width / 2 - tooltipRect.width / 2;
+      left = clamp(left, padding, viewportW - tooltipRect.width - padding);
+
+      var top = rect.top - tooltipRect.height - 10;
+      if (top < padding) {
+        top = rect.bottom + 10;
+      }
+      top = clamp(top, padding, viewportH - tooltipRect.height - padding);
+
+      tooltipEl.style.left = Math.round(left) + 'px';
+      tooltipEl.style.top = Math.round(top) + 'px';
+    }
+
+    function showTooltip(targetEl) {
+      var tooltipEl = getTooltipEl();
+      if (!tooltipEl || !targetEl) return;
+
+      setTooltipContent(tooltipEl, targetEl);
+      positionTooltip(tooltipEl, targetEl);
+
+      tooltipEl.setAttribute('aria-hidden', 'false');
+      tooltipEl.classList.remove('opacity-0', 'translate-y-1');
+      tooltipEl.classList.add('opacity-100', 'translate-y-0');
+    }
+
+    function hideTooltip() {
+      var tooltipEl = getTooltipEl();
+      if (!tooltipEl) return;
+
+      tooltipEl.setAttribute('aria-hidden', 'true');
+      tooltipEl.classList.add('opacity-0', 'translate-y-1');
+      tooltipEl.classList.remove('opacity-100', 'translate-y-0');
+
+      hideTimer = setTimeout(function() {
+        tooltipEl.classList.add('hidden');
+      }, hideAfterMs);
+    }
+
+    function scheduleShow(targetEl) {
+      clearTimers();
+      showTimer = setTimeout(function() {
+        activeTarget = targetEl;
+        showTooltip(targetEl);
+      }, showDelayMs);
+    }
+
+    function scheduleHide(targetEl) {
+      if (targetEl && activeTarget && targetEl !== activeTarget) return;
+      clearTimers();
+      hideTooltip();
+      activeTarget = null;
+    }
+
+    document.addEventListener('mouseover', function(e) {
+      var cell = e.target && e.target.closest ? e.target.closest('[data-plan-day]') : null;
+      if (!cell) return;
+      scheduleShow(cell);
+    });
+
+    document.addEventListener('mouseout', function(e) {
+      var cell = e.target && e.target.closest ? e.target.closest('[data-plan-day]') : null;
+      if (!cell) return;
+      var related = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('[data-plan-day]') : null;
+      if (related === cell) return;
+      scheduleHide(cell);
+    });
+
+    document.addEventListener('focusin', function(e) {
+      var cell = e.target && e.target.closest ? e.target.closest('[data-plan-day]') : null;
+      if (!cell) return;
+      scheduleShow(cell);
+    });
+
+    document.addEventListener('focusout', function(e) {
+      var cell = e.target && e.target.closest ? e.target.closest('[data-plan-day]') : null;
+      if (!cell) return;
+      scheduleHide(cell);
+    });
+
+    window.addEventListener('scroll', function() {
+      if (!activeTarget) return;
+      var tooltipEl = getTooltipEl();
+      if (!tooltipEl) return;
+      positionTooltip(tooltipEl, activeTarget);
+    }, true);
+
+    window.addEventListener('resize', function() {
+      if (!activeTarget) return;
+      var tooltipEl = getTooltipEl();
+      if (!tooltipEl) return;
+      positionTooltip(tooltipEl, activeTarget);
+    });
+  })();
+</script>

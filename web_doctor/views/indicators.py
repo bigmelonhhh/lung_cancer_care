@@ -130,7 +130,7 @@ def build_indicators_context(
         
     date_strs = [(start_date + timedelta(days=i)).strftime(date_fmt) for i in range(delta_days + 1)]
 
-    # 2. 获取各指标数据
+    # 2. 获取常规指标数据
     charts = {}
 
     def get_daily_values(metric_type, value_key='value_main'):
@@ -140,8 +140,8 @@ def build_indicators_context(
             metric_type=metric_type,
             start_date=start_dt,
             end_date=end_dt,
-            page_size=2000, # 足够大以覆盖数据
-            sort_order='asc' # 按时间正序
+            page_size=2000, 
+            sort_order='asc' 
         )
         
         data_map = {}
@@ -160,7 +160,14 @@ def build_indicators_context(
         "id": "chart-spo2",
         "title": "静息血氧 SpO2 (%)",
         "dates": date_strs,
-        "series": [{"name": "静息血氧", "data": spo2_data, "color": "#3b82f6"}],
+        "series": [
+            {
+                "name": "静息血氧",
+                "data": spo2_data,
+                "color": "#3b82f6",
+                "baseline": patient.baseline_blood_oxygen,
+            }
+        ],
         "y_min": 80,
         "y_max": 100
     }
@@ -173,8 +180,18 @@ def build_indicators_context(
         "title": "血压 收缩压/舒张压 (mmHg)",
         "dates": date_strs,
         "series": [
-            {"name": "收缩压", "data": bp_sbp, "color": "#3b82f6"},
-            {"name": "舒张压", "data": bp_dbp, "color": "#10b981"}
+            {
+                "name": "收缩压",
+                "data": bp_sbp,
+                "color": "#3b82f6",
+                "baseline": patient.baseline_blood_pressure_sbp,
+            },
+            {
+                "name": "舒张压",
+                "data": bp_dbp,
+                "color": "#10b981",
+                "baseline": patient.baseline_blood_pressure_dbp,
+            }
         ],
         "y_min": 40,
         "y_max": 220
@@ -186,7 +203,14 @@ def build_indicators_context(
         "id": "chart-hr",
         "title": "静息心率 (次/min)",
         "dates": date_strs,
-        "series": [{"name": "静息心率", "data": hr_data, "color": "#3b82f6"}],
+        "series": [
+            {
+                "name": "静息心率",
+                "data": hr_data,
+                "color": "#3b82f6",
+                "baseline": patient.baseline_heart_rate,
+            }
+        ],
         "y_min": 40,
         "y_max": 180
     }
@@ -197,7 +221,14 @@ def build_indicators_context(
         "id": "chart-weight",
         "title": "体重 (KG)",
         "dates": date_strs,
-        "series": [{"name": "体重", "data": weight_data, "color": "#3b82f6"}],
+        "series": [
+            {
+                "name": "体重",
+                "data": weight_data,
+                "color": "#3b82f6",
+                "baseline": patient.baseline_weight,
+            }
+        ],
         "y_min": 30,
         "y_max": 150
     }
@@ -208,7 +239,14 @@ def build_indicators_context(
         "id": "chart-temp",
         "title": "体温 (℃)",
         "dates": date_strs,
-        "series": [{"name": "体温", "data": temp_data, "color": "#3b82f6"}],
+        "series": [
+            {
+                "name": "体温",
+                "data": temp_data,
+                "color": "#3b82f6",
+                "baseline": patient.baseline_body_temperature,
+            }
+        ],
         "y_min": 34,
         "y_max": 42
     }
@@ -219,7 +257,14 @@ def build_indicators_context(
         "id": "chart-steps",
         "title": "步数",
         "dates": date_strs,
-        "series": [{"name": "步数", "data": steps_data, "color": "#3b82f6"}],
+        "series": [
+            {
+                "name": "步数",
+                "data": steps_data,
+                "color": "#3b82f6",
+                "baseline": patient.baseline_steps,
+            }
+        ],
         "y_min": 0,
         "y_max": 30000 
     }

@@ -73,7 +73,7 @@
   </td>
   {% for i in "x"|rjust:"21" %}
   {% with day=forloop.counter %}
-  <td class="px-0.5 py-3 text-center">
+  <td class="px-0.5 py-3 text-center {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}">
     <form method="post">
       {% csrf_token %}
       <input

@@ -89,12 +89,12 @@ def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientPr
     for patient in patients:
         # 1. 查询待办消息总数
         try:
-            todo_page = TodoListService.get_todo_page(
+            todo_page = TodoListService.get_todo_page( 
                 user=user,
                 patient_id=patient.id,
                 status="pending",
                 page=1,
-                size=100
+                size=999
             )
             patient.todo_count = todo_page.paginator.count
         except Exception as e:
@@ -197,10 +197,14 @@ def patient_workspace(request: HttpRequest, patient_id: int) -> HttpResponse:
         page=1,
         size=5
     )
-    
+    patient.todo_count = todo_page.paginator.count
     todo_sidebar_html = render_to_string(
         "web_doctor/partials/todo_list_sidebar.html",
-        {"todo_list": todo_page.object_list, "current_patient": patient},
+        {
+            "todo_list": todo_page.object_list,
+            "current_patient": patient,
+            "todo_total": todo_page.paginator.count,
+        },
         request=request
     )
     

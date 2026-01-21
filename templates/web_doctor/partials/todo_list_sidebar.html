@@ -6,7 +6,7 @@
             {% else %}
                 患者待办
             {% endif %}
-            <span class="text-rose-500">({{ todo_list|length|default:0 }})</span>
+            <span class="text-rose-500">({% if todo_total %}{{ todo_total }}{% else %}{{ todo_list|length|default:0 }}{% endif %})</span>
         </h3>
         <a href="{% if current_patient %}{% url 'web_doctor:doctor_todo_list' %}?patient_id={{ current_patient.id }}{% else %}javascript:void(0){% endif %}" 
            {% if not current_patient %}onclick="alert('请先选择患者'); return false;"{% endif %}
