@@ -24,7 +24,6 @@
                         {% if patient.consult_count > 99 %}(99+){% else %}({{ patient.consult_count|default:0 }}){% endif %}
                     </span>
                 </div>
-                <p class="text-sm text-gray-400 mt-0.5">{{ patient.phone }}</p>
             </button>
         </li>
     {% endfor %}

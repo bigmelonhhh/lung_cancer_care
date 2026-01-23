@@ -86,7 +86,7 @@
                         </div>
                         
                         <!-- Time -->
-                        <span class="text-[10px] text-slate-400 shrink-0 mb-1" x-text="formatTime(msg.created_at)"></span>
+                        <span class="text-[10px] text-slate-400 shrink-0 mb-1" x-text="msg.created_at_display || formatTime(msg.created_at)"></span>
                     </div>
                     
                     <!-- Status -->
@@ -360,7 +360,13 @@
             formatTime(isoStr) {
                 if (!isoStr) return '';
                 const date = new Date(isoStr);
-                return date.getHours().toString().padStart(2, '0') + ':' + date.getMinutes().toString().padStart(2, '0');
+                const pad = (n) => String(n).padStart(2, '0');
+                const yyyy = date.getFullYear();
+                const mm = pad(date.getMonth() + 1);
+                const dd = pad(date.getDate());
+                const hh = pad(date.getHours());
+                const min = pad(date.getMinutes());
+                return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
             },
             
             previewImage(url) {

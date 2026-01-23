@@ -274,7 +274,7 @@ class ConsultationRecordsTests(TestCase):
         self.assertEqual(new_report["interpretation"], "New Remarks")
 
     def test_uploader_display_logic(self):
-        """测试上传人信息显示逻辑：医生录入显示医生名，患者上传显示患者名"""
+        """测试上传人信息显示逻辑：始终展示患者姓名"""
         request = self.factory.get('/doctor/workspace/reports?tab=records')
         request.user = self.doctor_user
         
@@ -285,12 +285,10 @@ class ConsultationRecordsTests(TestCase):
         
         # 1. Check Doctor Created Event (event1)
         report1 = next(r for r in reports if r["id"] == self.event1.id)
-        # created_by_doctor is set to self.doctor ("Test Doctor")
-        self.assertEqual(report1["uploader_info"]["name"], "Test Doctor")
+        self.assertEqual(report1["uploader_info"]["name"], "Test Patient")
         
         # 2. Check Patient/Unknown Created Event (event2)
         report2 = next(r for r in reports if r["id"] == self.event2.id)
-        # created_by_doctor is None, should fallback to patient name ("Test Patient")
         self.assertEqual(report2["uploader_info"]["name"], "Test Patient")
 
     def test_uploader_prefers_archiver_name_for_images_area(self):
@@ -324,7 +322,8 @@ class ConsultationRecordsTests(TestCase):
 
         reports = context.get("reports_page").object_list
         mapped = next(r for r in reports if r["id"] == event.id)
-        self.assertEqual(mapped["uploader_info"]["name"], "小助理")
+        self.assertEqual(mapped["archiver"], "小助理")
+        self.assertEqual(mapped["uploader_info"]["name"], "Test Patient")
         self.assertEqual(mapped["image_count"], 2)
 
     def test_uploader_pagination_consistency(self):
@@ -356,7 +355,8 @@ class ConsultationRecordsTests(TestCase):
         self.assertEqual(context1["reports_page"].number, 1)
         for r in page1_reports:
             if r["id"] in created_ids:
-                self.assertIn(r["uploader_info"]["name"], ("归档人A", "归档人B"))
+                self.assertIn(r["archiver"], ("归档人A", "归档人B"))
+                self.assertEqual(r["uploader_info"]["name"], "Test Patient")
 
         request2 = self.factory.get("/doctor/workspace/reports?tab=records&records_page=2")
         request2.user = self.doctor_user
@@ -366,4 +366,5 @@ class ConsultationRecordsTests(TestCase):
         self.assertEqual(context2["reports_page"].number, 2)
         for r in page2_reports:
             if r["id"] in created_ids:
-                self.assertIn(r["uploader_info"]["name"], ("归档人A", "归档人B"))
+                self.assertIn(r["archiver"], ("归档人A", "归档人B"))
+                self.assertEqual(r["uploader_info"]["name"], "Test Patient")

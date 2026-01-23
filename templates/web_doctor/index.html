@@ -24,9 +24,13 @@
     </main>
 
     <aside class="w-80 flex flex-col border-l border-slate-200 bg-white shrink-0 z-10">
-        {% include "web_doctor/partials/todo_list_sidebar.html" %}
+        <div class="flex flex-col h-full min-h-0">
+            {% include "web_doctor/partials/todo_list_sidebar.html" %}
 
-        {% include "web_doctor/partials/chat.html" %}
+            <div class="flex-1 min-h-0">
+                {% include "web_doctor/partials/chat.html" %}
+            </div>
+        </div>
     </aside>
 
 </div>

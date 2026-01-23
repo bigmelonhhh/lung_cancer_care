@@ -1166,10 +1166,6 @@ video {
   height: 350px;
 }
 
-.h-\[440px\] {
-  height: 440px;
-}
-
 .h-\[80px\] {
   height: 80px;
 }
@@ -1236,6 +1232,10 @@ video {
 
 .max-h-screen {
   max-height: 100vh;
+}
+
+.min-h-0 {
+  min-height: 0px;
 }
 
 .min-h-40 {
@@ -1999,6 +1999,10 @@ video {
 
 .overflow-x-hidden {
   overflow-x: hidden;
+}
+
+.overscroll-contain {
+  overscroll-behavior: contain;
 }
 
 .scroll-smooth {
@@ -3333,6 +3337,10 @@ video {
 
 .text-\[11px\] {
   font-size: 11px;
+}
+
+.text-\[13px\] {
+  font-size: 13px;
 }
 
 .text-\[15px\] {
@@ -5018,6 +5026,10 @@ video {
     flex-wrap: nowrap;
   }
 
+  .lg\:p-4 {
+    padding: 1rem;
+  }
+
   .lg\:p-5 {
     padding: 1.25rem;
   }
@@ -5025,5 +5037,36 @@ video {
   .lg\:px-6 {
     padding-left: 1.5rem;
     padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1536px) {
+  .\32xl\:h-5 {
+    height: 1.25rem;
+  }
+
+  .\32xl\:h-6 {
+    height: 1.5rem;
+  }
+
+  .\32xl\:w-5 {
+    width: 1.25rem;
+  }
+
+  .\32xl\:w-6 {
+    width: 1.5rem;
+  }
+
+  .\32xl\:p-5 {
+    padding: 1.25rem;
+  }
+
+  .\32xl\:text-base {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  .\32xl\:leading-7 {
+    line-height: 1.75rem;
   }
 }

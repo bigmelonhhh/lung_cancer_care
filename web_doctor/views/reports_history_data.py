@@ -122,10 +122,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
     record_type_display = record_type_map.get(event.event_type, "-后台接口未定义")
 
     # 5. 处理上传人信息
-    # 业务逻辑变更：诊疗记录列表项的“图片区上传人”优先展示归档人；若归档人缺失/未知，则回退展示患者姓名。
     uploader_name = event.patient.name
-    if archiver_name != "-后台接口未定义":
-        uploader_name = archiver_name
 
     return {
         "id": event.id,
@@ -452,15 +449,14 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     service_updates = []
     checkup_libs = {lib.name: lib.id for lib in CheckupLibrary.objects.all()}
     
-    for update in updates:
+    for idx, update in enumerate(updates):
         img_id = update.get("image_id")
         category_str = update.get("category")
         report_date_str = update.get("report_date")
-        
         if not img_id or not category_str or not report_date_str:
-            continue
+            return HttpResponse(f"第{idx + 1}条归档数据缺少必填字段", status=400)
             
-        parts = category_str.split("-")
+        parts = str(category_str).split("-")
         type_name = parts[0]
         sub_name = parts[1] if len(parts) > 1 else None
         
@@ -473,17 +469,20 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
             record_type = ReportImage.RecordType.CHECKUP
         
         if record_type is None:
-            continue
+            return HttpResponse(f"第{idx + 1}条归档数据类目无效", status=400)
             
         checkup_item_id = None
         if record_type == ReportImage.RecordType.CHECKUP:
-            if sub_name:
-                checkup_item_id = checkup_libs.get(sub_name)
+            if not sub_name:
+                return HttpResponse(f"第{idx + 1}条归档数据缺少复查二级分类", status=400)
+            checkup_item_id = checkup_libs.get(sub_name) or checkup_libs.get("其他")
+            if not checkup_item_id:
+                return HttpResponse(f"第{idx + 1}条归档数据复查二级分类无效", status=400)
         
         try:
             report_date = datetime.strptime(report_date_str, "%Y-%m-%d").date()
         except ValueError:
-            continue
+            return HttpResponse(f"第{idx + 1}条归档数据报告日期格式错误", status=400)
             
         service_updates.append({
             "image_id": img_id,
@@ -499,20 +498,23 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     assistant_profile = getattr(request.user, "assistant_profile", None)
     
     archiver = None
+    archiver_name = "未知"
     
     if doctor_profile:
         archiver = doctor_profile
+        archiver_name = doctor_profile.name or "未知"
     elif assistant_profile:
         related_doctors = assistant_profile.doctors.all()
         if related_doctors.exists():
             archiver = related_doctors.first()
+            archiver_name = assistant_profile.name or "未知"
         else:
             return HttpResponse("助理账号未关联任何医生，无法归档", status=403)
     else:
-         return HttpResponse("非医生/助理账号无法归档", status=403)
+        return HttpResponse("非医生/助理账号无法归档", status=403)
          
     try:
-        ReportArchiveService.archive_images(archiver, service_updates)
+        ReportArchiveService.archive_images(archiver, service_updates, archiver_name=archiver_name)
     except Exception as e:
         logger.exception("归档失败")
         return HttpResponse(f"归档失败: {str(e)}", status=400)
@@ -555,12 +557,15 @@ def patient_report_update(request: HttpRequest, patient_id: int, report_id: int)
     doctor_profile = getattr(request.user, "doctor_profile", None)
     assistant_profile = getattr(request.user, "assistant_profile", None)
     archiver = None
+    archiver_name = "未知"
     if doctor_profile:
         archiver = doctor_profile
+        archiver_name = doctor_profile.name or "未知"
     elif assistant_profile:
         related_doctors = assistant_profile.doctors.all()
         if related_doctors.exists():
             archiver = related_doctors.first()
+            archiver_name = assistant_profile.name or "未知"
         else:
             return HttpResponse("助理账号未关联任何医生，无法归档", status=403)
     else:
@@ -617,7 +622,7 @@ def patient_report_update(request: HttpRequest, patient_id: int, report_id: int)
 
     if service_updates:
         try:
-            ReportArchiveService.archive_images(archiver, service_updates)
+            ReportArchiveService.archive_images(archiver, service_updates, archiver_name=archiver_name)
             updated_any = True
         except ValidationError as e:
             return HttpResponse(str(e), status=400)

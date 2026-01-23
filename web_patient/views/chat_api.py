@@ -2,10 +2,21 @@ import json
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_GET, require_POST
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from chat.services.chat import ChatService
 from chat.models import MessageContentType
 from users.decorators import check_patient, auto_wechat_login
 from web_patient.views.chat import get_patient_chat_title
+
+
+def _format_datetime_for_display(dt) -> str:
+    if not dt:
+        return ""
+    try:
+        local_dt = timezone.localtime(dt)
+    except Exception:
+        local_dt = dt
+    return local_dt.strftime("%Y-%m-%d %H:%M")
 
 @require_GET
 @auto_wechat_login
@@ -43,6 +54,7 @@ def list_messages(request: HttpRequest):
                 'text_content': msg.text_content or "",
                 'image_url': msg.image.url if msg.image else '',
                 'created_at': msg.created_at.isoformat(),
+                'created_at_display': _format_datetime_for_display(msg.created_at),
             })
             
         return JsonResponse({'status': 'success', 'messages': data})
@@ -70,7 +82,8 @@ def send_text_message(request: HttpRequest):
             'status': 'success',
             'message': {
                 'id': message.id,
-                'created_at': message.created_at.isoformat()
+                'created_at': message.created_at.isoformat(),
+                'created_at_display': _format_datetime_for_display(message.created_at),
             }
         })
     except ValidationError as e:
@@ -97,6 +110,7 @@ def upload_image_message(request: HttpRequest):
             'message': {
                 'id': message.id,
                 'created_at': message.created_at.isoformat(),
+                'created_at_display': _format_datetime_for_display(message.created_at),
                 'image_url': message.image.url
             }
         })

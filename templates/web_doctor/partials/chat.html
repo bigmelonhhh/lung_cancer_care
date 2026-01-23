@@ -1,10 +1,10 @@
-<div class="flex flex-col flex-1/2" 
+<div class="flex flex-col flex-1 min-h-0" 
      x-data="chatWidget()" 
      x-init="init()"
      @update-chat-patient.window="handlePatientSelect($event.detail)">
     
     <!-- 顶部标题栏 -->
-    <div class="px-4 py-3 border-b border-slate-50 bg-slate-50/50 flex  flex-col">
+    <div class="px-4 py-3 border-b border-slate-200 bg-slate-50/50 flex flex-col doctor-chat-header">
         <div class="flex flex-col">
             <h3 class="font-semibold text-slate-700 text-sm">在线沟通</h3>
             <span class="text-xs text-slate-400" x-text="currentUserInfo"></span>
@@ -36,7 +36,7 @@
     </div>
 
     <!-- 空状态 -->
-    <div x-show="!patientId" class="pt-10 flex-1 flex flex-col items-center justify-center text-slate-300 text-sm" data-test="empty-state">
+    <div x-show="!patientId" class="pt-10 flex-1 min-h-0 flex flex-col items-center justify-center text-slate-300 text-sm" data-test="empty-state">
         <svg class="w-12 h-12 mb-2 opacity-50" fill="#10b981" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
         </svg>
@@ -44,14 +44,14 @@
     </div>
 
     <!-- 聊天内容区域 -->
-    <div x-show="patientId" class=" flex flex-col h-[440px] relative" style="display: none;">
+    <div x-show="patientId" class="flex flex-col flex-1 min-h-0 relative" style="display: none;">
         
         <!-- 消息列表 -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages-container" x-ref="messagesContainer">
+        <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 lg:p-4 2xl:p-5 space-y-4 doctor-chat-scroll" id="chat-messages-container" x-ref="messagesContainer">
             <template x-for="msg in messages" :key="msg.id">
                 <div class="flex flex-col" :class="isMyMessage(msg) ? 'items-end' : 'items-start'">
                     <!-- 时间戳 (可选: 仅当时间间隔较大时显示) -->
-                    <div class="text-xs text-slate-300 mb-1 text-center w-full" x-text="formatTime(msg.created_at)"></div>
+                    <div class="text-xs text-slate-300 mb-1 text-center w-full" x-text="msg.created_at_display || formatTime(msg.created_at)"></div>
                     
                     <div class="flex max-w-[95%]" :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'">
                         <!-- 头像/名字 -->
@@ -68,7 +68,7 @@
                              :class="isMyMessage(msg) ? 'bg-emerald-500 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none'">
                             
                             <!-- 文本内容 -->
-                            <p x-show="msg.content_type === 1" class="whitespace-pre-wrap break-words text-[15px] leading-6" x-text="msg.text_content"></p>
+                            <p x-show="msg.content_type === 1" class="whitespace-pre-wrap break-words text-[15px] leading-6 2xl:text-base 2xl:leading-7" x-text="msg.text_content"></p>
                             
                             <!-- 图片内容 -->
                             <div x-show="msg.content_type === 2">
@@ -87,26 +87,30 @@
                 </div>
             </template>
             
-            <div x-show="messages.length === 0 && !loading" class="text-center text-slate-300 text-sm py-8">
-                暂无聊天记录
+            <div x-show="messages.length === 0 && !loading" class="min-h-full flex flex-col items-center justify-center text-slate-300 text-sm py-8">
+                <svg class="w-10 h-10 mb-2 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h8M8 14h5m-7 7l2.4-3.2A9 9 0 1 1 21 12a9 9 0 0 1-12.6 8.8L6 21z"></path>
+                </svg>
+                <div>暂无聊天记录</div>
             </div>
         </div>
 
         <!-- 底部输入栏 -->
-        <div class="p-3 border-t border-slate-100 bg-white" x-show="canChat">
-            <div class="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 transition-all">
+        <div class="doctor-chat-input" x-show="canChat" style="display: none;">
+        <div class="h-full p-3 border-t border-slate-100 bg-white">
+            <div class="flex items-end gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 transition-all">
                 <textarea 
                     x-model="inputText" 
                     @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
-                    class="flex-1 bg-transparent border-none outline-none p-1 text-sm focus:ring-0 resize-none max-h-24 min-h-[24px] " 
+                    class="flex-1 bg-transparent border-none outline-none p-1 text-sm 2xl:text-base focus:ring-0 resize-none max-h-24 min-h-[24px]" 
                     rows="1" 
                     placeholder="输入消息..."
                     data-test="chat-input"></textarea>
                 
                 <!-- 工具栏 -->
-                <div class="flex items-center gap-1 pb-0.5">
+                <div class="flex items-center gap-1 pb-0.5 shrink-0">
                     <button @click="$refs.fileInput.click()" class="p-1.5 text-slate-400 hover:text-emerald-500 rounded-full hover:bg-slate-200 transition-colors" title="发送图片">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-5 h-5 2xl:w-6 2xl:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                         </svg>
                         <input type="file" x-ref="fileInput" class="hidden" accept="image/*" @change="uploadImage($event)">
@@ -116,19 +120,52 @@
                             :disabled="!inputText.trim()"
                             class="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                             data-test="send-btn">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg class="w-4 h-4 2xl:w-5 2xl:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
                         </svg>
                     </button>
                 </div>
             </div>
         </div>
-        
-        <!-- 只读提示 -->
-        <div x-show="!canChat" class="p-3 border-t border-slate-100 bg-slate-50 text-center text-slate-400 text-sm">
         </div>
     </div>
 </div>
+
+<style>
+.doctor-chat-scroll {
+  transition: height 180ms ease, max-height 180ms ease, min-height 180ms ease;
+}
+.doctor-chat-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.9) transparent;
+}
+.doctor-chat-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.doctor-chat-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.doctor-chat-scroll::-webkit-scrollbar-thumb {
+  background-color: rgb(148 163 184 / 0.8);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.doctor-chat-input {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 70px;
+  z-index: 20;
+}
+@media (max-height: 800px) {
+  .doctor-chat-scroll {
+    padding: 12px !important;
+  }
+}
+</style>
 
 <script>
 function chatWidget() {
@@ -140,6 +177,8 @@ function chatWidget() {
         internalLabel: '内部会话',
         internalUnreadCount: 0,
         isDirector: false,
+        canChat: true,
+        debugEnabled: false,
         
         conversations: {
             patient: null,
@@ -170,14 +209,19 @@ function chatWidget() {
         get currentConversationId() {
             return this.conversations[this.activeTab];
         },
-        
-        get canChat() {
-            return this.permissions[this.activeTab];
-        },
 
         async init() {
             // 初始化时获取当前用户信息
             await this.fetchContext();
+            this.debugEnabled = (window.localStorage && window.localStorage.getItem('doctorChatDebug') === '1');
+            this.syncChatPermission('init');
+            this.$watch('activeTab', () => this.syncChatPermission('activeTab'));
+            this.$watch(() => JSON.stringify(this.permissions), () => this.syncChatPermission('permissions'));
+            this.updateLayoutHeights();
+            this._onResize = () => {
+                this.updateLayoutHeights();
+            };
+            window.addEventListener('resize', this._onResize);
             
             // 监听图片上传按钮点击（通过 label 或 JS 触发 input 点击）
             // 上面的 input 已经绑定了 @change
@@ -201,17 +245,19 @@ function chatWidget() {
                         this.conversations.patient = info.patient_conversation_id;
                         this.conversations.internal = info.internal_conversation_id;
                         
-                        this.permissions.patient = info.can_send_patient;
-                        this.permissions.internal = info.can_send_internal;
+                        this.permissions = {
+                            patient: !!info.can_send_patient,
+                            internal: !!info.can_send_internal,
+                        };
                         
                         // 设置未读数
                         this.internalUnreadCount = info.internal_unread_count || 0;
-                        // 判断是否为主任 (根据 role_label 简单判断，或者后端返回明确字段)
-                        this.isDirector = (info.role_label === '主任');
+                        this.isDirector = !!(info.is_director ?? (info.role_label == '主任'));
+                        this.syncChatPermission('fetchContext');
+                        
                     }
                 }
             } catch (e) {
-                console.error('获取上下文失败', e);
                 // Fallback
                 const userType = "{{ request.user.user_type }}";
                 const userName = "{{ request.user.display_name }}";
@@ -229,7 +275,11 @@ function chatWidget() {
             
             // 获取新的上下文（包括动态的内部会话标签）
             await this.fetchContext(this.patientId);
+            this.syncChatPermission('handlePatientSelect');
             
+            this.$nextTick(() => {
+                this.updateLayoutHeights();
+            });
             this.loadMessages();
             this.startPolling();
         },
@@ -246,6 +296,8 @@ function chatWidget() {
             
             this.messages = [];
             this.$nextTick(() => {
+                this.syncChatPermission('switchTab');
+                this.updateLayoutHeights();
                 this.loadMessages();
             });
         },
@@ -258,7 +310,24 @@ function chatWidget() {
             
             this.loading = true;
             try {
-                const msgRes = await fetch(`/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`);
+                const url = `/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`;
+                const msgRes = await fetch(url);
+                if (msgRes.status === 403) {
+                    await this.fetchContext(this.patientId);
+                    if (this.currentConversationId) {
+                        const retryUrl = `/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}`;
+                        const retryRes = await fetch(retryUrl);
+                        const retryData = await retryRes.json();
+                        if (retryData.status === 'success') {
+                            this.messages = retryData.messages;
+                            this.scrollToBottom();
+                            if (this.messages.length > 0) {
+                                this.markRead(this.currentConversationId, this.messages[this.messages.length - 1].id);
+                            }
+                            return;
+                        }
+                    }
+                }
                 const msgData = await msgRes.json();
                 
                 if (msgData.status === 'success') {
@@ -270,7 +339,6 @@ function chatWidget() {
                     }
                 }
             } catch (e) {
-                console.error('加载消息失败', e);
             } finally {
                 this.loading = false;
             }
@@ -279,6 +347,9 @@ function chatWidget() {
         async sendMessage() {
             const content = this.inputText.trim();
             if (!content || !this.patientId) return;
+            if (!this.canChat) {
+                return;
+            }
 
             // 乐观更新
             const tempMsg = {
@@ -327,7 +398,6 @@ function chatWidget() {
                     throw new Error(data.message);
                 }
             } catch (e) {
-                console.error('发送失败', e);
                 this.messages.pop(); // 移除失败消息
                 alert('发送失败: ' + e.message);
             }
@@ -349,12 +419,15 @@ function chatWidget() {
         async pollUnreadCount() {
             try {
                 const res = await fetch(`/doctor/chat/api/messages/unread-count/?conversation_id=${this.conversations.internal}`);
+                if (res.status === 403) {
+                    await this.fetchContext(this.patientId);
+                    return;
+                }
                 const data = await res.json();
                 if (data.status === 'success') {
                     this.internalUnreadCount = data.unread_count;
                 }
             } catch (e) {
-                console.error('Unread poll error', e);
             }
         },
 
@@ -364,7 +437,12 @@ function chatWidget() {
             if (!lastId || String(lastId).startsWith('temp')) return; // 只有临时消息时不轮询增量
 
             try {
-                const res = await fetch(`/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}&after_id=${lastId}`);
+                const url = `/doctor/chat/api/messages/list/?conversation_id=${this.currentConversationId}&after_id=${lastId}`;
+                const res = await fetch(url);
+                if (res.status === 403) {
+                    await this.fetchContext(this.patientId);
+                    return;
+                }
                 const data = await res.json();
                 if (data.status === 'success' && data.messages.length > 0) {
                     // 过滤掉已存在的（以防万一）
@@ -404,6 +482,52 @@ function chatWidget() {
             });
         },
 
+       
+
+        syncChatPermission(reason = '') {
+            const next = !!this.permissions[this.activeTab];
+            const changed = this.canChat !== next;
+            this.canChat = next;
+           
+            if (changed) {
+                this.$nextTick(() => this.updateLayoutHeights());
+            }
+        },
+
+        updateLayoutHeights() {
+            this.$nextTick(() => {
+                const messagesEl = this.$refs.messagesContainer;
+                if (!messagesEl) return;
+
+                const viewportHeight = window.innerHeight || 0;
+                const topNavEl = document.querySelector('header');
+                const topNavHeight = topNavEl ? topNavEl.getBoundingClientRect().height : 64;
+
+                const todoEl = document.getElementById('patient-todo-list');
+                const todoHeight = todoEl ? todoEl.getBoundingClientRect().height : 0;
+
+                const chatHeaderEl = this.$el.querySelector('.doctor-chat-header');
+                const chatHeaderHeight = chatHeaderEl ? chatHeaderEl.getBoundingClientRect().height : 0;
+
+                const rawRemainingHeight = viewportHeight - topNavHeight - todoHeight - chatHeaderHeight;
+                let maxHeight = Math.max(240, Math.min(rawRemainingHeight, viewportHeight));
+                if (maxHeight < 390) {
+                    maxHeight = 280; 
+                }
+
+                if (maxHeight > 500) {
+                    maxHeight = 440; 
+                }
+                
+                messagesEl.style.maxHeight = `${maxHeight}px`;
+                messagesEl.style.height = '';
+                messagesEl.style.minHeight = '';
+                const inputHeight = this.canChat ? 120 : 0;
+                const safeGap = 16;
+                messagesEl.style.setProperty('padding-bottom', `${inputHeight + safeGap}px`, 'important');
+            });
+        },
+
         isMyMessage(msg) {
             return msg.sender_id === this.currentUserId;
         },
@@ -411,7 +535,13 @@ function chatWidget() {
         formatTime(isoString) {
             if (!isoString) return '';
             const date = new Date(isoString);
-            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const pad = (n) => String(n).padStart(2, '0');
+            const yyyy = date.getFullYear();
+            const mm = pad(date.getMonth() + 1);
+            const dd = pad(date.getDate());
+            const hh = pad(date.getHours());
+            const min = pad(date.getMinutes());
+            return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
         },
 
         getAvatarColor(role) {
@@ -466,12 +596,3 @@ function chatWidget() {
     }
 }
 </script>
-
-<!-- 
-@Test Cases:
-1. 空状态测试: 初始加载页面，应显示“请从左侧选择患者开始聊天”提示 (data-test="empty-state" visible)。
-2. 患者选择测试: 模拟触发 update-chat-patient 事件，应隐藏空状态，显示聊天界面，且标题栏显示患者姓名。
-3. 消息发送测试: 在输入框 (data-test="chat-input") 输入文本，点击发送 (data-test="send-btn")，应立即在列表显示新消息。
-4. 角色区分测试: 检查消息列表，自己发送的消息应在右侧 (flex-row-reverse)，对方消息在左侧。
-5. 异常处理测试: 断网情况下发送消息，应弹出 alert 提示失败，并移除临时消息。
--->

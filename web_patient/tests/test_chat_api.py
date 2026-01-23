@@ -65,18 +65,22 @@ class ChatApiTests(TestCase):
             content_type='application/json'
         )
         self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertIn("created_at_display", payload["message"])
         
         # Check DB
         self.assertEqual(Message.objects.count(), 1)
         msg = Message.objects.first()
         self.assertEqual(msg.text_content, content)
         self.assertEqual(msg.sender, self.user)
+        self.assertTrue(timezone.is_aware(msg.created_at))
         
         # List messages
         response = self.client.get(self.list_url)
         data = response.json()
         self.assertEqual(len(data['messages']), 1)
         self.assertEqual(data['messages'][0]['text_content'], content)
+        self.assertIn("created_at_display", data["messages"][0])
 
     def test_send_invalid_content(self):
          # Test sending empty content (assuming service/view validation)

@@ -333,6 +333,7 @@ class ReportArchiveService:
         hospital_name: str = "",
         department_name: str = "",
         interpretation: str = "",
+        archiver_name: str = "",
     ) -> ClinicalEvent:
         """
         【功能说明】
@@ -353,6 +354,7 @@ class ReportArchiveService:
         event = queryset.order_by("-created_at", "-id").first()
         created = False
         if event is None:
+            normalized_archiver_name = (archiver_name or "").strip()[:50] or "未知"
             event = ClinicalEvent.objects.create(
                 patient=patient,
                 event_type=event_type,
@@ -361,6 +363,7 @@ class ReportArchiveService:
                 department_name=department_name,
                 interpretation=interpretation,
                 created_by_doctor=created_by_doctor,
+                archiver_name=normalized_archiver_name,
             )
             created = True
 
@@ -374,6 +377,9 @@ class ReportArchiveService:
                 updates["interpretation"] = interpretation
             if created_by_doctor and event.created_by_doctor is None:
                 updates["created_by_doctor"] = created_by_doctor
+            normalized_archiver_name = (archiver_name or "").strip()[:50]
+            if normalized_archiver_name and normalized_archiver_name != event.archiver_name:
+                updates["archiver_name"] = normalized_archiver_name
             if updates:
                 for key, value in updates.items():
                     setattr(event, key, value)
@@ -409,6 +415,7 @@ class ReportArchiveService:
     def archive_images(
         archiver: DoctorProfile,
         updates: Iterable[Dict[str, object]],
+        archiver_name: Optional[str] = None,
     ) -> int:
         """
         【功能说明】
@@ -417,6 +424,11 @@ class ReportArchiveService:
         updates = list(updates)
         if not updates:
             raise ValidationError("归档更新不能为空。")
+
+        normalized_archiver_name = (archiver_name or "").strip()
+        if not normalized_archiver_name:
+            normalized_archiver_name = (getattr(archiver, "name", None) or "").strip()
+        normalized_archiver_name = normalized_archiver_name[:50] or "未知"
 
         image_ids = [item.get("image_id") for item in updates if item.get("image_id")]
         if not image_ids:
@@ -481,6 +493,7 @@ class ReportArchiveService:
                     event_type=record_type,
                     event_date=report_date,
                     created_by_doctor=archiver,
+                    archiver_name=normalized_archiver_name,
                 )
 
             image.record_type = record_type

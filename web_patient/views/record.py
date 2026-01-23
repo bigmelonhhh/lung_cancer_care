@@ -1054,6 +1054,12 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
             end_date = start_date.replace(month=start_date.month + 1)
         current_month = start_date.strftime("%Y-%m")
 
+    tz = timezone.get_current_timezone()
+    if timezone.is_naive(start_date):
+        start_date = timezone.make_aware(start_date, tz)
+    if timezone.is_naive(end_date):
+        end_date = timezone.make_aware(end_date, tz)
+
     # 分页参数
     page = int(request.GET.get("page", 1))
     limit = int(request.GET.get("limit", 30))
