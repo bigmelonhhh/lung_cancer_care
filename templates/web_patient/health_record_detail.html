@@ -87,7 +87,15 @@
                         <!-- Standard Layout -->
                         <div class="flex items-baseline gap-2">
                             <span class="text-slate-500 font-medium min-w-[3em]">{{ item.label }}{% if item.label|length > 0 %}:{% endif %}</span>
-                            <span class="{% if item.is_large %}text-xl{% else %}text-base{% endif %} font-bold text-slate-900">{{ item.value }}</span>
+                            {% if record_type == 'medical' and item.key == 'medicated' %}
+                                <span class="mt-1 text-lg font-bold text-emerald-600" aria-label="已用药" data-testid="medicated-check">
+                                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                </span>
+                            {% else %}
+                                <span class="{% if item.is_large %}text-xl{% else %}text-base{% endif %} font-bold text-slate-900">{{ item.value }}</span>
+                            {% endif %}
                         </div>
                     {% endif %}
                 {% endfor %}
@@ -95,14 +103,18 @@
 
             <!-- Footer -->
             <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
-                <div>
-                    <button onclick="handleDelete('{{ record.id }}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
-                         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                        删除
-                    </button>
-                </div>
+                {% if record_type != 'review_record' %}
+                    <div>
+                        <button onclick="handleDelete('{{ record.id }}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
+                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            删除
+                        </button>
+                    </div>
+                {% else %}
+                    <div></div>
+                {% endif %}
 
                 {% if record.can_edit %}
                 <button onclick="openEditModal('{{ record.id }}')" class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">
@@ -166,6 +178,7 @@
     const currentTitle = "{{ title }}";
     const patientId = "{{ patient_id }}";
     const currentMonth = "{{ current_month }}";
+    const currentCheckupId = "{{ checkup_id|default:'' }}";
     const detailBaseUrl = "{% url 'web_patient:health_record_detail' %}";
     const recordUrls = {
         temperature: "{% url 'web_patient:record_temperature' %}",
@@ -208,7 +221,8 @@
         
         document.getElementById('loading-spinner').classList.remove('hidden');
         
-        const url = `?type=${currentType}&title=${currentTitle}&patient_id=${patientId}&month=${currentMonth}&page=${nextPage}`;
+        const checkupParam = (currentType === 'review_record' && currentCheckupId) ? `&checkup_id=${encodeURIComponent(currentCheckupId)}` : '';
+        const url = `?type=${currentType}&title=${currentTitle}&patient_id=${patientId}&month=${currentMonth}&page=${nextPage}${checkupParam}`;
         
         fetch(url, {
             headers: {
@@ -266,7 +280,15 @@
                     ${record.data.map(item => `
                         <div class="flex items-baseline gap-2">
                             <span class="text-slate-500 font-medium min-w-[3em]">${item.label}${item.label ? ':' : ''}</span>
-                            <span class="${item.is_large ? 'text-xl' : 'text-base'} font-bold text-slate-900">${item.value}</span>
+                            ${
+                                (currentType === 'medical' && item.key === 'medicated')
+                                  ? `<span class="text-lg font-bold text-emerald-600" aria-label="已用药" data-testid="medicated-check">
+                                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                     </span>`
+                                  : `<span class="${item.is_large ? 'text-xl' : 'text-base'} font-bold text-slate-900">${item.value}</span>`
+                            }
                         </div>
                     `).join('')}
                 </div>`;
@@ -276,6 +298,15 @@
             const sourceIcon = record.is_manual 
                 ? `<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>`
                 : `<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>`;
+
+            const deleteButtonHtml = currentType === 'review_record'
+                ? ''
+                : `<button onclick="handleDelete('${record.id}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                       </svg>
+                       删除
+                   </button>`;
 
             div.innerHTML = `
                 <div class="flex items-center justify-between mb-4 border-b border-slate-50 pb-2">
@@ -292,12 +323,7 @@
                 ${dataHtml}
                 <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
                     <div>
-                         <button onclick="handleDelete('${record.id}')" class="text-slate-400 text-sm hover:text-red-500 px-2 py-1 -ml-2 rounded active:bg-slate-50 transition flex items-center gap-1">
-                             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            删除
-                        </button>
+                        ${deleteButtonHtml}
                     </div>
                     ${record.can_edit ? `
                     <button onclick="openEditModal('${record.id}')" class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">
@@ -390,7 +416,8 @@
     function updateMonthDisplay(input) {
         if (!input.value) return;
         document.getElementById('month-display').innerText = input.value;
-        const newUrl = `?type=${currentType}&title=${encodeURIComponent(currentTitle)}&patient_id=${patientId}&month=${input.value}`;
+        const checkupParam = (currentType === 'review_record' && currentCheckupId) ? `&checkup_id=${encodeURIComponent(currentCheckupId)}` : '';
+        const newUrl = `?type=${currentType}&title=${encodeURIComponent(currentTitle)}&patient_id=${patientId}&month=${input.value}${checkupParam}`;
         window.location.replace(newUrl);
     }
 

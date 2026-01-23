@@ -1,13 +1,17 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.core.paginator import Paginator
 from django.utils import timezone
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.models import MetricType
-from core.models import QuestionnaireCode
+from core.models import QuestionnaireCode, DailyTask
+from core.models.choices import PlanItemCategory, TaskStatus
 from patient_alerts.services.todo_list import TodoListService
 from core.service.tasks import get_daily_plan_summary
+from core.service.checkup import get_active_checkup_library
+from market.service.order import get_paid_orders_for_patient
 import os
 from decimal import Decimal
 from datetime import datetime
@@ -619,13 +623,59 @@ def record_pain(request: HttpRequest) -> HttpResponse:
 @check_patient
 def health_records(request: HttpRequest) -> HttpResponse:
     """
-    【页面说明】健康档案页面 `/p/health/records/`
+    【页面说明】健康档案页面 `/p/health/records/` 
     【功能逻辑】
     1. 展示各项健康指标的记录统计（记录次数、异常次数）。
     2. 支持空状态展示。
     """
     patient = request.patient
     patient_id = patient.id or None
+
+    orders = get_paid_orders_for_patient(patient)
+    selected_package_id = request.GET.get("package_id")
+
+    service_packages = []
+    for order in orders:
+        service_packages.append(
+            {
+                "id": order.id,
+                "name": order.product.name if getattr(order, "product_id", None) else "",
+                "start_date": order.start_date,
+                "end_date": order.end_date,
+                "is_active": False,
+            }
+        )
+
+    selected_package = None
+    if service_packages:
+        if selected_package_id:
+            try:
+                selected_id_int = int(selected_package_id)
+            except (TypeError, ValueError):
+                selected_id_int = None
+            if selected_id_int:
+                selected_package = next(
+                    (pkg for pkg in service_packages if pkg["id"] == selected_id_int), None
+                )
+
+        if not selected_package:
+            selected_package = service_packages[0]
+
+        for pkg in service_packages:
+            if pkg["id"] == selected_package["id"]:
+                pkg["is_active"] = True
+                break
+
+    today = timezone.localdate()
+    if selected_package and selected_package.get("start_date") and selected_package.get("end_date"):
+        start_date = selected_package["start_date"]
+        end_date = selected_package["end_date"]
+    else:
+        start_date = datetime(2000, 1, 1).date()
+        end_date = today
+
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
 
     # 一般检测数据
     health_stats = [
@@ -658,10 +708,6 @@ def health_records(request: HttpRequest) -> HttpResponse:
 
     # 动态获取各项指标的总数
     if patient_id:
-        # 定义异常统计的时间范围（从较早时间到现在，覆盖所有历史）
-        start_date = datetime(2000, 1, 1).date()
-        end_date = timezone.now().date()
-
         metric_type_map = {
             "medical": MetricType.USE_MEDICATED,
             "temperature": MetricType.BODY_TEMPERATURE,
@@ -683,6 +729,8 @@ def health_records(request: HttpRequest) -> HttpResponse:
                         metric_type=m_type,
                         page=1,
                         page_size=1,
+                        start_date=start_dt,
+                        end_date=end_dt,
                     )
                     item["count"] = page_obj.paginator.count
 
@@ -757,10 +805,6 @@ def health_records(request: HttpRequest) -> HttpResponse:
     ]
     # 动态获取各项指标的总数
     if patient_id:
-        # 复用上面定义的时间范围
-        start_date = datetime(2000, 1, 1).date()
-        end_date = timezone.now().date()
-
         metric_type_map_survey = {
             "physical": QuestionnaireCode.Q_PHYSICAL,
             "breath": QuestionnaireCode.Q_BREATH,
@@ -783,6 +827,8 @@ def health_records(request: HttpRequest) -> HttpResponse:
                         metric_type=m_type,
                         page=1,
                         page_size=1,
+                        start_date=start_dt,
+                        end_date=end_dt,
                     )
                     item["count"] = page_obj.paginator.count
 
@@ -796,11 +842,45 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 except Exception as e:
                     logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
                     # 保持默认值 0
+    # 复查项目
+    checkup_library_items = get_active_checkup_library()
+    checkup_stats = []
+    if patient_id and checkup_library_items:
+        for chk in checkup_library_items:
+            lib_id = chk.get("lib_id")
+            if not lib_id:
+                continue
+
+            base_qs = DailyTask.objects.filter(
+                patient=patient,
+                task_type=PlanItemCategory.CHECKUP,
+                task_date__gte=start_date,
+                task_date__lte=end_date,
+                interaction_payload__checkup_id=lib_id,
+            )
+            completed_count = base_qs.filter(status=TaskStatus.COMPLETED).count()
+            overdue_count = base_qs.filter(
+                status=TaskStatus.PENDING,
+                task_date__lt=today,
+            ).count()
+            checkup_stats.append(
+                {
+                    "lib_id": lib_id,
+                    "title": chk.get("name") or "",
+                    "category": chk.get("category") or "",
+                    "count": completed_count,
+                    "abnormal": overdue_count,
+                }
+            )
 
     context = {
         "patient_id": patient_id,
         "health_stats": health_stats,
         "health_survey_stats": health_survey_stats,
+        "service_packages": service_packages,
+        "selected_package_id": selected_package["id"] if selected_package else None,
+        "selected_date_range": {"start_date": start_date, "end_date": end_date},
+        "checkup_stats": checkup_stats,
     }
 
     return render(request, "web_patient/health_records.html", context)
@@ -1031,6 +1111,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     """
     record_type = request.GET.get("type")
     title = request.GET.get("title", "历史记录")
+    checkup_id = request.GET.get("checkup_id")
 
     patient = request.patient
     patient_id = patient.id or None
@@ -1071,6 +1152,99 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
 
     if patient_id and record_type:
         try:
+            if record_type == "review_record":
+                try:
+                    checkup_id_int = int(checkup_id) if checkup_id else None
+                except (TypeError, ValueError):
+                    checkup_id_int = None
+
+                if not checkup_id_int:
+                    records = []
+                else:
+                    month_start_date = start_date.date()
+                    month_end_exclusive = end_date.date()
+                    today = timezone.localdate()
+                    weekday_map = {
+                        0: "星期一",
+                        1: "星期二",
+                        2: "星期三",
+                        3: "星期四",
+                        4: "星期五",
+                        5: "星期六",
+                        6: "星期日",
+                    }
+
+                    qs = (
+                        DailyTask.objects.filter(
+                            patient=patient,
+                            task_type=PlanItemCategory.CHECKUP,
+                            task_date__gte=month_start_date,
+                            task_date__lt=month_end_exclusive,
+                            interaction_payload__checkup_id=checkup_id_int,
+                        )
+                        .order_by("-task_date", "-id")
+                    )
+                    paginator = Paginator(qs, limit)
+                    page_obj = paginator.get_page(page)
+                    total_count = paginator.count
+                    has_more = page_obj.has_next()
+
+                    for task in page_obj.object_list:
+                        if task.status == TaskStatus.COMPLETED:
+                            status_label = "已完成"
+                        else:
+                            status_label = "未开始" if task.task_date > today else "未完成"
+
+                        time_str = "--:--"
+                        if task.completed_at:
+                            time_str = timezone.localtime(task.completed_at).strftime("%H:%M")
+
+                        records.append(
+                            {
+                                "id": task.id,
+                                "date": task.task_date.strftime("%Y-%m-%d"),
+                                "weekday": weekday_map[task.task_date.weekday()],
+                                "time": time_str,
+                                "source": "checkup_task",
+                                "source_display": status_label,
+                                "is_manual": False,
+                                "can_edit": False,
+                                "data": [
+                                    {
+                                        "label": "复查",
+                                        "value": title,
+                                        "is_large": True,
+                                        "key": "checkup_name",
+                                    },
+                                    {
+                                        "label": "状态",
+                                        "value": status_label,
+                                        "is_large": True,
+                                        "key": "checkup_status",
+                                    },
+                                ],
+                            }
+                        )
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse(
+                        {
+                            "records": records,
+                            "has_more": has_more,
+                            "next_page": page + 1 if has_more else None,
+                        }
+                    )
+                context = {
+                    "record_type": record_type,
+                    "title": title,
+                    "records": records,
+                    "current_month": current_month,
+                    "patient_id": patient_id,
+                    "has_more": has_more,
+                    "next_page": page + 1 if has_more else None,
+                    "checkup_id": checkup_id_int if checkup_id else None,
+                }
+                return render(request, "web_patient/health_record_detail.html", context)
+
             # 映射前端 type 到后端 MetricType
             metric_type_map = {
                 "medical": MetricType.USE_MEDICATED,
@@ -1165,6 +1339,15 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             },
                             # {"label": "心率", "value": "80", "is_large": True, "key": "heart"} # 暂无心率关联
                         ]
+                    elif record_type == "medical":
+                        data_fields = [
+                            {
+                                "label": "用药",
+                                "value": "",
+                                "is_large": True,
+                                "key": "medicated",
+                            }
+                        ]
                     # ... 其他类型处理
                     else:
                         data_fields.append(
@@ -1188,19 +1371,22 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             ),
                             "is_manual": metric.source == "manual",
                             "can_edit": metric.source == "manual"
-                            and dt.date() == datetime.now().date(),
+                            and dt.date() == timezone.localdate(),
                             "data": data_fields,
                         }
                     )
 
-        except Exception as e:
-            logging.info(f"查询详情失败: {e}")
-            return redirect(request.path_info)
+        except Exception:
+            logging.exception("查询详情失败")
+            records = []
+            has_more = False
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse(
+                    {"records": [], "has_more": False, "next_page": None}, status=500
+                )
 
     # 如果是 AJAX 请求，返回 JSON
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        from django.http import JsonResponse
-
         return JsonResponse(
             {
                 "records": records,
@@ -1217,6 +1403,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "patient_id": patient_id,
         "has_more": has_more,
         "next_page": page + 1 if has_more else None,
+        "checkup_id": checkup_id,
     }
 
     return render(request, "web_patient/health_record_detail.html", context)

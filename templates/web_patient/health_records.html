@@ -13,8 +13,34 @@
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
                 </a>
-                <h1 class="w-full text-center text-lg font-bold text-slate-800">健康档案</h1>
+                <h1 class="w-full text-center text-lg font-bold text-slate-800">健康档案</h1> 
             </div>
+            {% if service_packages %}
+            <div class="px-4 pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="flex-1">
+                        <label for="servicePackageSelect" class="block text-xs font-medium text-slate-500 mb-1">服务包</label>
+                        <div class="relative">
+                            <select id="servicePackageSelect" class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-9 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                {% for pkg in service_packages %}
+                                <option value="{{ pkg.id }}" {% if pkg.id == selected_package_id %}selected{% endif %}>
+                                    {{ pkg.name }}（{{ pkg.start_date|date:"Y-m-d" }} ~ {{ pkg.end_date|date:"Y-m-d" }}）
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-slate-500">
+                    当前统计范围：{{ selected_date_range.start_date|date:"Y-m-d" }} ~ {{ selected_date_range.end_date|date:"Y-m-d" }}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -182,6 +208,44 @@
             </div>
             {% endfor %}
         </div>
+        
+
+        <div class="text-black font-semibold text-lg mb-2 mt-4">复查档案</div>
+        <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
+            {% if checkup_stats %}
+                {% for stat in checkup_stats %}
+                <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
+                    <div class="flex items-start gap-3">
+                        <div class="w-6 h-6 flex items-center justify-center text-blue-600 mt-0.5">
+                            <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h3 class="font-bold text-slate-800 text-base" style="max-width: 220px;">{{ stat.title }}</h3>
+                            </div>
+                            <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
+                                <span>记录：{{ stat.count }}次</span>
+                                <div class="flex items-center gap-1">
+                                    <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                                    </svg>
+                                    <span class="text-red-500">异常：{{ stat.abnormal }}次</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    <button onclick="window.location.href='{% url 'web_patient:health_record_detail' %}?type=review_record&title={{ stat.title }}&checkup_id={{ stat.lib_id }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                        查看详情
+                    </button>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="p-4 text-sm text-slate-500">暂无复查档案数据</div>
+            {% endif %}
+        </div>
          <div class="text-black font-semibold text-lg mb-2 mt-4">随访问卷</div>
          <div class=" bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
             {% for stat in health_survey_stats %}
@@ -229,7 +293,6 @@
             </div>
             {% endfor %}
         </div>
-
     </div>
 </div>
 <script>
@@ -237,5 +300,16 @@
         var url = "{% url 'web_patient:patient_home' %}?patient_id={{ patient_id }}";
         window.location.replace(url);
     }
+
+    (function () {
+        var select = document.getElementById("servicePackageSelect");
+        if (!select) return;
+        select.addEventListener("change", function (e) {
+            var packageId = e.target.value;
+            var url = new URL(window.location.href);
+            url.searchParams.set("package_id", packageId);
+            window.location.href = url.toString();
+        });
+    })();
 </script>
 {% endblock %}
