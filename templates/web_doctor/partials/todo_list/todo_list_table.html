@@ -40,6 +40,7 @@
                             data-todo-content="{{ item.event_content }}"
                             data-todo-status="{{ item.status }}"
                             data-todo-handle-content="{{ item.handle_content }}"
+                            data-patient-id="{{ item.patient_id|default:'' }}"
                             onclick="handleTodoModalTrigger(this, false)"
                             class="text-blue-600 hover:text-blue-800 font-medium text-xs px-3 py-1 border border-blue-200 rounded hover:bg-blue-50 transition-colors">去查看</button>
                     {% else %}
@@ -49,6 +50,7 @@
                             data-todo-content="{{ item.event_content }}"
                             data-todo-status="{{ item.status }}"
                             data-todo-handle-content=""
+                            data-patient-id="{{ item.patient_id|default:'' }}"
                             onclick="handleTodoModalTrigger(this, true)"
                             class="text-rose-600 hover:text-rose-800 font-medium text-xs px-3 py-1 border border-rose-200 rounded hover:bg-rose-50 transition-colors">去处理</button>
                     {% endif %}

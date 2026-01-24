@@ -188,3 +188,21 @@ class TodoPatientBindingTests(TestCase):
         
         # Check data-patient-id attribute (Task 3 verification)
         self.assertIn(f'data-patient-id="{self.patient1.id}"', content)
+
+    def test_todo_list_table_buttons_include_data_patient_id(self):
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'pending'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn(f'data-patient-id="{self.patient1.id}"', content)
+
+    def test_doctor_workspace_contains_pending_jump_script_hook(self):
+        url = reverse('web_doctor:doctor_workspace')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertIn('todo_pending_jump', content)
