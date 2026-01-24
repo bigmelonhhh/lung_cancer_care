@@ -382,8 +382,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "bp_hr": reverse("web_patient:record_bp"),
         "spo2": reverse("web_patient:record_spo2"),
         "weight": reverse("web_patient:record_weight"),
-        "breath": reverse("web_patient:record_breath"),
-        "sputum": reverse("web_patient:record_sputum"),
         "followup": reverse("web_patient:daily_survey"), 
         "checkup": reverse("web_patient:record_checkup"),
     }
