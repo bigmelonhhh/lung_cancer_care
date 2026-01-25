@@ -114,7 +114,15 @@ def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
 
         sort_dt = report_dt or created_dt or timezone.make_aware(datetime.combine(start_date, time.min), tz)
         display_dt = report_dt or created_dt or sort_dt
-        date_display = display_dt.strftime("%Y-%m-%d")
+        try:
+            display_dt_local = (
+                timezone.localtime(display_dt)
+                if isinstance(display_dt, datetime) and timezone.is_aware(display_dt)
+                else display_dt
+            )
+        except Exception:
+            display_dt_local = display_dt
+        date_display = display_dt_local.strftime("%Y-%m-%d")
 
         if report_dt is None:
             report_date_missing = True

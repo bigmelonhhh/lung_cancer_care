@@ -26,6 +26,12 @@ def login_view(request: HttpRequest) -> HttpResponse:
         if success:
             user = payload
             if user.user_type in {choices.UserType.DOCTOR, choices.UserType.ASSISTANT}:
+                # 移动端适配：若是医生且使用移动设备访问，跳转至移动端首页
+                user_agent = request.META.get("HTTP_USER_AGENT", "").lower()
+                mobile_keywords = ["mobile", "android", "iphone", "ipad"]
+                if user.user_type == choices.UserType.DOCTOR and any(k in user_agent for k in mobile_keywords):
+                    return redirect("web_doctor:mobile_home")
+
                 # 医生/医助：进入医生端工作台
                 return redirect("web_doctor:doctor_workspace")
             if user.user_type == choices.UserType.SALES:

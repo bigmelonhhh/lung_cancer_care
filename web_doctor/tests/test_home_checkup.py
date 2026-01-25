@@ -167,7 +167,7 @@ class TestHomeCheckupTimeline(TestCase):
         dates = [e["date_display"] for e in jan_data["events"]]
         self.assertEqual(
             dates,
-            ["2023-01-20 00:00:00", "2023-01-15 00:00:00", "2023-01-01 00:00:00"],
+            ["2023-01-20", "2023-01-15", "2023-01-01"],
         )
 
     @patch("web_doctor.views.home.ClinicalEvent")
@@ -197,7 +197,7 @@ class TestHomeCheckupTimeline(TestCase):
         self.assertTrue(jan_data["events"][1]["report_date_missing"])
         self.assertEqual(
             [e["date_display"] for e in jan_data["events"]],
-            ["2023-01-06 09:00:00", "2023-01-05 12:00:00"],
+            ["2023-01-06", "2023-01-05"],
         )
 
     @patch("web_doctor.views.home.get_paid_orders_for_patient")
@@ -216,7 +216,7 @@ class TestHomeCheckupTimeline(TestCase):
         result = _get_checkup_timeline_data(self.patient)
         jan_data = next(d for d in result["timeline_data"] if d["month_label"] == "2023-01")
         value = jan_data["events"][0]["date_display"]
-        self.assertTrue(re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", value))
+        self.assertTrue(re.match(r"^\d{4}-\d{2}-\d{2}$", value))
 
     @patch("web_doctor.views.home.get_active_checkup_library")
     @patch("web_doctor.views.home.get_paid_orders_for_patient")
@@ -249,4 +249,4 @@ class TestHomeCheckupTimeline(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "提示：日期优先显示报告日期，缺失时显示创建日期")
-        self.assertContains(response, "2023-01-15 00:00:00")
+        self.assertContains(response, "2023-01-15")
