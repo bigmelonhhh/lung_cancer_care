@@ -3,7 +3,7 @@ import random
 import json
 import os
 import uuid
-from datetime import date, timedelta, datetime
+from datetime import date, timedelta, datetime, time
 from typing import List, Dict, Any
 
 from django.http import HttpRequest, HttpResponse, Http404, JsonResponse
@@ -13,7 +13,7 @@ from django.views.decorators.http import require_POST
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.db.models.functions import TruncMonth
 
 from users.models import PatientProfile
@@ -72,18 +72,54 @@ def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
             curr = date(curr.year, curr.month + 1, 1)
             
     # 3. 批量查询数据
-    # 查询范围内的所有 Event
-    events_qs = ClinicalEvent.objects.filter(
-        patient=patient,
-        event_date__gte=start_date,
-        event_date__lte=end_date
-    ).values('id', 'event_type', 'event_date', 'created_at')
+    events_qs = ClinicalEvent.objects.filter(patient=patient).filter(
+        Q(event_date__gte=start_date, event_date__lte=end_date)
+        | Q(event_date__isnull=True, created_at__date__gte=start_date, created_at__date__lte=end_date)
+    ).values("id", "event_type", "event_date", "created_at")
     
     # 在内存中处理分组
     events_by_month = {}
     for event in events_qs:
-        e_date = event['event_date']
-        m_key = e_date.strftime("%Y-%m")
+        raw_report_date = event.get("event_date")
+        report_date = None
+        report_date_missing = False
+        if isinstance(raw_report_date, datetime):
+            report_date = raw_report_date.date()
+        elif isinstance(raw_report_date, date):
+            report_date = raw_report_date
+        elif raw_report_date is None:
+            report_date_missing = True
+        else:
+            report_date_missing = True
+            logger.warning(
+                "Invalid ClinicalEvent.event_date type, treat as missing. event_id=%s raw_type=%s",
+                event.get("id"),
+                type(raw_report_date).__name__,
+            )
+
+        created_at = event.get("created_at")
+        tz = timezone.get_current_timezone()
+
+        report_dt = None
+        if report_date:
+            report_dt = timezone.make_aware(datetime.combine(report_date, time.min), tz)
+
+        created_dt = None
+        if created_at:
+            try:
+                created_dt = timezone.localtime(created_at)
+            except Exception:
+                if isinstance(created_at, datetime):
+                    created_dt = timezone.make_aware(created_at, tz) if timezone.is_naive(created_at) else created_at
+
+        sort_dt = report_dt or created_dt or timezone.make_aware(datetime.combine(start_date, time.min), tz)
+        display_dt = report_dt or created_dt or sort_dt
+        date_display = display_dt.strftime("%Y-%m-%d")
+
+        if report_dt is None:
+            report_date_missing = True
+
+        m_key = sort_dt.strftime("%Y-%m")
         if m_key not in events_by_month:
             events_by_month[m_key] = []
         
@@ -91,12 +127,25 @@ def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
         type_map = {1: "门诊", 2: "住院", 3: "复查"}
         type_code_map = {1: "outpatient", 2: "hospitalization", 3: "checkup"}
         
-        events_by_month[m_key].append({
-            "type": type_code_map.get(event['event_type'], "other"),
-            "type_display": type_map.get(event['event_type'], "其他"),
-            "date": timezone.localtime(event['created_at']).strftime("%Y-%m-%d %H:%M:%S") if event.get('created_at') else e_date.strftime("%Y-%m-%d 00:00:00"),
-            "created_at": event['created_at']
-        })
+        events_by_month[m_key].append(
+            {
+                "id": event.get("id"),
+                "type": type_code_map.get(event["event_type"], "other"),
+                "type_display": type_map.get(event["event_type"], "其他"),
+                "report_date_missing": report_date_missing,
+                "created_at": created_at,
+                "sort_dt": sort_dt,
+                "date_display": date_display,
+            }
+        )
+
+    def _safe_dt_ts(value):
+        if not value:
+            return 0
+        try:
+            return value.timestamp()
+        except Exception:
+            return 0
 
     # 4. 组装 timeline_data
     timeline_data = []
@@ -110,8 +159,18 @@ def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
             month_name = f"{m_date.month}月"
         
         events = events_by_month.get(month_label, [])
-        # 按日期倒序
-        events.sort(key=lambda x: x['date'], reverse=True)
+        events.sort(
+            key=lambda item: (
+                _safe_dt_ts(item.get("sort_dt")),
+                _safe_dt_ts(
+                    timezone.localtime(item["created_at"])
+                    if item.get("created_at")
+                    else None
+                ),
+                item.get("id") or 0,
+            ),
+            reverse=True,
+        )
         
         checkup_count = sum(1 for e in events if e["type"] == "checkup")
         outpatient_count = sum(1 for e in events if e["type"] == "outpatient")
