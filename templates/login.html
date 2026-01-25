@@ -1,7 +1,9 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
 {% block body %}
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-  <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-8">
+<div class="min-h-screen flex items-center justify-center bg-cover bg-center relative" style="background-image: url('{% static 'login.png' %}');">
+  <div class="absolute inset-0 "></div>
+  <div class="bg-white/90 backdrop-blur rounded-xl shadow-xl w-full max-w-md p-8 relative z-10">
     <div class="text-center mb-6">
       <div class="text-2xl font-bold text-slate-800">肺部康复管理系统</div>
       <p class="text-sm text-slate-500 mt-1">请登录您的医生/销售账号</p>

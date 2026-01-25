@@ -1334,7 +1334,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     else:
                         data_fields.append(
                             {
-                                "label": title,
+                                "label": title+'（评分）',
                                 "value": metric.display_value,
                                 "is_large": True,
                                 "key": "common",
