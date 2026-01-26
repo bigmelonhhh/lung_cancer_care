@@ -8,6 +8,8 @@ from core.models import QuestionnaireCode
 from django.utils import timezone
 from datetime import timedelta
 from web_patient.views.record import health_records
+from market.models import Product, Order
+from decimal import Decimal
 
 class HealthRecordsAbnormalCountTest(TestCase):
     def setUp(self):
@@ -24,6 +26,19 @@ class HealthRecordsAbnormalCountTest(TestCase):
             user=self.user,
             name="Test Patient",
             phone="13800138000"
+        )
+        product = Product.objects.create(
+            name="VIP 服务包",
+            price=Decimal("199.00"),
+            duration_days=1,
+            is_active=True,
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.now(),
         )
         
         # 模拟登录

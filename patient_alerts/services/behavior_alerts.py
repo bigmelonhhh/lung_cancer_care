@@ -162,7 +162,11 @@ class BehaviorAlertService:
             DailyTask.objects.filter(
                 patient_id=patient.id,
                 task_type=task_type,
-                status=core_choices.TaskStatus.PENDING,
+                status__in=[
+                    core_choices.TaskStatus.PENDING,
+                    core_choices.TaskStatus.TERMINATED,
+                    core_choices.TaskStatus.NOT_STARTED,
+                ],
                 task_date__lte=today - timedelta(days=2),
             )
             .only("id", "task_date", "title")
@@ -222,7 +226,14 @@ class BehaviorAlertService:
             qs.values("task_date")
             .annotate(
                 pending=Count(
-                    "id", filter=Q(status=core_choices.TaskStatus.PENDING)
+                    "id",
+                    filter=Q(
+                        status__in=[
+                            core_choices.TaskStatus.PENDING,
+                            core_choices.TaskStatus.TERMINATED,
+                            core_choices.TaskStatus.NOT_STARTED,
+                        ]
+                    ),
                 )
             )
         )

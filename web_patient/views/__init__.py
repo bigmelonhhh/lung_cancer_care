@@ -15,7 +15,18 @@ from .feedback import feedback_view
 from .document import document_detail
 from .home import patient_home
 from .plan import management_plan, my_medication
-from .record import record_temperature, record_bp, record_spo2, record_weight, record_breath, record_sputum, record_pain, health_records,record_checkup, health_record_detail, query_last_metric, delete_report_image
+from .record import (
+    record_temperature,
+    record_bp,
+    record_spo2,
+    record_weight,
+    health_records,
+    record_checkup,
+    health_record_detail,
+    query_last_metric,
+    membership_status,
+    delete_report_image,
+)
 from .followup import daily_survey, get_survey_detail, submit_surveys
 from .api import delete_health_metric, update_health_metric, submit_medication
 from .chat import consultation_chat
@@ -50,9 +61,6 @@ __all__ = [
     "record_bp",
     "record_spo2",
     "record_weight",
-    "record_breath",
-    "record_sputum",
-    "record_pain",
     "health_records",
     "record_checkup",
     "health_record_detail",
@@ -68,5 +76,6 @@ __all__ = [
     "examination_detail",
     "health_calendar",
     "query_last_metric",
+    "membership_status",
     "delete_report_image",
 ]

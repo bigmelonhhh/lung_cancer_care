@@ -6,6 +6,8 @@ from users.models import PatientProfile, CustomUser
 from health_data.models import MetricType
 from django.utils import timezone
 import datetime
+from market.models import Product, Order
+from decimal import Decimal
 
 class ManagementPlanViewTests(TestCase):
     def setUp(self):
@@ -16,6 +18,19 @@ class ManagementPlanViewTests(TestCase):
             wx_openid='test_openid_123'
         )
         self.patient = PatientProfile.objects.create(user=self.user, name="Test Patient")
+        product = Product.objects.create(
+            name="VIP 服务包",
+            price=Decimal("199.00"),
+            duration_days=30,
+            is_active=True,
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.now(),
+        )
         self.url = reverse('web_patient:management_plan')
 
     @patch('web_patient.views.plan.get_daily_plan_summary')
@@ -111,4 +126,3 @@ class ManagementPlanViewTests(TestCase):
         self.assertIsNotNone(spo2_task)
         self.assertEqual(spo2_task['status'], '')
         self.assertEqual(spo2_task['status_text'], '今日无计划')
-

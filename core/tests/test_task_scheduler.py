@@ -1,6 +1,6 @@
 """generate_daily_tasks_for_date 调度函数测试。"""
 
-from datetime import date
+from datetime import date, timedelta
 
 from django.test import TestCase
 
@@ -44,24 +44,119 @@ class TaskSchedulerTest(TestCase):
 
         task_date = self.cycle_start_date  # 对应 schedule_days 中的第 1 天
 
-        # 第一次生成：应为计划生成一条任务
+        # 第一次生成：应为计划生成两条任务（当天 + 未来）
         created_count = generate_daily_tasks_for_date(task_date)
-        self.assertEqual(created_count, 1)
+        self.assertEqual(created_count, 2)
 
-        tasks = DailyTask.objects.filter(patient=self.patient, task_date=task_date)
-        self.assertEqual(tasks.count(), 1)
+        tasks = DailyTask.objects.filter(patient=self.patient)
+        self.assertEqual(tasks.count(), 2)
 
         # 计划任务校验
-        plan_task = tasks.get(plan_item=self.plan_item)
+        plan_task = tasks.get(plan_item=self.plan_item, task_date=task_date)
         self.assertEqual(plan_task.task_type, choices.PlanItemCategory.MEDICATION)
         self.assertEqual(plan_task.title, self.plan_item.item_name)
         self.assertIn("100mg", plan_task.detail)
         self.assertIn("每日一次", plan_task.detail)
+        self.assertEqual(plan_task.status, choices.TaskStatus.PENDING)
+
+        future_task = tasks.get(
+            plan_item=self.plan_item,
+            task_date=self.cycle_start_date + timedelta(days=2),
+        )
+        self.assertEqual(future_task.status, choices.TaskStatus.NOT_STARTED)
 
         # 第二次调用同一天生成，应不再新增任务（幂等）
         created_count_again = generate_daily_tasks_for_date(task_date)
         self.assertEqual(created_count_again, 0)
         self.assertEqual(
-            DailyTask.objects.filter(patient=self.patient, task_date=task_date).count(),
-            1,
+            DailyTask.objects.filter(patient=self.patient).count(),
+            2,
+        )
+
+    def test_cleanup_removed_schedule_days_deletes_future_tasks(self):
+        task_date = self.cycle_start_date
+        future_date = self.cycle_start_date + timedelta(days=2)
+
+        generate_daily_tasks_for_date(task_date)
+        self.assertTrue(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=future_date,
+            ).exists()
+        )
+
+        self.plan_item.schedule_days = [1]
+        self.plan_item.save(update_fields=["schedule_days"])
+
+        generate_daily_tasks_for_date(task_date + timedelta(days=1))
+
+        self.assertFalse(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=future_date,
+            ).exists()
+        )
+        self.assertTrue(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=task_date,
+            ).exists()
+        )
+
+    def test_cleanup_deleted_plan_item_deletes_future_tasks(self):
+        task_date = self.cycle_start_date
+        future_date = self.cycle_start_date + timedelta(days=2)
+
+        generate_daily_tasks_for_date(task_date)
+        self.assertTrue(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=future_date,
+            ).exists()
+        )
+
+        self.plan_item.delete()
+
+        generate_daily_tasks_for_date(task_date + timedelta(days=1))
+
+        self.assertFalse(
+            DailyTask.objects.filter(
+                plan_item__isnull=True,
+                task_date=future_date,
+            ).exists()
+        )
+        self.assertTrue(
+            DailyTask.objects.filter(
+                task_date=task_date,
+            ).exists()
+        )
+
+    def test_cleanup_terminated_cycle_deletes_not_started_tasks(self):
+        task_date = self.cycle_start_date
+        future_date = self.cycle_start_date + timedelta(days=2)
+
+        generate_daily_tasks_for_date(task_date)
+        self.assertTrue(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=future_date,
+            ).exists()
+        )
+
+        self.cycle.status = choices.TreatmentCycleStatus.TERMINATED
+        self.cycle.save(update_fields=["status"])
+
+        generate_daily_tasks_for_date(task_date + timedelta(days=1))
+
+        self.assertFalse(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=future_date,
+            ).exists()
+        )
+        self.assertTrue(
+            DailyTask.objects.filter(
+                plan_item=self.plan_item,
+                task_date=task_date,
+            ).exists()
         )

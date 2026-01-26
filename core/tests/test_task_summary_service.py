@@ -91,7 +91,7 @@ class TaskSummaryServiceTest(TestCase):
             summary[0],
             {
                 "task_type": int(choices.PlanItemCategory.MEDICATION),
-                "status": int(choices.TaskStatus.COMPLETED),
+                "status": int(choices.TaskStatus.PENDING),
                 "title": "用药提醒",
             },
         )
