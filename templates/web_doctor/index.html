@@ -58,6 +58,20 @@
 
         // 2. 监听 pageshow 事件 (用于处理浏览器后退/缓存恢复)
         window.addEventListener('pageshow', function(event) {
+            // 处理从待办列表页回退后的“跳转到指标”意图
+            try {
+                const pendingJumpRaw = sessionStorage.getItem('todo_pending_jump');
+                if (pendingJumpRaw) {
+                    sessionStorage.removeItem('todo_pending_jump');
+                    sessionStorage.removeItem('todo_needs_refresh');
+                    const pendingJump = JSON.parse(pendingJumpRaw);
+                    if (pendingJump && pendingJump.action === 'indicators' && window.goToPatientIndicators) {
+                        window.goToPatientIndicators({ patientId: pendingJump.patientId, query: pendingJump.query });
+                        return;
+                    }
+                }
+            } catch (e) {}
+
             // 检查是否有未处理的刷新标记
             if (sessionStorage.getItem('todo_needs_refresh') === 'true') {
                 console.log('检测到数据变更标记，正在刷新页面...');

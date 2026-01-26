@@ -16,12 +16,13 @@ from django.db import transaction
 
 from health_data.models.report_upload import ReportUpload, ReportImage, UploadSource, UploaderRole
 from health_data.services.report_service import ReportUploadService
-from users.decorators import auto_wechat_login, check_patient
+from users.decorators import auto_wechat_login, check_patient, require_membership
 
 logger = logging.getLogger(__name__)
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def my_examination(request: HttpRequest) -> HttpResponse:
     """
     检查报告列表页面
@@ -88,6 +89,7 @@ def my_examination(request: HttpRequest) -> HttpResponse:
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def upload_report(request: HttpRequest) -> HttpResponse:
     """
     上传检查报告页面
@@ -159,6 +161,7 @@ def upload_report(request: HttpRequest) -> HttpResponse:
 @require_POST
 @auto_wechat_login
 @check_patient
+@require_membership
 def delete_report(request: HttpRequest) -> JsonResponse:
     """
     删除指定报告 (ReportUpload)

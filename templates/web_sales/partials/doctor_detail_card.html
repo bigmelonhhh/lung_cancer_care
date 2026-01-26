@@ -1,10 +1,25 @@
 <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 space-y-4">
-  <div>
-    <p class="text-sm uppercase text-slate-400 tracking-widest">医生档案</p>
-    <h1 class="text-2xl font-semibold text-slate-900 mt-2">{{ doctor.name }}</h1>
-    {% if doctor.title %}
-    <p class="text-sm text-slate-500 mt-1">{{ doctor.title }}</p>
-    {% endif %}
+  <div class="flex items-start gap-3 min-w-0">
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-200 transition shrink-0"
+      onclick="webSalesGoBackToDashboard()"
+      aria-label="返回到首页"
+      aria-keyshortcuts="Esc"
+      title="返回首页（Esc）"
+    >
+      <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+        <path fill-rule="evenodd" d="M11.78 15.53a.75.75 0 0 1-1.06 0l-5-5a.75.75 0 0 1 0-1.06l5-5a.75.75 0 1 1 1.06 1.06L7.31 9.25H16a.75.75 0 0 1 0 1.5H7.31l4.47 4.47a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
+      </svg>
+      <span class="text-sm font-medium">返回</span>
+    </button>
+    <div class="min-w-0">
+      <p class="text-sm uppercase text-slate-400 tracking-widest">医生档案</p>
+      <h1 class="text-2xl font-semibold text-slate-900 mt-2 truncate">{{ doctor.name }}</h1>
+      {% if doctor.title %}
+      <p class="text-sm text-slate-500 mt-1">{{ doctor.title }}</p>
+      {% endif %}
+    </div>
   </div>
   <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-600">
     <div>
@@ -25,3 +40,36 @@
     </div>
   </dl>
 </div>
+
+<script>
+  (function () {
+    if (window.__webSalesBackNavBound) return;
+    window.__webSalesBackNavBound = true;
+
+    window.webSalesGoBackToDashboard = function () {
+      var dashboardUrl = "{% url 'web_sales:sales_dashboard' %}";
+      var mainArea = document.getElementById('main-content-area');
+
+      if (window.htmx && mainArea) {
+        htmx.ajax('GET', dashboardUrl, { target: mainArea, swap: 'innerHTML' });
+        return;
+      }
+      window.location.href = dashboardUrl;
+    };
+
+    window.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape') return;
+      var active = document.activeElement;
+      if (
+        active &&
+        (active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.tagName === 'SELECT' ||
+          active.isContentEditable)
+      ) {
+        return;
+      }
+      window.webSalesGoBackToDashboard();
+    });
+  })();
+</script>

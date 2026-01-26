@@ -1,7 +1,11 @@
+import re
 from django.test import TestCase
+from django.urls import reverse
 from unittest.mock import patch, MagicMock
-from datetime import date, timedelta
-from users.models import PatientProfile
+from datetime import date, timedelta, datetime
+from django.utils import timezone
+from users import choices as user_choices
+from users.models import PatientProfile, CustomUser, DoctorProfile
 from health_data.models import ClinicalEvent
 from web_doctor.views.home import _get_checkup_timeline_data, build_home_context
 
@@ -134,3 +138,115 @@ class TestHomeCheckupTimeline(TestCase):
         
         context = build_home_context(self.patient)
         self.assertEqual(context["current_month"], "2020-12")
+
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_events_sorted_by_report_date_asc(self, mock_get_orders):
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 1, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=3,
+            event_date=date(2023, 1, 20),
+        )
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=1,
+            event_date=date(2023, 1, 1),
+        )
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=2,
+            event_date=date(2023, 1, 15),
+        )
+
+        result = _get_checkup_timeline_data(self.patient)
+        jan_data = next(d for d in result["timeline_data"] if d["month_label"] == "2023-01")
+        dates = [e["date_display"] for e in jan_data["events"]]
+        self.assertEqual(
+            dates,
+            ["2023-01-20", "2023-01-15", "2023-01-01"],
+        )
+
+    @patch("web_doctor.views.home.ClinicalEvent")
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_report_date_missing_fallback_to_created_at(self, mock_get_orders, mock_clinical_event):
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 1, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        tz = timezone.get_current_timezone()
+        created_at_1 = timezone.make_aware(datetime(2023, 1, 5, 12, 0, 0), tz)
+        created_at_2 = timezone.make_aware(datetime(2023, 1, 6, 9, 0, 0), tz)
+
+        mock_qs = MagicMock()
+        mock_qs.filter.return_value = mock_qs
+        mock_qs.values.return_value = [
+            {"id": 10, "event_type": 3, "event_date": None, "created_at": created_at_1},
+            {"id": 11, "event_type": 1, "event_date": "2023/01/10", "created_at": created_at_2},
+        ]
+        mock_clinical_event.objects.filter.return_value = mock_qs
+
+        result = _get_checkup_timeline_data(self.patient)
+        jan_data = next(d for d in result["timeline_data"] if d["month_label"] == "2023-01")
+        self.assertEqual(len(jan_data["events"]), 2)
+        self.assertTrue(jan_data["events"][0]["report_date_missing"])
+        self.assertTrue(jan_data["events"][1]["report_date_missing"])
+        self.assertEqual(
+            [e["date_display"] for e in jan_data["events"]],
+            ["2023-01-06", "2023-01-05"],
+        )
+
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_report_date_display_format(self, mock_get_orders):
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 1, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=3,
+            event_date=date(2023, 1, 15),
+        )
+
+        result = _get_checkup_timeline_data(self.patient)
+        jan_data = next(d for d in result["timeline_data"] if d["month_label"] == "2023-01")
+        value = jan_data["events"][0]["date_display"]
+        self.assertTrue(re.match(r"^\d{4}-\d{2}-\d{2}$", value))
+
+    @patch("web_doctor.views.home.get_active_checkup_library")
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_patient_checkup_timeline_view_renders_report_date(self, mock_get_orders, mock_lib):
+        mock_lib.return_value = []
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 1, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        doctor_user = CustomUser.objects.create_user(
+            phone="13900000000",
+            user_type=user_choices.UserType.DOCTOR,
+        )
+        DoctorProfile.objects.create(
+            user=doctor_user,
+            name="张医生",
+            hospital="测试医院",
+            department="测试科室",
+        )
+        self.client.force_login(doctor_user)
+
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=3,
+            event_date=date(2023, 1, 15),
+        )
+
+        url = reverse("web_doctor:patient_checkup_timeline", kwargs={"patient_id": self.patient.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "提示：日期优先显示报告日期，缺失时显示创建日期")
+        self.assertContains(response, "2023-01-15")

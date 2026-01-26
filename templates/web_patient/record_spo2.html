@@ -24,6 +24,7 @@
         <form method="POST" action="{% url 'web_patient:record_spo2' %}?patient_id={{ patient_id }}" id="spo2-form" class="bg-white rounded-xl shadow-sm p-5">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.GET.next }}">
+            <input type="hidden" name="selected_date" value="{{ selected_date }}">
             
             <!-- 1. Measurement Time -->
             <div class="mb-5">

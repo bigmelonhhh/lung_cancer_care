@@ -18,7 +18,7 @@ from business_support.service import (
     bind_device,
     unbind_device,
 )
-from users.decorators import check_patient
+from users.decorators import check_patient, require_membership
 from wx.services.client import WX_APPID, wechat_client
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 @login_required
 @check_patient
+@require_membership
 def device_list(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     if not patient:
@@ -56,6 +57,7 @@ def device_list(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @check_patient
+@require_membership
 @require_POST
 def api_bind_device(request: HttpRequest) -> JsonResponse:
     patient = request.patient
@@ -93,6 +95,7 @@ def api_bind_device(request: HttpRequest) -> JsonResponse:
 
 @login_required
 @check_patient
+@require_membership
 @require_POST
 def api_unbind_device(request: HttpRequest) -> JsonResponse:
     patient = request.patient

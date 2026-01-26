@@ -10,9 +10,11 @@ from django.conf import settings
 from django.contrib.auth.decorators import user_passes_test
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
+from django.shortcuts import redirect
 
 from users import choices
 from functools import wraps
+from wx.services.oauth import generate_menu_auth_url
 
 RoleCheck = Callable[[HttpRequest], bool]
 ViewFunc = Callable[[HttpRequest], HttpResponse]
@@ -142,6 +144,21 @@ def auto_wechat_login(view_func: Callable) -> Callable:
     return _wrapped_view
 
 
+def require_membership(view_func: Callable) -> Callable:
+    @wraps(view_func)
+    def _wrapped_view(request: HttpRequest, *args, **kwargs):
+        patient = getattr(request, "patient", None)
+        is_member = bool(
+            getattr(patient, "is_member", False)
+            and getattr(patient, "membership_expire_date", None)
+        )
+        if not is_member:
+            return redirect(generate_menu_auth_url("market:product_buy"))
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped_view
+
+
 __all__ = [
     "check_patient",
     "check_doctor",
@@ -149,5 +166,6 @@ __all__ = [
     "check_admin",
     "check_assistant",
     "check_doctor_or_assistant",
-    "auto_wechat_login"
+    "auto_wechat_login",
+    "require_membership",
 ]

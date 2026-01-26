@@ -3,6 +3,9 @@ from django.urls import reverse
 from users.models import CustomUser, PatientProfile
 from users import choices
 from web_patient.views import patient_dashboard
+from market.models import Product, Order
+from decimal import Decimal
+from django.utils import timezone
 
 class DashboardMedicationLinkTest(TestCase):
     def setUp(self):
@@ -16,6 +19,19 @@ class DashboardMedicationLinkTest(TestCase):
             user=self.user,
             name="Test Patient Med Dash",
             phone="13800008888"
+        )
+        product = Product.objects.create(
+            name="VIP 服务包",
+            price=Decimal("199.00"),
+            duration_days=30,
+            is_active=True,
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.now(),
         )
         self.factory = RequestFactory()
 

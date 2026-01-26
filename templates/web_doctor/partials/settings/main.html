@@ -65,9 +65,7 @@
                                 <div class="flex flex-col text-left">
                                     <span class="font-medium text-slate-800">
                                         {{ cycle.name }}
-                                        {% if selected_cycle and cycle.id == selected_cycle.id %}
-                                            <span class="ml-2 text-sm text-emerald-600 border border-emerald-200 rounded-full px-2 py-0.5">当前疗程</span>
-                                        {% endif %}
+                                      
                                     </span>
                                     <span class="text-sm text-slate-500">
                                         {{ cycle.start_date }} ~ {{ cycle.end_date }} · 状态：{{ cycle.get_status_display }}

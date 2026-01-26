@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
 from users.models import CustomUser
-from users.decorators import auto_wechat_login, check_patient
+from users.decorators import auto_wechat_login, check_patient, require_membership
 from core.service.treatment_cycle import get_active_treatment_cycle
 from core.service.plan_item import PlanItemService
 from core.models import TreatmentCycle, choices
@@ -28,6 +28,7 @@ def is_today_data(metric_info: dict) -> bool:
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def management_plan(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】TODO 管理计划页面 `/p/plan/`
@@ -170,6 +171,7 @@ def management_plan(request: HttpRequest) -> HttpResponse:
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def my_medication(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】我的用药页面 `/p/medication/`

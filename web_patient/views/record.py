@@ -1,19 +1,31 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.core.paginator import Paginator
 from django.utils import timezone
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.models import MetricType
-from core.models import QuestionnaireCode
+from core.models import QuestionnaireCode, DailyTask
+from core.models.choices import PlanItemCategory, TaskStatus
 from patient_alerts.services.todo_list import TodoListService
 from core.service.tasks import get_daily_plan_summary
+from core.service.checkup import get_active_checkup_library
+from market.service.order import get_paid_orders_for_patient
+from wx.services.oauth import generate_menu_auth_url
 import os
 from decimal import Decimal
 from datetime import datetime
 from django.contrib import messages
 from users.decorators import auto_wechat_login, check_patient
 import logging
+
+
+def _is_member(patient) -> bool:
+    return bool(
+        getattr(patient, "is_member", False)
+        and getattr(patient, "membership_expire_date", None)
+    )
 
 
 @auto_wechat_login
@@ -25,6 +37,9 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
     patient = request.patient
     if not patient:
         return JsonResponse({"error": "No patient info"}, status=400)
+
+    if not _is_member(patient):
+        return JsonResponse({"success": True, "plans": {}})
     
     # 1. 获取今日计划摘要 (包含完成状态)
     summary_list = get_daily_plan_summary(patient)
@@ -129,6 +144,21 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
 
 @auto_wechat_login
 @check_patient
+def membership_status(request: HttpRequest) -> JsonResponse:
+    patient = request.patient
+    if not patient:
+        return JsonResponse({"success": False, "message": "未找到患者信息"}, status=400)
+    return JsonResponse(
+        {
+            "success": True,
+            "is_member": _is_member(patient),
+            "buy_url": generate_menu_auth_url("market:product_buy"),
+        }
+    )
+
+
+@auto_wechat_login
+@check_patient
 def record_temperature(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】体温录入页面 `/p/record/temperature/`
@@ -139,6 +169,15 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
     patient = request.patient
 
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -147,12 +186,23 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
 
         if weight_val and patient_id:
             try:
-                record_time_str = record_time.replace("T", " ")
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 1. 解析 naive datetime
-                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
-                # 2. 转换为 aware datetime
+                record_time_naive = datetime.strptime(
+                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 record_time = timezone.make_aware(record_time_naive)
                 
                 HealthMetricService.save_manual_metric(
@@ -170,6 +220,7 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "temperature": {
                                 "value": weight_val,
@@ -189,10 +240,16 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                 logging.info(f"保存体重数据失败: {e}")
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_temperature.html", context)
 
@@ -211,6 +268,15 @@ def record_bp(request: HttpRequest) -> HttpResponse:
     # 优先从 GET 参数获取 patient_id
     patient = request.patient
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -221,12 +287,23 @@ def record_bp(request: HttpRequest) -> HttpResponse:
 
         if ssy_val and szy_val and heart_val and patient_id:
             try:
-                record_time_str = record_time.replace("T", " ")
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 1. 解析 naive datetime
-                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
-                # 2. 转换为 aware datetime
+                record_time_naive = datetime.strptime(
+                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 record_time = timezone.make_aware(record_time_naive)
 
                 HealthMetricService.save_manual_metric(
@@ -249,6 +326,7 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "bp_hr": {
                                 "ssy": ssy_val,
@@ -270,10 +348,16 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 logging.info(f"保存体重数据失败: {e}")
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_bp.html", context)
 
@@ -291,6 +375,15 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -300,12 +393,23 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
         if weight_val and patient_id:
             try:
                 # 调用 Service 保存数据
-                record_time_str = record_time.replace("T", " ")
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
-                # 1. 解析 naive datetime
-                record_time_naive = datetime.strptime(record_time_str, "%Y-%m-%d %H:%M:%S")
-                # 2. 转换为 aware datetime
+                record_time_naive = datetime.strptime(
+                    record_time_str, "%Y-%m-%d %H:%M:%S"
+                )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 record_time = timezone.make_aware(record_time_naive)
 
                 HealthMetricService.save_manual_metric(
@@ -323,6 +427,7 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "spo2": {
                                 "value": weight_val,
@@ -341,10 +446,16 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
             except Exception as e:
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_spo2.html", context)
 
@@ -362,6 +473,15 @@ def record_weight(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     patient_id = patient.id or None
+    selected_date_str = request.GET.get("selected_date") or request.POST.get(
+        "selected_date"
+    )
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
@@ -370,8 +490,15 @@ def record_weight(request: HttpRequest) -> HttpResponse:
 
         if weight_val and patient_id:
             try:
+                if not record_time and selected_date:
+                    now_local = timezone.localtime(timezone.now())
+                    record_time = datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    ).strftime("%Y-%m-%d %H:%M:%S")
+
                 # 替换T为空格，补全秒数
-                record_time_str = record_time.replace("T", " ")
+                record_time_str = (record_time or "").replace("T", " ")
                 if len(record_time_str.split(":")) == 2:
                     record_time_str += ":00"
 
@@ -379,6 +506,10 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 record_time_naive = datetime.strptime(
                     record_time_str, "%Y-%m-%d %H:%M:%S"
                 )
+                if selected_date and record_time_naive.date() != selected_date:
+                    record_time_naive = datetime.combine(
+                        selected_date, record_time_naive.time()
+                    )
                 # 2. 转换为带时区的datetime（使用Django配置的TIME_ZONE，如Asia/Shanghai）
                 record_time = timezone.make_aware(record_time_naive)
                 HealthMetricService.save_manual_metric(
@@ -396,6 +527,7 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
+                        "refresh_flag": True,
                         "metric_data": {
                             "weight": {
                                 "value": weight_val,
@@ -415,217 +547,78 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 messages.error(request, f"提交失败：{str(e)}")
                 return redirect(request.path_info)
 
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year, month=selected_date.month, day=selected_date.day
+        )
     context = {
-        "default_time": timezone.now(),
+        "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
         "patient_id": patient_id,
-        "now_obj": timezone.now(),
+        "now_obj": now_local,
+        "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_weight.html", context)
 
 
 @auto_wechat_login
 @check_patient
-def record_breath(request: HttpRequest) -> HttpResponse:
-    """
-    【页面说明】呼吸情况自测页面 `/p/record/breath/`
-    【功能逻辑】
-    1. 接收 openid 参数标识用户。
-    2. 显示当前时间作为默认测量时间。
-    3. 提供呼吸情况多选列表（数据由后端传入）。
-    4. 提交按钮。
-    """
-    patient = request.patient
-    patient_id = patient.id or None
-
-    # 获取当前时间，格式化为 YYYY/MM/DD HH:mm
-    now = timezone.now()
-    default_time = now.strftime("%Y/%m/%d %H:%M")
-
-    # 呼吸情况选项数据
-    breath_options = [
-        {"value": "0", "label": "(0) 整体顺畅，仅剧烈运动气促"},
-        {"value": "1", "label": "(1) 快走或上坡气促"},
-        {"value": "2", "label": "(2) 与同龄人同走需停下"},
-        {"value": "3", "label": "(3) 走100米或几分钟即停"},
-        {"value": "4", "label": "(4) 静息或穿衣即气促"},
-    ]
-
-    context = {
-        "default_time": default_time,
-        "patient_id": patient_id,
-        "breath_options": breath_options,
-    }
-
-    return render(request, "web_patient/record_breath.html", context)
-
-
-@auto_wechat_login
-@check_patient
-def record_sputum(request: HttpRequest) -> HttpResponse:
-    """
-    【页面说明】咳嗽与痰色情况自测页面 `/p/record/sputum/`
-    【功能逻辑】
-    1. 接收 openid 参数标识用户。
-    2. 显示当前时间作为默认测量时间。
-    3. 提供咳嗽情况（多选）和痰色情况（单选网格）。
-    4. 提交按钮。
-    """
-    patient = request.patient
-    patient_id = patient.id or None
-
-    # 获取当前时间，格式化为 YYYY/MM/DD HH:mm
-    now = timezone.now()
-    default_time = now.strftime("%Y/%m/%d %H:%M")
-
-    # 咳嗽情况选项数据（多选）
-    cough_options = [
-        {"value": "0", "label": "(0) 今日无咳嗽"},
-        {"value": "1", "label": "(1) 轻度/偶发"},
-        {"value": "2", "label": "(2) 多次影响活动或夜间休息"},
-        {"value": "3", "label": "(3) 持续或严重影响说话/睡眠"},
-    ]
-
-    # 痰色情况选项数据（单选网格）
-    # color_class 用于前端显示颜色条或图标颜色
-    sputum_colors = [
-        {
-            "value": "0",
-            "label": "(0)无痰",
-            "desc": "无痰/透明",
-            "color_class": "bg-gray-100",
-            "color_hex": "",
-        },
-        {
-            "value": "1",
-            "label": "(1)白色",
-            "desc": "较黏/浑白",
-            "color_class": "bg-white border-gray-200",
-            "color_hex": "#FFFFFF",
-        },
-        {
-            "value": "2",
-            "label": "(2)黄色",
-            "desc": "发黄/黏稠",
-            "color_class": "bg-yellow-100 border-yellow-200",
-            "color_hex": "#FACC15",
-        },
-        {
-            "value": "3",
-            "label": "(3)绿色",
-            "desc": "发绿/黏稠",
-            "color_class": "bg-green-100 border-green-200",
-            "color_hex": "#A5B30B",
-        },
-        {
-            "value": "4",
-            "label": "(4)棕色",
-            "desc": "铁锈色/黏稠",
-            "color_class": "bg-amber-100 border-amber-200",
-            "color_hex": "#A56415",
-        },
-        {
-            "value": "5",
-            "label": "(5)红色",
-            "desc": "有血丝或血块",
-            "color_class": "bg-red-100 border-red-200",
-            "color_hex": "#EF4444",
-        },
-    ]
-
-    context = {
-        "default_time": default_time,
-        "patient_id": patient_id,
-        "cough_options": cough_options,
-        "sputum_colors": sputum_colors,
-    }
-
-    return render(request, "web_patient/record_sputum.html", context)
-
-
-@auto_wechat_login
-@check_patient
-def record_pain(request: HttpRequest) -> HttpResponse:
-    """
-    【页面说明】疼痛情况记录页面 `/p/record/pain/`
-    【功能逻辑】
-    1. 接收 openid 参数标识用户。
-    2. 显示当前时间作为默认测量时间。
-    3. 提供疼痛情况列表（数据由后端传入）。
-    4. 实现联动逻辑：选中非第一项时，展示程度单选。
-    5. 提交按钮。
-    """
-    patient = request.patient
-    patient_id = patient.id or None
-
-    # 获取当前时间，格式化为 YYYY/MM/DD HH:mm
-    now = timezone.now()
-    default_time = now.strftime("%Y/%m/%d %H:%M")
-
-    # 疼痛部位选项
-    pain_locations = [
-        {"value": "0", "label": "今日无疼痛情况", "is_none": True},
-        {"value": "1", "label": "术口/胸膛/肋间"},
-        {"value": "2", "label": "肩峰/肩背/肩胛"},
-        {"value": "3", "label": "肋骨/脊柱/骨盆/四肢"},
-        {"value": "4", "label": "头痛"},
-    ]
-
-    # 疼痛程度选项
-    pain_levels = [
-        {
-            "level": "mild",
-            "label": "轻度：",
-            "desc": "能做家务/正常活动，睡眠基本不受影响",
-            "options": [
-                {"value": "1", "label": "1分"},
-                {"value": "2", "label": "2分"},
-                {"value": "3", "label": "3分"},
-            ],
-        },
-        {
-            "level": "moderate",
-            "label": "中度：",
-            "desc": "活动或睡眠受影响，需要（或增加）止痛药",
-            "options": [
-                {"value": "4", "label": "4分"},
-                {"value": "5", "label": "5分"},
-                {"value": "6", "label": "6分"},
-            ],
-        },
-        {
-            "level": "severe",
-            "label": "重度：",
-            "desc": "明显疼痛或无法入眠，需要立即处理/尽快就医",
-            "options": [
-                {"value": "7", "label": "7分"},
-                {"value": "8", "label": "8分"},
-                {"value": "9", "label": "9分"},
-                {"value": "10", "label": "10分"},
-            ],
-        },
-    ]
-
-    context = {
-        "default_time": default_time,
-        "patient_id": patient_id,
-        "pain_locations": pain_locations,
-        "pain_levels": pain_levels,
-    }
-
-    return render(request, "web_patient/record_pain.html", context)
-
-
-@auto_wechat_login
-@check_patient
 def health_records(request: HttpRequest) -> HttpResponse:
     """
-    【页面说明】健康档案页面 `/p/health/records/`
+    【页面说明】健康档案页面 `/p/health/records/` 
     【功能逻辑】
     1. 展示各项健康指标的记录统计（记录次数、异常次数）。
     2. 支持空状态展示。
     """
     patient = request.patient
     patient_id = patient.id or None
+    is_member = _is_member(patient)
+    selected_package_id = request.GET.get("package_id")
+
+    service_packages = []
+    if is_member:
+        orders = get_paid_orders_for_patient(patient)
+        for order in orders:
+            service_packages.append(
+                {
+                    "id": order.id,
+                    "name": order.product.name if getattr(order, "product_id", None) else "",
+                    "start_date": order.start_date,
+                    "end_date": order.end_date,
+                    "is_active": False,
+                }
+            )
+
+    selected_package = None
+    if service_packages:
+        if selected_package_id:
+            try:
+                selected_id_int = int(selected_package_id)
+            except (TypeError, ValueError):
+                selected_id_int = None
+            if selected_id_int:
+                selected_package = next(
+                    (pkg for pkg in service_packages if pkg["id"] == selected_id_int), None
+                )
+
+        if not selected_package:
+            selected_package = service_packages[0]
+
+        for pkg in service_packages:
+            if pkg["id"] == selected_package["id"]:
+                pkg["is_active"] = True
+                break
+
+    today = timezone.localdate()
+    if selected_package and selected_package.get("start_date") and selected_package.get("end_date"):
+        start_date = selected_package["start_date"]
+        end_date = selected_package["end_date"]
+    else:
+        start_date = datetime(2000, 1, 1).date()
+        end_date = today
+
+    start_dt = datetime.combine(start_date, datetime.min.time())
+    end_dt = datetime.combine(end_date, datetime.max.time())
 
     # 一般检测数据
     health_stats = [
@@ -658,10 +651,6 @@ def health_records(request: HttpRequest) -> HttpResponse:
 
     # 动态获取各项指标的总数
     if patient_id:
-        # 定义异常统计的时间范围（从较早时间到现在，覆盖所有历史）
-        start_date = datetime(2000, 1, 1).date()
-        end_date = timezone.now().date()
-
         metric_type_map = {
             "medical": MetricType.USE_MEDICATED,
             "temperature": MetricType.BODY_TEMPERATURE,
@@ -683,6 +672,8 @@ def health_records(request: HttpRequest) -> HttpResponse:
                         metric_type=m_type,
                         page=1,
                         page_size=1,
+                        start_date=start_dt,
+                        end_date=end_dt,
                     )
                     item["count"] = page_obj.paginator.count
 
@@ -696,111 +687,141 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 except Exception as e:
                     logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
                     # 保持默认值 0
-    # 随访问卷
-    health_survey_stats = [
-        {
-            "type": "physical",
-            "title": "体能评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "physical",
-        },
-        {
-            "type": "breath",
-            "title": "呼吸评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "breath",
-        },
-        {
-            "type": "cough",
-            "title": "咳嗽与痰色评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "cough",
-        },
-        {
-            "type": "appetite",
-            "title": "食欲评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "appetite",
-        },
-        {
-            "type": "pain",
-            "title": "身体疼痛评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "pain",
-        },
-        {
-            "type": "sleep",
-            "title": "睡眠质量评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "sleep",
-        },
-        {
-            "type": "psych",
-            "title": "抑郁评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "psych",
-        },
-        {
-            "type": "anxiety",
-            "title": "焦虑评估",
-            "count": 0,
-            "abnormal": 0,
-            "icon": "anxiety",
-        },
-    ]
-    # 动态获取各项指标的总数
-    if patient_id:
-        # 复用上面定义的时间范围
-        start_date = datetime(2000, 1, 1).date()
-        end_date = timezone.now().date()
+    health_survey_stats = []
+    checkup_stats = []
+    if is_member:
+        health_survey_stats = [
+            {
+                "type": "physical",
+                "title": "体能评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "physical",
+            },
+            {
+                "type": "breath",
+                "title": "呼吸评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "breath",
+            },
+            {
+                "type": "cough",
+                "title": "咳嗽与痰色评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "cough",
+            },
+            {
+                "type": "appetite",
+                "title": "食欲评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "appetite",
+            },
+            {
+                "type": "pain",
+                "title": "身体疼痛评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "pain",
+            },
+            {
+                "type": "sleep",
+                "title": "睡眠质量评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "sleep",
+            },
+            {
+                "type": "psych",
+                "title": "抑郁评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "psych",
+            },
+            {
+                "type": "anxiety",
+                "title": "焦虑评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "anxiety",
+            },
+        ]
+        if patient_id:
+            metric_type_map_survey = {
+                "physical": QuestionnaireCode.Q_PHYSICAL,
+                "breath": QuestionnaireCode.Q_BREATH,
+                "cough": QuestionnaireCode.Q_COUGH,
+                "appetite": QuestionnaireCode.Q_APPETITE,
+                "pain": QuestionnaireCode.Q_PAIN,
+                "sleep": QuestionnaireCode.Q_SLEEP,
+                "psych": QuestionnaireCode.Q_PSYCH,
+                "anxiety": QuestionnaireCode.Q_ANXIETY,
+            }
 
-        metric_type_map_survey = {
-            "physical": QuestionnaireCode.Q_PHYSICAL,
-            "breath": QuestionnaireCode.Q_BREATH,
-            "cough": QuestionnaireCode.Q_COUGH,
-            "appetite": QuestionnaireCode.Q_APPETITE,
-            "pain": QuestionnaireCode.Q_PAIN,
-            "sleep": QuestionnaireCode.Q_SLEEP,
-            "psych": QuestionnaireCode.Q_PSYCH,
-            "anxiety": QuestionnaireCode.Q_ANXIETY,
-        }
+            for item in health_survey_stats:
+                m_type = metric_type_map_survey.get(item["type"])
+                if m_type:
+                    try:
+                        page_obj = HealthMetricService.query_metrics_by_type(
+                            patient_id=int(patient_id),
+                            metric_type=m_type,
+                            page=1,
+                            page_size=1,
+                            start_date=start_dt,
+                            end_date=end_dt,
+                        )
+                        item["count"] = page_obj.paginator.count
 
-        for item in health_survey_stats:
-            m_type = metric_type_map_survey.get(item["type"])
-            if m_type:
-                try:
-                    # 调用 Service 获取分页对象，从而获取总数
-                    # page=1, page_size=1 最小化数据传输
-                    page_obj = HealthMetricService.query_metrics_by_type(
-                        patient_id=int(patient_id),
-                        metric_type=m_type,
-                        page=1,
-                        page_size=1,
-                    )
-                    item["count"] = page_obj.paginator.count
+                        item["abnormal"] = TodoListService.count_abnormal_events(
+                            patient=patient,
+                            start_date=start_date,
+                            end_date=end_date,
+                            type_code=m_type,
+                        )
+                    except Exception as e:
+                        logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
 
-                    # 获取异常次数
-                    item["abnormal"] = TodoListService.count_abnormal_events(
-                        patient=patient,
-                        start_date=start_date,
-                        end_date=end_date,
-                        type_code=m_type,
-                    )
-                except Exception as e:
-                    logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
-                    # 保持默认值 0
+        checkup_library_items = get_active_checkup_library()
+        if patient_id and checkup_library_items:
+            for chk in checkup_library_items:
+                lib_id = chk.get("lib_id")
+                if not lib_id:
+                    continue
+
+                base_qs = DailyTask.objects.filter(
+                    patient=patient,
+                    task_type=PlanItemCategory.CHECKUP,
+                    task_date__gte=start_date,
+                    task_date__lte=end_date,
+                    interaction_payload__checkup_id=lib_id,
+                )
+                completed_count = base_qs.filter(status=TaskStatus.COMPLETED).count()
+                overdue_count = base_qs.filter(
+                    status=TaskStatus.PENDING,
+                    task_date__lt=today,
+                ).count()
+                checkup_stats.append(
+                    {
+                        "lib_id": lib_id,
+                        "title": chk.get("name") or "",
+                        "category": chk.get("category") or "",
+                        "count": completed_count,
+                        "abnormal": overdue_count,
+                    }
+                )
 
     context = {
         "patient_id": patient_id,
+        "is_member": is_member,
         "health_stats": health_stats,
         "health_survey_stats": health_survey_stats,
+        "service_packages": service_packages,
+        "selected_package_id": selected_package["id"] if selected_package else None,
+        "selected_date_range": {"start_date": start_date, "end_date": end_date},
+        "checkup_stats": checkup_stats,
+        "buy_url": generate_menu_auth_url("market:product_buy"),
     }
 
     return render(request, "web_patient/health_records.html", context)
@@ -1031,9 +1052,48 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     """
     record_type = request.GET.get("type")
     title = request.GET.get("title", "历史记录")
+    checkup_id = request.GET.get("checkup_id")
+    source = request.GET.get("source")
 
     patient = request.patient
     patient_id = patient.id or None
+    is_member = _is_member(patient)
+
+    general_record_types = {
+        "medical",
+        "temperature",
+        "bp",
+        "spo2",
+        "weight",
+        "step",
+        "heart",
+        "bp_hr",
+    }
+    add_record_types = {"temperature", "weight", "spo2", "bp", "bp_hr"}
+    show_operation_controls = bool(
+        source == "health_records" and record_type in general_record_types
+    )
+    show_add_button = bool(show_operation_controls and record_type in add_record_types)
+
+    member_only_types = {
+        "review_record",
+        "physical",
+        "breath",
+        "cough",
+        "appetite",
+        "pain",
+        "sleep",
+        "psych",
+        "anxiety",
+    }
+    if record_type in member_only_types and not is_member:
+        buy_url = generate_menu_auth_url("market:product_buy")
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {"success": False, "message": "该功能为会员专属，请先开通会员", "buy_url": buy_url},
+                status=403,
+            )
+        return redirect(buy_url)
 
     # 获取当前月份（YYYY-MM）
     current_month = request.GET.get("month", datetime.now().strftime("%Y-%m"))
@@ -1071,6 +1131,102 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
 
     if patient_id and record_type:
         try:
+            if record_type == "review_record":
+                try:
+                    checkup_id_int = int(checkup_id) if checkup_id else None
+                except (TypeError, ValueError):
+                    checkup_id_int = None
+
+                if not checkup_id_int:
+                    records = []
+                else:
+                    month_start_date = start_date.date()
+                    month_end_exclusive = end_date.date()
+                    today = timezone.localdate()
+                    weekday_map = {
+                        0: "星期一",
+                        1: "星期二",
+                        2: "星期三",
+                        3: "星期四",
+                        4: "星期五",
+                        5: "星期六",
+                        6: "星期日",
+                    }
+
+                    qs = (
+                        DailyTask.objects.filter(
+                            patient=patient,
+                            task_type=PlanItemCategory.CHECKUP,
+                            task_date__gte=month_start_date,
+                            task_date__lt=month_end_exclusive,
+                            interaction_payload__checkup_id=checkup_id_int,
+                        )
+                        .order_by("-task_date", "-id")
+                    )
+                    paginator = Paginator(qs, limit)
+                    page_obj = paginator.get_page(page)
+                    total_count = paginator.count
+                    has_more = page_obj.has_next()
+
+                    for task in page_obj.object_list:
+                        if task.status == TaskStatus.COMPLETED:
+                            status_label = "已完成"
+                        else:
+                            status_label = "未开始" if task.task_date > today else "未完成"
+
+                        time_str = "--:--"
+                        if task.completed_at:
+                            time_str = timezone.localtime(task.completed_at).strftime("%H:%M")
+
+                        records.append(
+                            {
+                                "id": task.id,
+                                "date": task.task_date.strftime("%Y-%m-%d"),
+                                "weekday": weekday_map[task.task_date.weekday()],
+                                "time": time_str,
+                                "source": "checkup_task",
+                                "source_display": status_label,
+                                "is_manual": False,
+                                "can_edit": False,
+                                "data": [
+                                    {
+                                        "label": "复查",
+                                        "value": title,
+                                        "is_large": True,
+                                        "key": "checkup_name",
+                                    },
+                                    {
+                                        "label": "状态",
+                                        "value": status_label,
+                                        "is_large": True,
+                                        "key": "checkup_status",
+                                    },
+                                ],
+                            }
+                        )
+                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                    return JsonResponse(
+                        {
+                            "records": records,
+                            "has_more": has_more,
+                            "next_page": page + 1 if has_more else None,
+                        }
+                    )
+                context = {
+                    "record_type": record_type,
+                    "title": title,
+                    "records": records,
+                    "current_month": current_month,
+                    "patient_id": patient_id,
+                    "has_more": has_more,
+                    "next_page": page + 1 if has_more else None,
+                    "checkup_id": checkup_id_int if checkup_id else None,
+                    "source": source,
+                    "show_operation_controls": show_operation_controls,
+                    "show_add_button": show_add_button,
+                }
+                return render(request, "web_patient/health_record_detail.html", context)
+
             # 映射前端 type 到后端 MetricType
             metric_type_map = {
                 "medical": MetricType.USE_MEDICATED,
@@ -1165,11 +1321,20 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             },
                             # {"label": "心率", "value": "80", "is_large": True, "key": "heart"} # 暂无心率关联
                         ]
+                    elif record_type == "medical":
+                        data_fields = [
+                            {
+                                "label": "用药",
+                                "value": "",
+                                "is_large": True,
+                                "key": "medicated",
+                            }
+                        ]
                     # ... 其他类型处理
                     else:
                         data_fields.append(
                             {
-                                "label": title,
+                                "label": title+'（评分）',
                                 "value": metric.display_value,
                                 "is_large": True,
                                 "key": "common",
@@ -1188,19 +1353,22 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             ),
                             "is_manual": metric.source == "manual",
                             "can_edit": metric.source == "manual"
-                            and dt.date() == datetime.now().date(),
+                            and dt.date() == timezone.localdate(),
                             "data": data_fields,
                         }
                     )
 
-        except Exception as e:
-            logging.info(f"查询详情失败: {e}")
-            return redirect(request.path_info)
+        except Exception:
+            logging.exception("查询详情失败")
+            records = []
+            has_more = False
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse(
+                    {"records": [], "has_more": False, "next_page": None}, status=500
+                )
 
     # 如果是 AJAX 请求，返回 JSON
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-        from django.http import JsonResponse
-
         return JsonResponse(
             {
                 "records": records,
@@ -1217,6 +1385,10 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "patient_id": patient_id,
         "has_more": has_more,
         "next_page": page + 1 if has_more else None,
+        "checkup_id": checkup_id,
+        "source": source,
+        "show_operation_controls": show_operation_controls,
+        "show_add_button": show_add_button,
     }
 
     return render(request, "web_patient/health_record_detail.html", context)

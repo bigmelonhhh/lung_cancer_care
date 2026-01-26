@@ -130,34 +130,7 @@
     </aside>
 
     <main id="main-content-area" class="flex-1 overflow-y-auto p-6 md:p-10 bg-gray-50">
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 space-y-8">
-        <div>
-          <p class="text-sm uppercase tracking-widest text-slate-400">Dashboard</p>
-          <h1 class="text-2xl md:text-3xl font-semibold text-slate-900 mt-2">你好，{{ sales.name }} 经理</h1>
-          <p class="text-slate-500 mt-2">点击左侧列表查看详情，或点击顶部按钮录入新患者。</p>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="bg-gradient-to-br from-blue-500 to-sky-400 text-white rounded-2xl p-6 shadow-lg flex flex-col">
-            <div class="text-sm uppercase tracking-wide text-white/70">管理医生总数</div>
-            <div class="text-4xl font-bold mt-4">{{ stats.doctor_total }}</div>
-            <p class="text-sm text-white/80 mt-2">持续维护优质渠道，助力医生工作室增长。</p>
-          </div>
-          <div class="bg-gradient-to-br from-emerald-500 to-teal-400 text-white rounded-2xl p-6 shadow-lg flex flex-col">
-            <div class="text-sm uppercase tracking-wide text-white/70">管理患者总数</div>
-            <div class="text-4xl font-bold mt-4">{{ stats.patient_total }}</div>
-            <p class="text-sm text-white/80 mt-2">关注患者依从性，及时提醒续费与关怀。</p>
-          </div>
-        </div>
-        {% if qrcode_url %}
-        <div class="bg-white border border-dashed border-slate-200 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
-          <img src="{{ qrcode_url }}" alt="销售专属二维码" class="w-48 h-48 object-contain border border-slate-200 rounded-xl shadow-sm bg-white" loading="lazy">
-          <div>
-            <p class="text-lg font-semibold text-slate-900">{{ sales.name }}的专用二维码</p>
-            <p class="text-sm text-slate-500 mt-2">将此二维码转发给客户，扫码即可直接绑定您的销售身份（以客户第一次扫码绑定为准）。</p>
-          </div>
-        </div>
-        {% endif %}
-      </div>
+      {% include "web_sales/partials/dashboard_home.html" %}
     </main>
   </div>
 

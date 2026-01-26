@@ -314,8 +314,11 @@
       const menuUrls = {{ menuUrl|safe }};
       let url = specificUrl || menuUrls[type];
       if (url) {
+           const dateDisplayEl = document.getElementById('current-date-display');
+           const selectedDate = dateDisplayEl ? dateDisplayEl.textContent.trim() : '';
            const sep = url.includes('?') ? '&' : '?';
-           window.location.href = url + sep + "patient_id={{ patient.id }}";
+           const dateParam = selectedDate ? `&selected_date=${encodeURIComponent(selectedDate)}` : '';
+           window.location.href = url + sep + "patient_id={{ patient.id }}" + dateParam;
       }
   }
 

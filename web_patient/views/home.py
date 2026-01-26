@@ -70,6 +70,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     is_family = True
+    is_member = bool(getattr(patient, "is_member", False) and getattr(patient, "membership_expire_date", None))
     
     # 不是家属，也不是患者，转向填写信息
     if not patient:
@@ -85,21 +86,16 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     service_days = "0"
     daily_plans = []
     
-    if patient_id:  # 获取守护天数
+    if patient_id and is_member:
         served_days, remaining_days = PatientService().get_guard_days(patient)
         service_days = served_days
-        
-        # 调用接口获取今日计划数据
+
         try:
             summary_list = get_daily_plan_summary(patient)
-            print(f"{summary_list}")
-            # 将接口数据转换为前端需要的格式
             for item in summary_list:
-                task_type_val = item.get("task_type")
                 status_val = item.get("status")
                 title_val = item.get("title")
-                
-                # 默认值
+
                 plan_data = {
                     "type": "unknown",
                     "title": title_val,
@@ -108,82 +104,88 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     "action_text": "去完成",
                     "icon_class": "bg-blue-100 text-blue-600",
                 }
-                
-                # 根据 title 或 task_type 映射前端类型
-                # 注意：这里主要依赖 title 来做映射，因为 task_type 比较宽泛（如 MONITORING=4 包含多种监测）
-                # 过滤掉步数任务，不显示在计划列表里
+
                 if "步数" in title_val:
                     continue
 
                 if "用药" in title_val:
-                    plan_data.update({
-                        "type": "medication",
-                        "subtitle": item.get("subtitle") or ("您今天还未服药" if status_val == 0 else "今日已服药"),
-                        "action_text": "去服药"
-                    })
+                    plan_data.update(
+                        {
+                            "type": "medication",
+                            "subtitle": item.get("subtitle")
+                            or ("您今天还未服药" if status_val == 0 else "今日已服药"),
+                            "action_text": "去服药",
+                        }
+                    )
                 elif "体温" in title_val:
-                    plan_data.update({
-                        "type": "temperature",
-                        "subtitle": item.get("subtitle") or "请记录今日体温",
-                        "action_text": "去填写"
-                    })
+                    plan_data.update(
+                        {
+                            "type": "temperature",
+                            "subtitle": item.get("subtitle") or "请记录今日体温",
+                            "action_text": "去填写",
+                        }
+                    )
                 elif "血压" in title_val or "心率" in title_val:
-                    # 检查是否已经添加了 bp_hr 类型的任务
                     has_bp_hr = any(p["type"] == "bp_hr" for p in daily_plans)
                     if has_bp_hr:
                         continue
-                        
-                    plan_data.update({
-                        "type": "bp_hr",
-                        "title": "血压/心率监测",  # 合并后的标题
-                        "subtitle": item.get("subtitle") or "请记录今日血压心率情况",
-                        "action_text": "去填写"
-                    })
+
+                    plan_data.update(
+                        {
+                            "type": "bp_hr",
+                            "title": "血压/心率监测",
+                            "subtitle": item.get("subtitle") or "请记录今日血压心率情况",
+                            "action_text": "去填写",
+                        }
+                    )
                 elif "血氧" in title_val:
-                    plan_data.update({
-                        "type": "spo2",
-                        "subtitle": item.get("subtitle") or "请记录今日血氧饱和度",
-                        "action_text": "去填写"
-                    })
+                    plan_data.update(
+                        {
+                            "type": "spo2",
+                            "subtitle": item.get("subtitle") or "请记录今日血氧饱和度",
+                            "action_text": "去填写",
+                        }
+                    )
                 elif "体重" in title_val:
-                    plan_data.update({
-                        "type": "weight",
-                        "subtitle": item.get("subtitle") or "请记录今日体重",
-                        "action_text": "去填写"
-                    })
+                    plan_data.update(
+                        {
+                            "type": "weight",
+                            "subtitle": item.get("subtitle") or "请记录今日体重",
+                            "action_text": "去填写",
+                        }
+                    )
                 elif "随访" in title_val or "问卷" in title_val:
-                    # 获取问卷ID列表并构建带参数的URL
                     q_ids = item.get("questionnaire_ids", [])
                     action_url = reverse("web_patient:daily_survey")
                     if q_ids:
-                         ids_str = ",".join(map(str, q_ids))
-                         action_url = f"{action_url}?ids={ids_str}"
-                    
-                    plan_data.update({
-                        "type": "followup",
-                        "subtitle": item.get("subtitle") or ("请及时完成您的随访任务" if status_val == 0 else "今日已完成"),
-                        "action_text": "去完成",
-                        "url": action_url
-                    })
+                        ids_str = ",".join(map(str, q_ids))
+                        action_url = f"{action_url}?ids={ids_str}"
+
+                    plan_data.update(
+                        {
+                            "type": "followup",
+                            "subtitle": item.get("subtitle")
+                            or ("请及时完成您的随访任务" if status_val == 0 else "今日已完成"),
+                            "action_text": "去完成",
+                            "url": action_url,
+                        }
+                    )
                 elif "复查" in title_val:
-                    plan_data.update({
-                        "type": "checkup",
-                        "subtitle": item.get("subtitle") or ("请及时完成您的复查任务" if status_val == 0 else "今日已完成"),
-                        "action_text": "去完成"
-                    })
-                # 去除呼吸、咳嗽、疼痛等映射
+                    plan_data.update(
+                        {
+                            "type": "checkup",
+                            "subtitle": item.get("subtitle")
+                            or ("请及时完成您的复查任务" if status_val == 0 else "今日已完成"),
+                            "action_text": "去完成",
+                        }
+                    )
                 else:
-                    # 如果匹配不到已知类型，暂不展示，或者作为通用类型展示
-                    # 根据需求：去除不存在的类型，所以这里选择不添加到 daily_plans
                     continue
-                
+
                 daily_plans.append(plan_data)
-                
-        except Exception as e:
+
+        except Exception:
             daily_plans = []
-            
-    else:
-        service_days = "0"
         
     # 对 daily_plans 进行排序
     # 排序顺序：用药(medication) > 血氧(spo2) > 血压心率(bp_hr) > 体重(weight) > 体温(temperature) > 复查(checkup) > 随访(followup) > 其他
@@ -270,7 +272,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     listData = {}
     # 今日步数
     step_count = "0"
-    if patient_id:
+    if patient_id and is_member:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
             if MetricType.STEPS in listData and listData[MetricType.STEPS] is not None:
@@ -380,9 +382,6 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "bp_hr": reverse("web_patient:record_bp"),
         "spo2": reverse("web_patient:record_spo2"),
         "weight": reverse("web_patient:record_weight"),
-        "breath": reverse("web_patient:record_breath"),
-        "sputum": reverse("web_patient:record_sputum"),
-        "pain": reverse("web_patient:record_pain"),
         "followup": reverse("web_patient:daily_survey"), 
         "checkup": reverse("web_patient:record_checkup"),
     }
@@ -391,6 +390,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     context = {
         "patient": patient,
         "is_family": is_family,
+        "is_member": is_member,
         "service_days": service_days,
         "daily_plans": daily_plans,
         "buy_url": generate_menu_auth_url("market:product_buy"),

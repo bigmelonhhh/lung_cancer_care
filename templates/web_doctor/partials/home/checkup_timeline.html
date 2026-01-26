@@ -94,6 +94,7 @@
 
                 {# 底部详情展示区域 #}
         <div class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto ">
+            <div class="text-xs text-slate-500 mb-2">提示：日期优先显示报告日期，缺失时显示创建日期</div>
             <div class="w-full flex gap-4 min-w-max relative pt-6">
                 {# 时间轴横线 #}
                 <div class="absolute top-2.5 left-0 w-full h-0.5 bg-slate-200"></div>
@@ -110,7 +111,7 @@
                         </div>
                         
                         {# 卡片内容 #}
-                        <div class="w-32 rounded overflow-hidden shadow-sm border text-center transition-transform hover:-translate-y-1 
+                        <div class="w-44 rounded overflow-hidden shadow-sm border text-center transition-transform hover:-translate-y-1 
                              {% if event.type == 'checkup' %}border-green-200 bg-green-50
                              {% elif event.type == 'outpatient' %}border-amber-200 bg-amber-50
                              {% else %}border-purple-200 bg-purple-50{% endif %}">
@@ -120,8 +121,8 @@
                                  {% else %}bg-purple-600{% endif %}">
                                 {{ event.type_display }}
                             </div>
-                            <div class="py-1.5 text-xs font-medium text-slate-700">
-                                {{ event.date }}
+                            <div class="py-1.5 text-[11px] font-medium text-slate-700">
+                                {{ event.date_display }}
                             </div>
                         </div>
                     </div>

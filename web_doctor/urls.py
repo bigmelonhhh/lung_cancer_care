@@ -8,6 +8,7 @@ app_name = "web_doctor"
 
 urlpatterns = [
     path("login/", views.login_view, name="login"),
+    path("doctor/mobile/home/", views.mobile_home, name="mobile_home"),
     path("logout/", views.logout_view, name="logout"),
     # path("doctor/dashboard/", views.doctor_dashboard, name="doctor_dashboard"), # 已删除
     

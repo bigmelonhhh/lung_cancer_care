@@ -42,6 +42,7 @@
     >
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.GET.next }}">
+      <input type="hidden" name="selected_date" value="{{ selected_date }}">
 
       <div class="bg-white rounded-xl shadow-sm p-5">
         <!-- 1. Measurement Time -->
