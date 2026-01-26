@@ -5,12 +5,13 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 
 from business_support.models import FeedbackImage
-from users.decorators import check_patient
+from users.decorators import check_patient, require_membership
 from web_patient.forms import FeedbackForm
 
 
 @login_required
 @check_patient
+@require_membership
 def feedback_view(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     if request.method == "POST":

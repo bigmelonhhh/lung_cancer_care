@@ -29,7 +29,10 @@ from .reports_history_data import (
     delete_consultation_record,
 )
 
+from .mobile.views import mobile_home
+
 __all__ = [
+    "mobile_home",
     "login_view",
     "logout_view",
     "doctor_change_password",

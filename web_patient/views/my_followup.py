@@ -1,12 +1,13 @@
 import logging
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
-from users.decorators import auto_wechat_login, check_patient
+from users.decorators import auto_wechat_login, check_patient, require_membership
 
 logger = logging.getLogger(__name__)
 
 @auto_wechat_login
 @check_patient
+@require_membership
 def my_followup(request: HttpRequest) -> HttpResponse:
     """
     我的随访页面

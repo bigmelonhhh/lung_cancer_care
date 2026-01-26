@@ -41,4 +41,6 @@ def sales_dashboard(request: HttpRequest) -> HttpResponse:
         "stats": stats,
         "qrcode_url": qrcode_url,
     }
+    if request.headers.get("HX-Request") == "true":
+        return render(request, "web_sales/partials/dashboard_home.html", context)
     return render(request, "web_sales/dashboard.html", context)

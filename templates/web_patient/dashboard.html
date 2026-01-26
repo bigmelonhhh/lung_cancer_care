@@ -29,7 +29,7 @@
         </a>
       </div>
 
-      {% if patient.is_member and patient.membership_expire_date %}
+      {% if is_member %}
       <div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#FFF7ED] to-[#FFEDD5] border border-orange-100 p-5 shadow-sm">
         <div class="flex items-center justify-between relative z-10">
           <div class="flex items-center gap-3">
@@ -80,7 +80,11 @@
       </h2>
       <div class="grid grid-cols-2 gap-3">
         {% for entry in main_entries %}
-        <a href="{% if entry.title == '我的随访' %}{% url 'web_patient:my_followup' %}{% else %}{{ entry.url }}{% endif %}" class="flex flex-col justify-between p-4 rounded-2xl bg-white shadow-sm border border-slate-200 active:scale-[0.98] transition h-36 relative overflow-hidden group">
+        <a
+          href="{% if not is_member and entry.title == '我的随访' or not is_member and entry.title == '我的复查' or not is_member and entry.title == '我的用药' %}{{ buy_url }}{% elif entry.title == '我的随访' %}{% url 'web_patient:my_followup' %}{% else %}{{ entry.url }}{% endif %}"
+          onclick="return handleMemberOnlyNavigation(event, '{{ entry.title|escapejs }}');"
+          class="flex flex-col justify-between p-4 rounded-2xl bg-white shadow-sm border border-slate-200 active:scale-[0.98] transition h-36 relative overflow-hidden group"
+        >
           <div class="flex justify-between items-start z-10">
             <span class="text-lg font-extrabold text-slate-800 leading-tight tracking-tight">{{ entry.title }}</span>
             
@@ -128,7 +132,11 @@
       <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6">
         <div class="grid grid-cols-4 gap-y-8">
           {% for entry in service_entries %}
-          <a href="{{ entry.url }}" class="flex flex-col items-center gap-3 active:opacity-60 transition group">
+          <a
+            href="{% if not is_member and entry.title == '我的订单' or not is_member and entry.title == '智能设备' or not is_member and entry.title == '工作室' or not is_member and entry.title == '上传报告' or not is_member and entry.title == '亲情账号' or not is_member and entry.title == '意见反馈' %}{{ buy_url }}{% else %}{{ entry.url }}{% endif %}"
+            onclick="return handleMemberOnlyNavigation(event, '{{ entry.title|escapejs }}');"
+            class="flex flex-col items-center gap-3 active:opacity-60 transition group"
+          >
              <div class="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-600 group-hover:bg-slate-100 group-hover:text-sky-600 transition">
                 {% if entry.title == "我的订单" %}
                 <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
@@ -163,6 +171,40 @@
 
   </div>
 </div>
+
+<script>
+  const IS_MEMBER = {{ is_member|yesno:"true,false" }};
+  const BUY_URL = "{{ buy_url|escapejs }}";
+
+  function handleMemberOnlyNavigation(event, title) {
+    const memberOnlyTitles = new Set([
+      '我的随访',
+      '我的复查',
+      '我的用药',
+      '我的订单',
+      '智能设备',
+      '工作室',
+      '上传报告',
+      '亲情账号',
+      '意见反馈'
+    ]);
+
+    if (IS_MEMBER) {
+      return true;
+    }
+
+    if (!title || !memberOnlyTitles.has(title)) {
+      return true;
+    }
+
+    if (event) {
+      event.preventDefault();
+    }
+    alert('该功能为会员专属，请先开通会员');
+    window.location.href = BUY_URL;
+    return false;
+  }
+</script>
 
 {% if messages %}
 <script>

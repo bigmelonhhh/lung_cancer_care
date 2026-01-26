@@ -1,12 +1,12 @@
 <!-- 弹框HTML结构 -->
-<div id="todo-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-white rounded-lg p-6 w-[650px] shadow-xl">
+<div id="todo-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 opacity-0 transition-opacity duration-200">
+    <div id="todo-modal-panel" class="bg-white rounded-lg p-6 w-[650px] shadow-xl transform scale-95 transition-transform duration-200">
         <h3 class="text-lg font-medium mb-4 text-slate-800" id="modal-title">处理患者待办</h3>
         
         <div class="mb-4">
-            <div class="flex items-center mb-2 justify-between cursor-pointer">
+            <div class="flex items-center mb-2 justify-between">
             <label class="block text-sm font-medium text-slate-700 mb-1">待处理事件</label>
-            <span class="text-rose-500 text-sm">查看指标></span></div>
+            <button type="button" id="view-indicators-btn" class="text-rose-500 text-sm hover:text-rose-600 transition">查看指标></button></div>
             <div id="event-title" class="p-2 bg-slate-50 rounded text-slate-800 font-medium border border-slate-100"></div>
             <div id="event-content" class="p-2 bg-slate-50 rounded mt-1 text-sm text-slate-600 border border-slate-100"></div>
         </div>
@@ -42,6 +42,12 @@
     window.showTodoModal = function(itemData, isEditMode, onSave) {
         // 保存当前操作的数据ID和回调
         const currentItemId = itemData.id;
+        window.__todoModalContext = {
+            patientId: itemData.patient_id || null,
+            indicatorsQuery: {
+                filter_type: "cycle"
+            }
+        };
         
         // 填充数据
         $('#event-title').text(itemData.title || '');
@@ -145,11 +151,51 @@
         }
         
         // 显示弹框
-        $('#todo-modal').removeClass('hidden');
+        openModal();
     };
 
+    function openModal() {
+        const modal = document.getElementById('todo-modal');
+        const panel = document.getElementById('todo-modal-panel');
+        if (!modal) return;
+
+        modal.classList.remove('hidden');
+        requestAnimationFrame(function() {
+            modal.style.opacity = '1';
+            if (panel) panel.style.transform = 'scale(1)';
+        });
+    }
+
+    function closeModalAsync() {
+        return new Promise(function(resolve) {
+            const modal = document.getElementById('todo-modal');
+            const panel = document.getElementById('todo-modal-panel');
+            if (!modal) {
+                resolve();
+                return;
+            }
+
+            const finish = function() {
+                modal.classList.add('hidden');
+                modal.removeEventListener('transitionend', onEnd);
+                resolve();
+            };
+
+            const onEnd = function(e) {
+                if (e.target === modal) {
+                    finish();
+                }
+            };
+
+            modal.addEventListener('transitionend', onEnd);
+            modal.style.opacity = '0';
+            if (panel) panel.style.transform = 'scale(0.95)';
+            window.setTimeout(finish, 260);
+        });
+    }
+
     function closeModal() {
-        $('#todo-modal').addClass('hidden');
+        closeModalAsync();
     }
 
     /**
@@ -159,6 +205,10 @@
      */
     window.handleTodoModalTrigger = function(btn, isEditMode) {
         const dataset = btn.dataset;
+        const entry = dataset.entrySource || (document.getElementById('todo-filter-form') ? 'todo_list' : 'home');
+        try {
+            sessionStorage.setItem('todo_modal_entry', entry);
+        } catch (e) {}
         const itemData = {
             id: dataset.todoId,
             title: dataset.todoTitle,
@@ -177,7 +227,121 @@
     // 初始化事件绑定
     $(document).ready(function() {
         // 取消按钮
-        $('#cancel-btn').click(closeModal);
+        $('#cancel-btn').click(function() {
+            closeModal();
+        });
+
+        window.goToPatientIndicators = function(payload) {
+            const patientId = payload && payload.patientId ? String(payload.patientId) : '';
+            const query = payload && payload.query ? String(payload.query) : '';
+            if (!patientId) {
+                alert('未获取到患者ID，无法跳转指标');
+                return;
+            }
+
+            const ensureLoadingOverlay = function() {
+                if (document.getElementById('workspace-loading-overlay')) return null;
+                if (document.getElementById('todo-nav-loading-overlay')) return document.getElementById('todo-nav-loading-overlay');
+                const overlay = document.createElement('div');
+                overlay.id = 'todo-nav-loading-overlay';
+                overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm';
+                overlay.innerHTML = '<div class="flex flex-col items-center justify-center text-center px-6 py-10 text-slate-500"><p class="text-sm font-medium text-slate-600">加载中...</p></div>';
+                document.body.appendChild(overlay);
+                return overlay;
+            };
+
+            const removeLoadingOverlay = function(overlay) {
+                if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            };
+
+            const htmxGet = function(url, targetSelector, indicatorSelector) {
+                return new Promise(function(resolve, reject) {
+                    if (!window.htmx) {
+                        reject(new Error('htmx not found'));
+                        return;
+                    }
+                    const elt = document.createElement('a');
+                    elt.href = '#';
+                    elt.style.display = 'none';
+                    elt.setAttribute('hx-get', url);
+                    elt.setAttribute('hx-target', targetSelector);
+                    elt.setAttribute('hx-swap', 'innerHTML');
+                    elt.setAttribute('hx-request', '{"timeout": 10000}');
+                    if (indicatorSelector) {
+                        elt.setAttribute('hx-indicator', indicatorSelector);
+                    }
+                    document.body.appendChild(elt);
+                    window.htmx.process(elt);
+
+                    const handler = function(evt) {
+                        if (!evt.detail || evt.detail.elt !== elt) return;
+                        document.body.removeEventListener('htmx:afterRequest', handler);
+                        elt.remove();
+                        if (evt.detail.successful) {
+                            resolve();
+                        } else {
+                            reject(new Error('request failed'));
+                        }
+                    };
+                    document.body.addEventListener('htmx:afterRequest', handler);
+
+                    elt.click();
+                });
+            };
+
+            const indicatorsUrl = '/doctor/workspace/patient/' + patientId + '/indicators/' + (query ? ('?' + query) : '');
+            const hasPatientContent = !!document.getElementById('patient-content');
+            if (hasPatientContent) {
+                htmxGet(indicatorsUrl, '#patient-content', '#workspace-loading-overlay').catch(function() {
+                    alert('加载患者指标失败，请稍后重试');
+                });
+                return;
+            }
+
+            const overlay = ensureLoadingOverlay();
+            const workspaceUrl = '/doctor/workspace/patient/' + patientId + '/';
+            htmxGet(workspaceUrl, '#main-content', null)
+                .then(function() {
+                    removeLoadingOverlay(overlay);
+                    return htmxGet(indicatorsUrl, '#patient-content', '#workspace-loading-overlay');
+                })
+                .catch(function() {
+                    removeLoadingOverlay(overlay);
+                    alert('加载患者工作区失败，请稍后重试');
+                });
+        };
+
+        $('#view-indicators-btn').click(function() {
+            const ctx = window.__todoModalContext || {};
+            const patientId = ctx.patientId;
+            const query = ctx.indicatorsQuery ? new URLSearchParams(ctx.indicatorsQuery).toString() : '';
+            const entry = (function() {
+                try {
+                    return sessionStorage.getItem('todo_modal_entry') || 'home';
+                } catch (e) {
+                    return 'home';
+                }
+            })();
+
+            closeModalAsync().then(function() {
+                if (!patientId) {
+                    alert('未获取到患者ID，无法跳转指标');
+                    return;
+                }
+                if (entry === 'todo_list') {
+                    try {
+                        sessionStorage.setItem('todo_pending_jump', JSON.stringify({
+                            action: 'indicators',
+                            patientId: String(patientId),
+                            query: query
+                        }));
+                    } catch (e) {}
+                    window.history.back();
+                    return;
+                }
+                window.goToPatientIndicators({ patientId: patientId, query: query });
+            });
+        });
         
         // 点击遮罩层关闭
         $('#todo-modal').click(function(e) {

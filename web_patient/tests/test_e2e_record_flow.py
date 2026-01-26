@@ -8,7 +8,11 @@ from django.utils import timezone
 import datetime
 import json
 from decimal import Decimal
+from django.test import override_settings
+from users import choices
+from market.models import Order, Product
 
+@override_settings(DEBUG=True, TEST_PATIENT_ID="1")
 class E2ERecordFlowTests(TestCase):
     def setUp(self):
         self.client = Client()
@@ -16,6 +20,7 @@ class E2ERecordFlowTests(TestCase):
         self.user = CustomUser.objects.create_user(
             username='e2e_test_user',
             password='password123',
+            user_type=choices.UserType.PATIENT,
             wx_openid='e2e_openid'
         )
         self.patient = PatientProfile.objects.create(
@@ -179,6 +184,20 @@ class E2ERecordFlowTests(TestCase):
             value_main=Decimal('36.8'),
             measured_at=timezone.now(),
             source='manual'
+        )
+
+        product = Product.objects.create(
+            name="VIP 服务包",
+            price=Decimal("199.00"),
+            duration_days=30,
+            is_active=True,
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.now(),
         )
         
         url = reverse('web_patient:query_last_metric')

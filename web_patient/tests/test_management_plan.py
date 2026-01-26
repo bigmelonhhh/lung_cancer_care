@@ -3,11 +3,12 @@ from django.urls import reverse
 from unittest.mock import patch, MagicMock
 from web_patient.views.plan import management_plan
 from users.models import PatientProfile, CustomUser
+from users import choices
 from health_data.models import MetricType
 from django.utils import timezone
 import datetime
-from market.models import Product, Order
 from decimal import Decimal
+from market.models import Product, Order
 
 class ManagementPlanViewTests(TestCase):
     def setUp(self):
@@ -15,6 +16,7 @@ class ManagementPlanViewTests(TestCase):
         self.user = CustomUser.objects.create_user(
             username='testpatient', 
             password='password',
+            user_type=choices.UserType.PATIENT,
             wx_openid='test_openid_123'
         )
         self.patient = PatientProfile.objects.create(user=self.user, name="Test Patient")

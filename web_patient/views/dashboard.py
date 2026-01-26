@@ -5,6 +5,7 @@ from django.urls import reverse
 from users.models import PatientRelation
 from django.http import HttpResponseBadRequest
 from users.decorators import auto_wechat_login, check_patient
+from wx.services.oauth import generate_menu_auth_url
 
 
 
@@ -21,6 +22,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     
     is_family = True
+    is_member = bool(getattr(patient, "is_member", False) and getattr(patient, "membership_expire_date", None))
 
     
     # 不是家属，也不是患者， 转向填写信息
@@ -63,8 +65,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         },
     ]
 
-    from wx.services.oauth import generate_menu_auth_url
-    # orders_url = reverse("web_patient:orders")
+    buy_url = generate_menu_auth_url("market:product_buy")
     service_entries = [
         {"title": "我的订单", "url": generate_menu_auth_url("web_patient:orders")},
         {"title": "智能设备", "url": generate_menu_auth_url("web_patient:device_list")},
@@ -83,9 +84,10 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         {
             "patient": patient,
             "is_family": is_family,
+            "is_member": is_member,
             "main_entries": main_entries,
             "service_entries": service_entries,
-            "buy_url": generate_menu_auth_url("market:product_buy")
+            "buy_url": buy_url,
         },
     )
 

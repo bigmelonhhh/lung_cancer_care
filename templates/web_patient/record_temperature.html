@@ -25,6 +25,7 @@
         <form method="POST" action="{% url 'web_patient:record_temperature' %}?patient_id={{ patient_id }}" id="temperature-form" class="bg-white rounded-xl shadow-sm p-5">
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ request.GET.next }}">
+            <input type="hidden" name="selected_date" value="{{ selected_date }}">
                     <!-- Main Form Card -->
                     <div class="bg-white rounded-xl shadow-sm p-5">
                         

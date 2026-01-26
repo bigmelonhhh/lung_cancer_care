@@ -5,12 +5,13 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from market.models import Order
-from users.decorators import check_patient
+from users.decorators import check_patient, require_membership
 from users.models import PatientRelation
 
 
 @login_required
 @check_patient
+@require_membership
 def patient_orders(request):
     """
     【页面说明】患者端订单列表 `/p/orders/`。

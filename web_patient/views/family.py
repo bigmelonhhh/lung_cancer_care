@@ -6,7 +6,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from users.decorators import check_patient
+from users.decorators import check_patient, require_membership
 from users.models import PatientRelation
 from users.services.patient import PatientService
 from wx.services.oauth import generate_menu_auth_url
@@ -16,6 +16,7 @@ patient_service = PatientService()
 
 @login_required
 @check_patient
+@require_membership
 def family_management(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     if not patient:
@@ -48,6 +49,7 @@ def family_management(request: HttpRequest) -> HttpResponse:
 @require_POST
 @login_required
 @check_patient
+@require_membership
 def unbind_family(request: HttpRequest) -> HttpResponse:
     relation_id = request.POST.get("relation_id")
     if not relation_id:

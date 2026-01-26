@@ -74,7 +74,7 @@
   <!-- Main Content Area -->
   <div class="px-4 -mt-14 relative z-20 space-y-6">
     <a
-      href="{% if patient.is_member and patient.membership_expire_date %}{% url 'web_patient:consultation_chat' %}{% else %}{{ buy_url }}{% endif %}"
+      href="{% if is_member %}{% url 'web_patient:consultation_chat' %}{% else %}{{ buy_url }}{% endif %}"
       class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
     >
       <div class="flex items-center gap-4 relative z-10">
@@ -98,7 +98,7 @@
         <div>
           <div class="flex items-center gap-2">
             <h2 class="text-lg font-bold text-slate-900">问题咨询</h2>
-            {% if patient.is_member and patient.membership_expire_date %}
+            {% if is_member %}
             <span
               class="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-500 font-bold border border-red-100"
               >VIP</span
@@ -151,7 +151,8 @@
 
       <!-- Medication -->
       <a
-        href="{% url 'web_patient:my_medication' %}"
+        href="{% if is_member %}{% url 'web_patient:my_medication' %}{% else %}{{ buy_url }}{% endif %}"
+        onclick="return handleMemberOnlyNavigation(event);"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#5E9EFF] to-[#4364F7] shadow-md shadow-blue-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
@@ -179,7 +180,8 @@
 
       <!-- Plan -->
       <a
-        href="{% url 'web_patient:management_plan' %}"
+        href="{% if is_member %}{% url 'web_patient:management_plan' %}{% else %}{{ buy_url }}{% endif %}"
+        onclick="return handleMemberOnlyNavigation(event);"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#00C9A7] to-[#00A99D] shadow-md shadow-teal-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
@@ -212,15 +214,12 @@
         <span class="w-1 h-4 bg-orange-500 rounded-full"></span>
         <h3 class="text-lg font-bold text-slate-800">服务包</h3>
       </div>
-      {% if patient.is_member and patient.membership_expire_date %}
+      {% if is_member %}
       <div
         class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#FFF7ED] to-[#FFEDD5] border border-orange-100 p-5 shadow-sm"
       >
         <div class="flex items-center justify-between relative z-10">
           <div class="flex items-center gap-3">
-            <!-- <div class="w-11 h-11 shrink-0 rounded-full bg-orange-200/50 flex items-center justify-center text-orange-700">
-               <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.2h7.6l-6 4.8 2.4 7.2-6-4.8-6 4.8 2.4-7.2-6-4.8h7.6z"/></svg>
-             </div> -->
             <div>
               <p class="text-lg font-bold text-orange-900">VIP 会员服务中</p>
               <p class="text-sm text-orange-800/80 mt-0.5 font-medium">
@@ -287,13 +286,14 @@
             <div
               class="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-orange-400 backdrop-blur-sm border border-white/5"
             >
-              <svg class="w-9 h-9" fill="currentColor" viewBox="0 0 20 20">
+            <svg t="1769178589403" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6930" width="32" height="32"><path d="M896 96a162.72 162.72 0 0 0-229.92 0L640 121.76 613.92 96A162.72 162.72 0 0 0 384 96a162.72 162.72 0 0 0 0 230.24l241.6 241.6a20.96 20.96 0 0 0 29.6 0L896 325.92A162.72 162.72 0 0 0 896 96z" fill="#ED7899" p-id="6931"></path><path d="M549.92 212L497.12 160a57.28 57.28 0 0 1 59.04-96A208 208 0 0 1 640 121.76z" fill="#F283A5" p-id="6932"></path><path d="M720 728.16l-62.08 15.2-263.52-147.2 7.68 3.36 150.56 71.04a96 96 0 0 0 48 8.96l35.04-2.56a64 64 0 0 1 58.4 29.6 26.08 26.08 0 0 1 1.6 2.88A34.56 34.56 0 0 0 720 728.16z" fill="#CDA1A7" p-id="6933"></path><path d="M432 768l80 32a160 160 0 0 0 124.96-2.56l47.2-21.28a32 32 0 0 0 19.84-28.8v-6.56a64 64 0 0 0-68.64-64l-35.04 2.56a96 96 0 0 1-48-8.96l-150.56-71.04a192 192 0 0 0-104.16-16.96L108.32 604.64a32 32 0 0 0-28.32 32v202.4a32 32 0 0 0 39.68 31.04L224 843.84a128 128 0 0 1 90.72 10.88l202.08 106.08a128 128 0 0 0 118.56 0L976 784a58.88 58.88 0 0 0 32-52.32 58.88 58.88 0 0 0-73.6-56.96L704 734.88" fill="#FAEFDE" p-id="6934"></path><path d="M679.84 874.24l-44.48 23.04a128 128 0 0 1-118.56 0l-201.44-106.56a128 128 0 0 0-91.36-10.88L80 816v23.04a32 32 0 0 0 39.68 31.04L224 843.84a128 128 0 0 1 90.72 10.88l202.08 106.08a128 128 0 0 0 118.56 0l113.6-58.88-5.44-9.6a48 48 0 0 0-63.68-18.08z" fill="#EFD8BE" p-id="6935"></path><path d="M401.92 663.52l150.56 71.04a96 96 0 0 0 48 8.96l35.04-2.56a64 64 0 0 1 58.4 29.76l1.6 2.88a32 32 0 0 0 37.44 17.92L1006.56 720a58.72 58.72 0 0 0-72.32-45.28L704 734.88a64 64 0 0 0-68-57.92l-35.04 2.56a96 96 0 0 1-48-8.96l-150.56-71.04a192 192 0 0 0-104.8-17.12L108.32 604.64a32 32 0 0 0-28.32 32V672l217.6-25.6a192 192 0 0 1 104.32 17.12z" fill="#FFF7F0" p-id="6936"></path><path d="M720 728.16l188.16-46.24-176 45.44a35.68 35.68 0 0 1-12.16 0.8z" fill="#FFF7F0" p-id="6937"></path><path d="M176 640H144a16 16 0 0 0 0 32h32a16 16 0 0 0 0-32zM176 720H144a16 16 0 0 0 0 32h32a16 16 0 0 0 0-32zM176 800H144a16 16 0 0 0 0 32h32a16 16 0 0 0 0-32z" fill="#8D6C9F" p-id="6938"></path><path d="M994.88 672.8a74.4 74.4 0 0 0-64-13.28L715.84 715.2a80 80 0 0 0-81.6-54.24l-35.04 2.56A80 80 0 0 1 560 656l-150.56-71.04a208 208 0 0 0-113.12-18.4L106.4 588.8a48 48 0 0 0-42.4 48v202.24a48 48 0 0 0 59.68 46.56l104.96-26.24a112 112 0 0 1 80 9.6l201.44 106.08a144 144 0 0 0 133.44 0l340.8-176a75.04 75.04 0 0 0 11.36-125.76z m-26.08 97.44l-340.8 176a112 112 0 0 1-103.68 0l-201.44-105.6a144 144 0 0 0-101.92-12.32l-105.12 26.24a16 16 0 0 1-19.84-16V636.48a16 16 0 0 1 14.08-16l189.28-22.24a176 176 0 0 1 96 16l150.56 71.04a112 112 0 0 0 55.84 10.4l35.04-2.56a48 48 0 0 1 51.52 48v6.56a16 16 0 0 1-9.44 14.56l-48 21.28a144 144 0 0 1-112 2.4l-80-32a16 16 0 1 0-11.84 29.76l80 32a176.8 176.8 0 0 0 137.6-2.88l48-21.28A48 48 0 0 0 720 747.36l218.4-56.64a42.88 42.88 0 0 1 30.56 80z" fill="#8D6C9F" p-id="6939"></path><path d="M840 382.24L654.88 567.52a20.96 20.96 0 0 1-29.6 0l-16-17.76a96 96 0 0 1 3.52-132l131.36-131.36a67.84 67.84 0 0 1 96 0 67.84 67.84 0 0 1-0.16 95.84z" fill="#E0678F" p-id="6940"></path><path d="M907.68 84.32a178.88 178.88 0 0 0-252.8 0l-14.4 14.4-14.88-14.88a178.72 178.72 0 1 0-252.8 252.8l241.6 241.6a36.64 36.64 0 0 0 26.08 10.88 36.64 36.64 0 0 0 26.08-10.88l241.44-241.6a178.88 178.88 0 0 0-0.32-252.32z m-22.72 230.24l-241.44 241.6a4.32 4.32 0 0 1-7.04 0l-241.6-241.6a146.72 146.72 0 0 1 208-208l14.88 14.88-3.52 3.52a16 16 0 1 0 22.56 22.56L640 144l37.44-37.44a146.72 146.72 0 1 1 208 208z" fill="#8D6C9F" p-id="6941"></path><path d="M576 162.88l-26.56 26.56a16 16 0 1 0 22.56 22.56l26.56-26.56A16 16 0 0 0 576 162.88z" fill="#8D6C9F" p-id="6942"></path></svg>
+              {% comment %} <svg class="w-9 h-9" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
                   d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
                   clip-rule="evenodd"
                 />
-              </svg>
+              </svg> {% endcomment %}
             </div>
           </div>
         </div>
@@ -301,6 +301,7 @@
       {% endif %}
     </div>
 
+    {% if is_member %}
     <!-- 4. Daily Plan List (Light Background Items on White Page) -->
     <div>
       <div class="flex items-center justify-between mb-4">
@@ -311,6 +312,7 @@
         {% if daily_plans %}
         <a
           href="{% url 'web_patient:management_plan' %}"
+          onclick="return handleMemberOnlyNavigation(event);"
           class="text-sm text-slate-500 font-medium flex items-center hover:text-blue-600 transition"
         >
           查看历史
@@ -600,6 +602,29 @@
       </div>
       {% endif %}
     </div>
+    {% else %}
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-2">
+          <span class="w-1 h-4 bg-blue-600 rounded-full"></span>
+          <h3 class="text-lg font-bold text-slate-800">今日计划</h3>
+        </div>
+      </div>
+      <a
+        href="{{ buy_url }}"
+        onclick="return handleMemberOnlyNavigation(event);"
+        class="block bg-slate-50 rounded-xl p-4 border border-slate-200 active:bg-slate-100 transition"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="font-bold text-slate-800 text-sm">开通会员解锁今日计划</p>
+            <p class="text-sm text-slate-500 mt-0.5">用药提醒、体征监测、随访复查等</p>
+          </div>
+          <div class="text-sm font-bold text-blue-600">去开通</div>
+        </div>
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   <!-- Medication Reminder Modal -->
@@ -678,6 +703,21 @@
 </div>
 
 <script>
+  const IS_MEMBER = {{ is_member|yesno:"true,false" }};
+  const BUY_URL = "{{ buy_url|escapejs }}";
+
+  function handleMemberOnlyNavigation(event) {
+    if (IS_MEMBER) {
+      return true;
+    }
+    if (event) {
+      event.preventDefault();
+    }
+    alert('该功能为会员专属，请先开通会员');
+    window.location.href = BUY_URL;
+    return false;
+  }
+
   function openMedicationModal() {
       const modal = document.getElementById('medication-modal');
       modal.classList.remove('hidden');
@@ -725,6 +765,11 @@
   }
 
   function handleTaskClick(title, type, specificUrl) {
+      if (!IS_MEMBER) {
+          alert('该功能为会员专属，请先开通会员');
+          window.location.href = BUY_URL;
+          return;
+      }
       // 获取当前用户openid
       const patientId = "{{ patient_id|default:'' }}";
 
@@ -759,6 +804,9 @@
   });
 
   function refreshMetricData() {
+    if (!IS_MEMBER) {
+      return;
+    }
     fetch("{% url 'web_patient:query_last_metric' %}")
         .then(response => response.json())
         .then(data => {
