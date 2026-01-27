@@ -40,6 +40,44 @@ from chat.services.chat import ChatService
 
 logger = logging.getLogger(__name__)
 
+_CYCLE_STATE_RANK = {
+    "in_progress": 0,
+    "not_started": 1,
+    "completed": 2,
+    "terminated": 3,
+}
+
+
+def _resolve_cycle_runtime_state(cycle: TreatmentCycle, today: date | None = None) -> str:
+    if today is None:
+        today = date.today()
+    if cycle.status == core_choices.TreatmentCycleStatus.TERMINATED:
+        return "terminated"
+    if today < cycle.start_date:
+        return "not_started"
+    if cycle.end_date and today > cycle.end_date:
+        return "completed"
+    if cycle.status == core_choices.TreatmentCycleStatus.COMPLETED:
+        return "completed"
+    return "in_progress"
+
+
+def _sort_cycles_for_settings(cycles: list[TreatmentCycle], today: date | None = None) -> list[TreatmentCycle]:
+    if today is None:
+        today = date.today()
+    states = [_resolve_cycle_runtime_state(c, today=today) for c in cycles]
+    if "in_progress" not in states:
+        return cycles
+
+    indexed = list(enumerate(cycles))
+    indexed.sort(
+        key=lambda item: (
+            _CYCLE_STATE_RANK[_resolve_cycle_runtime_state(item[1], today=today)],
+            item[0],
+        )
+    )
+    return [cycle for _, cycle in indexed]
+
 
 def _get_workspace_identities(user):
     """
@@ -347,10 +385,9 @@ def _build_settings_context(
 
     active_cycle = get_active_treatment_cycle(patient)
 
-    # 患者全部疗程列表，改为正序排列（最早的在前）
-    # 之前是 order_by("-end_date", "-start_date")
-    cycles_qs = patient.treatment_cycles.all().order_by("start_date")
-    paginator = Paginator(cycles_qs, 5)
+    cycles_qs = patient.treatment_cycles.all().order_by("-end_date", "-start_date")
+    cycles = _sort_cycles_for_settings(list(cycles_qs))
+    paginator = Paginator(cycles, 5)
     try:
         page_number = int(tc_page) if tc_page else 1
     except (TypeError, ValueError):
@@ -380,9 +417,12 @@ def _build_settings_context(
     # 判断当前选中的疗程是否可以终止（必须是进行中状态）
     can_terminate_selected_cycle = False
     is_cycle_editable = False
-    if selected_cycle and selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS:
-        can_terminate_selected_cycle = True
-        is_cycle_editable = True
+    if selected_cycle:
+        runtime_state = _resolve_cycle_runtime_state(selected_cycle)
+        if runtime_state == "in_progress":
+            can_terminate_selected_cycle = True
+        if runtime_state in ("in_progress", "not_started"):
+            is_cycle_editable = True
 
     # 医院计划设置区域：从各业务 service 获取真实的“可用库”数据
     # current_day_index：用于前端判断哪些 Day 属于“历史不可编辑”
@@ -617,9 +657,8 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
             "cycle_days": cycle_days_raw or "",
         },
     }
-    selected_cycle_id = new_cycle.id if new_cycle else None
     context.update(
-        _build_settings_context(patient, tc_page=request.GET.get("tc_page"), selected_cycle_id=selected_cycle_id)
+        _build_settings_context(patient, tc_page=request.GET.get("tc_page"), selected_cycle_id=None)
     )
 
     return render(
@@ -669,12 +708,11 @@ def patient_treatment_cycle_terminate(request: HttpRequest, patient_id: int, cyc
     }
     # 终止后，通常不再有选中的 active cycle，或者 selected_cycle 变为已终止状态
     # 这里我们让 _build_settings_context 自动决定 active_cycle（此时应该为 None 或下一个 active）
-    # 但我们仍保持当前 cycle 为 selected，以便用户看到状态变更
     context.update(
         _build_settings_context(
             patient,
             tc_page=request.GET.get("tc_page"),
-            selected_cycle_id=cycle.id,
+            selected_cycle_id=None,
         )
     )
 

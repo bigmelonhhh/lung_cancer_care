@@ -29,6 +29,7 @@ from core.service.treatment_cycle import (
     get_cycle_confirmer,
     get_treatment_cycles,
 )
+from core.service.tasks import MONITORING_ADHERENCE_ALL, get_adherence_metrics
 from core.models import TreatmentCycle, choices, CheckupLibrary
 from core.service.plan_item import PlanItemService
 from core.service.checkup import get_active_checkup_library
@@ -328,13 +329,45 @@ def build_home_context(patient: PatientProfile) -> dict:
         logger.error(f"Failed to load checkup library: {e}")
         checkup_subcategories = []
 
+    medication_adherence = get_adherence_metrics(
+        patient_id=patient.id,
+        adherence_type=choices.PlanItemCategory.MEDICATION,
+    )
+    monitoring_adherence = get_adherence_metrics(
+        patient_id=patient.id,
+        adherence_type=MONITORING_ADHERENCE_ALL,
+    )
+
+    def _format_adherence_display(metrics: dict) -> str:
+        rate = metrics.get("rate")
+        completed = metrics.get("completed", 0)
+        total = metrics.get("total", 0)
+        percent = "--" if rate is None else f"{rate * 100:.0f}%"
+        return f"{percent}（{completed}/{total}）"
+
+    medication_adherence_display = _format_adherence_display(medication_adherence)
+    monitoring_adherence_display = _format_adherence_display(monitoring_adherence)
+
+    adherence_start_date = medication_adherence.get("start_date")
+    adherence_end_date = medication_adherence.get("end_date")
+    adherence_date_range = ""
+    if adherence_start_date and adherence_end_date:
+        adherence_date_range = (
+            f"{adherence_start_date.strftime('%Y-%m-%d')} ~ {adherence_end_date.strftime('%Y-%m-%d')}"
+        )
+
     return {
         "served_days": served_days,
         "remaining_days": remaining_days,
         "doctor_info": doctor_info,
         "medical_info": medical_info,
         "patient": patient,
-        "compliance": "用药依从率80%，数据监测完成率80%",
+        "compliance": f"用药依从率{medication_adherence_display}，常规监测综合依从率{monitoring_adherence_display}",
+        "medication_adherence": medication_adherence,
+        "monitoring_adherence": monitoring_adherence,
+        "medication_adherence_display": medication_adherence_display,
+        "monitoring_adherence_display": monitoring_adherence_display,
+        "adherence_date_range": adherence_date_range,
         "current_medication": current_medication,
         "timeline_data": timeline_data,
         "current_month": current_month_str,

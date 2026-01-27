@@ -36,6 +36,18 @@ class TreatmentCycle(models.Model):
     def __str__(self) -> str:  # pragma: no cover
         return f"{self.patient.name}-{self.name}"
 
+    def get_status_display(self) -> str:
+        today = date.today()
+        if self.status == choices.TreatmentCycleStatus.TERMINATED:
+            return "已终止"
+        if self.status == choices.TreatmentCycleStatus.COMPLETED:
+            return "已结束"
+        if today < self.start_date:
+            return "未开始"
+        if self.end_date and today > self.end_date:
+            return "已结束"
+        return "进行中"
+
     @property
     def is_finished(self) -> bool:
         """

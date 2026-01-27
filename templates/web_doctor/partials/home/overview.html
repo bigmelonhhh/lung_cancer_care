@@ -66,7 +66,15 @@
 
          <div class="flex items-start">
             <span class="w-24 shrink-0 text-slate-500 text-sm">依从性：</span>
-            <span class="text-slate-800 text-sm">{{ compliance }}</span>
+            <div class="text-slate-800 text-sm space-y-1">
+                <div class="flex items-center gap-2">
+                    <div>用药依从率：{{ medication_adherence_display|default:"--" }}</div>
+                    <div>常规监测综合依从率：{{ monitoring_adherence_display|default:"--" }}</div>
+                </div>
+                {% if adherence_date_range %}
+                    <div class="text-slate-500 text-xs">统计区间：{{ adherence_date_range }}</div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
