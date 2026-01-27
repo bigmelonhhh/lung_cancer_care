@@ -14,6 +14,11 @@
   </div>
 
   <div class="px-4 py-6 space-y-4">
+    {% if error_message %}
+    <div class="bg-red-50 border border-red-100 text-red-600 text-sm font-medium rounded-xl px-4 py-3">
+        {{ error_message }}
+    </div>
+    {% endif %}
     {% for cycle in cycles %}
     <div class="bg-white rounded-xl p-5 shadow-sm">
         <h2 class="text-base font-bold text-slate-800 mb-4">{{ cycle.name }}</h2>
@@ -39,26 +44,14 @@
                 </div>
                 
                 <div class="shrink-0">
-                    {% if task.status == 'active' %}
-                        <a href="{% url 'web_patient:daily_survey' %}?ids={{ task.id }}" class="text-sm font-bold text-blue-600 flex items-center gap-0.5 active:opacity-70">
-                            {{ task.status_label }}
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </a>
-                    {% elif task.status == 'completed' %}
-                        <button @click="showSuccessModal = true" class="text-sm font-bold text-blue-600 flex items-center gap-0.5 active:opacity-70">
-                            {{ task.status_label }}
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </button>
+                    {% if task.status == 'completed' %}
+                        <span class="text-sm font-bold text-green-500">{{ task.status_text }}</span>
                     {% elif task.status == 'incomplete' %}
-                        <span class="text-sm font-bold text-red-500">{{ task.status_label }}</span>
+                        <span class="text-sm font-bold text-red-500">{{ task.status_text }}</span>
                     {% elif task.status == 'terminated' %}
-                         <span class="text-sm font-bold text-slate-400">{{ task.status_label }}</span>
+                         <span class="text-sm font-bold text-slate-400">{{ task.status_text }}</span>
                     {% else %}
-                        <span class="text-sm font-bold text-slate-500">{{ task.status_label }}</span>
+                        <span class="text-sm font-bold text-slate-500">{{ task.status_text }}</span>
                     {% endif %}
                 </div>
             </div>

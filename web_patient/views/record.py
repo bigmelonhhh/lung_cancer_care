@@ -784,31 +784,36 @@ def health_records(request: HttpRequest) -> HttpResponse:
                     except Exception as e:
                         logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
 
-        checkup_library_items = get_active_checkup_library()
+        checkup_library_items = get_active_checkup_library() 
         if patient_id and checkup_library_items:
             for chk in checkup_library_items:
                 lib_id = chk.get("lib_id")
+                code = chk.get("code")
                 if not lib_id:
                     continue
 
-                base_qs = DailyTask.objects.filter(
-                    patient=patient,
-                    task_type=PlanItemCategory.CHECKUP,
-                    task_date__gte=start_date,
-                    task_date__lte=end_date,
-                    interaction_payload__checkup_id=lib_id,
-                )
-                completed_count = base_qs.filter(status=TaskStatus.COMPLETED).count()
-                overdue_count = base_qs.filter(
-                    status=TaskStatus.TERMINATED,
-                ).count()
+                completed_count = 0
+                if code:
+                    try:
+                        page_obj = HealthMetricService.query_metrics_by_type(
+                            patient_id=int(patient_id),
+                            metric_type=code,
+                            page=1,
+                            page_size=1,
+                            start_date=start_dt,
+                            end_date=end_dt,
+                        )
+                        completed_count = page_obj.paginator.count
+                    except Exception as e:
+                        logging.error(f"查询复查档案统计失败 code={code}: {e}")
                 checkup_stats.append(
                     {
                         "lib_id": lib_id,
+                        "code": code,
                         "title": chk.get("name") or "",
                         "category": chk.get("category") or "",
                         "count": completed_count,
-                        "abnormal": overdue_count,
+                        "abnormal": 0,
                     }
                 )
 

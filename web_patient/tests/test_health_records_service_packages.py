@@ -5,8 +5,7 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import CheckupLibrary, DailyTask
-from core.models.choices import PlanItemCategory, TaskStatus
+from core.models import CheckupLibrary
 from health_data.models import HealthMetric, MetricType
 from market.models import Product, Order
 from users.models import CustomUser, PatientProfile
@@ -134,38 +133,33 @@ class HealthRecordsServicePackageTests(TestCase):
         blood = CheckupLibrary.objects.create(name="血常规", code="BLOOD_ROUTINE", is_active=True)
         CheckupLibrary.objects.create(name="停用项目", code="INACTIVE", is_active=False)
 
-        today = timezone.localdate()
-        DailyTask.objects.create(
+        tz = timezone.get_current_timezone()
+        HealthMetric.objects.create(
             patient=self.patient,
-            task_date=today - timedelta(days=2),
-            task_type=PlanItemCategory.CHECKUP,
-            title="胸部CT",
-            status=TaskStatus.COMPLETED,
-            interaction_payload={"checkup_id": ct.id},
+            metric_type=ct.code,
+            measured_at=timezone.make_aware(
+                datetime.combine(latest_order.start_date + timedelta(days=1), datetime.min.time()),
+                tz,
+            ),
+            value_main=Decimal("1"),
         )
-        DailyTask.objects.create(
+        HealthMetric.objects.create(
             patient=self.patient,
-            task_date=today - timedelta(days=1),
-            task_type=PlanItemCategory.CHECKUP,
-            title="胸部CT",
-            status=TaskStatus.PENDING,
-            interaction_payload={"checkup_id": ct.id},
+            metric_type=ct.code,
+            measured_at=timezone.make_aware(
+                datetime.combine(latest_order.start_date + timedelta(days=2), datetime.min.time()),
+                tz,
+            ),
+            value_main=Decimal("1"),
         )
-        DailyTask.objects.create(
+        HealthMetric.objects.create(
             patient=self.patient,
-            task_date=today + timedelta(days=1),
-            task_type=PlanItemCategory.CHECKUP,
-            title="胸部CT",
-            status=TaskStatus.PENDING,
-            interaction_payload={"checkup_id": ct.id},
-        )
-        DailyTask.objects.create(
-            patient=self.patient,
-            task_date=today - timedelta(days=2),
-            task_type=PlanItemCategory.CHECKUP,
-            title="血常规",
-            status=TaskStatus.COMPLETED,
-            interaction_payload={"checkup_id": blood.id},
+            metric_type=blood.code,
+            measured_at=timezone.make_aware(
+                datetime.combine(latest_order.start_date + timedelta(days=1), datetime.min.time()),
+                tz,
+            ),
+            value_main=Decimal("1"),
         )
 
         response = self.client.get(self.url, {"package_id": str(latest_order.id)})
@@ -175,7 +169,10 @@ class HealthRecordsServicePackageTests(TestCase):
         self.assertIn(ct.id, stats)
         self.assertIn(blood.id, stats)
 
-        self.assertEqual(stats[ct.id]["count"], 1)
-        self.assertEqual(stats[ct.id]["abnormal"], 1)
+        self.assertEqual(stats[ct.id]["code"], ct.code)
+        self.assertEqual(stats[blood.id]["code"], blood.code)
+
+        self.assertEqual(stats[ct.id]["count"], 2)
+        self.assertEqual(stats[ct.id]["abnormal"], 0)
         self.assertEqual(stats[blood.id]["count"], 1)
         self.assertEqual(stats[blood.id]["abnormal"], 0)

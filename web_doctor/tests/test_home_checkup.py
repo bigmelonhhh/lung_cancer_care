@@ -167,7 +167,7 @@ class TestHomeCheckupTimeline(TestCase):
         dates = [e["date_display"] for e in jan_data["events"]]
         self.assertEqual(
             dates,
-            ["2023-01-20", "2023-01-15", "2023-01-01"],
+            ["2023-01-01", "2023-01-15", "2023-01-20"],
         )
 
     @patch("web_doctor.views.home.ClinicalEvent")
@@ -197,7 +197,7 @@ class TestHomeCheckupTimeline(TestCase):
         self.assertTrue(jan_data["events"][1]["report_date_missing"])
         self.assertEqual(
             [e["date_display"] for e in jan_data["events"]],
-            ["2023-01-06", "2023-01-05"],
+            ["2023-01-05", "2023-01-06"],
         )
 
     @patch("web_doctor.views.home.get_paid_orders_for_patient")
@@ -250,3 +250,51 @@ class TestHomeCheckupTimeline(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "提示：日期优先显示报告日期，缺失时显示创建日期")
         self.assertContains(response, "2023-01-15")
+
+    @patch("web_doctor.views.home.get_active_checkup_library")
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_patient_checkup_timeline_view_events_order_asc(self, mock_get_orders, mock_lib):
+        mock_lib.return_value = []
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 1, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        doctor_user = CustomUser.objects.create_user(
+            phone="13900000001",
+            user_type=user_choices.UserType.DOCTOR,
+        )
+        DoctorProfile.objects.create(
+            user=doctor_user,
+            name="李医生",
+            hospital="测试医院",
+            department="测试科室",
+        )
+        self.client.force_login(doctor_user)
+
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=3,
+            event_date=date(2023, 1, 20),
+        )
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=1,
+            event_date=date(2023, 1, 1),
+        )
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_type=2,
+            event_date=date(2023, 1, 15),
+        )
+
+        url = reverse("web_doctor:patient_checkup_timeline", kwargs={"patient_id": self.patient.id})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+
+        content = response.content.decode("utf-8")
+        pos_1 = content.find("2023-01-01")
+        pos_15 = content.find("2023-01-15")
+        pos_20 = content.find("2023-01-20")
+        self.assertTrue(pos_1 != -1 and pos_15 != -1 and pos_20 != -1)
+        self.assertTrue(pos_1 < pos_15 < pos_20)

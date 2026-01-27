@@ -2,9 +2,9 @@ from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
 from users.models import CustomUser
 from users.decorators import auto_wechat_login, check_patient, require_membership
-from core.service.treatment_cycle import get_active_treatment_cycle
+from core.service.treatment_cycle import get_active_treatment_cycle, get_treatment_cycles
 from core.service.plan_item import PlanItemService
-from core.models import TreatmentCycle, choices
+from core.models import TreatmentCycle, choices, DailyTask
 from core.service.tasks import get_daily_plan_summary
 from health_data.services.health_metric import HealthMetricService
 from health_data.models import MetricType
@@ -31,7 +31,7 @@ def is_today_data(metric_info: dict) -> bool:
 @require_membership
 def management_plan(request: HttpRequest) -> HttpResponse:
     """
-    【页面说明】TODO 管理计划页面 `/p/plan/`
+    【页面说明】TODO 管理计划页面 `/p/plan/` 
     【功能逻辑】
     1. 展示医嘱用药计划。
     2. 展示每日体征监测计划。
@@ -131,34 +131,102 @@ def management_plan(request: HttpRequest) -> HttpResponse:
         })
 
     # 3. 随访问卷与复查计划
-    treatment_courses = [
-        {
-            "name": "第三疗程",
-            "is_current": True,
-            "items": [
-                {"title": "随访问卷", "date": "2025-12-21", "status": "not_started", "status_text": "未开始", "type": "questionnaire"},
-                {"title": "复查", "date": "2025-12-21", "status": "not_started", "status_text": "未开始", "type": "checkup"},
-                {"title": "随访问卷", "date": "2025-12-14", "status": "completed", "status_text": "已完成", "type": "questionnaire"},
-                {"title": "复查", "date": "2025-12-14", "status": "completed", "status_text": "已完成", "type": "checkup"},
-            ]
-        },
-        {
-            "name": "第二疗程",
-            "is_current": False,
-            "items": [
-                {"title": "随访问卷", "date": "2025-11-01", "status": "incomplete", "status_text": "未完成", "type": "questionnaire"},
-                {"title": "复查", "date": "2025-11-01", "status": "terminated", "status_text": "已中止", "type": "checkup"},
-            ]
-        },
-        {
-            "name": "第一疗程",
-            "is_current": False,
-            "items": [
-                {"title": "随访问卷", "date": "2025-10-01", "status": "completed", "status_text": "已完成", "type": "questionnaire"},
-                {"title": "复查", "date": "2025-10-01", "status": "completed", "status_text": "已完成", "type": "checkup"},
-            ]
-        }
-    ]
+    treatment_courses = []
+    try:
+        active_cycle = get_active_treatment_cycle(patient)
+        cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
+        cycles = list(cycles_page.object_list)
+        while getattr(cycles_page, "has_next", lambda: False)():
+            cycles_page = get_treatment_cycles(
+                patient, page=int(cycles_page.next_page_number()), page_size=100
+            )
+            cycles.extend(list(cycles_page.object_list))
+
+        for cycle in cycles:
+            start_date = getattr(cycle, "start_date", None)
+            end_date = getattr(cycle, "end_date", None)
+            if not start_date or not end_date:
+                continue
+
+            tasks = (
+                DailyTask.objects.filter(
+                    patient=patient,
+                    task_type__in=[
+                        choices.PlanItemCategory.CHECKUP,
+                        choices.PlanItemCategory.QUESTIONNAIRE,
+                    ],
+                    task_date__range=(start_date, end_date),
+                )
+                .order_by("-task_date", "task_type", "id")
+            )
+
+            grouped = {}
+            for task in tasks:
+                grouped.setdefault((task.task_date, int(task.task_type)), []).append(
+                    int(task.status)
+                )
+
+            items = []
+            for (task_date, task_type), statuses in grouped.items():
+                if task_type == choices.PlanItemCategory.QUESTIONNAIRE:
+                    item_type = "questionnaire"
+                    title = "随访问卷"
+                else:
+                    item_type = "checkup"
+                    title = "复查"
+
+                status_val = None
+                if choices.TaskStatus.PENDING in statuses:
+                    status_val = choices.TaskStatus.PENDING
+                elif choices.TaskStatus.NOT_STARTED in statuses:
+                    status_val = choices.TaskStatus.NOT_STARTED
+                elif choices.TaskStatus.TERMINATED in statuses:
+                    status_val = choices.TaskStatus.TERMINATED
+                elif choices.TaskStatus.COMPLETED in statuses:
+                    status_val = choices.TaskStatus.COMPLETED
+
+                status = ""
+                status_text = ""
+                if status_val == choices.TaskStatus.COMPLETED:
+                    status = "completed"
+                    status_text = "已完成"
+                elif status_val == choices.TaskStatus.PENDING:
+                    status = "incomplete"
+                    status_text = "未完成"
+                elif status_val == choices.TaskStatus.NOT_STARTED:
+                    status = "not_started"
+                    status_text = "未开始"
+                elif status_val == choices.TaskStatus.TERMINATED:
+                    status = "terminated"
+                    status_text = "已中止"
+
+                items.append(
+                    {
+                        "title": title,
+                        "date": task_date.strftime("%Y-%m-%d"),
+                        "status": status,
+                        "status_text": status_text,
+                        "type": item_type,
+                    }
+                )
+
+            items.sort(
+                key=lambda item: (
+                    item.get("date") or "",
+                    -(0 if item.get("type") == "questionnaire" else 1),
+                ),
+                reverse=True, 
+            )
+
+            treatment_courses.append(
+                {
+                    "name": cycle.name,
+                    "is_current": bool(active_cycle and cycle.id == active_cycle.id),
+                    "items": items,
+                }
+            )
+    except Exception:
+        treatment_courses = []
 
     context = {
         "medication_plan": medication_plan,

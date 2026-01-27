@@ -4,6 +4,8 @@ from unittest.mock import patch, MagicMock
 from web_patient.views.plan import management_plan
 from users.models import PatientProfile, CustomUser
 from users import choices
+from core.models import TreatmentCycle, DailyTask
+from core.models import choices as core_choices
 from health_data.models import MetricType
 from django.utils import timezone
 import datetime
@@ -128,3 +130,111 @@ class ManagementPlanViewTests(TestCase):
         self.assertIsNotNone(spo2_task)
         self.assertEqual(spo2_task['status'], '')
         self.assertEqual(spo2_task['status_text'], '今日无计划')
+
+    def test_management_plan_treatment_courses_from_cycles_and_tasks(self):
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+
+        cycle_current = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="第三疗程",
+            start_date=today - datetime.timedelta(days=10),
+            end_date=today + datetime.timedelta(days=10),
+            cycle_days=21,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        cycle_history = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="第二疗程",
+            start_date=today - datetime.timedelta(days=40),
+            end_date=today - datetime.timedelta(days=20),
+            cycle_days=21,
+            status=core_choices.TreatmentCycleStatus.COMPLETED,
+        )
+
+        date_recent = today - datetime.timedelta(days=1)
+        date_future = today + datetime.timedelta(days=3)
+        date_old = today - datetime.timedelta(days=20)
+
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date_recent,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date_recent,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=core_choices.TaskStatus.COMPLETED,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date_future,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date_future,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date_old,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date_old,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=core_choices.TaskStatus.COMPLETED,
+        )
+
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+        courses = response.context["treatment_courses"]
+        self.assertEqual(len(courses), 2)
+        self.assertEqual(courses[0]["name"], cycle_current.name)
+        self.assertTrue(courses[0]["is_current"])
+        self.assertEqual(courses[1]["name"], cycle_history.name)
+        self.assertFalse(courses[1]["is_current"])
+
+        def find_item(course, date_str, item_type):
+            return next(
+                (
+                    i
+                    for i in course["items"]
+                    if i.get("date") == date_str and i.get("type") == item_type
+                ),
+                None,
+            )
+
+        future_q = find_item(courses[0], date_future.strftime("%Y-%m-%d"), "questionnaire")
+        self.assertIsNotNone(future_q)
+        self.assertEqual(future_q["status"], "not_started")
+
+        future_c = find_item(courses[0], date_future.strftime("%Y-%m-%d"), "checkup")
+        self.assertIsNotNone(future_c)
+        self.assertEqual(future_c["status"], "not_started")
+
+        recent_q = find_item(courses[0], date_recent.strftime("%Y-%m-%d"), "questionnaire")
+        self.assertIsNotNone(recent_q)
+        self.assertEqual(recent_q["status"], "incomplete")
+
+        recent_c = find_item(courses[0], date_recent.strftime("%Y-%m-%d"), "checkup")
+        self.assertIsNotNone(recent_c)
+        self.assertEqual(recent_c["status"], "completed")
+
+        old_q = find_item(courses[1], date_old.strftime("%Y-%m-%d"), "questionnaire")
+        self.assertIsNotNone(old_q)
+        self.assertEqual(old_q["status"], "terminated")

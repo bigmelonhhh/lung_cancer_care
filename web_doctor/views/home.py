@@ -178,7 +178,7 @@ def _get_checkup_timeline_data(patient: PatientProfile) -> dict:
                 ),
                 item.get("id") or 0,
             ),
-            reverse=True,
+            reverse=False,
         )
         
         checkup_count = sum(1 for e in events if e["type"] == "checkup")

@@ -39,19 +39,9 @@
                 
                 <div class="shrink-0">
                     {% if task.status == 'active' %}
-                        <a href="{% url 'web_patient:record_checkup' %}?task_id={{ task.id }}" class="text-sm font-bold text-blue-600 flex items-center gap-0.5 active:opacity-70">
-                            {{ task.status_label }}
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </a>
+                       <span class="text-sm font-bold text-blue-500">{{ task.status_label }}</span>
                     {% elif task.status == 'completed' %}
-                        <button @click="showSuccessModal = true" class="text-sm font-bold text-blue-600 flex items-center gap-0.5 active:opacity-70">
-                            {{ task.status_label }}
-                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </button>
+                         <span class="text-sm font-bold text-green-500">{{ task.status_label }}</span>
                     {% elif task.status == 'incomplete' %}
                         <span class="text-sm font-bold text-red-500">{{ task.status_label }}</span>
                     {% elif task.status == 'terminated' %}

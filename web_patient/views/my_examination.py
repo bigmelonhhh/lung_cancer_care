@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import DailyTask, TreatmentCycle
 from core.models.choices import PlanItemCategory, TaskStatus
 from core.service import tasks as task_service
+from core.service.treatment_cycle import get_active_treatment_cycle, get_treatment_cycles
 from health_data.models.test_report import TestReport
 from users.decorators import auto_wechat_login, check_patient, require_membership
 
@@ -41,7 +42,7 @@ def _build_task_payload(task: DailyTask, today):
             status_label = "未开始"
         else:
             status = "active"
-            status_label = "去完成"
+            status_label = "未完成"
 
     return {
         "id": task.id,
@@ -50,6 +51,106 @@ def _build_task_payload(task: DailyTask, today):
         "status": status,
         "status_label": status_label,
     }
+
+
+def _resolve_grouped_status(statuses: list[int]) -> int | None:
+    if TaskStatus.PENDING in statuses:
+        return TaskStatus.PENDING
+    if TaskStatus.NOT_STARTED in statuses:
+        return TaskStatus.NOT_STARTED
+    if TaskStatus.TERMINATED in statuses:
+        return TaskStatus.TERMINATED
+    if TaskStatus.COMPLETED in statuses:
+        return TaskStatus.COMPLETED
+    return None
+
+
+def _get_treatment_courses_checkup_like_my_followup(*, patient, today) -> list[dict]:
+    active_cycle = get_active_treatment_cycle(patient)
+
+    cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
+    cycles = list(cycles_page.object_list)
+    while getattr(cycles_page, "has_next", lambda: False)():
+        cycles_page = get_treatment_cycles(
+            patient, page=int(cycles_page.next_page_number()), page_size=100
+        )
+        cycles.extend(list(cycles_page.object_list))
+
+    treatment_courses: list[dict] = []
+    for cycle in cycles:
+        start_date = getattr(cycle, "start_date", None)
+        end_date = getattr(cycle, "end_date", None)
+        if not start_date or not end_date:
+            continue
+
+        tasks = (
+            DailyTask.objects.filter(
+                patient=patient,
+                task_type__in=[
+                    PlanItemCategory.CHECKUP,
+                ],
+                task_date__range=(start_date, end_date),
+            )
+            .order_by("-task_date", "task_type", "id")
+        )
+
+        grouped: dict[tuple[timezone.datetime.date, int], dict] = {}
+        for task in tasks:
+            key = (task.task_date, int(task.task_type))
+            if key not in grouped:
+                grouped[key] = {"task_id": int(task.id), "statuses": []}
+            grouped[key]["statuses"].append(int(task.status))
+
+        items: list[dict] = []
+        for (task_date, task_type), payload in grouped.items():
+            if task_type != PlanItemCategory.CHECKUP:
+                continue
+
+            status_val = _resolve_grouped_status(payload["statuses"])
+            status = ""
+            status_label = ""
+
+            if status_val == TaskStatus.COMPLETED:
+                status = "completed"
+                status_label = "已完成"
+            elif status_val == TaskStatus.TERMINATED:
+                status = "terminated"
+                status_label = "已中止"
+            elif status_val == TaskStatus.NOT_STARTED:
+                status = "not_started"
+                status_label = "未开始"
+            elif status_val == TaskStatus.PENDING:
+                if task_date > today:
+                    status = "not_started"
+                    status_label = "未开始"
+                else:
+                    status = "active"
+                    status_label = "未完成"
+            else:
+                status = "not_started"
+                status_label = "未开始"
+
+            items.append(
+                {
+                    "id": payload["task_id"],
+                    "title": "复查",
+                    "date": task_date.strftime("%Y-%m-%d"),
+                    "status": status,
+                    "status_label": status_label,
+                }
+            )
+
+        items.sort(key=lambda item: (item.get("date") or ""), reverse=True)
+
+        treatment_courses.append(
+            {
+                "name": cycle.name,
+                "is_current": bool(active_cycle and cycle.id == active_cycle.id),
+                "items": items,
+            }
+        )
+
+    return treatment_courses
 
 
 @auto_wechat_login
@@ -68,123 +169,18 @@ def my_examination(request: HttpRequest) -> HttpResponse:
         patient_id=patient.id,
     )
 
-    cycles = list(TreatmentCycle.objects.filter(patient=patient).order_by("-start_date"))
-    tasks = (
-        DailyTask.objects.filter(
-            patient=patient,
-            task_type=PlanItemCategory.CHECKUP,
-        )
-        .select_related("plan_item", "plan_item__cycle")
-        .order_by("-task_date")
+    treatment_courses = _get_treatment_courses_checkup_like_my_followup(
+        patient=patient, today=today
     )
-
-    tasks_by_cycle_id = {}
-    unassigned_tasks = []
-
-    for task in tasks:
-        cycle = _resolve_cycle_for_task(task, cycles)
-        if cycle:
-            tasks_by_cycle_id.setdefault(cycle.id, []).append(task)
-        else:
-            unassigned_tasks.append(task)
-
-    cycles_payload = []
-    for cycle in cycles:
-        cycle_tasks = tasks_by_cycle_id.get(cycle.id, [])
-        if not cycle_tasks:
-            continue
-
-        is_current = cycle.start_date <= today and (
-            cycle.end_date is None or cycle.end_date >= today
-        )
-        cycle_name = f"{cycle.name} (当前疗程)" if is_current else cycle.name
-        cycle_tasks_sorted = sorted(cycle_tasks, key=lambda t: t.task_date, reverse=True)
-
-        cycles_payload.append(
-            {
-                "name": cycle_name,
-                "tasks": [_build_task_payload(task, today) for task in cycle_tasks_sorted],
-            }
-        )
-
-    if unassigned_tasks:
-        cycles_payload.append(
-            {
-                "name": "其他复查",
-                "tasks": [
-                    _build_task_payload(task, today)
-                    for task in sorted(unassigned_tasks, key=lambda t: t.task_date, reverse=True)
-                ],
-            }
-        )
-
-    if not cycles_payload:
-        cycles_payload = [
-            {
-                "name": "第三疗程 (当前疗程)",
-                "tasks": [
-                    {
-                        "id": 101,
-                        "title": "复查项目",
-                        "date": "2025-12-21",
-                        "status": "not_started",
-                        "status_label": "未开始",
-                    },
-                    {
-                        "id": 102,
-                        "title": "复查项目",
-                        "date": "2025-12-14",
-                        "status": "active",
-                        "status_label": "去完成",
-                    },
-                    {
-                        "id": 103,
-                        "title": "复查项目",
-                        "date": "2025-12-06",
-                        "status": "completed",
-                        "status_label": "已完成",
-                    },
-                ],
-            },
-            {
-                "name": "第二疗程",
-                "tasks": [
-                    {
-                        "id": 201,
-                        "title": "复查项目",
-                        "date": "2025-11-10",
-                        "status": "incomplete",
-                        "status_label": "未完成",
-                    },
-                    {
-                        "id": 202,
-                        "title": "复查项目",
-                        "date": "2025-11-01",
-                        "status": "terminated",
-                        "status_label": "已中止",
-                    },
-                ],
-            },
-            {
-                "name": "第一疗程",
-                "tasks": [
-                    {
-                        "id": 301,
-                        "title": "复查项目",
-                        "date": "2025-10-09",
-                        "status": "completed",
-                        "status_label": "已完成",
-                    },
-                    {
-                        "id": 302,
-                        "title": "复查项目",
-                        "date": "2025-10-01",
-                        "status": "completed",
-                        "status_label": "已完成",
-                    },
-                ],
-            },
-        ]
+    cycles_payload = [
+        {
+            "name": f"{course['name']} (当前疗程)"
+            if course.get("is_current")
+            else course.get("name"),
+            "tasks": course.get("items") or [],
+        }
+        for course in treatment_courses
+    ]
 
     context = {
         "cycles": cycles_payload,
