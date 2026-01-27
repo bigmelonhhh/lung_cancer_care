@@ -65,7 +65,7 @@ def management_plan(request: HttpRequest) -> HttpResponse:
     
     if med_task:
         # status 0 = pending, 1 = completed
-        status = "completed" if med_task.get('status') == 1 else "incomplete"
+        status = "completed" if med_task.get('status') == choices.TaskStatus.COMPLETED else "incomplete"
         status_text = "已完成" if status == "completed" else "未完成"
         medication_plan.append({
             "title": med_task.get('title', "按时用药"),

@@ -29,17 +29,28 @@ MONITORING_ADHERENCE_TYPES = (
     MetricType.BODY_TEMPERATURE,
 )
 
+_TASK_MAX_OVERDUE_DAYS = {
+    choices.PlanItemCategory.MEDICATION: 0,
+    choices.PlanItemCategory.MONITORING: 0,
+    choices.PlanItemCategory.CHECKUP: 7,
+    choices.PlanItemCategory.QUESTIONNAIRE: 7,
+}
 
-# TODO 支持起止时间查询。如果没写，就查当天的。 如果写了，就查起止时间内的。
-# 今日计划  复查和问卷  今日计划测7天内的。 
-# TODO 用药依从性（当前服务包内）   一般监测依从性（当前服务包内）
+
+
+
+# TODO 查询复查档案的记录数（需要支持到二级分类）。
+# TODO 根据日期来查询复查的图像。  
+
 def get_daily_plan_summary(
     patient: PatientProfile,
     task_date: date = date.today(),
 ) -> List[Dict[str, Any]]:
     """
     【功能说明】
-    - 汇总患者当天的计划任务，用于患者端列表展示。
+    - 汇总患者当天及有效期内的计划任务，用于患者端列表展示。
+      - 用药/监测：仅统计当天。
+      - 复查/问卷：统计最近 7 天内任务。
 
     【使用方法】
     - `get_daily_plan_summary(patient)` 返回今天的计划摘要；
@@ -62,19 +73,40 @@ def get_daily_plan_summary(
         choices.PlanItemCategory.MONITORING,
     )
 
+    refresh_task_statuses(as_of_date=task_date, patient_id=patient.id)
+
+    window_start_by_type = {
+        choices.PlanItemCategory.MEDICATION: task_date,
+        choices.PlanItemCategory.MONITORING: task_date,
+        choices.PlanItemCategory.CHECKUP: task_date
+        - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.CHECKUP]),
+        choices.PlanItemCategory.QUESTIONNAIRE: task_date
+        - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.QUESTIONNAIRE]),
+    }
+    min_window_start = min(window_start_by_type.values())
+
     tasks = (
         DailyTask.objects.filter(
             patient=patient,
-            task_date=task_date,
+            task_date__range=(min_window_start, task_date),
             task_type__in=task_types,
         )
+        .exclude(
+            status__in=[
+                choices.TaskStatus.NOT_STARTED,
+                choices.TaskStatus.TERMINATED,
+            ]
+        )
         .select_related("plan_item")
-        .order_by("id")
+        .order_by("task_date", "id")
     )
 
     # 按类型聚合任务，便于后续做“合并/逐条”逻辑。
     tasks_by_type = {task_type: [] for task_type in task_types}
     for task in tasks:
+        window_start = window_start_by_type.get(task.task_type, task_date)
+        if task.task_date < window_start:
+            continue
         tasks_by_type[task.task_type].append(task)
 
     summary: List[Dict[str, Any]] = []
@@ -87,6 +119,13 @@ def get_daily_plan_summary(
         task_list = tasks_by_type[task_type]
         if not task_list:
             continue
+        task_list.sort(
+            key=lambda task: (
+                0 if task.status == choices.TaskStatus.PENDING else 1,
+                task.task_date,
+                task.id,
+            )
+        )
         questionnaire_ids = []
         if task_type == choices.PlanItemCategory.QUESTIONNAIRE:
             seen = set()
@@ -122,6 +161,83 @@ def get_daily_plan_summary(
         )
 
     return summary
+
+
+def _get_task_max_overdue_days(task_type: int) -> int:
+    return _TASK_MAX_OVERDUE_DAYS.get(task_type, 0)
+
+
+def resolve_task_valid_window(
+    *,
+    task_type: int,
+    as_of_date: date,
+) -> tuple[date, date]:
+    max_overdue_days = _get_task_max_overdue_days(task_type)
+    window_start = as_of_date - timedelta(days=max_overdue_days)
+    return window_start, as_of_date
+
+
+def resolve_task_status(
+    *,
+    task_type: int,
+    task_date: date,
+    as_of_date: date,
+) -> int:
+    if task_date > as_of_date:
+        return choices.TaskStatus.NOT_STARTED
+    window_start, _ = resolve_task_valid_window(
+        task_type=task_type,
+        as_of_date=as_of_date,
+    )
+    if task_date < window_start:
+        return choices.TaskStatus.TERMINATED
+    return choices.TaskStatus.PENDING
+
+
+def refresh_task_statuses(
+    *,
+    as_of_date: date | None = None,
+    patient_id: int | None = None,
+) -> int:
+    """
+    【功能说明】
+    - 按任务类型与有效期刷新任务状态。
+
+    【规则说明】
+    - task_date > as_of_date：未开始。
+    - task_date <= as_of_date 且超出有效期：已终止。
+    - task_date <= as_of_date 且在有效期内：未完成。
+    - 已完成任务保持不变。
+    """
+    if as_of_date is None:
+        as_of_date = timezone.localdate()
+
+    base_qs = DailyTask.objects.exclude(status=choices.TaskStatus.COMPLETED)
+    if patient_id is not None:
+        base_qs = base_qs.filter(patient_id=patient_id)
+
+    updated = 0
+    for task_type, max_overdue_days in _TASK_MAX_OVERDUE_DAYS.items():
+        type_qs = base_qs.filter(task_type=task_type)
+        expired_before = as_of_date - timedelta(days=max_overdue_days)
+
+        updated += (
+            type_qs.filter(task_date__gt=as_of_date)
+            .exclude(status=choices.TaskStatus.NOT_STARTED)
+            .update(status=choices.TaskStatus.NOT_STARTED)
+        )
+        updated += (
+            type_qs.filter(task_date__lt=expired_before)
+            .exclude(status=choices.TaskStatus.TERMINATED)
+            .update(status=choices.TaskStatus.TERMINATED)
+        )
+        updated += (
+            type_qs.filter(task_date__gte=expired_before, task_date__lte=as_of_date)
+            .exclude(status=choices.TaskStatus.PENDING)
+            .update(status=choices.TaskStatus.PENDING)
+        )
+
+    return updated
 
 
 def _resolve_task_date(occurred_at: datetime | None) -> date:
@@ -162,6 +278,34 @@ def _resolve_completed_at(occurred_at: datetime | None) -> datetime:
     return occurred_at or timezone.now()
 
 
+def _resolve_latest_incomplete_task_date(
+    *,
+    patient_id: int,
+    task_type: int,
+    completed_at: datetime,
+) -> date | None:
+    task_date = _resolve_task_date(completed_at)
+    window_start, window_end = resolve_task_valid_window(
+        task_type=task_type,
+        as_of_date=task_date,
+    )
+    candidate = (
+        DailyTask.objects.filter(
+            patient_id=patient_id,
+            task_type=task_type,
+            task_date__range=(window_start, window_end),
+            status__in=[
+                choices.TaskStatus.PENDING,
+                choices.TaskStatus.NOT_STARTED,
+            ],
+        )
+        .order_by("-task_date", "-id")
+        .values_list("task_date", flat=True)
+        .first()
+    )
+    return candidate
+
+
 def complete_daily_medication_tasks(
     patient_id: int,
     occurred_at: datetime | None = None,
@@ -180,6 +324,7 @@ def complete_daily_medication_tasks(
     【返回值说明】
     - int | None：返回第一条匹配任务的 ID；若无任务则返回 None。
     """
+    refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
     completed_at = _resolve_completed_at(occurred_at)
     task_date = _resolve_task_date(completed_at)
 
@@ -187,7 +332,10 @@ def complete_daily_medication_tasks(
         patient_id=patient_id,
         task_date=task_date,
         task_type=choices.PlanItemCategory.MEDICATION,
-        status=choices.TaskStatus.PENDING,
+        status__in=[
+            choices.TaskStatus.PENDING,
+            choices.TaskStatus.NOT_STARTED,
+        ],
     )
     task_id = tasks.values_list("id", flat=True).first()
     tasks.update(
@@ -241,15 +389,18 @@ def complete_daily_monitoring_tasks(
     【返回值说明】
     - int：实际更新的任务数量。
     """
+    refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
     tasks, completed_at = _get_monitoring_tasks_queryset(
         patient_id=patient_id,
         metric_type=metric_type,
         occurred_at=occurred_at,
     )
-    return tasks.update(
-        status=choices.TaskStatus.COMPLETED,
-        completed_at=completed_at,
-    )
+    return tasks.filter(
+        status__in=[
+            choices.TaskStatus.PENDING,
+            choices.TaskStatus.NOT_STARTED,
+        ]
+    ).update(status=choices.TaskStatus.COMPLETED, completed_at=completed_at)
 
 
 def complete_daily_monitoring_tasks_with_latest_task_id(
@@ -272,23 +423,26 @@ def complete_daily_monitoring_tasks_with_latest_task_id(
     【返回值说明】
     - (updated_count, task_id)：updated_count 为更新数量；task_id 为最新任务 ID（无匹配任务则为 None）。
     """
+    refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
     tasks, completed_at = _get_monitoring_tasks_queryset(
         patient_id=patient_id,
         metric_type=metric_type,
         occurred_at=occurred_at,
     )
     latest_task_id = tasks.order_by("-id").values_list("id", flat=True).first()
-    updated_count = tasks.update(
-        status=choices.TaskStatus.COMPLETED,
-        completed_at=completed_at,
-    )
+    updated_count = tasks.filter(
+        status__in=[
+            choices.TaskStatus.PENDING,
+            choices.TaskStatus.NOT_STARTED,
+        ]
+    ).update(status=choices.TaskStatus.COMPLETED, completed_at=completed_at)
     return updated_count, latest_task_id
 
 
 def complete_daily_questionnaire_tasks(
     patient_id: int,
     occurred_at: datetime | None = None,
-) -> int:
+) -> tuple[int, int | None]:
     """
     【功能说明】
     - 将患者当天的问卷任务标记为已完成。
@@ -301,21 +455,33 @@ def complete_daily_questionnaire_tasks(
     - occurred_at: datetime | None，事件时间，用于定位当日任务及 completed_at。
 
     【返回值说明】
-    - int：实际更新的任务数量。
+    - (updated_count, task_id)：updated_count 为更新数量；task_id 为匹配的首条任务 ID（无匹配任务则为 None）。
     """
+    refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
     completed_at = _resolve_completed_at(occurred_at)
-    task_date = _resolve_task_date(completed_at)
+    target_date = _resolve_latest_incomplete_task_date(
+        patient_id=patient_id,
+        task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+        completed_at=completed_at,
+    )
+    if not target_date:
+        return 0, None
 
     tasks = DailyTask.objects.filter(
         patient_id=patient_id,
-        task_date=task_date,
+        task_date=target_date,
         task_type=choices.PlanItemCategory.QUESTIONNAIRE,
-        status=choices.TaskStatus.PENDING,
+        status__in=[
+            choices.TaskStatus.PENDING,
+            choices.TaskStatus.NOT_STARTED,
+        ],
     )
-    return tasks.update(
+    task_id = tasks.order_by("id").values_list("id", flat=True).first()
+    updated_count = tasks.update(
         status=choices.TaskStatus.COMPLETED,
         completed_at=completed_at,
     )
+    return updated_count, task_id
 
 
 def complete_daily_checkup_tasks(
@@ -336,19 +502,25 @@ def complete_daily_checkup_tasks(
     【返回值说明】
     - int：实际更新的任务数量。
     """
+    refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
     completed_at = _resolve_completed_at(occurred_at)
-    task_date = _resolve_task_date(completed_at)
-
-    tasks = DailyTask.objects.filter(
+    target_date = _resolve_latest_incomplete_task_date(
         patient_id=patient_id,
-        task_date=task_date,
         task_type=choices.PlanItemCategory.CHECKUP,
-        status=choices.TaskStatus.PENDING,
-    )
-    return tasks.update(
-        status=choices.TaskStatus.COMPLETED,
         completed_at=completed_at,
     )
+    if not target_date:
+        return 0
+
+    return DailyTask.objects.filter(
+        patient_id=patient_id,
+        task_date=target_date,
+        task_type=choices.PlanItemCategory.CHECKUP,
+        status__in=[
+            choices.TaskStatus.PENDING,
+            choices.TaskStatus.NOT_STARTED,
+        ],
+    ).update(status=choices.TaskStatus.COMPLETED, completed_at=completed_at)
 
 
 def _resolve_adherence_date_range(
@@ -384,11 +556,13 @@ def get_adherence_metrics(
     adherence_type: int | str,
     start_date: date | None = None,
     end_date: date | None = None,
+    refresh: bool = True,
 ) -> dict:
     """
     【功能说明】
     - 计算指定患者在时间范围内的依从性（按任务完成率统计）。
     - 依从性 = 已完成任务数 / 计划任务数。
+    - 未来任务（未开始）不参与统计。
 
     【使用方法】
     - get_adherence_metrics(patient_id, choices.PlanItemCategory.MEDICATION)
@@ -420,7 +594,22 @@ def get_adherence_metrics(
     【异常说明】
     - 不支持的依从性类型：抛出 ValueError。
     """
+    if refresh:
+        refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
+
     start_date, end_date = _resolve_adherence_date_range(start_date, end_date)
+    today = timezone.localdate()
+    if end_date > today:
+        end_date = today
+        if start_date > end_date:
+            return {
+                "type": adherence_type,
+                "start_date": start_date,
+                "end_date": end_date,
+                "total": 0,
+                "completed": 0,
+                "rate": None,
+            }
 
     base_qs = DailyTask.objects.filter(
         patient_id=patient_id,
@@ -469,6 +658,7 @@ def get_adherence_metrics(
     else:
         raise ValueError("不支持的依从性类型")
 
+    task_qs = task_qs.exclude(status=choices.TaskStatus.NOT_STARTED)
     total = task_qs.count()
     completed = task_qs.filter(status=choices.TaskStatus.COMPLETED).count()
     rate = None if total == 0 else completed / total
@@ -502,6 +692,7 @@ def get_adherence_metrics_batch(
     - List[dict]，每项结构同 get_adherence_metrics 返回值。
     """
     patient_id = patient.id if isinstance(patient, PatientProfile) else int(patient)
+    refresh_task_statuses(as_of_date=timezone.localdate(), patient_id=patient_id)
     results = []
     for adherence_type in adherence_types:
         results.append(
@@ -510,6 +701,7 @@ def get_adherence_metrics_batch(
                 adherence_type=adherence_type,
                 start_date=start_date,
                 end_date=end_date,
+                refresh=False,
             )
         )
     return results

@@ -64,7 +64,8 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
     # 处理计划列表
     for item in summary_list:
         title = item.get("title", "")
-        status_val = item.get("status", 0) # 0=pending, 1=completed
+        status_val = item.get("status", 0)
+        is_completed = status_val == TaskStatus.COMPLETED
         
         # 映射 type
         # 简单映射逻辑，需与 patient_home 保持一致
@@ -82,7 +83,7 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         # Determine default subtitle based on type (Logic from home.py)
         default_subtitle = ""
         if plan_type == "medication":
-            default_subtitle = "您今天还未服药" if status_val == 0 else "今日已服药"
+            default_subtitle = "您今天还未服药" if not is_completed else "今日已服药"
         elif plan_type == "temperature":
             default_subtitle = "请记录今日体温"
         elif plan_type == "bp_hr":
@@ -92,18 +93,18 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         elif plan_type == "weight":
             default_subtitle = "请记录今日体重"
         elif plan_type == "followup":
-            default_subtitle = "请及时完成您的随访任务" if status_val == 0 else "今日已完成"
+            default_subtitle = "请及时完成您的随访任务" if not is_completed else "今日已完成"
         elif plan_type == "checkup":
-            default_subtitle = "请及时完成您的复查任务" if status_val == 0 else "今日已完成"
+            default_subtitle = "请及时完成您的复查任务" if not is_completed else "今日已完成"
 
         plan_data = {
             "type": plan_type,
-            "status": "completed" if status_val == 1 else "pending",
+            "status": "completed" if is_completed else "pending",
             "subtitle": item.get("subtitle") or default_subtitle
         }
         
         # 获取数值展示，仅当状态为 completed 时更新 subtitle
-        if status_val == 1:
+        if is_completed:
             if plan_type == "temperature" and MetricType.BODY_TEMPERATURE in last_metrics:
                 info = last_metrics[MetricType.BODY_TEMPERATURE]
                 if is_today(info):
@@ -799,8 +800,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 )
                 completed_count = base_qs.filter(status=TaskStatus.COMPLETED).count()
                 overdue_count = base_qs.filter(
-                    status=TaskStatus.PENDING,
-                    task_date__lt=today,
+                    status=TaskStatus.TERMINATED,
                 ).count()
                 checkup_stats.append(
                     {
@@ -840,6 +840,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     """
     from core.models import DailyTask
     from core.models.choices import PlanItemCategory, TaskStatus, ReportType
+    from core.service import tasks as task_service
     from health_data.models.report_upload import ReportUpload, ReportImage, UploadSource, UploaderRole
     from health_data.services.report_service import ReportUploadService
     from core.models.checkup import CheckupLibrary
@@ -851,13 +852,28 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
 
     patient = request.patient
     patient_id = patient.id or None
-    today = timezone.now().date()
+    today = timezone.localdate()
 
-    # 查询今日复查任务
-    tasks = DailyTask.objects.filter(
-        patient=patient,
-        task_date=today,
-        task_type=PlanItemCategory.CHECKUP
+    task_service.refresh_task_statuses(as_of_date=today, patient_id=patient.id)
+    window_start, window_end = task_service.resolve_task_valid_window(
+        task_type=PlanItemCategory.CHECKUP,
+        as_of_date=today,
+    )
+
+    # 查询有效期内复查任务（支持 7 天内补交）
+    tasks = (
+        DailyTask.objects.filter(
+            patient=patient,
+            task_date__range=(window_start, window_end),
+            task_type=PlanItemCategory.CHECKUP,
+        )
+        .exclude(
+            status__in=[
+                TaskStatus.NOT_STARTED,
+                TaskStatus.TERMINATED,
+            ]
+        )
+        .order_by("task_date")
     )
 
     if request.method == "POST":
@@ -1171,8 +1187,12 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     for task in page_obj.object_list:
                         if task.status == TaskStatus.COMPLETED:
                             status_label = "已完成"
+                        elif task.status == TaskStatus.TERMINATED:
+                            status_label = "已中止"
+                        elif task.status == TaskStatus.NOT_STARTED or task.task_date > today:
+                            status_label = "未开始"
                         else:
-                            status_label = "未开始" if task.task_date > today else "未完成"
+                            status_label = "未完成"
 
                         time_str = "--:--"
                         if task.completed_at:

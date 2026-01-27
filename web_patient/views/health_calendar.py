@@ -5,6 +5,7 @@ from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 from users.decorators import auto_wechat_login, check_patient
 from core.service.tasks import get_daily_plan_summary
+from core.models import choices as core_choices
 from health_data.models import MetricType, HealthMetric
 from health_data.services.health_metric import HealthMetricService
 from users.services.patient import PatientService
@@ -117,6 +118,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
     for item in summary_list:
         title_val = item.get("title")
         status_val = item.get("status")
+        is_completed = status_val == core_choices.TaskStatus.COMPLETED
         task_type_val = item.get("task_type")
         
         # 默认值
@@ -124,7 +126,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
             "type": "unknown",
             "title": title_val,
             "subtitle": "请按时完成",
-            "status": "pending" if status_val == 0 else "completed",
+            "status": "completed" if is_completed else "pending",
             "action_text": "去完成",
             "icon_class": "bg-blue-100 text-blue-600",
         }
@@ -137,7 +139,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
         if "用药" in title_val:
             plan_data.update({
                 "type": "medication",
-                "subtitle": "您还未服药" if status_val == 0 else "已服药",
+                "subtitle": "您还未服药" if not is_completed else "已服药",
                 "action_text": "去服药"
             })
         elif "体温" in title_val:
@@ -176,14 +178,14 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
                  action_url = f"{action_url}?ids={ids_str}"
             plan_data.update({
                 "type": "followup",
-                "subtitle": "请及时完成随访" if status_val == 0 else "已完成",
+                "subtitle": "请及时完成随访" if not is_completed else "已完成",
                 "action_text": "去完成",
                 "url": action_url
             })
         elif "复查" in title_val:
             plan_data.update({
                 "type": "checkup",
-                "subtitle": "请及时完成复查" if status_val == 0 else "已完成",
+                "subtitle": "请及时完成复查" if not is_completed else "已完成",
                 "action_text": "去完成"
             })
         else:

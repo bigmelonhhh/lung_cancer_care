@@ -10,10 +10,12 @@ from datetime import date, datetime
 from django.core.management.base import BaseCommand, CommandError
 
 from core.service.task_scheduler import generate_daily_tasks_for_date
+from core.service.tasks import refresh_task_statuses
+from patient_alerts.services.behavior_alerts import BehaviorAlertService
 
 
 class Command(BaseCommand):
-    help = "Generate DailyTask records for a given date (default: today)."
+    help = "Generate DailyTask records starting from a given date (default: today)."
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(
@@ -35,5 +37,19 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"Generated {created_count} daily task(s) for {task_date.isoformat()}."
+            )
+        )
+
+        refreshed_count = refresh_task_statuses(as_of_date=task_date)
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Refreshed {refreshed_count} daily task status(es)."
+            )
+        )
+
+        alerts = BehaviorAlertService.run()
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Generated {len(alerts)} behavior alert(s)."
             )
         )

@@ -89,18 +89,18 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if patient_id and is_member:
         served_days, remaining_days = PatientService().get_guard_days(patient)
         service_days = served_days
-
         try:
             summary_list = get_daily_plan_summary(patient)
             for item in summary_list:
                 status_val = item.get("status")
+                is_completed = status_val == core_choices.TaskStatus.COMPLETED
                 title_val = item.get("title")
 
                 plan_data = {
                     "type": "unknown",
                     "title": title_val,
                     "subtitle": "请按时完成",
-                    "status": "pending" if status_val == 0 else "completed",
+                    "status": "completed" if is_completed else "pending",
                     "action_text": "去完成",
                     "icon_class": "bg-blue-100 text-blue-600",
                 }
@@ -113,7 +113,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                         {
                             "type": "medication",
                             "subtitle": item.get("subtitle")
-                            or ("您今天还未服药" if status_val == 0 else "今日已服药"),
+                            or ("您今天还未服药" if not is_completed else "今日已服药"),
                             "action_text": "去服药",
                         }
                     )
@@ -165,7 +165,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                         {
                             "type": "followup",
                             "subtitle": item.get("subtitle")
-                            or ("请及时完成您的随访任务" if status_val == 0 else "今日已完成"),
+                            or ("请及时完成您的随访任务" if not is_completed else "今日已完成"),
                             "action_text": "去完成",
                             "url": action_url,
                         }
@@ -175,7 +175,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                         {
                             "type": "checkup",
                             "subtitle": item.get("subtitle")
-                            or ("请及时完成您的复查任务" if status_val == 0 else "今日已完成"),
+                            or ("请及时完成您的复查任务" if not is_completed else "今日已完成"),
                             "action_text": "去完成",
                         }
                     )

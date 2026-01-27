@@ -15,6 +15,7 @@ class CheckupPlanItem(TypedDict):
     category: str
     is_active: bool
     schedule: list[int]
+    code: str | None
 
 
 def get_active_checkup_library() -> List[CheckupPlanItem]:
@@ -42,6 +43,7 @@ def get_active_checkup_library() -> List[CheckupPlanItem]:
                 category=item.get_category_display(),
                 is_active=item.is_active,
                 schedule=list(item.schedule_days_template or []),
+                code=item.code,
             )
         )
     return items

@@ -217,10 +217,13 @@ class QuestionnaireSubmissionService:
         
         submission.total_score = total_score
         submission.save(update_fields=["total_score"])
-        task_service.complete_daily_questionnaire_tasks(
+        _, resolved_task_id = task_service.complete_daily_questionnaire_tasks(
             patient_id=patient_id,
             occurred_at=submission.created_at,
         )
+        if submission.task_id is None and resolved_task_id:
+            submission.task_id = resolved_task_id
+            submission.save(update_fields=["task_id"])
 
         # 5. 将问卷总分落库到 HealthMetric：
         #    - metric_type 使用问卷的 code，例如 Q_SLEEP、Q_PAIN 等；

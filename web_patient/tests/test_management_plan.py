@@ -8,7 +8,7 @@ from health_data.models import MetricType
 from django.utils import timezone
 import datetime
 from decimal import Decimal
-from market.models import Order, Product
+from market.models import Product, Order
 
 class ManagementPlanViewTests(TestCase):
     def setUp(self):

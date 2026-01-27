@@ -133,14 +133,14 @@ class TaskCompletionServiceTest(TestCase):
         )
 
     def test_complete_daily_questionnaire_tasks_updates_all(self):
-        DailyTask.objects.create(
+        task_a = DailyTask.objects.create(
             patient=self.patient,
             task_date=self.task_date,
             task_type=choices.PlanItemCategory.QUESTIONNAIRE,
             title="随访问卷",
             status=choices.TaskStatus.PENDING,
         )
-        DailyTask.objects.create(
+        task_b = DailyTask.objects.create(
             patient=self.patient,
             task_date=self.task_date,
             task_type=choices.PlanItemCategory.QUESTIONNAIRE,
@@ -148,12 +148,13 @@ class TaskCompletionServiceTest(TestCase):
             status=choices.TaskStatus.PENDING,
         )
 
-        updated_count = task_service.complete_daily_questionnaire_tasks(
+        updated_count, task_id = task_service.complete_daily_questionnaire_tasks(
             patient_id=self.patient.id,
             occurred_at=self.occurred_at,
         )
 
         self.assertEqual(updated_count, 2)
+        self.assertEqual(task_id, task_a.id)
         self.assertEqual(
             DailyTask.objects.filter(
                 patient=self.patient,
