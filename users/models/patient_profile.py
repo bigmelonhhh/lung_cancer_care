@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxLengthValidator
@@ -280,11 +280,9 @@ class PatientProfile(TimeStampedModel):
 
         last_end_date: date | None = None
         for order in paid_orders:
-            duration = order.product.duration_days or 0
-            if duration <= 0:
+            end_date = order.end_date
+            if not end_date:
                 continue
-            start_date = timezone.localtime(order.paid_at).date()
-            end_date = start_date + timedelta(days=duration - 1)
             if today <= end_date:
                 return "active", end_date
             if not last_end_date or end_date > last_end_date:
@@ -313,10 +311,7 @@ class PatientProfile(TimeStampedModel):
         【规则】存在未过期的付费服务包订单。
         """
 
-        if not hasattr(self, "_membership_cache"):
-            self._membership_cache = self._compute_membership()
-        state, _ = self._membership_cache
-        return state == "active"
+        return self.service_status == "active"
 
     def has_active_membership(self) -> bool:
         """
@@ -329,11 +324,18 @@ class PatientProfile(TimeStampedModel):
     def get_service_status_display(self) -> str:
         """兼容旧模板调用，返回当前会员状态文案。"""
 
-        if not hasattr(self, "_membership_cache"):
-            self._membership_cache = self._compute_membership()
-        state, _ = self._membership_cache
+        state = self.service_status
         if state == "active":
             return "付费会员"
         if state == "expired":
             return "已过期"
         return "免费会员"
+
+    @property
+    def service_status(self) -> str:
+        """返回会员状态代码：active / expired / none。"""
+
+        if not hasattr(self, "_membership_cache"):
+            self._membership_cache = self._compute_membership()
+        state, _ = self._membership_cache
+        return state

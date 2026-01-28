@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime, time
 
 from django.db import transaction
 from django.utils import timezone
@@ -178,12 +179,45 @@ def handle_wechat_pay_success(data: dict) -> Order:
         raise PaymentNotifyError("支付未成功")
 
     with transaction.atomic():
-        order = Order.objects.select_for_update().get(order_no=out_trade_no)
+        order = (
+            Order.objects.select_for_update()
+            .select_related("product", "patient")
+            .get(order_no=out_trade_no)
+        )
         if order.status == Order.Status.PENDING:
             order.status = Order.Status.PAID
             order.paid_at = order.paid_at or timezone.now()
             order.save(update_fields=["status", "paid_at", "updated_at"])
+        if order.status == Order.Status.PAID:
+            _update_patient_membership_expire_at(order)
     return order
+
+
+def _update_patient_membership_expire_at(order: Order) -> None:
+    """支付成功后，更新患者会员到期时间（取最大有效期）。"""
+
+    duration_days = getattr(order.product, "duration_days", 0) or 0
+    if duration_days <= 0:
+        return
+
+    end_date = order.end_date
+    if not end_date:
+        return
+
+    expire_at = datetime.combine(end_date, time.max)
+    if timezone.is_aware(timezone.now()) and timezone.is_naive(expire_at):
+        expire_at = timezone.make_aware(expire_at, timezone.get_current_timezone())
+
+    patient = order.patient
+    current_expire_at = patient.membership_expire_at
+    if current_expire_at and timezone.is_naive(current_expire_at) and timezone.is_aware(expire_at):
+        current_expire_at = timezone.make_aware(
+            current_expire_at, timezone.get_current_timezone()
+        )
+
+    if not current_expire_at or expire_at > current_expire_at:
+        patient.membership_expire_at = expire_at
+        patient.save(update_fields=["membership_expire_at", "updated_at"])
 
 
 def get_paid_orders_for_patient(patient: PatientProfile) -> list[Order]:

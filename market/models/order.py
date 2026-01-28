@@ -89,4 +89,7 @@ class Order(TimeStampedModel):
         start = self.start_date
         if not start:
             return None
-        return start + timedelta(days=self.product.duration_days - 1)
+        duration_days = getattr(self.product, "duration_days", 0) or 0
+        if duration_days <= 0:
+            return None
+        return start + timedelta(days=duration_days - 1)

@@ -12,6 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from core.service.task_scheduler import generate_daily_tasks_for_date
 from core.service.tasks import refresh_task_statuses
 from patient_alerts.services.behavior_alerts import BehaviorAlertService
+from users.services.patient import PatientService
 
 
 class Command(BaseCommand):
@@ -22,6 +23,11 @@ class Command(BaseCommand):
             "--date",
             dest="task_date",
             help="Target date in YYYY-MM-DD format. Defaults to today.",
+        )
+        parser.add_argument(
+            "--sync-membership",
+            action="store_true",
+            help="Sync membership_expire_at based on paid orders (legacy data alignment).",
         )
 
     def handle(self, *args, **options) -> None:
@@ -46,6 +52,15 @@ class Command(BaseCommand):
                 f"Refreshed {refreshed_count} daily task status(es)."
             )
         )
+
+        if options.get("sync_membership"):
+            updated_count, cleared_count = PatientService().sync_membership_expire_at()
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "Synced membership_expire_at for "
+                    f"{updated_count} patient(s), cleared {cleared_count}."
+                )
+            )
 
         alerts = BehaviorAlertService.run()
         self.stdout.write(

@@ -1,4 +1,4 @@
-from datetime import timedelta, date
+from datetime import timedelta, date, datetime, time
 from typing import Optional
 
 # users/services/patient.py
@@ -57,12 +57,10 @@ class PatientService:
         # 1. 生成原始服务区间 (不截断)
         raw_ranges: list[tuple[date, date]] = []
         for order in paid_orders:
-            duration = getattr(order.product, "duration_days", 0) or 0
-            if duration <= 0:
+            start_date = order.start_date
+            end_date = order.end_date
+            if not start_date or not end_date:
                 continue
-
-            start_date = timezone.localtime(order.paid_at).date()
-            end_date = start_date + timedelta(days=duration - 1)
             raw_ranges.append((start_date, end_date))
 
         if not raw_ranges:
@@ -101,6 +99,62 @@ class PatientService:
                 remaining_days += (end - remaining_start).days + 1
 
         return served_days, remaining_days
+
+    def sync_membership_expire_at(self) -> tuple[int, int]:
+        """
+        【业务说明】根据已支付订单回填会员到期时间（历史对齐）。
+
+        【规则说明】
+        - 只统计已支付且 paid_at 不为空的订单；
+        - 会员到期时间取该患者所有订单的最大 end_date（按当日 23:59:59 对齐）；
+        - 无已支付订单则清空 membership_expire_at。
+
+        【返回值】
+        - (updated_count, cleared_count)
+        """
+        from market.models import Order  # 避免在模块顶层引入引起不必要耦合
+
+        now = timezone.now()
+        expire_by_patient: dict[int, datetime] = {}
+
+        paid_orders = (
+            Order.objects.select_related("product")
+            .filter(status=Order.Status.PAID, paid_at__isnull=False)
+            .order_by("patient_id")
+        )
+        for order in paid_orders.iterator():
+            end_date = order.end_date
+            if not end_date:
+                continue
+            expire_at = datetime.combine(end_date, time.max)
+            if timezone.is_aware(now) and timezone.is_naive(expire_at):
+                expire_at = timezone.make_aware(
+                    expire_at, timezone.get_current_timezone()
+                )
+            current = expire_by_patient.get(order.patient_id)
+            if not current or expire_at > current:
+                expire_by_patient[order.patient_id] = expire_at
+
+        patients_to_update: list[PatientProfile] = []
+        for patient in PatientProfile.objects.filter(id__in=expire_by_patient.keys()):
+            target = expire_by_patient.get(patient.id)
+            if patient.membership_expire_at != target:
+                patient.membership_expire_at = target
+                patient.updated_at = now
+                patients_to_update.append(patient)
+
+        if patients_to_update:
+            PatientProfile.objects.bulk_update(
+                patients_to_update, ["membership_expire_at", "updated_at"]
+            )
+
+        cleared_count = (
+            PatientProfile.objects.filter(membership_expire_at__isnull=False)
+            .exclude(id__in=expire_by_patient.keys())
+            .update(membership_expire_at=None, updated_at=now)
+        )
+
+        return len(patients_to_update), cleared_count
     
     
     
