@@ -4,6 +4,34 @@
 <div class="fixed inset-0 top-16 flex bg-slate-100 overflow-hidden">
     
     <aside class="w-64 flex flex-col bg-white border-r border-slate-200 z-10">
+        <div class="px-3 py-3 border-b border-slate-200 bg-white">
+            <div class="flex items-center gap-2">
+                <input
+                    id="patient-search-input"
+                    type="text"
+                    class="w-full h-9 px-3 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                    placeholder="患者姓名/手机号"
+                    autocomplete="off"
+                />
+               
+            </div>
+            <div class="flex items-center justify-end mt-2 ">
+                 <button
+                    id="patient-search-btn"
+                    type="button"
+                    class="mr-2 h-9 px-3 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
+                >
+                    搜索
+                </button>
+                <button
+                    id="patient-search-reset"
+                    type="button"
+                    class="h-9 px-3 text-sm bg-white text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition"
+                >
+                    重置
+                </button>
+            </div>
+        </div>
         <ul id="patient-list-container" class="flex-1 overflow-y-auto divide-y divide-slate-50">
             {% include "web_doctor/partials/patient_list.html" %}
         </ul>

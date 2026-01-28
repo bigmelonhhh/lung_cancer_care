@@ -30,9 +30,11 @@ from .reports_history_data import (
 )
 
 from .mobile.views import mobile_home
+from .mobile.patient_list import mobile_patient_list
 
 __all__ = [
     "mobile_home",
+    "mobile_patient_list",
     "login_view",
     "logout_view",
     "doctor_change_password",

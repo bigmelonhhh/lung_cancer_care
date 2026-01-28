@@ -37,6 +37,7 @@ from web_doctor.views.home import build_home_context
 from patient_alerts.services.todo_list import TodoListService
 from django.template.loader import render_to_string
 from chat.services.chat import ChatService
+from market.models import Order
 
 logger = logging.getLogger(__name__)
 
@@ -122,6 +123,7 @@ def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientPr
     为患者列表附加待办事项和咨询消息计数
     """
     patients = list(patients_qs)
+    _attach_patients_service_status_codes(patients)
     chat_service = ChatService()
     
     for patient in patients:
@@ -152,6 +154,62 @@ def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientPr
     return patients
 
 
+def _attach_patients_service_status_codes(patients: list[PatientProfile]) -> None:
+    if not patients:
+        return
+
+    patient_ids = [patient.id for patient in patients]
+    paid_orders = (
+        Order.objects.select_related("product")
+        .filter(
+            patient_id__in=patient_ids,
+            status=Order.Status.PAID,
+            paid_at__isnull=False,
+        )
+        .order_by("-paid_at")
+    )
+    orders_by_patient: dict[int, list[Order]] = {}
+    for order in paid_orders:
+        orders_by_patient.setdefault(order.patient_id, []).append(order)
+
+    today = timezone.localdate()
+    for patient in patients:
+        patient_orders = orders_by_patient.get(patient.id, [])
+        state = "none"
+        last_end_date: date | None = None
+        for order in patient_orders:
+            end_date = order.end_date
+            if not end_date:
+                continue
+            if today <= end_date:
+                state = "active"
+                last_end_date = None
+                break
+            if not last_end_date or end_date > last_end_date:
+                last_end_date = end_date
+        if state != "active" and last_end_date:
+            state = "expired"
+        patient.service_status_code = state
+
+
+def _split_patients_by_service_status(patients: list[PatientProfile]) -> tuple[list[PatientProfile], list[PatientProfile], list[PatientProfile]]:
+    managed: list[PatientProfile] = []
+    stopped: list[PatientProfile] = []
+    unpaid: list[PatientProfile] = []
+
+    for patient in patients:
+        state = getattr(patient, "service_status_code", None) or patient.service_status
+        if state == "active":
+            managed.append(patient)
+            continue
+        if state == "expired":
+            stopped.append(patient)
+            continue
+        unpaid.append(patient)
+
+    return managed, stopped, unpaid
+
+
 @login_required
 @check_doctor_or_assistant
 def doctor_workspace(request: HttpRequest) -> HttpResponse:
@@ -163,6 +221,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
+    managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
     
     display_name = get_user_display_name(request.user)
     
@@ -182,7 +241,9 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
             "doctor": doctor_profile,
             "assistant": assistant_profile,
             "workspace_display_name": display_name,
-            "patients": patients,
+            "managed_patients": managed_patients,
+            "stopped_patients": stopped_patients,
+            "unpaid_patients": unpaid_patients,
             "todo_list": [], # 首页初始状态为空，点击患者后加载
         },
     )
@@ -197,11 +258,14 @@ def doctor_workspace_patient_list(request: HttpRequest) -> HttpResponse:
     """
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
+    managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
     return render(
         request,
         "web_doctor/partials/patient_list.html",
         {
-            "patients": patients,
+            "managed_patients": managed_patients,
+            "stopped_patients": stopped_patients,
+            "unpaid_patients": unpaid_patients,
         },
     )
 

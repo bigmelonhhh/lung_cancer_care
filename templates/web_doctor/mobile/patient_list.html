@@ -1,0 +1,155 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}患者列表{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans">
+  <div class="bg-[#4DB6AC] pt-safe-top pb-5 px-4 shadow-md">
+    <div class="flex items-center gap-3 pt-4">
+      <a href="{% url 'web_doctor:mobile_home' %}" class="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </a>
+      <div class="text-white">
+        <div class="text-base font-bold leading-tight">患者列表</div>
+        <div class="text-xs opacity-90">支持姓名/手机号搜索</div>
+      </div>
+    </div>
+
+    <form method="get" class="mt-4">
+      <div class="flex items-center gap-2">
+        <input
+          type="text"
+          name="q"
+          value="{{ q|default:'' }}"
+          class="flex-1 h-10 px-4 text-sm rounded-full bg-white/95 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-white/50"
+          placeholder="请输入患者姓名/手机号"
+          autocomplete="off"
+          inputmode="search"
+        />
+        <button type="submit" class="h-10 px-5 rounded-full bg-blue-600 text-white text-sm font-bold active:scale-95 transition">
+          搜索
+        </button>
+      </div>
+      {% if q %}
+      <div class="mt-2 text-xs text-white/90">
+        当前搜索：<span class="font-bold">{{ q }}</span>
+        <a href="{% url 'web_doctor:mobile_patient_list' %}" class="ml-2 underline underline-offset-2">清空</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="px-4 py-4 space-y-4">
+    <div class="rounded-xl overflow-hidden shadow-sm">
+      <div class="bg-[#4DB6AC] px-4 py-2 flex items-center justify-between text-white">
+        <span class="font-bold text-sm">管理中患者 ({{ managed_total }})</span>
+        <span class="text-xs opacity-90">第 {{ managed_page.number }}/{{ managed_page.paginator.num_pages }} 页</span>
+      </div>
+      <div class="bg-white">
+        {% if managed_patients %}
+          {% for patient in managed_patients %}
+          <div class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between active:bg-slate-50 transition">
+            <div class="min-w-0">
+              <div class="flex items-baseline gap-2">
+                <div class="text-sm font-bold text-slate-800 truncate max-w-[9rem]">{{ patient.name }}</div>
+                <div class="text-xs text-slate-500 shrink-0">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
+              </div>
+              <div class="mt-1 text-xs text-slate-500 flex items-center gap-4">
+                <div>
+                  待办 <span class="text-red-500 font-bold">
+                    {% if patient.todo_count > 99 %}(99+){% else %}({{ patient.todo_count|default:0 }}){% endif %}
+                  </span>
+                </div>
+                <div>
+                  咨询 <span class="text-red-500 font-bold">
+                    {% if patient.consult_count > 99 %}(99+){% else %}({{ patient.consult_count|default:0 }}){% endif %}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <svg class="w-5 h-5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="p-4 text-center text-slate-400 text-sm">暂无管理中患者</div>
+        {% endif %}
+      </div>
+      {% if managed_page.paginator.num_pages > 1 %}
+      <div class="bg-white border-t border-slate-100 px-4 py-3 flex items-center justify-between text-sm">
+        {% if managed_page.has_previous %}
+          <a class="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 active:bg-slate-50 transition"
+             href="?q={{ q|urlencode }}&managed_page={{ managed_page.previous_page_number }}&unmanaged_page={{ unmanaged_page.number }}">上一页</a>
+        {% else %}
+          <span class="px-3 py-1.5 rounded-md border border-slate-100 text-slate-300">上一页</span>
+        {% endif %}
+        {% if managed_page.has_next %}
+          <a class="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 active:bg-slate-50 transition"
+             href="?q={{ q|urlencode }}&managed_page={{ managed_page.next_page_number }}&unmanaged_page={{ unmanaged_page.number }}">下一页</a>
+        {% else %}
+          <span class="px-3 py-1.5 rounded-md border border-slate-100 text-slate-300">下一页</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="rounded-xl overflow-hidden shadow-sm">
+      <div class="bg-[#4DB6AC] px-4 py-2 flex items-center justify-between text-white">
+        <span class="font-bold text-sm">未管理的患者 ({{ unmanaged_total }})</span>
+        <span class="text-xs opacity-90">第 {{ unmanaged_page.number }}/{{ unmanaged_page.paginator.num_pages }} 页</span>
+      </div>
+      <div class="bg-white">
+        {% if unmanaged_patients %}
+          {% for patient in unmanaged_patients %}
+          <div class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between active:bg-slate-50 transition">
+            <div class="min-w-0">
+              <div class="flex items-baseline gap-2">
+                <div class="text-sm font-bold text-slate-800 truncate max-w-[9rem]">{{ patient.name }}</div>
+                <div class="text-xs text-slate-500 shrink-0">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
+              </div>
+              <div class="mt-1 text-xs text-slate-500 flex items-center gap-4">
+                <div>
+                  待办 <span class="text-red-500 font-bold">
+                    {% if patient.todo_count > 99 %}(99+){% else %}({{ patient.todo_count|default:0 }}){% endif %}
+                  </span>
+                </div>
+                <div>
+                  咨询 <span class="text-red-500 font-bold">
+                    {% if patient.consult_count > 99 %}(99+){% else %}({{ patient.consult_count|default:0 }}){% endif %}
+                  </span>
+                </div>
+              </div>
+            </div>
+            <svg class="w-5 h-5 text-slate-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="p-4 text-center text-slate-400 text-sm">暂无未管理患者</div>
+        {% endif %}
+      </div>
+      {% if unmanaged_page.paginator.num_pages > 1 %}
+      <div class="bg-white border-t border-slate-100 px-4 py-3 flex items-center justify-between text-sm">
+        {% if unmanaged_page.has_previous %}
+          <a class="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 active:bg-slate-50 transition"
+             href="?q={{ q|urlencode }}&managed_page={{ managed_page.number }}&unmanaged_page={{ unmanaged_page.previous_page_number }}">上一页</a>
+        {% else %}
+          <span class="px-3 py-1.5 rounded-md border border-slate-100 text-slate-300">上一页</span>
+        {% endif %}
+        {% if unmanaged_page.has_next %}
+          <a class="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 active:bg-slate-50 transition"
+             href="?q={{ q|urlencode }}&managed_page={{ managed_page.number }}&unmanaged_page={{ unmanaged_page.next_page_number }}">下一页</a>
+        {% else %}
+          <span class="px-3 py-1.5 rounded-md border border-slate-100 text-slate-300">下一页</span>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
