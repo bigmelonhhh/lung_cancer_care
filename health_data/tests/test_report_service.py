@@ -167,6 +167,95 @@ class ReportServiceTest(TestCase):
         self.assertEqual(list(page2), [upload1])
         self.assertEqual(page1.paginator.count, 2)
 
+    def test_list_report_images_filters_and_ordering(self):
+        base_date = date(2025, 1, 10)
+        newer = ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/newer.png",
+                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "report_date": base_date + timedelta(days=1),
+                }
+            ],
+        )
+        middle = ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/middle.png",
+                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "report_date": base_date,
+                }
+            ],
+        )
+        older = ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/older.png",
+                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "report_date": base_date - timedelta(days=1),
+                }
+            ],
+        )
+        ReportUpload.objects.filter(id=older.id).update(deleted_at=timezone.now())
+
+        ReportUploadService.create_upload(
+            self.patient,
+            images=["https://example.com/no-date.png"],
+        )
+
+        page = ReportUploadService.list_report_images(
+            self.patient,
+            start_date=base_date - timedelta(days=1),
+            end_date=base_date + timedelta(days=1),
+        )
+        report_dates = [img.report_date for img in page]
+        self.assertEqual(report_dates, [base_date + timedelta(days=1), base_date])
+
+        page_with_deleted = ReportUploadService.list_report_images(
+            self.patient,
+            start_date=base_date - timedelta(days=1),
+            end_date=base_date + timedelta(days=1),
+            include_deleted=True,
+        )
+        report_dates_with_deleted = [img.report_date for img in page_with_deleted]
+        self.assertEqual(
+            report_dates_with_deleted,
+            [base_date + timedelta(days=1), base_date, base_date - timedelta(days=1)],
+        )
+
+    def test_list_report_images_pagination(self):
+        base_date = date(2025, 1, 10)
+        ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/newer.png",
+                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "report_date": base_date + timedelta(days=1),
+                }
+            ],
+        )
+        ReportUploadService.create_upload(
+            self.patient,
+            images=[
+                {
+                    "image_url": "https://example.com/older.png",
+                    "record_type": ReportImage.RecordType.OUTPATIENT,
+                    "report_date": base_date,
+                }
+            ],
+        )
+
+        page1 = ReportUploadService.list_report_images(self.patient, page=1, page_size=1)
+        page2 = ReportUploadService.list_report_images(self.patient, page=2, page_size=1)
+
+        self.assertEqual(page1.paginator.count, 2)
+        self.assertEqual(page1.object_list[0].report_date, base_date + timedelta(days=1))
+        self.assertEqual(page2.object_list[0].report_date, base_date)
+
     def test_delete_upload_hard_delete(self):
         upload = self._create_upload(images=["https://example.com/a.png"])
         deleted = ReportUploadService.delete_upload(upload)

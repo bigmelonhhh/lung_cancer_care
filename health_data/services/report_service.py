@@ -241,6 +241,50 @@ class ReportUploadService:
         return paginator.get_page(page)
 
     @staticmethod
+    def list_report_images(
+        patient: PatientProfile,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        page: int = 1,
+        page_size: int = 20,
+        include_deleted: bool = False,
+    ):
+        """
+        【功能说明】
+        - 按报告日期倒序返回指定患者的报告图片明细（ReportImage）。
+
+        【参数说明】
+        - patient: PatientProfile。
+        - start_date/end_date: report_date 日期范围（含边界）。
+        - page/page_size: 分页参数。
+        - include_deleted: 是否包含已删除的上传批次图片。
+
+        【返回值说明】
+        - Django Page 对象，page.object_list 为 ReportImage 列表。
+        """
+        queryset = (
+            ReportImage.objects.select_related(
+                "upload",
+                "checkup_item",
+                "clinical_event",
+                "health_metric",
+            )
+            .filter(upload__patient=patient)
+            .exclude(report_date__isnull=True)
+        )
+
+        if not include_deleted:
+            queryset = queryset.filter(upload__deleted_at__isnull=True)
+
+        if start_date is not None:
+            queryset = queryset.filter(report_date__gte=start_date)
+        if end_date is not None:
+            queryset = queryset.filter(report_date__lte=end_date)
+
+        paginator = Paginator(queryset.order_by("-report_date", "-id"), page_size)
+        return paginator.get_page(page)
+
+    @staticmethod
     def delete_upload(upload: ReportUpload) -> bool:
         """
         【功能说明】
