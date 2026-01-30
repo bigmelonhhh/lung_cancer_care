@@ -82,7 +82,7 @@
 {% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-white pb-24 relative font-sans">
+<div class="min-h-screen bg-white pb-24 relative font-sans"> 
   
   <!-- Header with Calendar -->
   <div class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-10 px-4 relative rounded-b-[2.5rem] shadow-lg transition-all duration-300">
@@ -183,6 +183,53 @@
     }
   }
 
+  function showToast(message, variant = 'info') {
+    const containerId = 'toast-container';
+    let container = document.getElementById(containerId);
+    if (!container) {
+      container = document.createElement('div');
+      container.id = containerId;
+      container.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[9999] space-y-2 w-[92vw] max-w-sm';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    const baseClass = 'px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center justify-between gap-3';
+    const variantClass = variant === 'error'
+      ? 'bg-red-600 text-white'
+      : variant === 'success'
+        ? 'bg-emerald-600 text-white'
+        : 'bg-slate-900 text-white';
+    toast.className = `${baseClass} ${variantClass}`;
+    toast.innerHTML = `<span class="leading-5">${String(message || '')}</span><button type="button" class="text-white/80 hover:text-white">×</button>`;
+    const closeBtn = toast.querySelector('button');
+    closeBtn.addEventListener('click', () => toast.remove());
+
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'transition', 'duration-300');
+      setTimeout(() => toast.remove(), 320);
+    }, 2400);
+  }
+
+  function resolveActiveDateStr() {
+    try {
+      if (fpInstance && fpInstance.selectedDates && fpInstance.selectedDates.length > 0) {
+        return flatpickr.formatDate(fpInstance.selectedDates[0], "Y-m-d");
+      }
+    } catch (e) {}
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const dateParam = urlParams.get('date');
+    if (dateParam) return dateParam;
+
+    const dateDisplayEl = document.getElementById('current-date-display');
+    const displayText = dateDisplayEl ? dateDisplayEl.textContent.trim() : '';
+    if (displayText) return displayText;
+
+    return todayStr;
+  }
+
   // --- 2. Calendar Logic ---
   let fpInstance;
   const todayStr = "{{ today|date:'Y-m-d' }}";
@@ -263,6 +310,7 @@
         console.log('Request canceled', error.message);
       } else {
         console.error('Error fetching data:', error);
+        showToast('网络异常，加载失败，请稍后重试', 'error');
         container.innerHTML = '<div class="text-center py-10 text-red-500">加载失败，请重试</div>';
       }
     })
@@ -282,7 +330,10 @@
 
   function submitMedication() {
       const patientId = "{{ patient.id|default:'' }}";
-      if (!patientId) return alert('未找到患者信息');
+      if (!patientId) {
+        showToast('未找到患者信息', 'error');
+        return;
+      }
 
       fetch("{% url 'web_patient:submit_medication' %}", {
           method: 'POST',
@@ -290,20 +341,21 @@
               'Content-Type': 'application/x-www-form-urlencoded',
               'X-CSRFToken': '{{ csrf_token }}'
           },
-          body: new URLSearchParams({'patient_id': patientId})
+          body: new URLSearchParams({
+            'patient_id': patientId,
+            'selected_date': resolveActiveDateStr()
+          })
       })
       .then(r => r.json())
       .then(data => {
           if (data.success) {
             // Refresh current date view
-            const currentDate = fpInstance.selectedDates[0];
-            const dateStr = flatpickr.formatDate(currentDate, "Y-m-d");
-            fetchTasks(dateStr);
+            fetchTasks(resolveActiveDateStr());
             closeMedicationModal();
           }
-          else alert(data.message || '提交失败');
+          else showToast(data.message || '提交失败', 'error');
       })
-      .catch(e => alert('提交出错'));
+      .catch(() => showToast('网络异常，提交失败，请稍后重试', 'error'));
   }
 
   function handleTaskClick(title, type, specificUrl) {
@@ -323,15 +375,20 @@
   }
 
   // --- 5. Data Refresh on Back ---
-  window.addEventListener('pageshow', function() {
-      if (localStorage.getItem('refresh_flag') === 'true') {
-          if (fpInstance && fpInstance.selectedDates.length > 0) {
-              const currentDate = fpInstance.selectedDates[0];
-              const dateStr = flatpickr.formatDate(currentDate, "Y-m-d");
-              fetchTasks(dateStr);
-          }
-          localStorage.removeItem('refresh_flag');
-      }
+  window.addEventListener('pageshow', function(event) {
+      const refreshFlag = localStorage.getItem('refresh_flag') === 'true';
+      const shouldRefresh = refreshFlag || Boolean(event && event.persisted);
+      if (!shouldRefresh) return;
+
+      fetchTasks(resolveActiveDateStr());
+      if (refreshFlag) localStorage.removeItem('refresh_flag');
+  });
+
+  document.addEventListener('visibilitychange', function() {
+      if (document.visibilityState !== 'visible') return;
+      if (localStorage.getItem('refresh_flag') !== 'true') return;
+      fetchTasks(resolveActiveDateStr());
+      localStorage.removeItem('refresh_flag');
   });
 </script>
 {% endblock %}

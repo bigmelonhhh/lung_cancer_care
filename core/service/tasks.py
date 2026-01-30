@@ -335,6 +335,7 @@ def complete_daily_medication_tasks(
         status__in=[
             choices.TaskStatus.PENDING,
             choices.TaskStatus.NOT_STARTED,
+            choices.TaskStatus.TERMINATED,
         ],
     )
     task_id = tasks.values_list("id", flat=True).first()
@@ -399,6 +400,7 @@ def complete_daily_monitoring_tasks(
         status__in=[
             choices.TaskStatus.PENDING,
             choices.TaskStatus.NOT_STARTED,
+            choices.TaskStatus.TERMINATED,
         ]
     ).update(status=choices.TaskStatus.COMPLETED, completed_at=completed_at)
 
@@ -434,6 +436,7 @@ def complete_daily_monitoring_tasks_with_latest_task_id(
         status__in=[
             choices.TaskStatus.PENDING,
             choices.TaskStatus.NOT_STARTED,
+            choices.TaskStatus.TERMINATED,
         ]
     ).update(status=choices.TaskStatus.COMPLETED, completed_at=completed_at)
     return updated_count, latest_task_id
