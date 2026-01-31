@@ -113,6 +113,9 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
     for m_type in metric_types_to_query:
         daily_metrics[m_type] = query_metric_for_date(patient.id, m_type, target_date)
 
+    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+    cached_plans = metric_plan_cache.get(target_date.strftime("%Y-%m-%d")) or {}
+
     # 4. 构建视图数据
     daily_plans = []
     for item in summary_list:
@@ -190,6 +193,15 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
             })
         else:
             continue
+
+        cached_plan = cached_plans.get(plan_data["type"]) if cached_plans else None
+        if cached_plan:
+            cached_status = cached_plan.get("status")
+            if cached_status in ("completed", "pending"):
+                plan_data["status"] = cached_status
+            cached_subtitle = cached_plan.get("subtitle")
+            if cached_subtitle:
+                plan_data["subtitle"] = cached_subtitle
 
         # 尝试填充具体的数值（如果已完成）
         metric_config = None

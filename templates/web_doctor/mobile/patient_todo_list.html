@@ -1,0 +1,195 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}患者待办{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans overflow-x-hidden">
+  <div class="bg-[#4DB6AC] pt-safe-top pb-5 px-4 shadow-md relative overflow-hidden">
+    <div class="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-white/10"></div>
+    <div class="absolute -bottom-20 -left-16 w-56 h-56 rounded-full bg-white/10"></div>
+
+    <div class="relative z-10 pt-4 flex items-center">
+      <button type="button" id="mobile-back-btn" class="w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <div class="text-white min-w-0 px-2 flex flex-col">
+        <div class="text-base font-bold truncate">
+          {% if patient %}患者待办：{{ patient.name }}{% else %}患者待办{% endif %}
+        </div>
+        <div class="text-xs opacity-90">
+          {% if patient %}{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁{% else %}全部患者{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 py-4 space-y-3">
+    <div id="mobile-todo-loading" class="htmx-indicator hidden fixed inset-x-0 top-24 z-40 flex justify-center">
+      <div class="bg-white/95 rounded-full shadow-sm px-4 py-2 flex items-center gap-2">
+        <span class="w-4 h-4 rounded-full border-2 border-slate-200 border-t-[#4DB6AC] animate-spin"></span>
+        <span class="text-sm text-slate-600">加载中...</span>
+      </div>
+    </div>
+
+    <div id="mobile-todo-list-content" class="space-y-3">
+      {% include "web_doctor/mobile/partials/patient_todo_list_content.html" %}
+    </div>
+  </div>
+</div>
+
+<div id="todo-detail-modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/40"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="w-full max-w-[92vw] sm:max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <div class="text-sm font-bold text-slate-800 truncate pr-3" id="todo-detail-title"></div>
+        <button type="button" id="todo-detail-close" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center active:scale-95 transition">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="px-4 py-4 max-h-[82vh] overflow-y-auto text-sm">
+        <div class="space-y-3">
+          <div>
+            <div class="text-xs text-slate-500 mb-1">待处理事件内容</div>
+            <div class="text-slate-700 text-sm bg-slate-50 rounded-xl p-3 break-words" id="todo-detail-content"></div>
+          </div>
+
+          <div class="grid grid-cols-1 gap-2 text-xs">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-slate-500 shrink-0">当前状态</span>
+              <span class="text-slate-700 min-w-0 truncate" id="todo-detail-status"></span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-slate-500 shrink-0">事件时间</span>
+              <span class="text-slate-700 min-w-0 truncate" id="todo-detail-event-time"></span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-slate-500 shrink-0">处理时间</span>
+              <span class="text-slate-700 min-w-0 truncate" id="todo-detail-handle-time"></span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-slate-500 shrink-0">处理人</span>
+              <span class="text-slate-700 min-w-0 truncate" id="todo-detail-handler"></span>
+            </div>
+          </div>
+
+          <div id="todo-detail-handle-content-wrap" class="hidden">
+            <div class="text-xs text-slate-500 mb-1">处理说明</div>
+            <div class="text-slate-700 text-sm bg-slate-50 rounded-xl p-3 break-words" id="todo-detail-handle-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="px-4 py-3 border-t border-slate-100 flex justify-end">
+        <button type="button" id="todo-detail-bottom-close" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:scale-[0.99] transition">
+          关闭
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+  (function () {
+    const getModalEls = function () {
+      return {
+        modal: document.getElementById("todo-detail-modal"),
+        titleEl: document.getElementById("todo-detail-title"),
+        contentEl: document.getElementById("todo-detail-content"),
+        statusEl: document.getElementById("todo-detail-status"),
+        eventTimeEl: document.getElementById("todo-detail-event-time"),
+        handleTimeEl: document.getElementById("todo-detail-handle-time"),
+        handlerEl: document.getElementById("todo-detail-handler"),
+        handleWrapEl: document.getElementById("todo-detail-handle-content-wrap"),
+        handleContentEl: document.getElementById("todo-detail-handle-content"),
+      };
+    };
+
+    const openModal = function (payload) {
+      const els = getModalEls();
+      if (!els.modal) return;
+
+      if (els.titleEl) els.titleEl.textContent = payload.title || "";
+      if (els.contentEl) els.contentEl.textContent = payload.content || "-";
+      if (els.statusEl) els.statusEl.textContent = payload.statusDisplay || "-";
+      if (els.eventTimeEl) els.eventTimeEl.textContent = payload.eventTime || "-";
+      if (els.handleTimeEl) els.handleTimeEl.textContent = payload.handleTime || "-";
+      if (els.handlerEl) els.handlerEl.textContent = payload.handler || "-";
+
+      const handleContent = payload.handleContent || "";
+      if (els.handleWrapEl && els.handleContentEl) {
+        if (handleContent.trim()) {
+          els.handleContentEl.textContent = handleContent;
+          els.handleWrapEl.classList.remove("hidden");
+        } else {
+          els.handleWrapEl.classList.add("hidden");
+        }
+      }
+
+      els.modal.classList.remove("hidden");
+      document.body.classList.add("overflow-hidden");
+    };
+
+    const closeModal = function () {
+      const els = getModalEls();
+      if (!els.modal) return;
+      els.modal.classList.add("hidden");
+      document.body.classList.remove("overflow-hidden");
+    };
+
+    window.addEventListener("DOMContentLoaded", function () {
+      document.addEventListener("click", function (event) {
+        const btn = event.target.closest("button[data-todo-detail-trigger]");
+        if (btn) {
+          const patientName = btn.dataset.patientName || "";
+          const eventTitle = btn.dataset.eventTitle || "";
+          openModal({
+            title: patientName ? (patientName + " - " + eventTitle) : eventTitle,
+            content: btn.dataset.eventContent || "",
+            handleContent: btn.dataset.handleContent || "",
+            eventTime: btn.dataset.eventTime || "",
+            handleTime: btn.dataset.handleTime || "",
+            handler: btn.dataset.handler || "",
+            statusDisplay: btn.dataset.statusDisplay || "",
+          });
+          return;
+        }
+
+        const backBtn = event.target.closest("#mobile-back-btn");
+        if (backBtn) {
+          window.history.back(); 
+          return;
+        }
+
+        const closeBtn = event.target.closest("#todo-detail-close, #todo-detail-bottom-close");
+        if (closeBtn) {
+          closeModal();
+          return;
+        }
+
+        const els = getModalEls();
+        if (!els.modal) return;
+        const overlay = els.modal.querySelector(":scope > div:first-child");
+        if (event.target === overlay) {
+          closeModal();
+        }
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          const els = getModalEls();
+          if (els.modal && !els.modal.classList.contains("hidden")) {
+            closeModal();
+          }
+        }
+      });
+    });
+  })();
+</script>
+{% endblock %}

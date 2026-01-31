@@ -6,6 +6,7 @@ from users.decorators import auto_wechat_login, check_patient
 from decimal import Decimal
 import logging
 from django.utils import timezone
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +25,30 @@ def submit_medication(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'success': False, 'message': '未找到患者信息'})
         
     try:
+        selected_date_str = request.POST.get("selected_date")
+        measured_at = timezone.now()
+        if selected_date_str:
+            try:
+                selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+                if selected_date > timezone.localdate():
+                    return JsonResponse({"success": False, "message": "不能为未来日期提交用药记录"})
+                now_local = timezone.localtime(timezone.now())
+                measured_at = timezone.make_aware(
+                    datetime.combine(
+                        selected_date,
+                        now_local.time().replace(second=0, microsecond=0),
+                    )
+                )
+            except ValueError:
+                return JsonResponse({"success": False, "message": "日期参数格式错误"})
+
         # 使用 HealthMetricService 保存用药记录
         # MetricType.USE_MEDICATED = "use_medicated"
         # value_main 默认为 1，表示已服药
         HealthMetricService.save_manual_metric(
             patient_id=int(patient_id),
             metric_type=MetricType.USE_MEDICATED,
-            measured_at=timezone.now(),
+            measured_at=measured_at,
             value_main=Decimal("1")
         )
         return JsonResponse({'success': True, 'message': '提交成功'})

@@ -32,12 +32,38 @@ from .reports_history_data import (
 from .mobile.views import mobile_home
 from .mobile.patient_list import mobile_patient_list
 from .mobile.patient_home import mobile_patient_home, mobile_patient_section
+from .mobile.my_assistant import mobile_my_assistant
+from .mobile.patient_records import mobile_patient_records
+from .mobile.patient_todo import mobile_patient_todo_list
+from .mobile.patient_basic_info import (
+    mobile_patient_basic_info,
+    api_mobile_patient_profile,
+    api_mobile_medical_info,
+    api_mobile_member_info,
+)
+from .mobile.health_record import (
+    health_records as mobile_health_records,
+    health_record_detail as mobile_health_record_detail,
+    review_record_detail as mobile_review_record_detail,
+    review_record_detail_data as mobile_review_record_detail_data,
+)
 
 __all__ = [
     "mobile_home",
     "mobile_patient_list",
     "mobile_patient_home",
     "mobile_patient_section",
+    "mobile_patient_basic_info",
+    "mobile_my_assistant",
+    "mobile_patient_records",
+    "mobile_patient_todo_list",
+    "mobile_health_records",
+    "mobile_health_record_detail",
+    "mobile_review_record_detail",
+    "mobile_review_record_detail_data",
+    "api_mobile_patient_profile",
+    "api_mobile_medical_info",
+    "api_mobile_member_info",
     "login_view",
     "logout_view",
     "doctor_change_password",

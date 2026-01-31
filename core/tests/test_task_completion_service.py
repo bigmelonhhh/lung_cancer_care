@@ -2,11 +2,14 @@
 
 from datetime import date, timedelta
 
+from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
 from core.models import DailyTask, MonitoringTemplate, PlanItem, TreatmentCycle, choices
 from core.service import tasks as task_service
+from health_data.models import MetricType
+from health_data.services.health_metric import HealthMetricService
 from users.models import PatientProfile
 
 
@@ -132,6 +135,25 @@ class TaskCompletionServiceTest(TestCase):
             1,
         )
 
+    def test_complete_daily_medication_tasks_allows_terminated_for_past_date(self):
+        yesterday = self.task_date - timedelta(days=1)
+        occurred_at = self.occurred_at - timedelta(days=1)
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=yesterday,
+            task_type=choices.PlanItemCategory.MEDICATION,
+            title="药物A",
+            status=choices.TaskStatus.TERMINATED,
+        )
+
+        task_service.complete_daily_medication_tasks(
+            patient_id=self.patient.id,
+            occurred_at=occurred_at,
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
+
     def test_complete_daily_questionnaire_tasks_updates_all(self):
         task_a = DailyTask.objects.create(
             patient=self.patient,
@@ -189,3 +211,94 @@ class TaskCompletionServiceTest(TestCase):
             ).count(),
             1,
         )
+
+    def test_complete_daily_monitoring_tasks_allows_terminated_for_past_date(self):
+        spo2_template, _ = MonitoringTemplate.objects.get_or_create(
+            code="M_SPO2",
+            defaults={
+                "name": "血氧监测",
+                "metric_type": "blood_oxygen",
+                "is_active": True,
+            },
+        )
+        spo2_plan = PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MONITORING,
+            template_id=spo2_template.id,
+            item_name=spo2_template.name,
+            schedule_days=[1],
+            status=choices.PlanItemStatus.ACTIVE,
+        )
+        yesterday = self.task_date - timedelta(days=1)
+        occurred_at = self.occurred_at - timedelta(days=1)
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=spo2_plan,
+            task_date=yesterday,
+            task_type=choices.PlanItemCategory.MONITORING,
+            title=spo2_plan.item_name,
+            status=choices.TaskStatus.TERMINATED,
+        )
+
+        updated_count = task_service.complete_daily_monitoring_tasks(
+            patient_id=self.patient.id,
+            metric_type="M_SPO2",
+            occurred_at=occurred_at,
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(updated_count, 1)
+        self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
+
+    def test_save_manual_metric_completes_tasks_for_multiple_dates(self):
+        weight_template, _ = MonitoringTemplate.objects.get_or_create(
+            code="M_WEIGHT",
+            defaults={
+                "name": "体重监测",
+                "metric_type": "weight",
+                "is_active": True,
+            },
+        )
+        weight_plan = PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MONITORING,
+            template_id=weight_template.id,
+            item_name=weight_template.name,
+            schedule_days=[1],
+            status=choices.PlanItemStatus.ACTIVE,
+        )
+        yesterday = self.task_date - timedelta(days=1)
+        task_yesterday = DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=weight_plan,
+            task_date=yesterday,
+            task_type=choices.PlanItemCategory.MONITORING,
+            title=weight_plan.item_name,
+            status=choices.TaskStatus.TERMINATED,
+        )
+        task_today = DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=weight_plan,
+            task_date=self.task_date,
+            task_type=choices.PlanItemCategory.MONITORING,
+            title=weight_plan.item_name,
+            status=choices.TaskStatus.PENDING,
+        )
+
+        HealthMetricService.save_manual_metric(
+            patient_id=self.patient.id,
+            metric_type=MetricType.WEIGHT,
+            measured_at=self.occurred_at - timedelta(days=1),
+            value_main=Decimal("1"),
+        )
+        HealthMetricService.save_manual_metric(
+            patient_id=self.patient.id,
+            metric_type=MetricType.WEIGHT,
+            measured_at=self.occurred_at,
+            value_main=Decimal("2"),
+        )
+
+        task_yesterday.refresh_from_db()
+        task_today.refresh_from_db()
+        self.assertEqual(task_yesterday.status, choices.TaskStatus.COMPLETED)
+        self.assertEqual(task_today.status, choices.TaskStatus.COMPLETED)

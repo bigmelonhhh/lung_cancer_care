@@ -22,7 +22,7 @@ from users.models import PatientProfile
 from health_data.services.report_service import ReportUploadService, ReportArchiveService
 from health_data.models import ReportImage, ClinicalEvent, ReportUpload
 from health_data.models.report_upload import UploadSource
-from core.service.checkup import get_active_checkup_library
+from core.service.checkup import get_active_checkup_library 
 from core.models import CheckupLibrary
 
 logger = logging.getLogger(__name__)
@@ -288,6 +288,57 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
     return archives_list, uploads_page
 
 
+def get_reports_page_for_patient(request: HttpRequest, patient: PatientProfile, page_size: int = 10):
+    try:
+        records_page_num = int(request.GET.get("records_page") or request.GET.get("page") or 1)
+    except (TypeError, ValueError):
+        records_page_num = 1
+
+    record_type = request.GET.get("recordType") or request.GET.get("record_type")
+    report_date_start = request.GET.get("reportDateStart") or request.GET.get("report_start_date")
+    report_date_end = request.GET.get("reportDateEnd") or request.GET.get("report_end_date")
+    archived_date_start = request.GET.get("archivedDateStart") or request.GET.get("archive_start_date")
+    archived_date_end = request.GET.get("archivedDateEnd") or request.GET.get("archive_end_date")
+    archiver = request.GET.get("archiver") or request.GET.get("archiver_name")
+
+    def _parse_date(value: str):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    report_start_date_obj = _parse_date(report_date_start)
+    report_end_date_obj = _parse_date(report_date_end)
+    archive_start_date_obj = _parse_date(archived_date_start)
+    archive_end_date_obj = _parse_date(archived_date_end)
+
+    events_page = ReportArchiveService.list_clinical_events(
+        patient=patient,
+        record_type=record_type,
+        report_start_date=report_start_date_obj,
+        report_end_date=report_end_date_obj,
+        archive_start_date=archive_start_date_obj,
+        archive_end_date=archive_end_date_obj,
+        archiver_name=archiver,
+        page=records_page_num,
+        page_size=page_size,
+    )
+    if events_page.object_list:
+        prefetch_related_objects(
+            events_page.object_list,
+            "report_images",
+            "report_images__checkup_item",
+            "created_by_doctor",
+            "created_by_doctor__user",
+            "patient",
+        )
+    reports_list = [_map_clinical_event_to_dict(event) for event in events_page.object_list]
+    events_page.object_list = reports_list
+    return events_page
+
+
 def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     """
     处理检查报告历史记录板块
@@ -305,11 +356,6 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     active_tab = request.GET.get("tab", "records")
     logger.info(f"Refreshing reports history section for patient {patient.id}, tab={active_tab}")
     
-    try:
-        records_page_num = int(request.GET.get("records_page", 1))
-    except (TypeError, ValueError):
-        records_page_num = 1
-        
     try:
         images_page_num = int(request.GET.get("images_page", 1))
     except (TypeError, ValueError):
@@ -331,50 +377,7 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
         images_page_num,
     )
 
-    def _parse_date(value: str):
-        if not value:
-            return None
-        try:
-            return datetime.strptime(value, "%Y-%m-%d").date()
-        except ValueError:
-            return None
-
-    report_start_date_obj = _parse_date(report_date_start)
-    report_end_date_obj = _parse_date(report_date_end)
-    archive_start_date_obj = _parse_date(archived_date_start)
-    archive_end_date_obj = _parse_date(archived_date_end)
-    
-    # -----------------------------------------------------------
-    # 处理诊疗记录数据 (Reports) - 切换为真实数据接口
-    # -----------------------------------------------------------
-    events_page = ReportArchiveService.list_clinical_events(
-        patient=patient,
-        record_type=record_type,
-        report_start_date=report_start_date_obj,
-        report_end_date=report_end_date_obj,
-        archive_start_date=archive_start_date_obj,
-        archive_end_date=archive_end_date_obj,
-        archiver_name=archiver,
-        page=records_page_num,
-        page_size=10
-    )
-    # 预加载
-    if events_page.object_list:
-        prefetch_related_objects(
-            events_page.object_list, 
-            'report_images', 
-            'report_images__checkup_item',
-            'created_by_doctor',
-            'created_by_doctor__user',
-            'patient'
-        )
-    
-    # 转换为前端所需的字典格式
-    reports_list = [_map_clinical_event_to_dict(event) for event in events_page.object_list]
-    
-    # 替换 object_list 以便模板迭代
-    events_page.object_list = reports_list
-    reports_page = events_page
+    reports_page = get_reports_page_for_patient(request, patient, page_size=10)
     
     # -----------------------------------------------------------
     # 处理图片档案数据 (Archives)

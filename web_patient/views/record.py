@@ -32,7 +32,7 @@ def _is_member(patient) -> bool:
 @check_patient
 def query_last_metric(request: HttpRequest) -> JsonResponse:
     """
-    API: 查询今日最新健康指标状态
+    API: 查询指定日期最新健康指标状态
     """
     patient = request.patient
     if not patient:
@@ -40,12 +40,18 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
 
     if not _is_member(patient):
         return JsonResponse({"success": True, "plans": {}})
+
+    date_str = request.GET.get("date")
+    target_date = timezone.localdate()
+    if date_str:
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            target_date = timezone.localdate()
     
-    # 1. 获取今日计划摘要 (包含完成状态)
-    summary_list = get_daily_plan_summary(patient)
+    summary_list = get_daily_plan_summary(patient, task_date=target_date)
     
-    # 2. 获取最新指标数据 (用于显示数值)
-    last_metrics = HealthMetricService.query_last_metric(patient.id)
+    last_metrics = HealthMetricService.query_last_metric_for_date(patient.id, target_date)
     
     # 3. 组装返回数据
     # 我们需要返回一个列表，或者以 type 为 key 的字典
@@ -54,12 +60,12 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
     result = {}
     
     # 辅助函数：判断数据是否为今日
-    def is_today(metric_info):
+    def is_target_date(metric_info):
         if not metric_info or 'measured_at' not in metric_info:
             return False
         utc_time = metric_info['measured_at']
         local_time = timezone.localtime(utc_time)
-        return local_time.date() == timezone.localdate()
+        return local_time.date() == target_date
 
     # 处理计划列表
     for item in summary_list:
@@ -107,26 +113,26 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         if is_completed:
             if plan_type == "temperature" and MetricType.BODY_TEMPERATURE in last_metrics:
                 info = last_metrics[MetricType.BODY_TEMPERATURE]
-                if is_today(info):
+                if is_target_date(info):
                     plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
             
             elif plan_type == "bp_hr":
                 # 血压心率特殊处理
                 bp_info = last_metrics.get(MetricType.BLOOD_PRESSURE)
                 hr_info = last_metrics.get(MetricType.HEART_RATE)
-                if bp_info and is_today(bp_info):
+                if bp_info and is_target_date(bp_info):
                     bp_str = bp_info['value_display']
-                    hr_str = hr_info['value_display'] if (hr_info and is_today(hr_info)) else "--"
+                    hr_str = hr_info['value_display'] if (hr_info and is_target_date(hr_info)) else "--"
                     plan_data["subtitle"] = f"今日已记录：血压{bp_str}mmHg，心率{hr_str}"
             
             elif plan_type == "spo2" and MetricType.BLOOD_OXYGEN in last_metrics:
                 info = last_metrics[MetricType.BLOOD_OXYGEN]
-                if is_today(info):
+                if is_target_date(info):
                     plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
                     
             elif plan_type == "weight" and MetricType.WEIGHT in last_metrics:
                 info = last_metrics[MetricType.WEIGHT]
-                if is_today(info):
+                if is_target_date(info):
                     plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
             
             elif plan_type == "medication":
@@ -139,6 +145,11 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
                  plan_data["subtitle"] = "今日已完成"
 
         result[plan_type] = plan_data
+
+    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+    metric_plan_cache[target_date.strftime("%Y-%m-%d")] = result
+    request.session["metric_plan_cache"] = metric_plan_cache
+    request.session.modified = True
 
     return JsonResponse({"success": True, "plans": result})
 
