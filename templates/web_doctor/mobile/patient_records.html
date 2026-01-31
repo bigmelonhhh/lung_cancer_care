@@ -1,0 +1,88 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}诊疗记录{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans">
+  <div class="bg-[#4DB6AC] pt-safe-top pb-5 px-4 shadow-md">
+    <div class="flex items-center gap-3 pt-4">
+      <div onclick="window.history.back()" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </div>
+      <div class="text-white min-w-0">
+        <div class="text-base font-bold leading-tight truncate">诊疗记录</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 py-4 space-y-3">
+    {% for report in reports_page %}
+    <details class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden group">
+      <summary class="list-none px-4 py-3 flex items-start justify-between gap-3 active:bg-slate-50 transition cursor-pointer">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <div class="text-sm font-bold text-slate-900">{{ report.date|date:"Y-m-d" }}</div>
+            <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">{{ report.record_type|default:"-" }}</span>
+          </div>
+          <div class="mt-1 text-xs text-slate-500 flex items-center gap-3">
+            <span>图片数量：{{ report.image_count|default:0 }}</span>
+            <span class="truncate">归档人：{{ report.archiver|default:"-" }}</span>
+            <span>归档日期：{{ report.archived_date|default:"-" }}</span>
+          </div>
+        </div>
+        <div class="shrink-0 pt-0.5">
+          <svg class="w-5 h-5 text-slate-300 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </summary>
+
+      <div class="px-4 pb-4 pt-1 space-y-3">
+        {% if report.interpretation %}
+        <div class="text-sm text-slate-700 whitespace-pre-wrap">{{ report.interpretation }}</div>
+        {% else %}
+        <div class="text-sm text-slate-400">暂无备注</div>
+        {% endif %}
+
+        {% if report.images %}
+        <div class="grid grid-cols-3 gap-2">
+          {% for img in report.images %}
+          <a href="{{ img.url }}" target="_blank" rel="noopener" class="block rounded-xl overflow-hidden bg-slate-100 aspect-square">
+            <img src="{{ img.url }}" alt="{{ img.name|default:'图片' }}" class="w-full h-full object-cover" loading="lazy" />
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </details>
+    {% empty %}
+    <div class="bg-white rounded-2xl shadow-sm p-8 text-center text-slate-400 text-sm">暂无诊疗记录</div>
+    {% endfor %}
+
+    {% if reports_page.paginator.num_pages > 1 %}
+    <div class="pt-2 flex items-center justify-between gap-3">
+      {% if reports_page.has_previous %}
+      <a href="?records_page={{ reports_page.previous_page_number }}" class="flex-1 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 active:scale-[0.99] transition">
+        上一页
+      </a>
+      {% else %}
+      <div class="flex-1 h-10 rounded-xl bg-slate-200/60 flex items-center justify-center text-sm font-bold text-slate-400">上一页</div>
+      {% endif %}
+
+      <div class="text-xs text-slate-500 shrink-0">第 {{ reports_page.number }}/{{ reports_page.paginator.num_pages }} 页</div>
+
+      {% if reports_page.has_next %}
+      <a href="?records_page={{ reports_page.next_page_number }}" class="flex-1 h-10 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center text-sm font-bold text-slate-700 active:scale-[0.99] transition">
+        下一页
+      </a>
+      {% else %}
+      <div class="flex-1 h-10 rounded-xl bg-slate-200/60 flex items-center justify-center text-sm font-bold text-slate-400">下一页</div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+

@@ -1,0 +1,201 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}患者咨询{% endblock %}
+
+{% block body %}
+<div x-data="mobilePatientChatList()" x-init="init()" class="fixed inset-0 bg-slate-50 overflow-hidden font-sans">
+  <div class="fixed top-0 left-0 right-0 bg-white/90 backdrop-blur-md border-b border-slate-100 z-50 pt-safe-top">
+    <div class="h-12 px-4 flex items-center justify-between">
+      <button type="button" class="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center active:scale-95 transition" @click="goBack()">
+        <svg class="w-5 h-5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <div class="min-w-0 px-2 flex-1 text-center">
+        <div class="text-base font-bold text-slate-800 truncate">聊天记录：{{ patient.name }}</div>
+      </div>
+      <div class="w-9 h-9"></div>
+    </div>
+  </div>
+
+  <div class="absolute inset-0 pb-safe-bottom" style="padding-top: calc(3rem + env(safe-area-inset-top));">
+    <div
+      x-ref="messagesContainer"
+      class="h-full overflow-y-auto overscroll-contain px-4 py-4 space-y-4 scroll-smooth -webkit-overflow-scrolling-touch"
+      @touchstart="onTouchStart($event)"
+      @touchmove="onTouchMove($event)"
+      @touchend="onTouchEnd()"
+    >
+      <div class="flex justify-center" x-show="hasNext || loadingOlder" style="display: none;">
+        <div class="text-xs text-slate-400 bg-white/70 border border-slate-200 rounded-full px-3 py-1 shadow-sm">
+          <span x-show="loadingOlder">加载中...</span>
+          <span x-show="!loadingOlder">下拉加载更早消息</span>
+        </div>
+      </div>
+
+      <template x-for="msg in messages" :key="msg.id">
+        <div class="flex flex-col" :class="isMyMessage(msg) ? 'items-end' : 'items-start'">
+          <div class="text-[11px] text-slate-300 mb-1 text-center w-full">
+            <span x-text="msg.created_at_display || formatTime(msg.created_at)"></span>
+            <span x-show="msg.is_unread" class="inline-block w-1.5 h-1.5 rounded-full bg-rose-500 ml-1 align-middle"></span>
+          </div>
+
+          <div class="flex" :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'">
+            <div class="flex-shrink-0 flex flex-col items-center mx-2">
+              <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                   :class="getAvatarColor(msg.sender_role)">
+                <span x-text="(msg.sender_name || ' ').substring(0, 1)"></span>
+              </div>
+              <span class="text-[10px] text-slate-400 mt-1 max-w-[4.5rem] truncate" x-text="msg.sender_name"></span>
+            </div>
+
+            <div class="max-w-[75%]">
+              <div class="px-4 py-2.5 rounded-2xl shadow-sm relative border border-black/5"
+                   :class="isMyMessage(msg) ? 'bg-emerald-500 text-white rounded-tr-none' : 'bg-white text-slate-800 rounded-tl-none'">
+                <p x-show="msg.content_type === 1" class="whitespace-pre-wrap break-words text-[15px] leading-6" x-text="msg.text_content"></p>
+
+                <div x-show="msg.content_type === 2">
+                  <img :src="msg.image_url" class="max-w-full rounded-lg cursor-pointer" @click="window.open(msg.image_url, '_blank')">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+
+      <div x-show="messages.length === 0" class="min-h-full flex flex-col items-center justify-center text-slate-300 text-sm py-10" style="display: none;">
+        <svg class="w-10 h-10 mb-2 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h8M8 14h5m-7 7l2.4-3.2A9 9 0 1 1 21 12a9 9 0 0 1-12.6 8.8L6 21z"></path>
+        </svg>
+        <div>暂无聊天记录</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<script>
+  function mobilePatientChatList() {
+    return {
+      apiUrl: "{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}",
+      messages: {{ messages|safe }},
+      hasNext: {{ has_next|yesno:"true,false" }},
+      nextCursor: "{{ next_cursor }}",
+      loadingOlder: false,
+      currentUserId: {{ request.user.id|default:0 }},
+      pullStartY: null,
+      pullDistance: 0,
+      pullTriggered: false,
+
+      init() {
+        this.$nextTick(() => this.scrollToBottom());
+      },
+
+      goBack() {
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+        window.location.href = "{% url 'web_doctor:mobile_patient_home' patient.id %}";
+      },
+
+      isMyMessage(msg) {
+        return msg.sender_id === this.currentUserId;
+      },
+
+      formatTime(isoString) {
+        if (!isoString) return "";
+        const date = new Date(isoString);
+        const pad = (n) => String(n).padStart(2, "0");
+        const yyyy = date.getFullYear();
+        const mm = pad(date.getMonth() + 1);
+        const dd = pad(date.getDate());
+        const hh = pad(date.getHours());
+        const min = pad(date.getMinutes());
+        return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
+      },
+
+      getAvatarColor(role) {
+        if (role === 1) return "bg-blue-400";
+        if (role === 2) return "bg-indigo-400";
+        if (role === 3) return "bg-rose-500";
+        return "bg-emerald-500";
+      },
+
+      scrollToBottom() {
+        const el = this.$refs.messagesContainer;
+        if (!el) return;
+        el.scrollTop = el.scrollHeight;
+      },
+
+      async loadOlder() {
+        if (this.loadingOlder || !this.hasNext || !this.nextCursor) return;
+        this.loadingOlder = true;
+        const container = this.$refs.messagesContainer;
+        const prevScrollHeight = container ? container.scrollHeight : 0;
+        const prevScrollTop = container ? container.scrollTop : 0;
+
+        try {
+          const url = `${this.apiUrl}?format=json&cursor=${encodeURIComponent(this.nextCursor)}`;
+          const res = await fetch(url);
+          if (!res.ok) return;
+          const data = await res.json();
+          const incoming = Array.isArray(data.messages) ? data.messages : [];
+          const existingIds = new Set(this.messages.map((m) => m.id));
+          const newMsgs = incoming.filter((m) => !existingIds.has(m.id));
+          if (newMsgs.length > 0) {
+            this.messages = [...newMsgs, ...this.messages];
+          }
+          this.hasNext = !!data.has_next;
+          this.nextCursor = data.next_cursor || "";
+          this.$nextTick(() => {
+            if (!container) return;
+            const nextScrollHeight = container.scrollHeight;
+            container.scrollTop = prevScrollTop + (nextScrollHeight - prevScrollHeight);
+          });
+        } finally {
+          this.loadingOlder = false;
+        }
+      },
+
+      onTouchStart(e) {
+        const container = this.$refs.messagesContainer;
+        if (!container) return;
+        if (container.scrollTop > 0) return;
+        const touch = e.touches && e.touches[0];
+        if (!touch) return;
+        this.pullStartY = touch.clientY;
+        this.pullDistance = 0;
+        this.pullTriggered = false;
+      },
+
+      onTouchMove(e) {
+        if (this.pullStartY === null) return;
+        const container = this.$refs.messagesContainer;
+        if (!container || container.scrollTop > 0) return;
+        const touch = e.touches && e.touches[0];
+        if (!touch) return;
+        const dy = touch.clientY - this.pullStartY;
+        if (dy <= 0) return;
+        this.pullDistance = dy;
+        if (dy > 60 && !this.pullTriggered) {
+          this.pullTriggered = true;
+        }
+      },
+
+      onTouchEnd() {
+        if (this.pullStartY === null) return;
+        const shouldLoad = this.pullTriggered;
+        this.pullStartY = null;
+        this.pullDistance = 0;
+        this.pullTriggered = false;
+        if (shouldLoad) {
+          this.loadOlder();
+        }
+      }
+    };
+  }
+</script>
+{% endblock %}

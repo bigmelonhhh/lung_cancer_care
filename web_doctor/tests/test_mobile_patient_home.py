@@ -88,7 +88,6 @@ class MobilePatientHomeTests(TestCase):
         self.assertIn(f'data-patient-name="{self.patient_active.name}"', content)
         self.assertIn('data-patient-gender="', content)
         self.assertIn('data-patient-age="', content)
-        self.assertIn(f'data-patient-no="P{self.patient_active.id:06d}"', content)
 
     def test_mobile_patient_home_renders(self):
         self.client.force_login(self.user)
@@ -98,7 +97,7 @@ class MobilePatientHomeTests(TestCase):
         self.assertTemplateUsed(response, "web_doctor/mobile/patient_home.html")
         content = response.content.decode("utf-8")
         self.assertIn(self.patient_active.name, content)
-        self.assertIn(f"P{self.patient_active.id:06d}", content)
+        self.assertNotIn(f"P{self.patient_active.id:06d}", content)
 
     def test_mobile_patient_home_denies_unrelated_patient(self):
         self.client.force_login(self.user)

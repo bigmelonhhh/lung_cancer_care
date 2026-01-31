@@ -89,6 +89,35 @@
 </div>
 
 <script>
+    function showToast(message, variant = 'info') {
+        const containerId = 'toast-container';
+        let container = document.getElementById(containerId);
+        if (!container) {
+            container = document.createElement('div');
+            container.id = containerId;
+            container.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-[9999] space-y-2 w-[92vw] max-w-sm';
+            document.body.appendChild(container);
+        }
+
+        const toast = document.createElement('div');
+        const baseClass = 'px-4 py-3 rounded-lg shadow-lg text-sm font-medium flex items-center justify-between gap-3';
+        const variantClass = variant === 'error'
+            ? 'bg-red-600 text-white'
+            : variant === 'success'
+                ? 'bg-emerald-600 text-white'
+                : 'bg-slate-900 text-white';
+        toast.className = `${baseClass} ${variantClass}`;
+        toast.innerHTML = `<span class="leading-5">${String(message || '')}</span><button type="button" class="text-white/80 hover:text-white">×</button>`;
+        const closeBtn = toast.querySelector('button');
+        closeBtn.addEventListener('click', () => toast.remove());
+
+        container.appendChild(toast);
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'transition', 'duration-300');
+            setTimeout(() => toast.remove(), 320);
+        }, 2400);
+    }
+
     function submitTemperature() {
         const input = document.getElementById('temperature-input');
         const errorMsg = document.getElementById('error-msg');
@@ -125,13 +154,16 @@
         })
         .then(data => {
             if (data.status === 'success') {
-                // 1. 设置刷新标记
+                const selectedDate = formData.get('selected_date') || '';
+                const dateParam = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '';
+                const syncUrl = "{% url 'web_patient:query_last_metric' %}" + dateParam;
+
                 localStorage.setItem('refresh_flag', 'true');
-                
-                // 2. 显示成功反馈 (可选)
                 submitBtn.innerText = '提交成功';
-                
-                // 3. 返回上一页
+                fetch(syncUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => showToast('网络异常，状态同步稍后完成', 'error'));
+
                 setTimeout(() => {
                     if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
                         history.back();
@@ -140,14 +172,14 @@
                     }
                 }, 300);
             } else {
-                alert('提交失败: ' + (data.message || '未知错误'));
+                showToast('提交失败：' + (data.message || '未知错误'), 'error');
                 submitBtn.disabled = false;
                 submitBtn.innerText = originalText;
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('网络错误，请稍后重试');
+            showToast('网络错误，请稍后重试', 'error');
             submitBtn.disabled = false;
             submitBtn.innerText = originalText;
         });

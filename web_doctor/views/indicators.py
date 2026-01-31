@@ -3,7 +3,7 @@ from datetime import date, timedelta, datetime
 from django.utils import timezone
 from django.core.cache import cache
 from core.models import TreatmentCycle, choices, QuestionnaireCode
-from core.service.treatment_cycle import get_treatment_cycles
+from core.service.treatment_cycle import get_treatment_cycles as _get_treatment_cycles
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
@@ -11,6 +11,48 @@ from health_data.services.questionnaire_submission import QuestionnaireSubmissio
 from users.models import PatientProfile
 
 logger = logging.getLogger(__name__)
+
+_CYCLE_STATE_RANK = {
+    "in_progress": 0,
+    "not_started": 1,
+    "completed": 2,
+    "terminated": 3,
+}
+
+
+def _resolve_cycle_runtime_state(cycle: TreatmentCycle, today: date | None = None) -> str:
+    if today is None:
+        today = timezone.localdate()
+    if cycle.status == choices.TreatmentCycleStatus.TERMINATED:
+        return "terminated"
+    if today < cycle.start_date:
+        return "not_started"
+    if cycle.end_date and today > cycle.end_date:
+        return "completed"
+    if cycle.status == choices.TreatmentCycleStatus.COMPLETED:
+        return "completed"
+    return "in_progress"
+
+
+def _sort_cycles_for_indicators(cycles: list[TreatmentCycle], today: date | None = None) -> list[TreatmentCycle]:
+    if today is None:
+        today = timezone.localdate()
+    indexed = list(enumerate(cycles))
+    indexed.sort(
+        key=lambda item: (
+            _CYCLE_STATE_RANK[_resolve_cycle_runtime_state(item[1], today=today)],
+            item[0],
+        )
+    )
+    return [cycle for _, cycle in indexed]
+
+
+def get_treatment_cycles(patient: PatientProfile, page: int = 1, page_size: int = 10):
+    cycles_page = _get_treatment_cycles(patient, page=page, page_size=page_size)
+    cycles = list(getattr(cycles_page, "object_list", []) or [])
+    cycles_page.object_list = _sort_cycles_for_indicators(cycles, today=timezone.localdate())
+    return cycles_page
+
 
 def build_indicators_context(
     patient: PatientProfile,
@@ -33,10 +75,8 @@ def build_indicators_context(
     # 确定默认显示的疗程（当前进行中 或 最近一个）
     active_cycle = None
     if treatment_cycles:
-        # 优先找当前进行中的 (status='in_progress')
         for cycle in treatment_cycles:
-            # 判断逻辑：优先使用 status 字段判断
-            if cycle.status == choices.TreatmentCycleStatus.IN_PROGRESS:
+            if _resolve_cycle_runtime_state(cycle, today=today) == "in_progress":
                 active_cycle = cycle
                 break
         

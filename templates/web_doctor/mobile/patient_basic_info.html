@@ -1,0 +1,347 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}患者基本信息{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans">
+  <div class="bg-[#4DB6AC] pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden">
+    <div class="absolute -top-14 -right-14 w-40 h-40 rounded-full bg-white/10"></div>
+    <div class="absolute -bottom-20 -left-16 w-56 h-56 rounded-full bg-white/10"></div>
+
+    <div class="relative z-10 pt-4 flex items-center">
+      <button type="button" id="mobile-back-btn" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <div class="text-white min-w-0 px-2 flex flex-col">
+        <div class="text-base font-bold truncate">基本信息</div>
+        <div class="text-xs opacity-90 truncate">患者：{{ patient.name }} · {{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 py-4 space-y-4">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="px-4 py-3 flex items-center justify-between">
+        <div class="text-sm font-bold text-slate-900">基本信息</div>
+      </div>
+      <div class="px-4 pb-4">
+        <div id="basic-info-loading" class="space-y-2 animate-pulse">
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+        </div>
+        <div id="basic-info-error" class="hidden text-sm text-rose-600">加载失败，请重试</div>
+        <dl id="basic-info-content" class="hidden space-y-2 text-sm">
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0  ">患者姓名</dt>
+            <dd id="basic-name" class="text-slate-800 font-medium min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">患者性别</dt>
+            <dd id="basic-gender" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">联系方式</dt>
+            <dd id="basic-phone" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">出生日期</dt>
+            <dd id="basic-birth-date" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">患者地址</dt>
+            <dd id="basic-address" class="text-slate-800 min-w-0 break-words" title=""></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">紧急联系人</dt>
+            <dd id="basic-emergency-contact" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">紧急联系人关系</dt>
+            <dd id="basic-emergency-relation" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">紧急联系人电话</dt>
+            <dd id="basic-emergency-phone" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="px-4 py-3 flex items-center justify-between">
+        <div class="text-sm font-bold text-slate-900">亲情账号</div>
+      </div>
+      <div class="px-4 pb-4">
+        <div id="family-loading" class="space-y-2 animate-pulse">
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+        </div>
+        <div id="family-error" class="hidden text-sm text-rose-600">加载失败，请重试</div>
+        <div id="family-empty" class="hidden text-sm text-slate-400">暂无亲情账号</div>
+        <div id="family-list" class="hidden space-y-3"></div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="px-4 py-3 flex items-center justify-between">
+        <div class="text-sm font-bold text-slate-900">病情信息</div>
+      </div>
+      <div class="px-4 pb-4">
+        <div id="medical-loading" class="space-y-2 animate-pulse">
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+        </div>
+        <div id="medical-error" class="hidden text-sm text-rose-600">加载失败，请重试</div>
+        <div id="medical-content" class="hidden">
+          <div class="grid grid-cols-1 gap-y-2 text-sm">
+            <div class="flex items-start">
+              <span class="text-slate-500 w-20 shrink-0 text-right mr-3">肿瘤诊断：</span>
+              <span id="medical-diagnosis" class="text-slate-800 font-medium whitespace-pre-wrap"></span>
+            </div>
+            <div class="flex items-start">
+              <span class="text-slate-500 w-20 shrink-0 text-right mr-3">危险因素：</span>
+              <span id="medical-risk-factors" class="text-slate-800 whitespace-pre-wrap"></span>
+            </div>
+            <div class="flex items-start">
+              <span class="text-slate-500 w-20 shrink-0 text-right mr-3">临床诊断：</span>
+              <span id="medical-clinical-diagnosis" class="text-slate-800 whitespace-pre-wrap"></span>
+            </div>
+            <div class="flex items-start">
+              <span class="text-slate-500 w-20 shrink-0 text-right mr-3">基因检测：</span>
+              <span id="medical-gene-test" class="text-slate-800 whitespace-pre-wrap"></span>
+            </div>
+            <div class="flex items-start">
+              <span class="text-slate-500 w-20 shrink-0 text-right mr-3">既往病史：</span>
+              <span id="medical-history" class="text-slate-800 whitespace-pre-wrap"></span>
+            </div>
+            <div class="flex items-start">
+              <span class="text-slate-500 w-20 shrink-0 text-right mr-3">手术信息：</span>
+              <span id="medical-surgery" class="text-slate-800 whitespace-pre-wrap"></span>
+            </div>
+          </div>
+          <div class="pt-3 flex items-center justify-end">
+            <span id="medical-last-updated" class="text-xs text-slate-400"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+      <div class="px-4 py-3 flex items-center justify-between">
+        <div class="text-sm font-bold text-slate-900">会员信息</div>
+      </div>
+      <div class="px-4 pb-4">
+        <div id="member-loading" class="space-y-2 animate-pulse">
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+          <div class="h-4 bg-slate-100 rounded"></div>
+        </div>
+        <div id="member-error" class="hidden text-sm text-rose-600">加载失败，请重试</div>
+        <dl id="member-content" class="hidden space-y-2 text-sm">
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">注册日期</dt>
+            <dd id="member-registered-date" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 ">会员类别</dt>
+            <dd id="member-type" class="text-slate-800 min-w-0 break-words"></dd>
+          </div>
+          <div id="member-package-dates" class="hidden space-y-2">
+            <div class="flex items-start gap-3 justify-between">
+              <dt class="text-slate-500 shrink-0 ">会员开始日期</dt>
+              <dd id="member-package-start" class="text-slate-800 min-w-0 break-words"></dd>
+            </div>
+            <div class="flex items-start gap-3 justify-between">
+              <dt class="text-slate-500 shrink-0 ">会员结束日期</dt>
+              <dd id="member-package-end" class="text-slate-800 min-w-0 break-words"></dd>
+            </div>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_head %}
+<script>
+  (function () {
+    function setText(el, value, fallback) {
+      if (!el) return;
+      const v = (value === null || value === undefined) ? "" : String(value).trim();
+      el.textContent = v ? v : (fallback || "暂无");
+    }
+
+    function show(el) {
+      if (!el) return;
+      el.classList.remove("hidden");
+    }
+
+    function hide(el) {
+      if (!el) return;
+      el.classList.add("hidden");
+    }
+
+    function fetchJson(url) {
+      return fetch(url, { credentials: "same-origin" }).then(function (res) {
+        return res.json().then(function (data) {
+          if (!res.ok) {
+            const err = new Error((data && data.message) || "请求失败");
+            err.status = res.status;
+            throw err;
+          }
+          return data;
+        });
+      });
+    }
+
+    window.addEventListener("load", function () {
+      const backBtn = document.getElementById("mobile-back-btn");
+      if (backBtn) {
+        backBtn.addEventListener("click", function () {
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+          window.location.href = "{% url 'web_doctor:mobile_patient_home' patient.id %}";
+        });
+      }
+
+      const patientId = {{ patient.id|default:"null" }};
+      if (!patientId) return;
+
+      const profileUrl = "/api/doctor/mobile/patient-profile/?patient_id=" + encodeURIComponent(patientId);
+      const medicalUrl = "/api/doctor/mobile/medical-info/?patient_id=" + encodeURIComponent(patientId);
+      const memberUrl = "/api/doctor/mobile/member-info/?patient_id=" + encodeURIComponent(patientId);
+
+      fetchJson(profileUrl).then(function (data) {
+        const loading = document.getElementById("basic-info-loading");
+        const error = document.getElementById("basic-info-error");
+        const content = document.getElementById("basic-info-content");
+        hide(loading);
+        hide(error);
+        show(content);
+
+        const info = (data && data.patient_info) || {};
+        setText(document.getElementById("basic-name"), info.name, "-");
+        setText(document.getElementById("basic-gender"), info.gender, "-");
+        setText(document.getElementById("basic-phone"), info.phone, "-");
+        setText(document.getElementById("basic-birth-date"), info.birth_date, "-");
+        setText(document.getElementById("basic-address"), info.address, "-");
+        const addressEl = document.getElementById("basic-address");
+        if (addressEl) addressEl.setAttribute("title", (info.address || "").toString());
+        setText(document.getElementById("basic-emergency-contact"), info.emergency_contact, "无");
+        setText(document.getElementById("basic-emergency-relation"), info.emergency_relation, "无");
+        setText(document.getElementById("basic-emergency-phone"), info.emergency_phone, "无");
+
+        const familyLoading = document.getElementById("family-loading");
+        const familyError = document.getElementById("family-error");
+        const familyEmpty = document.getElementById("family-empty");
+        const familyList = document.getElementById("family-list");
+        hide(familyLoading);
+        hide(familyError);
+
+        const relations = Array.isArray(info.relations) ? info.relations : [];
+        if (!familyList) return;
+        familyList.innerHTML = "";
+        if (!relations.length) {
+          hide(familyList);
+          show(familyEmpty);
+          return;
+        }
+        hide(familyEmpty);
+        show(familyList);
+
+        relations.forEach(function (rel) {
+          const item = document.createElement("div");
+          item.className = "bg-slate-50 rounded-xl p-3 text-sm text-slate-700 space-y-1";
+          const line1 = document.createElement("div");
+          line1.className = "flex items-center justify-between gap-3";
+          const relation = document.createElement("div");
+          relation.className = "text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 shrink-0";
+          relation.textContent = (rel && rel.relation) ? String(rel.relation) : "关系未知";
+          const name = document.createElement("div");
+          name.className = "text-slate-900 font-bold min-w-0 truncate";
+          name.textContent = (rel && rel.name) ? String(rel.name) : "未命名";
+          line1.appendChild(name);
+          line1.appendChild(relation);
+          const line2 = document.createElement("div");
+          line2.className = "text-xs text-slate-500";
+          line2.textContent = "手机号：" + ((rel && rel.phone) ? String(rel.phone) : "无");
+          item.appendChild(line1);
+          item.appendChild(line2);
+          familyList.appendChild(item);
+        });
+      }).catch(function () {
+        hide(document.getElementById("basic-info-loading"));
+        show(document.getElementById("basic-info-error"));
+        hide(document.getElementById("basic-info-content"));
+
+        hide(document.getElementById("family-loading"));
+        show(document.getElementById("family-error"));
+        hide(document.getElementById("family-empty"));
+        hide(document.getElementById("family-list"));
+      });
+
+      fetchJson(medicalUrl).then(function (data) {
+        hide(document.getElementById("medical-loading"));
+        hide(document.getElementById("medical-error"));
+        show(document.getElementById("medical-content"));
+
+        const info = (data && data.medical_info) || {};
+        setText(document.getElementById("medical-diagnosis"), info.diagnosis, "无");
+        setText(document.getElementById("medical-risk-factors"), info.risk_factors, "无");
+        setText(document.getElementById("medical-clinical-diagnosis"), info.clinical_diagnosis, "无");
+        setText(document.getElementById("medical-gene-test"), info.gene_test, "无");
+        setText(document.getElementById("medical-history"), info.history, "无");
+        setText(document.getElementById("medical-surgery"), info.surgery, "无");
+
+        const lastUpdatedEl = document.getElementById("medical-last-updated");
+        const lastUpdated = (info && info.last_updated) ? String(info.last_updated) : "";
+        if (lastUpdatedEl) {
+          lastUpdatedEl.textContent = lastUpdated ? ("最近更新：" + lastUpdated) : "";
+        }
+      }).catch(function () {
+        hide(document.getElementById("medical-loading"));
+        show(document.getElementById("medical-error"));
+        hide(document.getElementById("medical-content"));
+      });
+
+      fetchJson(memberUrl).then(function (data) {
+        hide(document.getElementById("member-loading"));
+        hide(document.getElementById("member-error"));
+        show(document.getElementById("member-content"));
+
+        const info = (data && data.member_info) || {};
+        setText(document.getElementById("member-registered-date"), info.registered_date, "-");
+        setText(document.getElementById("member-type"), info.member_type, "-");
+
+        const pkgWrap = document.getElementById("member-package-dates");
+        const start = (info && info.package_start_date) ? String(info.package_start_date) : "";
+        const end = (info && info.package_end_date) ? String(info.package_end_date) : "";
+        if (info.member_type === "付费" && (start || end)) {
+          setText(document.getElementById("member-package-start"), start, "-");
+          setText(document.getElementById("member-package-end"), end, "-");
+          show(pkgWrap);
+        } else {
+          hide(pkgWrap);
+        }
+      }).catch(function () {
+        hide(document.getElementById("member-loading"));
+        show(document.getElementById("member-error"));
+        hide(document.getElementById("member-content"));
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -18,6 +18,13 @@ from users.models import PatientProfile
 def mobile_home(request: HttpRequest) -> HttpResponse:
     logger = logging.getLogger(__name__)
 
+    def get_positive_int(value, default: int) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return default
+        return parsed if parsed > 0 else default
+
     def format_cn_datetime(value):
         if not value:
             return ""
@@ -88,10 +95,13 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
         last_active_at__date=today,
     ).count()
 
+    alerts_page_number = get_positive_int(request.GET.get("alerts_page"), 1)
+    alerts_page_size = get_positive_int(request.GET.get("alerts_size"), 1)
+    # 移动端首页仅默认展示 1 条待办：避免信息过载，优先突出最需要立即处理的事项。
     alerts_page = TodoListService.get_todo_page(
         user=request.user,
-        page=1,
-        size=5,
+        page=alerts_page_number,
+        size=alerts_page_size,
         status=["pending", "escalate"],
     )
     alerts_count = alerts_page.paginator.count
@@ -112,7 +122,12 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
             summaries = ChatService().list_patient_conversation_summaries(studio, request.user)
             unread_summaries = [s for s in summaries if (s.get("unread_count") or 0) > 0]
             consultations_count = len(unread_summaries)
-            for s in unread_summaries[:5]:
+            consultations_page_number = get_positive_int(request.GET.get("consultations_page"), 1)
+            consultations_page_size = get_positive_int(request.GET.get("consultations_size"), 1)
+            # 移动端首页仅默认展示 1 条咨询摘要：快速定位最新未读消息，更多内容由列表页承载。
+            start_index = (consultations_page_number - 1) * consultations_page_size
+            end_index = start_index + consultations_page_size
+            for s in unread_summaries[start_index:end_index]:
                 msg_type = s.get("last_message_type")
                 if msg_type == MessageContentType.IMAGE:
                     content = "[图片]"

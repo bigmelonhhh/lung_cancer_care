@@ -534,6 +534,51 @@ class HealthMetricService:
         return result
 
     @classmethod
+    def query_last_metric_for_date(
+        cls,
+        patient_id: int,
+        target_date: date,
+        metric_type: str | None = None,
+    ) -> dict:
+        PatientProfile = apps.get_model("users", "PatientProfile")
+        if not PatientProfile.objects.filter(id=patient_id).exists():
+            raise PatientProfile.DoesNotExist(f"Patient {patient_id} does not exist")
+
+        target_types = [metric_type] if metric_type else MetricType.values
+        start_dt = timezone.make_aware(
+            datetime.datetime.combine(target_date, datetime.datetime.min.time())
+        )
+        end_dt = timezone.make_aware(
+            datetime.datetime.combine(target_date, datetime.datetime.max.time())
+        )
+
+        result = {}
+        for m_type in target_types:
+            metric = (
+                HealthMetric.objects.filter(
+                    patient_id=patient_id,
+                    metric_type=m_type,
+                    measured_at__range=(start_dt, end_dt),
+                )
+                .order_by("-measured_at")
+                .first()
+            )
+            if not metric:
+                result[m_type] = None
+                continue
+
+            result[m_type] = {
+                "name": MetricType(m_type).label,
+                "value_main": metric.value_main,
+                "value_sub": metric.value_sub,
+                "value_display": cls._format_display_value(metric),
+                "measured_at": metric.measured_at,
+                "source": metric.source,
+            }
+
+        return result
+
+    @classmethod
     def list_monitoring_metric_types_for_patient(
         cls,
         patient: "PatientProfile",

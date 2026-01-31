@@ -1,0 +1,35 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}我的助理{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-slate-100 pb-safe-bottom font-sans">
+  <div class="bg-[#4DB6AC] pt-safe-top pb-5 px-4 shadow-md">
+    <div class="flex items-center gap-3 pt-4">
+      <div  onclick="window.history.back()" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 flex items-center justify-center active:scale-95 transition">
+        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </div>
+      <div class="text-white">
+        <div class="text-base font-bold leading-tight">我的助理</div>
+        <div class="text-xs opacity-90">平台助理列表</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 py-4">
+    <div class="rounded-xl overflow-hidden shadow-sm bg-white">
+      {% for assistant in assistants %}
+      <div class="px-4 py-3 border-b border-slate-100 last:border-0 flex items-center justify-between">
+          <div class="text-sm font-bold text-slate-800 truncate">姓名：{{  assistant.name|default:"--" }}</div>
+          <div class="mt-1 text-xs text-slate-500">角色：{{ assistant.user.get_user_type_display|default:"--" }}</div>
+      </div>
+      {% empty %}
+      <div class="p-6 text-center text-slate-400 text-sm">暂无数据</div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+

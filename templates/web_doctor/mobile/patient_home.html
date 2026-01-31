@@ -14,33 +14,31 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
         </svg>
       </button>
-      <div class="text-white text-center min-w-0 px-2">
-        <div class="text-base font-bold truncate">{{ patient.name }}</div>
-        <div class="text-xs opacity-90">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
+      <div class="text-white  min-w-0 px-2  flex  flex-col">
+        <div class="text-base font-bold truncate">患者：{{ patient.name }}</div>
+        <div class="text-xs ">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁 </div>
       </div>
       
     </div>
-
-    <div class="relative z-10 mt-4 bg-white/95 rounded-2xl p-4 shadow-sm">
-      <div class="flex items-center justify-between">
-        <div class="min-w-0">
-          <div class="text-sm font-bold text-slate-800 truncate">{{ patient.name }}</div>
-          <div class="mt-1 text-xs text-slate-500">
-            病历号：<span class="font-bold text-slate-700">{{ patient_no }}</span>
-          </div>
-        </div>
-        <div class="w-11 h-11 rounded-2xl bg-[#4DB6AC]/10 flex items-center justify-center text-[#4DB6AC]">
+  </div>
+  <div class="flex items-center px-4 font-bold text-black text-base mt-3">
+    <span class="w-1 h-4 bg-blue-600 rounded-full mr-2"></span>
+    常用菜单
+  </div>
+  <div class="px-4 py-5 space-y-4 opacity-0 translate-y-1 " id="mobile-patient-home-content">
+    <div class="grid grid-cols-2 gap-3">
+      <a href="{% url 'web_doctor:mobile_patient_basic_info' %}?patient_id={{ patient.id }}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+        <div class="w-11 h-11 rounded-2xl bg-violet-50 text-violet-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
           </svg>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="px-4 py-5 space-y-4 opacity-0 translate-y-1 mt-6" id="mobile-patient-home-content">
-    <div class="grid grid-cols-2 gap-3">
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'indicators' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+        <div>
+          <div class="text-sm font-bold text-slate-800">基本信息</div>
+          <div class="text-xs text-slate-500 mt-0.5">查看患者档案</div>
+        </div>
+      </a>
+      <a id="mobile-manage-metrics-entry" href="{% url 'web_doctor:mobile_health_records' %}?patient_id={{ patient.id }}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M3 3h2v18H3V3zm16 0h2v18h-2V3zM7 13h2v8H7v-8zm4-6h2v14h-2V7zm4 4h2v10h-2V11z"/>
@@ -52,7 +50,7 @@
         </div>
       </a>
 
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'records' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+      <a href="{% url 'web_doctor:mobile_patient_records' patient.id %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 7h10v2H7V7zm0 4h10v2H7v-2zm0 4h7v2H7v-2z"/>
@@ -64,7 +62,7 @@
         </div>
       </a>
 
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'todo' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+      <a href="{% url 'web_doctor:mobile_patient_todo_list' %}?patient_id={{ patient.id }}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19 3H14.82C14.4 1.84 13.3 1 12 1s-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm5 18H7v-2h10v2zm0-4H7v-2h10v2zm0-4H7V9h10v4z"/>
@@ -76,7 +74,7 @@
         </div>
       </a>
 
-      <a href="{% url 'web_doctor:mobile_patient_section' patient.id 'chat' %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
+      <a id="mobile-patient-chat-entry" href="{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}" class="bg-white rounded-2xl shadow-sm p-4 flex items-center gap-3 active:scale-[0.99] transition min-h-[88px]">
         <div class="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
           <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M4 4h16c1.1 0 2 .9 2 2v10c0 1.1-.9 2-2 2H7l-5 5V6c0-1.1.9-2 2-2zm2 6h12v2H6v-2zm0-3h12v2H6V7zm0 6h8v2H6v-2z"/>
@@ -87,6 +85,8 @@
           <div class="text-xs text-slate-500 mt-0.5">医患沟通入口</div>
         </div>
       </a>
+
+      
     </div>
   </div>
 </div>
@@ -110,6 +110,20 @@
         return;
       }
       window.location.href = "{% url 'web_doctor:mobile_patient_list' %}";
+    });
+
+    document.addEventListener("click", function (event) {
+      const entry = event.target.closest("#mobile-patient-chat-entry");
+      if (!entry) return;
+      event.preventDefault();
+      window.location.href = "{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}";
+    });
+
+    document.addEventListener("click", function (event) {
+      const entry = event.target.closest("#mobile-manage-metrics-entry");
+      if (!entry) return;
+      event.preventDefault();
+      window.location.href = "{% url 'web_doctor:mobile_health_records' %}?patient_id={{ patient.id }}";
     });
   })();
 </script>

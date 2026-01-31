@@ -1,0 +1,91 @@
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'web_doctor/review_record_detail.css' %}?v={% now 'U' %}">
+<script src="{% static 'web_doctor/review_record_detail.js' %}?v={% now 'U' %}" defer></script>
+{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans flex flex-col">
+  <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
+    <div class="pt-safe-top">
+      <div class="flex items-center h-12 px-4 relative">
+        <div  onclick="window.history.back()"  class="cursor-pointer absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </div>
+        <h1 class="w-full text-center text-lg font-bold text-slate-800">{{ title }}</h1>
+      </div>
+    </div>
+
+    <div class="flex items-center border-t border-slate-100 h-12">
+      <div class="flex-1 flex items-center justify-center active:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('rrd-month-picker').showPicker()">
+        <input type="month" id="rrd-month-picker" class="absolute inset-0 opacity-0 cursor-pointer" value="{{ current_month }}">
+        <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span id="rrd-month-display" class="text-slate-800 font-medium ml-1">{{ current_month }}</span>
+        <svg class="w-4 h-4 text-slate-500 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div id="rrd-scroll" class="flex-1 overflow-y-auto pb-20" data-patient-id="{{ patient_id|default:'' }}" data-category-code="{{ category_code }}" data-title="{{ title }}">
+    <div id="rrd-empty" class="hidden rrd-empty">
+      <div class="flex flex-col items-center justify-center py-10 pt-10" style="margin-top: 80px;">
+        <div class="flex items-center justify-center mb-3">
+          <svg t="1765808670850" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="8014" width="64" height="64"><path d="M35.698301 77.721345h59.476898c4.135408 0 7.419408 3.284 7.419408 7.419408s-3.284 7.419408-7.419408 7.419409H35.698301c-4.135408 0-7.419408-3.284-7.419408-7.419409s3.284-7.419408 7.419408-7.419408z m0 0" fill="#F4C15B" p-id="8015"></path><path d="M65.497565 47.922081c4.135408 0 7.419408 3.284 7.419409 7.419408v59.476898c0 4.135408-3.284 7.419408-7.419409 7.419408-4.135408 0-7.419408-3.284-7.419408-7.419408V55.341489c0-4.135408 3.284-7.419408 7.419408-7.419408z m0 0" fill="#F4C15B" p-id="8016"></path><path d="M362.030645 116.277943l28.704597 7.662668c4.013778 1.094667 6.324742 5.108445 5.230075 9.122223-1.094667 4.013778-5.108445 6.324742-9.122224 5.230075l-28.704597-7.662668c-4.013778-1.094667-6.324742-5.108445-5.230075-9.122223 1.216296-3.892149 5.108445-6.324742 9.122224-5.230075z m0 0" fill="#4680E8" p-id="8017"></path><path d="M414.939542 74.558974l7.662667 28.704596c1.094667 4.013778-1.216296 8.027557-5.230075 9.122224-4.013778 1.094667-8.027557-1.216296-9.122223-5.230075L400.587243 78.329493c-1.094667-4.013778 1.216296-8.027557 5.230075-9.122224 4.013778-0.973037 8.149186 1.337926 9.122224 5.351705z m0 0" fill="#8FB3FF" p-id="8018"></path><path d="M477.57881 99.493051L456.536881 120.53498c-2.919112 2.919112-7.541038 2.919112-10.46015 0-2.919112-2.919112-2.919112-7.541038 0-10.460149l21.041929-21.041929c2.919112-2.919112 7.541038-2.919112 10.46015 0 2.919112 2.797482 2.919112 7.541038 0 10.460149z m0 0" fill="#ABC3EF" p-id="8019"></path><path d="M927.000356 113.358831c-24.569189 0-44.516451 19.947262-44.516451 44.638081 0 24.569189 19.947262 44.516451 44.516451 44.516451 24.569189 0 44.638081-19.947262 44.638081-44.516451-0.12163-24.690818-20.068892-44.638081-44.638081-44.638081z m0 74.315715c-16.420002 0-29.799264-13.379261-29.799263-29.799264s13.379261-29.799264 29.799263-29.799263 29.799264 13.379261 29.799264 29.799263c-0.12163 16.541632-13.500891 29.799264-29.799264 29.799264z m0 0" fill="#F4C15B" p-id="8020"></path><path d="M905.715168 374.984202l-446.137546-59.476897v235.718256l446.137546 46.827414V374.984202z m0 0" fill="#4680E8" p-id="8021"></path><path d="M102.594607 392.742131l356.861385-77.113196v267.706853L102.594607 660.448984V392.742131z m0 0" fill="#8FB3FF" p-id="8022"></path><path d="M519.05452 482.018292l386.660648-106.91246V880.598646l-386.660648 106.91246V482.018292z m0 0" fill="#4680E8" p-id="8023"></path><path d="M102.594607 392.742131l416.338283 89.276161v502.816962L102.594607 883.517757V392.742131z m0 0" fill="#8FB3FF" p-id="8024"></path><path d="M519.05452 481.166884L102.594607 392.742131l-89.276161 178.430692 431.298729 101.317497 74.437345-191.323436z m0 0" fill="#ABC3EF" p-id="8025"></path><path d="M756.597221 28.461337L711.95914 46.584155v59.476897l44.638081-18.122817V28.461337z m0 0" fill="#F4C15B" p-id="8026"></path><path d="M659.780021 87.938235l44.638081 18.122817V46.584155l-44.638081-18.122818v59.476898z m96.8172-65.43675L708.796769 3.648889l-48.895118 16.906521 48.773489 20.67704 47.922081-18.730965z m0 0" fill="#E5CF6E" p-id="8027"></path><path d="M519.05452 482.018292l386.660648-106.91246 104.114978 178.430693-371.821831 121.751276-118.953795-193.269509z m0 0" fill="#8FB3FF" p-id="8028"></path><path d="M728.257513 388.241834S744.799145 283.883597 831.156194 231.947737c0 0 7.541038 8.514075 22.623115 27.853189 0 0-39.408006-6.203112-125.521796 128.440908z m0 0" fill="#ABC3EF" p-id="8029"></path><path d="M519.05452 383.984796s1.702815-57.165934 43.543413-186.09336c0 0 7.541038 8.514075 22.623115 27.853189-0.12163 0-15.933484 13.74415-66.166528 158.240171z m0 0" fill="#8FB3FF" p-id="8030"></path><path d="M373.585461 373.646276S326.514788 235.231738 211.209882 172.835729c0 0-19.217484 27.001782-40.381042 35.515857-0.12163 0 132.697945 46.219266 202.756621 165.29469z m0 0" fill="#E5CF6E" p-id="8031"></path></svg>
+        </div>
+        <p class="text-slate-500 font-medium text-sm">暂无数据</p>
+      </div>
+    </div>
+
+    <div id="rrd-virtual-container" class="relative w-full">
+      <div id="rrd-virtual-inner" class="absolute left-0 right-0 top-0"></div>
+    </div>
+
+    <div id="rrd-loading-spinner" class="hidden py-4 text-center">
+      <svg class="animate-spin h-6 w-6 text-blue-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    </div>
+
+    <div id="rrd-no-more" class="hidden py-4 text-center text-slate-400 text-sm mt-2">已全部加载</div>
+
+  </div>
+</div>
+
+<div id="rrd-toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4 pointer-events-none"></div>
+
+<div id="rrd-viewer" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-black/90"></div>
+  <div class="absolute inset-0 flex items-center justify-center p-4">
+    <div class="relative w-full h-full max-w-3xl max-h-[85vh] flex items-center justify-center">
+      <img id="rrd-viewer-image" src="" class="max-w-full max-h-full rounded-lg shadow-2xl hidden" alt="预览图">
+      <div id="rrd-viewer-loading" class="text-white text-sm">加载中...</div>
+      <button id="rrd-viewer-close" class="absolute top-3 right-3 text-white p-2 bg-black/30 rounded-full active:opacity-70">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+      <button id="rrd-viewer-prev" class="absolute left-2 top-1/2 -translate-y-1/2 text-white p-2 bg-black/30 rounded-full active:opacity-70">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <button id="rrd-viewer-next" class="absolute right-2 top-1/2 -translate-y-1/2 text-white p-2 bg-black/30 rounded-full active:opacity-70">
+        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+      <div id="rrd-viewer-index" class="absolute bottom-3 left-1/2 -translate-x-1/2 text-white text-sm bg-black/30 px-3 py-1 rounded-full"></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
