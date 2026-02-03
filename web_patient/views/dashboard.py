@@ -2,12 +2,17 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 
-from users.models import PatientRelation
-from django.http import HttpResponseBadRequest
 from users.decorators import auto_wechat_login, check_patient
 from wx.services.oauth import generate_menu_auth_url
 
 
+@auto_wechat_login
+@check_patient
+def reminder_settings(request: HttpRequest) -> HttpResponse:
+    return render(
+        request,
+        "web_patient/reminder_settings.html",
+    )
 
 
 @auto_wechat_login
@@ -71,7 +76,7 @@ def patient_dashboard(request: HttpRequest) -> HttpResponse:
         {"title": "智能设备", "url": generate_menu_auth_url("web_patient:device_list")},
         {"title": "工作室", "url": generate_menu_auth_url("web_patient:my_studio")},
         {"title": "上传报告", "url": generate_menu_auth_url("web_patient:report_list")},
-        # {"title": "提醒设置", "url": "#"},
+        {"title": "提醒设置", "url": generate_menu_auth_url("web_patient:reminder_settings")},
         {"title": "亲情账号", "url": generate_menu_auth_url("web_patient:family_management")},
         {"title": "健康日历", "url": generate_menu_auth_url("web_patient:health_calendar")},
         # {"title": "设置", "url": "#"},
