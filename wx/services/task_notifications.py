@@ -220,7 +220,13 @@ def _collect_recipients(
     for patient in patients:
         recipients = []
         user = patient.user
-        if user and user.is_active and user.is_subscribe and user.wx_openid:
+        if (
+            user
+            and user.is_active
+            and user.is_subscribe
+            and getattr(user, "is_receive_wechat_message", True)
+            and user.wx_openid
+        ):
             recipients.append(user)
         for relation in getattr(patient, "alert_relations", []) or []:
             relation_user = relation.user
@@ -229,6 +235,8 @@ def _collect_recipients(
             if not relation_user.is_active:
                 continue
             if not relation_user.is_subscribe:
+                continue
+            if not getattr(relation_user, "is_receive_wechat_message", True):
                 continue
             if not relation_user.wx_openid:
                 continue
@@ -322,6 +330,9 @@ def _maybe_send_watch_message(
     logs_to_create: List[SendMessageLog],
 ) -> None:
     if patient.id in existing_watch_patients:
+        return
+    owner = getattr(patient, "user", None)
+    if owner and not getattr(owner, "is_receive_watch_message", True):
         return
 
     device = None

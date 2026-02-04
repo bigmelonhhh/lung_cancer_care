@@ -80,6 +80,16 @@ class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
         default=False,
         help_text="【业务说明】记录是否关注公众号；【用法】用于模板消息推送判断；【示例】True;【参数】bool;【返回值】bool",
     )
+    is_receive_wechat_message = models.BooleanField(
+        "是否接收公众号消息",
+        default=True,
+        help_text="【业务说明】用户开关：是否接收公众号/微信推送消息；【用法】提醒设置页可配置；【示例】True；【参数】bool；【返回值】bool",
+    )
+    is_receive_watch_message = models.BooleanField(
+        "是否接收手表消息",
+        default=True,
+        help_text="【业务说明】用户开关：是否接收手表推送消息；【用法】提醒设置页可配置；【示例】True；【参数】bool；【返回值】bool",
+    )
 
     user_type = models.PositiveSmallIntegerField(
         "用户类型",

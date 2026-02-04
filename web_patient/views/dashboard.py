@@ -1,17 +1,42 @@
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_http_methods
 
 from users.decorators import auto_wechat_login, check_patient
+from users.services.patient import PatientService
 from wx.services.oauth import generate_menu_auth_url
+
+
+patient_service = PatientService()
 
 
 @auto_wechat_login
 @check_patient
+@require_http_methods(["GET", "POST"])
 def reminder_settings(request: HttpRequest) -> HttpResponse:
+    if request.method == "POST":
+        is_receive_wechat_message = request.POST.get("is_receive_wechat_message") == "on"
+        is_receive_watch_message = request.POST.get("is_receive_watch_message") == "on"
+        patient_service.update_message_preferences(
+            user=request.user,
+            is_receive_wechat_message=is_receive_wechat_message,
+            is_receive_watch_message=is_receive_watch_message,
+        )
+        return redirect(reverse("web_patient:reminder_settings"))
+
     return render(
         request,
         "web_patient/reminder_settings.html",
+        {
+            "patient": request.patient,
+            "is_receive_wechat_message": bool(
+                getattr(request.user, "is_receive_wechat_message", True)
+            ),
+            "is_receive_watch_message": bool(
+                getattr(request.user, "is_receive_watch_message", True)
+            ),
+        },
     )
 
 

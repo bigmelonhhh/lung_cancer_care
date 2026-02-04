@@ -77,7 +77,13 @@ def send_chat_unread_notification_for_message(
 
     patient = message.conversation.patient
     user = patient.user if patient else None
-    if not user or not user.is_active or not user.is_subscribe or not user.wx_openid:
+    if (
+        not user
+        or not user.is_active
+        or not user.is_subscribe
+        or not getattr(user, "is_receive_wechat_message", True)
+        or not user.wx_openid
+    ):
         return False
 
     last_read_id = (
@@ -182,7 +188,13 @@ def send_chat_unread_notifications(
             continue
         patient = conversation.patient
         user = patient.user if patient else None
-        if not user or not user.is_active or not user.is_subscribe or not user.wx_openid:
+        if (
+            not user
+            or not user.is_active
+            or not user.is_subscribe
+            or not getattr(user, "is_receive_wechat_message", True)
+            or not user.wx_openid
+        ):
             continue
 
         last_read_id = read_state_map.get((conversation.id, user.id))

@@ -126,6 +126,20 @@ class ChatUnreadNotificationTests(TestCase):
         self.assertEqual(SendMessageLog.objects.count(), 0)
         mock_send.assert_not_called()
 
+    def test_no_notification_when_receive_wechat_message_disabled(self):
+        self.patient_user.is_receive_wechat_message = False
+        self.patient_user.save(update_fields=["is_receive_wechat_message"])
+        message = self._create_message(
+            sender_role=MessageSenderRole.PLATFORM_DOCTOR,
+            created_at_offset_seconds=31,
+        )
+        with patch("wx.services.chat_notifications._send_wechat_text") as mock_send:
+            sent = send_chat_unread_notification_for_message(message.id)
+
+        self.assertFalse(sent)
+        self.assertEqual(SendMessageLog.objects.count(), 0)
+        mock_send.assert_not_called()
+
     def test_skip_when_already_sent(self):
         message = self._create_message(
             sender_role=MessageSenderRole.PLATFORM_DOCTOR,

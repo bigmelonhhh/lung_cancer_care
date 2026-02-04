@@ -103,6 +103,26 @@ class PatientServiceTests(TestCase):
         )
 
 
+    def test_update_message_preferences_updates_only_given_fields(self):
+        self.patient_user.refresh_from_db()
+        self.assertTrue(self.patient_user.is_receive_wechat_message)
+        self.assertTrue(self.patient_user.is_receive_watch_message)
+
+        self.service.update_message_preferences(
+            user=self.patient_user,
+            is_receive_wechat_message=False,
+        )
+        self.patient_user.refresh_from_db()
+        self.assertFalse(self.patient_user.is_receive_wechat_message)
+        self.assertTrue(self.patient_user.is_receive_watch_message)
+
+        self.service.update_message_preferences(
+            user=self.patient_user,
+            is_receive_watch_message=False,
+        )
+        self.patient_user.refresh_from_db()
+        self.assertFalse(self.patient_user.is_receive_watch_message)
+
     def test_edit_by_self_success(self):
         """A patient can successfully edit their own profile."""
         update_data = {

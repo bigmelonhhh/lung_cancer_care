@@ -16,17 +16,59 @@
     </div>
 
   <div class="max-w-3xl mx-auto px-4 pt-6">
-    <div class="bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between">
-      <div class="w-1/2 text-base font-medium text-slate-900">今日提醒计划</div>
-      <div class="w-1/2 flex justify-end">
-        <label class="inline-flex items-center cursor-pointer select-none">
-          <input id="reminder-toggle" type="checkbox" class="sr-only peer" checked>
-          <div class="relative w-12 h-7 rounded-full bg-slate-200 peer-checked:bg-emerald-500 transition-colors">
-            <div class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform peer-checked:translate-x-5"></div>
-          </div>
-        </label>
+    <form id="reminder-settings-form" method="post" class="space-y-3">
+      {% csrf_token %}
+      <div class="bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between">
+        <div class="w-1/2 text-base font-medium text-slate-900">公众号消息提醒</div>
+        <div class="w-1/2 flex justify-end">
+          <label class="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="wechat-toggle"
+              name="is_receive_wechat_message"
+              type="checkbox"
+              class="sr-only peer"
+              {% if is_receive_wechat_message %}checked{% endif %}
+              data-auto-submit="1"
+            >
+            <div class="relative w-12 h-7 rounded-full bg-slate-200 peer-checked:bg-emerald-500 transition-colors">
+              <div class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </label>
+        </div>
       </div>
-    </div>
+
+      <div class="bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between">
+        <div class="w-1/2 text-base font-medium text-slate-900">手表消息提醒</div>
+        <div class="w-1/2 flex justify-end">
+          <label class="inline-flex items-center cursor-pointer select-none">
+            <input
+              id="watch-toggle"
+              name="is_receive_watch_message"
+              type="checkbox"
+              class="sr-only peer"
+              {% if is_receive_watch_message %}checked{% endif %}
+              data-auto-submit="1"
+            >
+            <div class="relative w-12 h-7 rounded-full bg-slate-200 peer-checked:bg-emerald-500 transition-colors">
+              <div class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform peer-checked:translate-x-5"></div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
+
+<script>
+  (function () {
+    var form = document.getElementById('reminder-settings-form');
+    if (!form) return;
+    var inputs = form.querySelectorAll('input[data-auto-submit="1"]');
+    inputs.forEach(function (input) {
+      input.addEventListener('change', function () {
+        form.submit();
+      });
+    });
+  })();
+</script>
 {% endblock %}

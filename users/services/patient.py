@@ -16,6 +16,47 @@ from users.models import PatientProfile, CustomUser, PatientRelation
 
 
 class PatientService:
+    def update_message_preferences(
+        self,
+        *,
+        user: CustomUser,
+        is_receive_wechat_message: bool | None = None,
+        is_receive_watch_message: bool | None = None,
+    ) -> CustomUser:
+        """
+        【业务说明】更新账号的消息接收偏好（公众号/手表）。
+
+        【规则】
+        - 仅更新传入的字段；未传入的字段保持不变。
+        - 不影响系统维护字段 `is_subscribe`（是否关注公众号）。
+
+        【参数】
+        - user: CustomUser，当前登录账号（患者本人或家属）。
+        - is_receive_wechat_message: bool|None，是否接收公众号推送。
+        - is_receive_watch_message: bool|None，是否接收手表推送。
+
+        【返回值】
+        - CustomUser：更新后的 user（同一对象引用）。
+        """
+
+        if user is None:
+            raise ValidationError("用户不能为空")
+
+        update_fields: list[str] = []
+        if is_receive_wechat_message is not None:
+            user.is_receive_wechat_message = bool(is_receive_wechat_message)
+            update_fields.append("is_receive_wechat_message")
+        if is_receive_watch_message is not None:
+            user.is_receive_watch_message = bool(is_receive_watch_message)
+            update_fields.append("is_receive_watch_message")
+
+        if update_fields:
+            if "updated_at" not in update_fields:
+                update_fields.append("updated_at")
+            user.save(update_fields=update_fields)
+
+        return user
+
 
     def get_guard_days(self, patient: PatientProfile) -> tuple[int, int]:
         """

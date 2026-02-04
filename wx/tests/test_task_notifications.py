@@ -16,10 +16,20 @@ from wx.services.task_notifications import (
 
 
 class TaskNotificationTests(TestCase):
-    def _create_patient(self, *, phone: str, openid: str, is_subscribe: bool = True) -> PatientProfile:
+    def _create_patient(
+        self,
+        *,
+        phone: str,
+        openid: str,
+        is_subscribe: bool = True,
+        is_receive_wechat_message: bool = True,
+        is_receive_watch_message: bool = True,
+    ) -> PatientProfile:
         user = CustomUser.objects.create_user(
             wx_openid=openid,
             is_subscribe=is_subscribe,
+            is_receive_wechat_message=is_receive_wechat_message,
+            is_receive_watch_message=is_receive_watch_message,
         )
         return PatientProfile.objects.create(
             user=user,
@@ -27,10 +37,17 @@ class TaskNotificationTests(TestCase):
             name="测试患者",
         )
 
-    def _create_family_relation(self, *, patient: PatientProfile, openid: str) -> CustomUser:
+    def _create_family_relation(
+        self,
+        *,
+        patient: PatientProfile,
+        openid: str,
+        is_receive_wechat_message: bool = True,
+    ) -> CustomUser:
         family_user = CustomUser.objects.create_user(
             wx_openid=openid,
             is_subscribe=True,
+            is_receive_wechat_message=is_receive_wechat_message,
         )
         PatientRelation.objects.create(
             patient=patient,
@@ -141,4 +158,79 @@ class TaskNotificationTests(TestCase):
         log = SendMessageLog.objects.first()
         self.assertEqual(log.channel, SendMessageLog.Channel.WECHAT)
         self.assertEqual(log.content, "您的复查任务未完成")
+        mock_send.assert_not_called()
+
+    def test_creation_skips_wechat_when_user_disabled(self):
+        today = timezone.localdate()
+        patient = self._create_patient(
+            phone="13800000101",
+            openid="wx_openid_disabled",
+            is_subscribe=True,
+            is_receive_wechat_message=False,
+        )
+        self._create_task(
+            patient=patient,
+            task_date=today,
+            task_type=core_choices.PlanItemCategory.MONITORING,
+        )
+
+        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+            sent = send_daily_task_creation_messages(today)
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(SendMessageLog.objects.count(), 0)
+        mock_send.assert_not_called()
+
+    def test_creation_skips_family_when_family_user_disabled(self):
+        today = timezone.localdate()
+        patient = self._create_patient(phone="13800000102", openid="wx_openid_102")
+        self._create_family_relation(
+            patient=patient,
+            openid="wx_openid_family_disabled",
+            is_receive_wechat_message=False,
+        )
+        self._create_task(
+            patient=patient,
+            task_date=today,
+            task_type=core_choices.PlanItemCategory.MONITORING,
+        )
+
+        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+            sent = send_daily_task_creation_messages(today)
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(SendMessageLog.objects.count(), 1)
+        log = SendMessageLog.objects.first()
+        self.assertEqual(log.channel, SendMessageLog.Channel.WECHAT)
+        self.assertEqual(log.user, patient.user)
+        mock_send.assert_not_called()
+
+    def test_creation_skips_watch_when_watch_disabled(self):
+        today = timezone.localdate()
+        patient = self._create_patient(
+            phone="13800000103",
+            openid="wx_openid_watch_disabled",
+            is_subscribe=True,
+            is_receive_wechat_message=False,
+            is_receive_watch_message=False,
+        )
+        Device.objects.create(
+            sn="SN_WATCH_DISABLED",
+            imei="IMEI_WATCH_DISABLED",
+            current_patient=patient,
+        )
+        self._create_task(
+            patient=patient,
+            task_date=today,
+            task_type=core_choices.PlanItemCategory.MONITORING,
+        )
+
+        with patch(
+            "wx.services.task_notifications.SmartWatchService.send_message",
+            return_value=(True, "msg123"),
+        ) as mock_send:
+            sent = send_daily_task_creation_messages(today)
+
+        self.assertEqual(sent, 0)
+        self.assertEqual(SendMessageLog.objects.count(), 0)
         mock_send.assert_not_called()
