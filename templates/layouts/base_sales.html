@@ -6,16 +6,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}肺部康复管理系统{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/app.css' %}?v={% now 'U' %}" />
+    <link
+      rel="stylesheet"
+      href="{% static 'web_sales/web_sales_mobile.css' %}?v={% now 'U' %}"
+      media="(max-width: 768px)"
+    />
+    <script>
+      (function () {
+        if (!window.matchMedia) return;
+        var mql = window.matchMedia('(max-width: 768px)');
+        var wants = mql.matches ? '1' : '0';
+        var match = document.cookie.match(/(?:^|; )ws_is_mobile=([^;]+)/);
+        var cur = match ? match[1] : '';
+
+        if (cur !== wants) {
+          var maxAge = wants === '1' ? 31536000 : 0;
+          document.cookie =
+            'ws_is_mobile=' +
+            wants +
+            '; path=/; max-age=' +
+            maxAge +
+            '; SameSite=Lax';
+
+          if (window.sessionStorage && window.location && window.location.pathname) {
+            if (window.location.pathname.indexOf('/sales/dashboard') !== -1) {
+              var key = 'ws_is_mobile_reload_' + wants;
+              if (!window.sessionStorage.getItem(key)) {
+                window.sessionStorage.setItem(key, '1');
+                window.location.reload();
+                return;
+              }
+            }
+          }
+        }
+
+        if (wants !== '1') return;
+        var s = document.createElement('script');
+        s.defer = true;
+        s.src = "{% static 'web_sales/web_sales_mobile.js' %}?v={% now 'U' %}";
+        document.head.appendChild(s);
+      })();
+    </script>
     <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
   </head>
-  <body class="min-h-screen bg-gray-100 text-gray-800">
+  <body data-app="web-sales" class="min-h-screen bg-gray-100 text-gray-800">
     <style>
   [x-cloak] { display: none !important; }
 </style>
-<div x-data="{ sidebarOpen: false }" class="min-h-screen flex flex-col bg-gray-50 text-slate-900">
+<div
+  x-data="{ sidebarOpen: false }"
+  @ws-open-sidebar.window="sidebarOpen = true"
+  @ws-close-sidebar.window="sidebarOpen = false"
+  class="min-h-screen flex flex-col bg-gray-50 text-slate-900"
+>
   <header class="h-16 bg-white border-b border-slate-200 shadow-sm px-4 md:px-8 flex items-center justify-between">
     <div class="flex items-center space-x-4">
-      <button class="md:hidden text-slate-600 focus:outline-none" @click="sidebarOpen = true" aria-label="打开导航">
+      <button
+        class="ws-tap-target md:hidden text-slate-600 focus:outline-none ws-active-bg rounded-xl"
+        @click="sidebarOpen = true"
+        aria-label="打开导航"
+      >
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
@@ -24,19 +74,18 @@
         <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-200 flex items-center justify-center text-sky-700 font-semibold">
           LCC
         </div>
-        <div class="text-lg font-semibold tracking-wide text-slate-800">肺部康复管理系统-销售端</div>
+        <div data-ws-brand-title class="text-lg font-semibold tracking-wide text-slate-800">肺部康复管理系统-销售端</div>
       </a>
     </div>
     <div class="flex items-center space-x-4 text-sm">
-      <a href="{% url 'web_sales:sales_change_password' %}" class="text-slate-500 hover:text-slate-700">修改密码</a>
+      <a href="{% url 'web_sales:sales_change_password' %}" class="ws-tap-target text-slate-500 hover:text-slate-700 ws-active-bg rounded-xl px-2">修改密码</a>
       <span class="hidden sm:block text-slate-600">你好，{{ sales.name }}</span>
-      <a href="{% url 'web_doctor:logout' %}" class="text-rose-500 hover:text-rose-400 font-medium">退出</a>
+      <a href="{% url 'web_doctor:logout' %}" class="ws-tap-target text-rose-500 hover:text-rose-400 font-medium ws-active-bg rounded-xl px-2">退出</a>
     </div>
   </header>
     {% block body %}{% endblock %}
-
-  </body>
   </div>
 <script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
 <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  </body>
 </html>

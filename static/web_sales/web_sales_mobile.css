@@ -1,0 +1,69 @@
+[data-app="web-sales"] {
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+}
+
+[data-app="web-sales"] a,
+[data-app="web-sales"] button,
+[data-app="web-sales"] input,
+[data-app="web-sales"] select,
+[data-app="web-sales"] textarea {
+  touch-action: manipulation;
+}
+
+[data-app="web-sales"] .ws-tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+[data-app="web-sales"] [data-ws-card] {
+  padding: 1.25rem !important;
+}
+
+[data-app="web-sales"] [data-ws-card="compact"] {
+  padding: 1rem !important;
+}
+
+[data-app="web-sales"] [data-ws-sidebar] {
+  width: min(22rem, 86vw) !important;
+}
+
+[data-app="web-sales"] [data-ws-scroll-list] {
+  max-height: calc(100vh - 18rem);
+}
+
+[data-app="web-sales"] #main-content-area {
+  padding: 1rem !important;
+}
+
+[data-app="web-sales"] [data-ws-brand-title] {
+  font-size: 1rem;
+  line-height: 1.25rem;
+  max-width: 60vw;
+}
+
+[data-app="web-sales"] [data-ws-page-title] {
+  font-size: clamp(1.125rem, 4.8vw, 1.5rem);
+  line-height: 1.35;
+}
+
+[data-app="web-sales"] [data-ws-page-subtitle] {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+@media (hover: none) {
+  [data-app="web-sales"] .ws-active-bg:active {
+    background-color: rgba(15, 23, 42, 0.14) !important;
+  }
+
+  [data-app="web-sales"] .ws-active-bg-dark:active {
+    background-color: rgba(255, 255, 255, 0.12) !important;
+  }
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  [data-app="web-sales"] [data-ws-safe-bottom] {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom)) !important;
+  }
+}

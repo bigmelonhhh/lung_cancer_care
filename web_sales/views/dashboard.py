@@ -43,4 +43,8 @@ def sales_dashboard(request: HttpRequest) -> HttpResponse:
     }
     if request.headers.get("HX-Request") == "true":
         return render(request, "web_sales/partials/dashboard_home.html", context)
-    return render(request, "web_sales/dashboard.html", context)
+
+    template_name = "web_sales/dashboard.html"
+    if request.COOKIES.get("ws_is_mobile") == "1":
+        template_name = "web_sales/dashboard.mobile.html"
+    return render(request, template_name, context)

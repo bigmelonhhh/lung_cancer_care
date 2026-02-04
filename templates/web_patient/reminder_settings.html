@@ -1,0 +1,32 @@
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+{% block title %}提醒设置{% endblock %}
+{% block body %}
+<div class="min-h-screen bg-slate-50 ">
+  <div class=" h-12 bg-white/90 backdrop-blur-md shadow-sm z-50 flex items-center justify-between px-4 border-b border-slate-100">
+        <div onclick="window.history.back()"  class="w-8 h-8 flex items-center justify-center text-slate-600 active:bg-slate-100 rounded-full transition">
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+        </div>
+        <h1 class="text-base font-bold text-slate-800">
+            提醒设置
+        </h1>
+        <div class="w-8"></div>
+    </div>
+
+  <div class="max-w-3xl mx-auto px-4 pt-6">
+    <div class="bg-white rounded-2xl shadow-sm px-5 py-4 flex items-center justify-between">
+      <div class="w-1/2 text-base font-medium text-slate-900">今日提醒计划</div>
+      <div class="w-1/2 flex justify-end">
+        <label class="inline-flex items-center cursor-pointer select-none">
+          <input id="reminder-toggle" type="checkbox" class="sr-only peer" checked>
+          <div class="relative w-12 h-7 rounded-full bg-slate-200 peer-checked:bg-emerald-500 transition-colors">
+            <div class="absolute top-1 left-1 w-5 h-5 rounded-full bg-white transition-transform peer-checked:translate-x-5"></div>
+          </div>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -162,13 +162,9 @@ def build_indicators_context(
     start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
     end_dt = timezone.make_aware(datetime.combine(query_end_date, datetime.min.time()))
 
-    # 生成日期字符串列表 (MM-DD)
-    # 如果跨年，可能需要显示年份，这里暂时保持 MM-DD，或者根据跨度决定
-    date_fmt = "%m-%d"
-    if start_date.year != end_date.year:
-        date_fmt = "%Y-%m-%d"
-        
-    date_strs = [(start_date + timedelta(days=i)).strftime(date_fmt) for i in range(delta_days + 1)]
+    display_date_fmt = "%m-%d"
+    date_list = [start_date + timedelta(days=i) for i in range(delta_days + 1)]
+    date_strs = [d.strftime(display_date_fmt) for d in date_list]
 
     # 2. 获取常规指标数据
     charts = {}
@@ -187,12 +183,12 @@ def build_indicators_context(
         data_map = {}
         for m in page.object_list:
             local_dt = timezone.localtime(m.measured_at)
-            d_str = local_dt.strftime(date_fmt)
+            d = local_dt.date()
             val = getattr(m, value_key)
             if val is not None:
-                data_map[d_str] = float(val)
+                data_map[d] = float(val)
         
-        return [data_map.get(d, 0) for d in date_strs]
+        return [data_map.get(d, 0) for d in date_list]
 
     # SpO2
     spo2_data = get_daily_values(MetricType.BLOOD_OXYGEN)
@@ -321,17 +317,15 @@ def build_indicators_context(
     med_map = {}
     for m in med_page.object_list:
         local_dt = timezone.localtime(m.measured_at)
-        d_str = local_dt.strftime(date_fmt)
-        med_map[d_str] = True 
+        med_map[local_dt.date()] = True 
 
     medication_data = []
     med_count = 0
     # 重构 medication_data 循环，同时生成 display_date 和 real_date
-    for i in range(delta_days + 1):
-        day_date = start_date + timedelta(days=i)
-        d_str = day_date.strftime(date_fmt)
-        
-        taken = med_map.get(d_str, False)
+    for day_date in date_list:
+        d_str = day_date.strftime(display_date_fmt)
+
+        taken = med_map.get(day_date, False)
         if taken:
             med_count += 1
             
@@ -412,8 +406,8 @@ def build_indicators_context(
                 questionnaire_code=code,
             )
             # Map results to date_strs
-            score_map = {res['date'].strftime(date_fmt): res['score'] for res in results}
-            data = [float(score_map.get(d, 0)) for d in date_strs]
+            score_map = {res["date"]: res["score"] for res in results}
+            data = [float(score_map.get(d, 0)) for d in date_list]
         except Exception as e:
             logger.error(f"Failed to fetch questionnaire scores for {code}: {e}")
             data = [0] * len(date_strs)
@@ -455,10 +449,9 @@ def build_indicators_context(
         # 结果映射到日期
         flag_map = {}
         for item in hemoptysis_flags:
-            d_str = item['date'].strftime(date_fmt)
-            flag_map[d_str] = "有" if item['has_hemoptysis'] else "无"
+            flag_map[item["date"]] = "有" if item["has_hemoptysis"] else "无"
             
-        blood_table_row = [flag_map.get(d, "-") for d in date_strs]
+        blood_table_row = [flag_map.get(d, "-") for d in date_list]
         
     except Exception as e:
         logger.error(f"Failed to fetch hemoptysis flags: {e}")

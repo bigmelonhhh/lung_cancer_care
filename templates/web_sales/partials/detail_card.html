@@ -1,12 +1,12 @@
 <div class="space-y-6">
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="lg:col-span-2 space-y-6">
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6">
+      <div data-ws-card class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <div class="flex items-center gap-3 min-w-0">
             <button
               type="button"
-              class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-200 transition"
+              class="ws-tap-target inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 bg-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-200 transition ws-active-bg"
               onclick="webSalesGoBackToDashboard()"
               aria-label="返回到首页"
               aria-keyshortcuts="Esc"
@@ -19,7 +19,7 @@
             </button>
             <div class="min-w-0">
               <p class="text-sm uppercase text-slate-400 tracking-widest">基础信息</p>
-              <h2 class="text-xl font-semibold text-slate-900 mt-1 truncate">{{ patient.name }}</h2>
+              <h2 data-ws-page-title class="text-xl font-semibold text-slate-900 mt-1 truncate">{{ patient.name }}</h2>
             </div>
           </div>
           <span class="inline-flex items-center px-3 py-1 rounded-full bg-sky-100 text-sky-600 text-sm">
@@ -44,7 +44,7 @@
             <dd class="font-medium text-slate-800 mt-2">
               <select
                 name="doctor_id"
-                class="w-full md:w-2/3 rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                class="ws-tap-target w-full md:w-2/3 rounded-2xl border border-slate-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100"
                 hx-post="{% url 'web_sales:update_patient_doctor' patient.id %}"
                 hx-trigger="change"
                 hx-target="#doctor-update-toast"
@@ -62,7 +62,7 @@
         </dl>
       </div>
 
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6">
+      <div data-ws-card class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
             <p class="text-sm uppercase text-slate-400 tracking-widest">紧急联系人</p>
@@ -87,7 +87,7 @@
     </div>
 
     <div class="space-y-6">
-      <div class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 flex flex-col items-center text-center">
+      <div data-ws-card class="bg-white rounded-3xl shadow-xl border border-slate-200 p-6 flex flex-col items-center text-center">
         <h3 class="text-lg font-semibold text-slate-900 mb-2">绑定二维码</h3>
         <p class="text-sm text-slate-500 mb-6">患者扫码后即可绑定专属档案</p>
         {% if qrcode_url %}
@@ -100,7 +100,7 @@
         </div>
         <button
           type="button"
-          class="px-4 py-2 rounded-xl bg-rose-500 text-white text-sm hover:bg-rose-400 transition"
+          class="ws-tap-target px-4 py-2 rounded-xl bg-rose-500 text-white text-sm hover:bg-rose-400 transition ws-active-bg"
           hx-get="{% url 'web_sales:patient_detail' patient.id %}"
           hx-target="#main-content-area"
           hx-swap="innerHTML"
