@@ -10,7 +10,7 @@ def create_menu():
                 "url": (
                     "https://open.weixin.qq.com/connect/oauth2/authorize"
                     "?appid=wx3a562cd7118f6fd5"
-                    "&redirect_uri=http%3A%2F%2Feric.dagimed.com%2Fp%2Fhome%2F"
+                    "&redirect_uri=http%3A%2F%2Fzencare.imht.site%2Fp%2Fhome%2F"
                     "&response_type=code"
                     "&scope=snsapi_base"
                     "&state=STATE#wechat_redirect"
@@ -22,7 +22,7 @@ def create_menu():
                 "url": (
                     "https://open.weixin.qq.com/connect/oauth2/authorize"
                     "?appid=wx3a562cd7118f6fd5"
-                    "&redirect_uri=http%3A%2F%2Feric.dagimed.com%2Fp%2Fdashboard%2F"
+                    "&redirect_uri=http%3A%2F%2Fzencare.imht.site%2Fp%2Fdashboard%2F"
                     "&response_type=code"
                     "&scope=snsapi_base"
                     "&state=STATE#wechat_redirect"
