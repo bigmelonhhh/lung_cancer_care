@@ -19,27 +19,33 @@ import os
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.urls import include, path
 
 from business_support.views import smartwatch_data_callback
 
 def wechat_verify_view(request):
     # 文件名必须与微信后台提供的一致
-    filename = "MP_verify_CHZvy99Xmr1t237O.txt"
+    filename = getattr(settings, "WECHAT_VERIFY_FILENAME", "")
+    if not filename:
+        raise Http404("WeChat verify filename not configured.")
     # 拼接文件的完整路径 (假设文件在项目根目录，即 BASE_DIR)
     file_path = os.path.join(settings.BASE_DIR, filename)
-    
-    
-    with open(file_path, 'r') as f:
+    if not os.path.exists(file_path):
+        raise Http404("WeChat verify file not found.")
+
+    with open(file_path, "r") as f:
         content = f.read()
     # 微信要求返回纯文本内容
     return HttpResponse(content, content_type="text/plain")
     
 
-urlpatterns = [
+urlpatterns = []
 
-    path('MP_verify_CHZvy99Xmr1t237O.txt', wechat_verify_view),
+if getattr(settings, "WECHAT_VERIFY_FILENAME", ""):
+    urlpatterns.append(path(settings.WECHAT_VERIFY_FILENAME, wechat_verify_view))
+
+urlpatterns += [
 
     path('admin/', admin.site.urls),
     
