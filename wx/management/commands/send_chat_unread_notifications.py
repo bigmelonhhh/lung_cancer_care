@@ -1,4 +1,4 @@
-"""Send unread chat notifications to WeChat users."""
+"""Send unread chat notifications to watch devices."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from wx.services.chat_notifications import send_chat_unread_notifications
 
 
 class Command(BaseCommand):
-    help = "Send WeChat notifications for unread chat messages (default: 30s delay)."
+    help = "Send watch notifications for unread chat messages (default: 30s delay)."
 
     def add_arguments(self, parser) -> None:
         parser.add_argument(

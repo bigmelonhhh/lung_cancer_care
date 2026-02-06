@@ -4,6 +4,7 @@ from unittest.mock import patch
 from django.test import TestCase
 from django.utils import timezone
 
+from business_support.models import Device
 from chat.models import Conversation, ConversationReadState, Message, ConversationType, MessageSenderRole
 from users import choices as user_choices
 from users.models import CustomUser, DoctorProfile, DoctorStudio, PatientProfile
@@ -39,6 +40,11 @@ class ChatUnreadNotificationTests(TestCase):
             phone="18600001000",
             name="Patient Chat",
         )
+        Device.objects.create(
+            sn="SN_CHAT_001",
+            imei="IMEI_CHAT_001",
+            current_patient=self.patient_profile,
+        )
         self.conversation = Conversation.objects.create(
             patient=self.patient_profile,
             studio=self.studio,
@@ -71,15 +77,16 @@ class ChatUnreadNotificationTests(TestCase):
             created_at_offset_seconds=31,
         )
         with patch(
-            "wx.services.chat_notifications._send_wechat_text",
-            return_value=(True, None),
+            "wx.services.chat_notifications.SmartWatchService.send_message",
+            return_value=(True, "msg123"),
         ) as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertTrue(sent)
         log = SendMessageLog.objects.get(scene=SendMessageLog.Scene.CHAT_UNREAD)
-        self.assertEqual(log.channel, SendMessageLog.Channel.WECHAT)
+        self.assertEqual(log.channel, SendMessageLog.Channel.WATCH)
         self.assertEqual(log.payload.get("message_id"), message.id)
+        self.assertEqual(log.payload.get("msg_id"), "msg123")
         mock_send.assert_called_once()
 
     def test_no_notification_when_read(self):
@@ -92,7 +99,7 @@ class ChatUnreadNotificationTests(TestCase):
             user=self.patient_user,
             last_read_message=message,
         )
-        with patch("wx.services.chat_notifications._send_wechat_text") as mock_send:
+        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -105,7 +112,7 @@ class ChatUnreadNotificationTests(TestCase):
             created_at_offset_seconds=31,
             sender=self.patient_user,
         )
-        with patch("wx.services.chat_notifications._send_wechat_text") as mock_send:
+        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -119,21 +126,21 @@ class ChatUnreadNotificationTests(TestCase):
             sender_role=MessageSenderRole.PLATFORM_DOCTOR,
             created_at_offset_seconds=31,
         )
-        with patch("wx.services.chat_notifications._send_wechat_text") as mock_send:
+        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
         self.assertEqual(SendMessageLog.objects.count(), 0)
         mock_send.assert_not_called()
 
-    def test_no_notification_when_receive_wechat_message_disabled(self):
-        self.patient_user.is_receive_wechat_message = False
-        self.patient_user.save(update_fields=["is_receive_wechat_message"])
+    def test_no_notification_when_receive_watch_message_disabled(self):
+        self.patient_user.is_receive_watch_message = False
+        self.patient_user.save(update_fields=["is_receive_watch_message"])
         message = self._create_message(
             sender_role=MessageSenderRole.PLATFORM_DOCTOR,
             created_at_offset_seconds=31,
         )
-        with patch("wx.services.chat_notifications._send_wechat_text") as mock_send:
+        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -147,16 +154,16 @@ class ChatUnreadNotificationTests(TestCase):
         )
         SendMessageLog.objects.create(
             patient=self.patient_profile,
-            user=self.patient_user,
-            openid=self.patient_user.wx_openid,
-            channel=SendMessageLog.Channel.WECHAT,
+            user=None,
+            openid="",
+            channel=SendMessageLog.Channel.WATCH,
             scene=SendMessageLog.Scene.CHAT_UNREAD,
             biz_date=timezone.localdate(),
             content="已推送",
             payload={"message_id": message.id},
             is_success=True,
         )
-        with patch("wx.services.chat_notifications._send_wechat_text") as mock_send:
+        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -172,7 +179,7 @@ class ChatUnreadNotificationTests(TestCase):
             "wx.services.chat_notifications._acquire_debounce_lock",
             return_value=False,
         ) as mock_lock, patch(
-            "wx.services.chat_notifications._send_wechat_text"
+            "wx.services.chat_notifications.SmartWatchService.send_message"
         ) as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 

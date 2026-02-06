@@ -1,4 +1,4 @@
-"""聊天未读提醒（公众号推送）。"""
+"""聊天未读提醒（手表推送）。"""
 
 from __future__ import annotations
 
@@ -14,12 +14,15 @@ from chat.models import (
     Message,
     MessageSenderRole,
 )
+from business_support.models import Device
+from business_support.service.device import SmartWatchService
 from wx.models import SendMessageLog
 
 
 _DEFAULT_DELAY_SECONDS = 30
 _DEFAULT_LIMIT = 200
 _UNREAD_CONTENT = "您有新的医生消息，请及时查看。"
+_WATCH_TITLE = "消息"
 
 
 def schedule_chat_unread_notification(
@@ -48,7 +51,7 @@ def send_chat_unread_notification_for_message(
     as_of: datetime | None = None,
     delay_seconds: int = _DEFAULT_DELAY_SECONDS,
 ) -> bool:
-    """针对单条消息判断未读并推送。"""
+    """针对单条消息判断未读并推送（手表）。"""
     if not message_id:
         return False
     if as_of is None:
@@ -81,8 +84,7 @@ def send_chat_unread_notification_for_message(
         not user
         or not user.is_active
         or not user.is_subscribe
-        or not getattr(user, "is_receive_wechat_message", True)
-        or not user.wx_openid
+        or not getattr(user, "is_receive_watch_message", True)
     ):
         return False
 
@@ -99,7 +101,7 @@ def send_chat_unread_notification_for_message(
 
     if SendMessageLog.objects.filter(
         scene=SendMessageLog.Scene.CHAT_UNREAD,
-        channel=SendMessageLog.Channel.WECHAT,
+        channel=SendMessageLog.Channel.WATCH,
         is_success=True,
         payload__message_id=message.id,
     ).exists():
@@ -112,12 +114,28 @@ def send_chat_unread_notification_for_message(
     ):
         return False
 
-    ok, error = _send_wechat_text(user.wx_openid, _UNREAD_CONTENT)
+    device = _get_watch_device(patient)
+    if not device:
+        _release_debounce_lock(
+            conversation_id=message.conversation_id,
+            user_id=user.id,
+        )
+        return False
+
+    device_no = device.imei or device.sn
+    if not device_no:
+        _release_debounce_lock(
+            conversation_id=message.conversation_id,
+            user_id=user.id,
+        )
+        return False
+
+    ok, error = _send_watch_message(device_no, _WATCH_TITLE, _UNREAD_CONTENT)
     SendMessageLog.objects.create(
         patient=patient,
-        user=user,
-        openid=user.wx_openid or "",
-        channel=SendMessageLog.Channel.WECHAT,
+        user=None,
+        openid="",
+        channel=SendMessageLog.Channel.WATCH,
         scene=SendMessageLog.Scene.CHAT_UNREAD,
         biz_date=timezone.localdate(message.created_at) if message.created_at else None,
         content=_UNREAD_CONTENT,
@@ -126,9 +144,11 @@ def send_chat_unread_notification_for_message(
             "conversation_id": message.conversation_id,
             "sender_role": int(message.sender_role_snapshot or 0),
             "message_created_at": message.created_at.isoformat() if message.created_at else None,
+            "device_no": device_no,
+            "msg_id": error if ok else None,
         },
         is_success=ok,
-        error_message=error or "",
+        error_message="" if ok else str(error or ""),
     )
     if not ok:
         _release_debounce_lock(
@@ -145,7 +165,7 @@ def send_chat_unread_notifications(
     limit: int = _DEFAULT_LIMIT,
 ) -> int:
     """
-    扫描未读消息并推送公众号提醒。
+    扫描未读消息并推送手表提醒。
 
     规则：
     - 仅患者会话（PATIENT_STUDIO）。
@@ -192,8 +212,7 @@ def send_chat_unread_notifications(
             not user
             or not user.is_active
             or not user.is_subscribe
-            or not getattr(user, "is_receive_wechat_message", True)
-            or not user.wx_openid
+            or not getattr(user, "is_receive_watch_message", True)
         ):
             continue
 
@@ -209,25 +228,43 @@ def send_chat_unread_notifications(
             continue
 
         content = _UNREAD_CONTENT
-        ok, error = _send_wechat_text(user.wx_openid, content)
+
+        device = _get_watch_device(patient)
+        if not device:
+            _release_debounce_lock(
+                conversation_id=conversation.id,
+                user_id=user.id,
+            )
+            continue
+        device_no = device.imei or device.sn
+        if not device_no:
+            _release_debounce_lock(
+                conversation_id=conversation.id,
+                user_id=user.id,
+            )
+            continue
+
+        ok, error = _send_watch_message(device_no, _WATCH_TITLE, content)
         payload = {
             "message_id": message.id,
             "conversation_id": conversation.id,
             "sender_role": int(message.sender_role_snapshot or 0),
             "message_created_at": message.created_at.isoformat(),
+            "device_no": device_no,
+            "msg_id": error if ok else None,
         }
         logs.append(
             SendMessageLog(
                 patient=patient,
-                user=user,
-                openid=user.wx_openid or "",
-                channel=SendMessageLog.Channel.WECHAT,
+                user=None,
+                openid="",
+                channel=SendMessageLog.Channel.WATCH,
                 scene=SendMessageLog.Scene.CHAT_UNREAD,
                 biz_date=message.created_at.date() if message.created_at else None,
                 content=content,
                 payload=payload,
                 is_success=ok,
-                error_message=error or "",
+                error_message="" if ok else str(error or ""),
             )
         )
         if not ok:
@@ -250,7 +287,7 @@ def _load_sent_message_ids(messages: Iterable[Message]) -> Set[int]:
         return set()
     existing = SendMessageLog.objects.filter(
         scene=SendMessageLog.Scene.CHAT_UNREAD,
-        channel=SendMessageLog.Channel.WECHAT,
+        channel=SendMessageLog.Channel.WATCH,
         is_success=True,
         payload__message_id__in=message_ids,
     ).values_list("payload__message_id", flat=True)
@@ -281,20 +318,27 @@ def _load_read_state_map(messages: Iterable[Message]) -> Dict[Tuple[int, int], i
     }
 
 
-def _send_wechat_text(openid: str, content: str) -> tuple[bool, str | None]:
-    """
-    发送公众号文本消息。
-    如需替换为模板消息，可在此处统一调整。
-    """
-    if not openid:
-        return False, "缺少 openid"
+def _send_watch_message(device_no: str, title: str, content: str) -> tuple[bool, str | None]:
+    if not device_no:
+        return False, "缺少设备号"
     try:
-        from wx.services.client import wechat_client
-
-        wechat_client.message.send_text(openid, content)
-        return True, None
+        return SmartWatchService.send_message(device_no, title, content)
     except Exception as exc:  # pragma: no cover - 网络/配置异常
         return False, str(exc)
+
+
+def _get_watch_device(patient) -> Device | None:
+    watch_devices = getattr(patient, "watch_devices", None)
+    if watch_devices:
+        return watch_devices[0]
+    return (
+        patient.devices.filter(
+            is_active=True,
+            device_type=Device.DeviceType.WATCH,
+        )
+        .order_by("-bind_at")
+        .first()
+    )
 
 
 def _acquire_debounce_lock(
