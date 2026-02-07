@@ -75,25 +75,33 @@
   <div class="px-4 -mt-14 relative z-20 space-y-6">
     <a
       href="{% if is_member %}{% url 'web_patient:consultation_chat' %}{% else %}{{ buy_url }}{% endif %}"
+      onclick="return handleConsultationEntry(event);"
       class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
     >
       <div class="flex items-center gap-4 relative z-10">
-        <div
-          class="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200"
-        >
-          <svg
-            class="w-6 h-6"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        <div class="relative">
+          <div
+            class="w-12 h-12 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-emerald-200"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2.5"
-              d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
-            />
-          </svg>
+            <svg
+              class="w-6 h-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2.5"
+                d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+              />
+            </svg>
+          </div>
+          {% with count=unread_chat_count|default:0 %}
+          <span id="unread-badge" class="absolute top-[-10px] right-[-5px] bg-red-500 text-white text-xs rounded-full px-1.5 min-w-[1.25rem] h-5 flex items-center justify-center leading-5" style="{% if count > 0 %}display:flex{% else %}display:none{% endif %}">
+            {% if count > 99 %}99+{% else %}{{ count }}{% endif %}
+          </span>
+          {% endwith %}
         </div>
         <div>
           <div class="flex items-center gap-2">
@@ -705,6 +713,7 @@
 <script>
   const IS_MEMBER = {{ is_member|yesno:"true,false" }};
   const BUY_URL = "{{ buy_url|escapejs }}";
+  let UNREAD_CHAT_COUNT = parseInt('{{ unread_chat_count|default:0 }}', 10) || 0;
 
   function handleMemberOnlyNavigation(event) {
     if (IS_MEMBER) {
@@ -831,5 +840,68 @@
         }
     }
   }
+
+  function setUnreadBadge(count) {
+    UNREAD_CHAT_COUNT = count;
+    const badge = document.getElementById('unread-badge');
+    if (!badge) return;
+    if (count > 0) {
+      badge.style.display = 'inline-block';
+      badge.textContent = count > 99 ? '99+' : String(count);
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  function fetchUnreadCount() {
+    if (!IS_MEMBER) return;
+    const badge = document.getElementById('unread-badge');
+    if (badge) badge.classList.add('animate-pulse');
+    fetch("{% url 'web_patient:chat_api_unread_count' %}")
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.status === 'success' && typeof data.count === 'number') {
+          setUnreadBadge(data.count);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (badge) badge.classList.remove('animate-pulse');
+      });
+  }
+
+  function handleConsultationEntry(event) {
+    const href = event.currentTarget.getAttribute('href');
+    if (!IS_MEMBER) {
+      return handleMemberOnlyNavigation(event);
+    }
+    event.preventDefault();
+    if (UNREAD_CHAT_COUNT > 0) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      fetch("{% url 'web_patient:chat_api_reset_unread' %}", {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        signal: controller.signal
+      })
+      .then(() => setUnreadBadge(0))
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(timeout);
+        window.location.href = href;
+      });
+      return false;
+    } else {
+      window.location.href = href;
+      return false;
+    }
+  }
+
+  window.addEventListener('pageshow', function() {
+    fetchUnreadCount();
+  });
 </script>
 {% endblock %}

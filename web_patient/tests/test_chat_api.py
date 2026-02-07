@@ -34,6 +34,13 @@ class ChatApiTests(TestCase):
         self.studio = DoctorStudio.objects.create(name='Test Studio', owner_doctor=self.doctor_profile)
         self.doctor_profile.studio = self.studio
         self.doctor_profile.save()
+        self.doctor_user2 = User.objects.create_user(
+            username='doctor_member',
+            password='password',
+            user_type=UserType.DOCTOR,
+            phone='13800000001'
+        )
+        self.doctor_profile2 = DoctorProfile.objects.create(user=self.doctor_user2, name='Dr Member', studio=self.studio)
         
         # Assign patient to studio
         PatientStudioAssignment.objects.create(
@@ -97,3 +104,22 @@ class ChatApiTests(TestCase):
              self.assertNotEqual(response.status_code, 200)
          finally:
              logging.disable(logging.NOTSET)
+
+    def test_doctor_first_then_patient_sends_role_is_patient_side(self):
+        from chat.services.chat import ChatService
+        svc = ChatService()
+        conv = svc.get_or_create_patient_conversation(self.patient)
+        svc.create_text_message(conv, self.doctor_user2, "Doctor first")
+        response = self.client.post(
+            self.send_url,
+            json.dumps({'content': "Patient reply", 'role': 'patient'}),
+            content_type='application/json'
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.get(self.list_url)
+        data = response.json()
+        self.assertEqual(data['status'], 'success')
+        self.assertTrue(len(data['messages']) >= 2)
+        last = data['messages'][-1]
+        self.assertEqual(last['text_content'], "Patient reply")
+        self.assertTrue(last['is_patient_side'])

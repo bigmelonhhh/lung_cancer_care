@@ -16,6 +16,7 @@ from django.utils import timezone  # 处理时区转换
 
 from core.service.tasks import get_daily_plan_summary
 from core.models import choices as core_choices
+from . import chat_api
 
 # 定义计划类型与健康指标的映射关系
 PLAN_METRIC_MAPPING = {
@@ -272,6 +273,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     listData = {}
     # 今日步数
     step_count = "0"
+    unread_chat_count = 0
     if patient_id and is_member:
         try:
             listData = HealthMetricService.query_last_metric(int(patient_id))
@@ -282,6 +284,11 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     step_count = steps_info.get('value_display', '0')
         except Exception as e:
             listData = {}
+    if patient_id and is_member:
+        try:
+            unread_chat_count = chat_api.get_unread_chat_count(patient, request.user)
+        except Exception:
+            unread_chat_count = 0
             
     # 遍历计划列表，仅更新刚刚完成的任务
     for plan in daily_plans:
@@ -397,6 +404,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "patient_id": patient_id,
         "menuUrl": task_url_mapping,
         "step_count": step_count,
+        "unread_chat_count": unread_chat_count,
     }
     return render(request, "web_patient/patient_home.html", context)
 

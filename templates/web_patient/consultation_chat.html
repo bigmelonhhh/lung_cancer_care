@@ -167,6 +167,8 @@
             defaultDoctorAvatar: 'https://ui-avatars.com/api/?name=Doc&background=94a3b8&color=fff',
             lastMessageId: null,
             pollInterval: null,
+            currentRole: '{{ is_family|yesno:"family,patient" }}',
+            roleLocked: true,
 
             init() {
                 this.loadMessages();
@@ -174,10 +176,12 @@
                 this.$watch('messages', () => this.scrollToBottom());
             },
 
-                    // 判断是否为“患者侧”（本人或家属消息）
-                    isSelf(msg) {
-                        return !!(msg && msg.is_patient_side);
-                    },
+            isSelf(msg) {
+                if (!msg) return false;
+                if (msg.is_patient_side === true) return true;
+                if (msg.sender_id && this.currentUserId && msg.sender_id === this.currentUserId) return true;
+                return false;
+            },
 
             getDoctorAvatar(msg) {
                 // Future: Use real doctor avatar if available in message payload
@@ -235,12 +239,17 @@
             async sendMessage() {
                 const text = this.inputText.trim();
                 if (!text) return;
+                if (!this.currentRole) {
+                    alert('身份未确定，发送失败');
+                    return;
+                }
 
                 // Optimistic update
                 const tempId = -Date.now();
                 const tempMsg = {
                     id: tempId,
                     sender_id: this.currentUserId,
+                    is_patient_side: true,
                     content_type: 'text',
                     text_content: text,
                     created_at: new Date().toISOString(),
@@ -258,7 +267,7 @@
                             'Content-Type': 'application/json',
                             'X-CSRFToken': '{{ csrf_token }}'
                         },
-                        body: JSON.stringify({ content: text })
+                        body: JSON.stringify({ content: text, role: this.currentRole })
                     });
                     const data = await res.json();
                     
@@ -288,15 +297,21 @@
             async uploadImage(event) {
                 const file = event.target.files[0];
                 if (!file) return;
+                if (!this.currentRole) {
+                    alert('身份未确定，发送失败');
+                    return;
+                }
 
                 const formData = new FormData();
                 formData.append('image', file);
+                formData.append('role', this.currentRole);
 
                 // Optimistic update (show placeholder)
                  const tempId = -Date.now();
                  const tempMsg = {
                     id: tempId,
                     sender_id: this.currentUserId,
+                    is_patient_side: true,
                     content_type: 'image',
                     image_url: URL.createObjectURL(file), // Local preview
                     created_at: new Date().toISOString(),

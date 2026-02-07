@@ -78,4 +78,6 @@ urlpatterns = [
     path("chat/api/messages/send/", chat_api.send_text_message, name="chat_api_send_text"),
     path("chat/api/messages/upload/", chat_api.upload_image_message, name="chat_api_upload_image"),
     path("chat/api/messages/read/", chat_api.mark_read, name="chat_api_mark_read"),
+    path("chat/api/unread-count/", chat_api.unread_count, name="chat_api_unread_count"),
+    path("chat/api/reset-unread/", chat_api.reset_unread, name="chat_api_reset_unread"),
 ]

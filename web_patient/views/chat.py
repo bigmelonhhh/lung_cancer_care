@@ -14,10 +14,14 @@ def consultation_chat(request: HttpRequest) -> HttpResponse:
     """
     patient = request.patient
     patient_id = request.GET.get("patient_id") or (patient.id if patient else None)
+    is_family = True
+    if patient and patient.user_id == request.user.id:
+        is_family = False
     
     context = {
         "patient": patient,
         "patient_id": patient_id,
         "chat_title": get_patient_chat_title(patient),
+        "is_family": is_family,
     }
     return render(request, "web_patient/consultation_chat.html", context)

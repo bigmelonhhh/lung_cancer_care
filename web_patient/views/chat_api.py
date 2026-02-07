@@ -7,6 +7,8 @@ from chat.services.chat import ChatService
 from chat.models import MessageContentType
 from users.decorators import check_patient, auto_wechat_login
 from web_patient.views.chat import get_patient_chat_title
+from users.models import CustomUser
+from users.models import PatientProfile
 
 
 def _format_datetime_for_display(dt) -> str:
@@ -77,18 +79,22 @@ def send_text_message(request: HttpRequest):
     try:
         data = json.loads(request.body)
         content = data.get('content')
+        role = data.get('role')
         
         conversation = service.get_or_create_patient_conversation(patient=patient)
         message = service.create_text_message(conversation, request.user, content)
         
-        return JsonResponse({
+        resp = {
             'status': 'success',
             'message': {
                 'id': message.id,
                 'created_at': message.created_at.isoformat(),
                 'created_at_display': _format_datetime_for_display(message.created_at),
             }
-        })
+        }
+        if role:
+            resp['role_echo'] = role
+        return JsonResponse(resp)
     except ValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     except Exception as e:
@@ -104,11 +110,12 @@ def upload_image_message(request: HttpRequest):
     
     try:
         image_file = request.FILES.get('image')
+        role = request.POST.get('role')
         
         conversation = service.get_or_create_patient_conversation(patient=patient)
         message = service.create_image_message(conversation, request.user, image_file)
         
-        return JsonResponse({
+        resp = {
             'status': 'success',
             'message': {
                 'id': message.id,
@@ -116,7 +123,10 @@ def upload_image_message(request: HttpRequest):
                 'created_at_display': _format_datetime_for_display(message.created_at),
                 'image_url': message.image.url
             }
-        })
+        }
+        if role:
+            resp['role_echo'] = role
+        return JsonResponse(resp)
     except ValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
     except Exception as e:
@@ -137,6 +147,37 @@ def mark_read(request: HttpRequest):
         conversation = service.get_or_create_patient_conversation(patient=patient)
         service.mark_conversation_read(conversation, request.user, last_message_id)
         
+        return JsonResponse({'status': 'success'})
+    except ValidationError as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def get_unread_chat_count(patient: PatientProfile, user: CustomUser) -> int:
+    service = ChatService()
+    try:
+        conversation = service.get_or_create_patient_conversation(patient=patient)
+        return service.get_unread_count(conversation, user)
+    except Exception:
+        return 0
+
+@require_GET
+@auto_wechat_login
+@check_patient
+def unread_count(request: HttpRequest):
+    patient = request.patient
+    count = get_unread_chat_count(patient, request.user)
+    return JsonResponse({'status': 'success', 'count': count})
+
+@require_POST
+@auto_wechat_login
+@check_patient
+def reset_unread(request: HttpRequest):
+    patient = request.patient
+    service = ChatService()
+    try:
+        conversation = service.get_or_create_patient_conversation(patient=patient)
+        state = service.mark_conversation_read(conversation, request.user, None)
         return JsonResponse({'status': 'success'})
     except ValidationError as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
