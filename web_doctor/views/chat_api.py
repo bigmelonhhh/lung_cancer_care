@@ -7,7 +7,8 @@ from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from chat.services.chat import ChatService
-from chat.models import Conversation
+from chat.models import Conversation, MessageSenderRole
+from users.models import PatientRelation
 from users.decorators import check_doctor_or_assistant
 from users.models.patient_profile import PatientProfile
 
@@ -22,13 +23,33 @@ def _format_datetime_for_display(dt) -> str:
     return local_dt.strftime("%Y-%m-%d %H:%M")
 
 
+def _normalize_family_sender_name(msg) -> str:
+    try:
+        if msg.sender_role_snapshot == MessageSenderRole.FAMILY:
+            relation = PatientRelation.objects.filter(
+                patient=getattr(msg.conversation, "patient", None),
+                user=msg.sender,
+                is_active=True,
+            ).first()
+            name = ""
+            label = "家属"
+            if relation:
+                name = relation.name or ""
+                label = relation.relation_name or relation.get_relation_type_display() or "家属"
+            if not name:
+                name = getattr(msg.sender, "display_name", "") or msg.sender_display_name_snapshot or ""
+            return f"{name}({label})"
+    except Exception:
+        pass
+    return msg.sender_display_name_snapshot
+
 def _serialize_message(msg) -> dict:
     created_at_iso = msg.created_at.isoformat() if getattr(msg, "created_at", None) else ""
     return {
         "id": msg.id,
         "sender_id": msg.sender_id,
         "sender_role": msg.sender_role_snapshot,
-        "sender_name": msg.sender_display_name_snapshot,
+        "sender_name": _normalize_family_sender_name(msg),
         "studio_name": msg.studio_name_snapshot,
         "content_type": msg.content_type,
         "text_content": msg.text_content,

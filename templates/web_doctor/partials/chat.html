@@ -50,7 +50,7 @@
         <div class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 lg:p-4 2xl:p-5 space-y-4 doctor-chat-scroll" id="chat-messages-container" x-ref="messagesContainer">
             <template x-for="msg in messages" :key="msg.id">
                 <div class="flex flex-col" :class="isMyMessage(msg) ? 'items-end' : 'items-start'">
-                    <!-- 时间戳 (可选: 仅当时间间隔较大时显示) -->
+                    <!-- 时间戳 (可选: 仅当时间间隔较大时显示) --> 
                     <div class="text-xs text-slate-300 mb-1 text-center w-full" x-text="msg.created_at_display || formatTime(msg.created_at)"></div>
                     
                     <div class="flex max-w-[95%]" :class="isMyMessage(msg) ? 'flex-row-reverse' : 'flex-row'">
