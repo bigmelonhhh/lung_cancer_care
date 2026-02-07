@@ -36,10 +36,7 @@ def main():
     total_lines = 0
     total_files = 0
 
-    print(f"Starting code count in: {ROOT_DIR}")
-    print(f"Counting file types: {', '.join(FILE_EXTENSIONS)}")
-    print(f"Ignoring directories: {', '.join(IGNORE_DIRS)}")
-    print("-" * 50)
+    
 
     for root, dirs, files in os.walk(ROOT_DIR):
         # Remove ignored directories from the walk
@@ -57,14 +54,7 @@ def main():
                     total_files += 1
 
     # Print the results
-    print(f"{'File Type':<15} {'Files':<10} {'Lines of Code':<15}")
-    print("-" * 50)
-    for ext in sorted(line_counts.keys()):
-        print(f"{ext:<15} {file_counts[ext]:<10} {line_counts[ext]:<15}")
-
-    print("-" * 50)
-    print(f"{'Total':<15} {total_files:<10} {total_lines:<15}")
-    print("-" * 50)
+    
 
 if __name__ == "__main__":
     main()
