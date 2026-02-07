@@ -3,8 +3,8 @@
   <div class="bg-white border border-dashed border-slate-200 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6">
     <img src="{{ qrcode_url }}" alt="销售专属二维码" class="w-48 h-48 object-contain border border-slate-200 rounded-xl shadow-sm bg-white" loading="lazy">
     <div>
-      <p class="text-lg font-semibold text-slate-900">{{ sales.name }}的专用二维码</p>
-      <p class="text-sm text-slate-500 mt-2">将此二维码转发给客户，扫码即可直接绑定您的销售身份（以客户第一次扫码绑定为准）。</p>
+      <p class="text-lg font-semibold text-slate-900">CRC({{ sales.name }})的专用二维码</p>
+      <p class="text-sm text-slate-500 mt-2">请患者扫描此二维码进行注册</p>
     </div>
   </div>
   {% endif %}
