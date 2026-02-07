@@ -531,7 +531,7 @@ function submitCheckup() {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        提交中...
+        提交中... 
     `;
 
     fetch("{% url 'web_patient:record_checkup' %}", {
@@ -542,19 +542,27 @@ function submitCheckup() {
         },
         body: formData
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
+    .then(async (response) => {
+        let data = null;
+        try {
+            data = await response.json();
+        } catch (e) {
+            data = null;
+        }
+        if (!response.ok) {
+            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : '服务器异常，请联系管理员';
+            showStatus(msg, 'error');
+            submitBtn.disabled = false;
+            submitBtn.innerText = originalText;
+            return;
+        }
+        if (data && data.code === 200) {
             submitBtn.innerText = "上传成功";
             submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
             submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
             showStatus('上传成功，即将返回...', 'success');
-            
-            // 设置刷新标志，用于上一页数据刷新
             localStorage.setItem('refresh_flag', 'true');
-            
             setTimeout(() => {
-                // 优先返回上一页
                 if (document.referrer && document.referrer.includes(window.location.host)) {
                     history.back();
                 } else {
@@ -562,14 +570,15 @@ function submitCheckup() {
                 }
             }, 500);
         } else {
-            showStatus(data.message || '上传失败，请重试', 'error');
+            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : '上传失败，请重试';
+            showStatus(msg, 'error');
             submitBtn.disabled = false;
             submitBtn.innerText = originalText;
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        showStatus('网络错误，请检查网络连接后重试', 'error');
+        showStatus('网络不可用或服务器未响应', 'error');
         submitBtn.disabled = false;
         submitBtn.innerText = originalText;
     });

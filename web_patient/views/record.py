@@ -890,57 +890,65 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
         as_of_date=today,
     )
 
-    # 查询有效期内复查任务（支持 7 天内补交）
-    tasks = (
+    # 查询有效期内复查任务（近 7 天，仅 pending）
+    pending_qs = (
         DailyTask.objects.filter(
             patient=patient,
             task_date__range=(window_start, window_end),
             task_type=PlanItemCategory.CHECKUP,
+            status=TaskStatus.PENDING,
         )
-        .exclude(
-            status__in=[
-                TaskStatus.NOT_STARTED,
-                TaskStatus.TERMINATED,
-            ]
-        )
-        .order_by("task_date")
+        .order_by("task_date", "id")
     )
 
     if request.method == "POST":
         try:
             with transaction.atomic():
-                valid_files = []
-                for _, files in request.FILES.lists():
+                # 解析按任务分组的上传文件：字段形如 images_{task_id}
+                task_files_map = {}
+                for field_name, files in request.FILES.lists():
+                    if not field_name.startswith("images_"):
+                        continue
+                    try:
+                        task_id = int(field_name.split("_", 1)[1])
+                    except (ValueError, IndexError):
+                        continue
                     for f in files:
+                        # 校验文件
                         if f.size > 10 * 1024 * 1024:
                             logging.warning(f"File {f.name} too large: {f.size}")
                             continue
                         ext = os.path.splitext(f.name)[1].lower()
-                        if ext in ['.jpg', '.jpeg', '.png']:
-                            valid_files.append(f)
-                        else:
+                        if ext not in [".jpg", ".jpeg", ".png"]:
                             logging.warning(f"Invalid file type: {f.name}")
-
-                if not valid_files:
+                            continue
+                        task_files_map.setdefault(task_id, []).append(f)
+ 
+                # 汇总有效文件总数
+                total_valid = sum(len(v) for v in task_files_map.values())
+                if total_valid == 0:
+                    # 业务错误：未检测到有效文件，HTTP 200 + 业务 code
                     if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                        return JsonResponse({"status": "error", "message": "未检测到有效的图片上传"}, status=400)
+                        return JsonResponse({"code": 400, "msg": "未检测到有效的图片上传"})
                     messages.error(request, "未检测到有效的图片上传")
                     return redirect(request.path)
-
-                # 准备图片数据列表
+ 
+                # 保存所有图片并构造上传负载（保持 record_type=CHECKUP，report_date=today）
                 image_payloads = []
-                for f in valid_files:
-                    file_path = f"checkup_reports/{patient.id}/{today}/{uuid.uuid4()}{os.path.splitext(f.name)[1].lower()}"
-                    saved_path = default_storage.save(file_path, ContentFile(f.read()))
-                    image_url = default_storage.url(saved_path)
-                    image_payloads.append(
-                        {
-                            "image_url": image_url,
-                            "record_type": ReportImage.RecordType.CHECKUP,
-                            "report_date": today,
-                        }
-                    )
-
+                for task_id, files in task_files_map.items():
+                    for f in files:
+                        file_path = f"checkup_reports/{patient.id}/{today}/{uuid.uuid4()}{os.path.splitext(f.name)[1].lower()}"
+                        saved_path = default_storage.save(file_path, ContentFile(f.read()))
+                        image_url = default_storage.url(saved_path)
+                        image_payloads.append(
+                            {
+                                "image_url": image_url,
+                                "record_type": ReportImage.RecordType.CHECKUP,
+                                "report_date": today,
+                            }
+                        )
+ 
+                # 创建上传批次（不传 checkup_item_id，避免 service 层按项目再次自动核销误完成）
                 ReportUploadService.create_upload(
                     patient=patient,
                     images=image_payloads,
@@ -948,27 +956,71 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                     upload_source=UploadSource.CHECKUP_PLAN,
                     uploader_role=UploaderRole.PATIENT,
                 )
-
+ 
+                # 即时完成实际有图片的任务
+                now_ts = timezone.now()
+                affected_task_ids = [tid for tid, files in task_files_map.items() if files]
+                if affected_task_ids:
+                    for task in DailyTask.objects.filter(id__in=affected_task_ids):
+                        payload = task.interaction_payload or {}
+                        task.status = TaskStatus.COMPLETED
+                        task.completed_at = now_ts
+                        task.interaction_payload = payload
+                        task.save(update_fields=["status", "completed_at", "interaction_payload"])
+ 
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                    # AJAX 请求返回 JSON
-                    return JsonResponse({
-                        "status": "success",
-                        "redirect_url": reverse('web_patient:patient_home')
-                    })
-
+                    return JsonResponse({"code": 200, "msg": "OK", "redirect_url": reverse('web_patient:patient_home')})
+ 
                 messages.success(request, "复查报告上传成功")
                 return redirect('web_patient:patient_home')
-    
         except Exception as e:
             logging.error(f"复查上报失败: {e}", exc_info=True)
             if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                return JsonResponse({"status": "error", "message": str(e)}, status=500)
+                return JsonResponse({"code": 500, "msg": "服务器异常，请联系管理员", "detail": str(e)}, status=500)
             messages.error(request, "上传失败，请重试")
             return redirect(request.path)
 
-    # 构造前端所需的数据结构
+    # 构造前端所需的数据结构（筛选两条：今日最早 + 非今日最早，按 (plan_date, checkup_item_id) 去重）
+    # 解析 pending 任务，提取 checkup_item_id
+    def _resolve_checkup_id(task_obj):
+        if getattr(task_obj, "plan_item_id", None):
+            try:
+                return int(task_obj.plan_item.template_id)
+            except Exception:
+                pass
+        try:
+            return int((task_obj.interaction_payload or {}).get("checkup_id")) if (task_obj.interaction_payload or {}).get("checkup_id") else None
+        except Exception:
+            return None
+ 
+    # 去重集合
+    seen_keys = set()
+    selected_tasks = []
+    # 今日最早
+    for t in pending_qs:
+        if t.task_date != today:
+            continue
+        cid = _resolve_checkup_id(t)
+        key = (t.task_date, cid)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        selected_tasks.append(t)
+        break
+    # 非今日最早（7 天内）
+    for t in pending_qs:
+        if t.task_date >= today:
+            continue
+        cid = _resolve_checkup_id(t)
+        key = (t.task_date, cid)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        selected_tasks.append(t)
+        break
+ 
     checkup_items = []
-    for task in tasks:
+    for task in selected_tasks:
         # 获取该任务已上传的图片
         uploaded_images = []
         payload = task.interaction_payload or {}
@@ -1002,7 +1054,9 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
             "id": task.id,
             "name": task.title,
             "is_completed": task.status == TaskStatus.COMPLETED,
-            "existing_images": uploaded_images
+            "existing_images": uploaded_images,
+            "checkup_item_id": _resolve_checkup_id(task),
+            "plan_date": task.task_date.strftime("%Y-%m-%d"),
         })
 
     context = {

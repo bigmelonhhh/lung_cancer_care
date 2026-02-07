@@ -93,13 +93,12 @@ class RecordCheckupTests(TestCase):
         
         self.assertEqual(response.status_code, 200)
         json_response = response.json()
-        self.assertEqual(json_response['status'], 'success')
+        self.assertEqual(json_response['code'], 200)
         
-        # 验证数据库变更
-        # 1. 任务状态保持未完成（归档时再匹配）
+        # 验证数据库变更：任务即时完成
         self.task.refresh_from_db()
-        self.assertEqual(self.task.status, TaskStatus.PENDING)
-        self.assertIsNone(self.task.completed_at)
+        self.assertEqual(self.task.status, TaskStatus.COMPLETED)
+        self.assertIsNotNone(self.task.completed_at)
         
         # 2. ReportUpload 创建
         uploads = ReportUpload.objects.all()
@@ -123,10 +122,10 @@ class RecordCheckupTests(TestCase):
                 HTTP_X_REQUESTED_WITH='XMLHttpRequest'
             )
             
-            # 视图中如果没有任何任务上传了图片，返回 400
-            self.assertEqual(response.status_code, 400)
+            # 业务错误：HTTP 200 + 业务 code=400
+            self.assertEqual(response.status_code, 200)
             json_response = response.json()
-            self.assertEqual(json_response['status'], 'error')
+            self.assertEqual(json_response['code'], 400)
             
             # 验证任务状态未改变
             self.task.refresh_from_db()
@@ -154,8 +153,9 @@ class RecordCheckupTests(TestCase):
                 HTTP_X_REQUESTED_WITH='XMLHttpRequest'
             )
             
-            # 后端会忽略非法文件。如果所有文件都非法，则相当于没有上传文件，返回 400
-            self.assertEqual(response.status_code, 400)
+            # 后端会忽略非法文件。如果所有文件都非法，则相当于没有上传文件：HTTP 200 + 业务 code=400
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json().get('code'), 400)
             
             # 验证没有创建图片记录
             self.assertEqual(ReportImage.objects.count(), 0)
@@ -191,14 +191,16 @@ class RecordCheckupTests(TestCase):
         )
         
         self.assertEqual(response.status_code, 200)
+        json_response = response.json()
+        self.assertEqual(json_response.get('code'), 200)
         
         # 验证两个任务都已完成
         self.task.refresh_from_db()
         task2.refresh_from_db()
-        self.assertEqual(self.task.status, TaskStatus.PENDING)
-        self.assertEqual(task2.status, TaskStatus.PENDING)
-        self.assertIsNone(self.task.completed_at)
-        self.assertIsNone(task2.completed_at)
+        self.assertEqual(self.task.status, TaskStatus.COMPLETED)
+        self.assertEqual(task2.status, TaskStatus.COMPLETED)
+        self.assertIsNotNone(self.task.completed_at)
+        self.assertIsNotNone(task2.completed_at)
         
         # 验证只创建一个 ReportUpload
         self.assertEqual(ReportUpload.objects.count(), 1)
@@ -228,6 +230,7 @@ class RecordCheckupTests(TestCase):
                 )
                 
                 self.assertEqual(response.status_code, 500)
+                self.assertEqual(response.json().get('code'), 500)
                 
                 # 验证任务状态未改变（已回滚）
                 self.task.refresh_from_db()
@@ -236,8 +239,54 @@ class RecordCheckupTests(TestCase):
                 # 验证没有残留数据
                 self.assertEqual(ReportUpload.objects.count(), 0)
         finally:
-            # Restore logger level
             django_logger.setLevel(previous_level)
+
+    def test_record_checkup_pending_selection_two_items(self):
+        """测试近7天任务筛选仅展示今日最早与非今日最早"""
+        # 创建近7天内的任务：1条已完成 + 2条pending，今日再新增1条pending
+        from datetime import timedelta
+        yesterday = self.today - timedelta(days=1)
+        two_days_ago = self.today - timedelta(days=2)
+        # 已完成
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=two_days_ago,
+            task_type=PlanItemCategory.CHECKUP,
+            title="已完成任务",
+            status=TaskStatus.COMPLETED,
+            interaction_payload={"checkup_id": self.checkup_lib.id}
+        )
+        # 2条pending（非今日）
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=yesterday,
+            task_type=PlanItemCategory.CHECKUP,
+            title="昨日任务A",
+            status=TaskStatus.PENDING,
+            interaction_payload={"checkup_id": self.checkup_lib.id}
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=yesterday,
+            task_type=PlanItemCategory.CHECKUP,
+            title="昨日任务B",
+            status=TaskStatus.PENDING,
+            interaction_payload={"checkup_id": self.checkup_lib.id}
+        )
+        # 今日新增1条pending（与setUp中已有的形成今日多条）
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=self.today,
+            task_type=PlanItemCategory.CHECKUP,
+            title="今日任务B",
+            status=TaskStatus.PENDING,
+            interaction_payload={"checkup_id": self.checkup_lib.id}
+        )
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+        items = response.context['checkup_items']
+        # 仅展示2条：今日最早 + 非今日最早
+        self.assertEqual(len(items), 2)
 
     def test_delete_report_image(self):
         """测试删除已上传图片"""
