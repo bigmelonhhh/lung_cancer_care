@@ -227,6 +227,20 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
                     f"体温数据保存成功: patient_id={patient_id}, weight={weight_val}"
                 )
                 
+                try:
+                    date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
+                    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                    day_cache = metric_plan_cache.get(date_key) or {}
+                    day_cache["temperature"] = {
+                        "status": "completed",
+                        "subtitle": f"已记录：{weight_val}°C"
+                    }
+                    metric_plan_cache[date_key] = day_cache
+                    request.session["metric_plan_cache"] = metric_plan_cache
+                    request.session.modified = True
+                except Exception:
+                    pass
+                
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({
@@ -333,6 +347,20 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 )
                 logging.info(f"血氧数据保存成功: patient_id={patient_id}")
                 
+                try:
+                    date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
+                    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                    day_cache = metric_plan_cache.get(date_key) or {}
+                    day_cache["bp_hr"] = {
+                        "status": "completed",
+                        "subtitle": f"已记录：血压{ssy_val}/{szy_val}mmHg，心率{heart_val}"
+                    }
+                    metric_plan_cache[date_key] = day_cache
+                    request.session["metric_plan_cache"] = metric_plan_cache
+                    request.session.modified = True
+                except Exception:
+                    pass
+                
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({
@@ -433,6 +461,20 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                 logging.info(
                     f"血氧数据保存成功: patient_id={patient_id}, weight={weight_val}"
                 )
+                
+                try:
+                    date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
+                    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                    day_cache = metric_plan_cache.get(date_key) or {}
+                    day_cache["spo2"] = {
+                        "status": "completed",
+                        "subtitle": f"已记录：{weight_val}%"
+                    }
+                    metric_plan_cache[date_key] = day_cache
+                    request.session["metric_plan_cache"] = metric_plan_cache
+                    request.session.modified = True
+                except Exception:
+                    pass
 
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -533,6 +575,20 @@ def record_weight(request: HttpRequest) -> HttpResponse:
                 logging.info(
                     f"体重数据保存成功: patient_id={patient_id}, weight={weight_val}"
                 )
+                
+                try:
+                    date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
+                    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                    day_cache = metric_plan_cache.get(date_key) or {}
+                    day_cache["weight"] = {
+                        "status": "completed",
+                        "subtitle": f"已记录：{weight_val}kg"
+                    }
+                    metric_plan_cache[date_key] = day_cache
+                    request.session["metric_plan_cache"] = metric_plan_cache
+                    request.session.modified = True
+                except Exception:
+                    pass
 
                 # AJAX 请求返回 JSON
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -967,6 +1023,20 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                         task.completed_at = now_ts
                         task.interaction_payload = payload
                         task.save(update_fields=["status", "completed_at", "interaction_payload"])
+                
+                try:
+                    date_key = today.strftime("%Y-%m-%d")
+                    metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                    day_cache = metric_plan_cache.get(date_key) or {}
+                    day_cache["checkup"] = {
+                        "status": "completed",
+                        "subtitle": "已完成"
+                    }
+                    metric_plan_cache[date_key] = day_cache
+                    request.session["metric_plan_cache"] = metric_plan_cache
+                    request.session.modified = True
+                except Exception:
+                    pass
  
                 if request.headers.get("x-requested-with") == "XMLHttpRequest":
                     return JsonResponse({"code": 200, "msg": "OK", "redirect_url": reverse('web_patient:patient_home')})

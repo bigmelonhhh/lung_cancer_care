@@ -235,14 +235,18 @@
                 submitStatusText.textContent = `正在提交第 ${i + 1} / ${totalSubmissions} 个问卷...`;
                 
                 // Construct Payload for Single Submission
+                const urlParams = new URLSearchParams(window.location.search);
+                const selectedDate = urlParams.get('selected_date') || '';
                 const payload = {
                     patient_id: patientId,
                     questionnaire_id: parseInt(sId),
-                    answers: answers || [] // Ensure answers is not undefined
+                    answers: answers || [], // Ensure answers is not undefined
+                    selected_date: selectedDate
                 };
                 
                 try {
-                    const response = await fetch("{% url 'web_patient:submit_surveys' %}", {
+                    const submitUrl = selectedDate ? "{% url 'web_patient:submit_surveys' %}" + `?selected_date=${encodeURIComponent(selectedDate)}` : "{% url 'web_patient:submit_surveys' %}";
+                    const response = await fetch(submitUrl, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

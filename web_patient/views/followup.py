@@ -102,6 +102,20 @@ def submit_surveys(request: HttpRequest) -> JsonResponse:
                 questionnaire_id=q_id,
                 answers_data=answers
             )
+            try:
+                selected_date = request.GET.get("selected_date")
+                date_key = selected_date or timezone.localdate().strftime("%Y-%m-%d")
+                metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                day_cache = metric_plan_cache.get(date_key) or {}
+                day_cache["followup"] = {
+                    "status": "completed",
+                    "subtitle": "已完成"
+                }
+                metric_plan_cache[date_key] = day_cache
+                request.session["metric_plan_cache"] = metric_plan_cache
+                request.session.modified = True
+            except Exception:
+                pass
             # 返回 metric_data 供前端刷新首页状态
             return JsonResponse({
                 "success": True, 
