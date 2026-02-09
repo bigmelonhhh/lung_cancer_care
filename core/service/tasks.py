@@ -93,7 +93,11 @@ def get_daily_plan_summary(
             patient=patient,
             task_date__range=(min_window_start, task_date),
             task_type__in=task_types,
-            status=choices.TaskStatus.PENDING,
+        ) .exclude(
+            status__in=[
+                choices.TaskStatus.NOT_STARTED,
+                choices.TaskStatus.TERMINATED,
+            ]
         )
         .select_related("plan_item")
         .order_by("task_date", "id")

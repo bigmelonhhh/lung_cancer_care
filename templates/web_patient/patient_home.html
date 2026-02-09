@@ -903,5 +903,55 @@
   window.addEventListener('pageshow', function() {
     fetchUnreadCount();
   });
+  
+  window.addEventListener('message', function(e) {
+    const data = e.data || {};
+    if (data.type === 'CHECKUP_COMPLETION_UPDATED') {
+      if (data.allCompleted) {
+        const subtitleEl = document.getElementById('plan-subtitle-checkup');
+        if (subtitleEl) subtitleEl.textContent = '已完成近 7 天复查任务';
+        const actionEl = document.getElementById('plan-action-checkup');
+        if (actionEl) actionEl.innerHTML = '';
+      } else {
+        const subtitleEl = document.getElementById('plan-subtitle-checkup');
+        if (subtitleEl) subtitleEl.textContent = '请及时完成您的复查任务';
+      }
+      refreshMetricData();
+    }
+  });
+  
+  window.addEventListener('pageshow', function() {
+    try {
+      const flag = localStorage.getItem('checkup_all_completed');
+      if (flag) {
+        if (flag === 'true') {
+          const subtitleEl = document.getElementById('plan-subtitle-checkup');
+          if (subtitleEl) subtitleEl.textContent = '已完成近 7 天复查任务';
+          const actionEl = document.getElementById('plan-action-checkup');
+          if (actionEl) actionEl.innerHTML = '';
+        } else {
+          const subtitleEl = document.getElementById('plan-subtitle-checkup');
+          if (subtitleEl) subtitleEl.textContent = '请及时完成您的复查任务';
+        }
+        refreshMetricData();
+        localStorage.removeItem('checkup_all_completed');
+      }
+    } catch(e) {}
+  });
+  
+  function triggerHomeRefreshFromFlag() {
+    try {
+      const flag = localStorage.getItem('refresh_flag');
+      if (flag === 'true') {
+        refreshMetricData();
+        localStorage.removeItem('refresh_flag');
+      }
+    } catch(e) {}
+  }
+  window.addEventListener('pageshow', triggerHomeRefreshFromFlag);
+  window.addEventListener('popstate', triggerHomeRefreshFromFlag);
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) triggerHomeRefreshFromFlag();
+  });
 </script>
 {% endblock %}

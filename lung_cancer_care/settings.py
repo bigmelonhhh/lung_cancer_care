@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 import os
 import sys
+import time
+import shutil
+import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -21,6 +25,60 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "logs"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+# ========== 新增：Windows兼容的日志处理器 ==========
+class WindowsSafeRotatingFileHandler(RotatingFileHandler):
+    """
+    修复Windows下RotatingFileHandler的文件占用问题
+    重写doRollover方法，增加重试机制和文件句柄释放
+    """
+    def doRollover(self):
+        # 先关闭当前文件流
+        if self.stream:
+            self.stream.close()
+            self.stream = None
+        
+        # 短暂延迟，确保文件句柄释放
+        time.sleep(0.1)
+        
+        # 处理日志备份文件
+        if self.backupCount > 0:
+            for i in range(self.backupCount - 1, 0, -1):
+                sfn = self.rotation_filename(f"{self.baseFilename}.{i}")
+                dfn = self.rotation_filename(f"{self.baseFilename}.{i + 1}")
+                if os.path.exists(sfn):
+                    if os.path.exists(dfn):
+                        os.remove(dfn)
+                    # 使用shutil.move替代os.rename，提高Windows兼容性
+                    try:
+                        shutil.move(sfn, dfn)
+                    except PermissionError:
+                        # 如果移动失败，跳过该文件
+                        pass
+        
+            # 处理最新的备份文件
+            dfn = self.rotation_filename(f"{self.baseFilename}.1")
+            if os.path.exists(dfn):
+                try:
+                    os.remove(dfn)
+                except PermissionError:
+                    pass
+            
+            # 尝试重命名当前日志文件，增加重试机制
+            max_attempts = 3
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    shutil.move(self.baseFilename, dfn)
+                    break
+                except PermissionError:
+                    attempts += 1
+                    time.sleep(0.1)
+        
+        # 重新打开新的日志文件
+        self.mode = 'w'
+        self.stream = self._open()
+
+# ========== 原有配置保持不变 ==========
 DJANGO_ENV = os.getenv("DJANGO_ENV", "development").lower()
 LOG_LEVEL = os.getenv("DJANGO_LOG_LEVEL", "INFO").upper()
 ALLOWED_HOSTS_RAW = os.getenv("ALLOWED_HOSTS", "")
@@ -30,11 +88,6 @@ if DJANGO_ENV != "production" and not ALLOWED_HOSTS:
 
 WEB_BASE_URL = os.getenv("WEB_BASE_URL", "http://localhost:8001").rstrip("/")
 TEST_PATIENT_ID = os.getenv("TEST_PATIENT_ID") or None
-WECHAT_VERIFY_FILENAME = (os.getenv("WECHAT_VERIFY_FILENAME") or "").strip()
-WECHAT_DAILY_TASK_TEMPLATE_ID = os.getenv(
-    "WECHAT_DAILY_TASK_TEMPLATE_ID",
-    "aNWInDmh-VbJsLXqxF2Msf7uLbFROre76xw_951y2V0",
-)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
@@ -45,9 +98,7 @@ SECRET_KEY = 'django-insecure-$idrzn%uju_mymafcg9h76u&bq!*2uhs2-yk-!(9i#!+e5x*3=
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = DJANGO_ENV != "production"
 
-
 # Application definition
-
 INSTALLED_APPS = [
     'lung_cancer_care.admin_site.LungCancerAdminConfig',
     'django.contrib.auth',
@@ -97,7 +148,6 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'users.middleware.PatientContextMiddleware',
     'lung_cancer_care.middleware.RequestLogMiddleware',
-    
 ]
 
 ROOT_URLCONF = 'lung_cancer_care.urls'
@@ -119,10 +169,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'lung_cancer_care.wsgi.application'
 
-
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
-
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
@@ -151,7 +199,7 @@ EMBED_TOKEN = os.getenv("EMBED_TOKEN", "")
 
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",  # <--- 改成这个
+        "BACKEND": "django_redis.cache.RedisCache",
         "LOCATION": f"redis://{_redis_auth}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
@@ -159,10 +207,8 @@ CACHES = {
     }
 }
 
-
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
-
 AUTH_PASSWORD_VALIDATORS = [
     {
         'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
@@ -178,11 +224,8 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
-
-
 LANGUAGE_CODE = "zh-hans"
 TIME_ZONE = "Asia/Shanghai"
 USE_I18N = True
@@ -190,13 +233,8 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
-
 STATIC_URL = 'static/'
-
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
-
+STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
 
@@ -210,12 +248,10 @@ WX_MCH_ID = os.getenv("WX_MCH_ID")
 WX_MCH_KEY = os.getenv("WX_MCH_KEY")
 WX_PAY_NOTIFY_URL = os.getenv("WX_PAY_NOTIFY_URL")
 
-
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
-
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'users.CustomUser'
 
@@ -223,12 +259,17 @@ LOGIN_URL = 'web_doctor:login'
 LOGIN_REDIRECT_URL = 'web_doctor:doctor_dashboard'
 LOGOUT_REDIRECT_URL = 'web_doctor:login'
 
+# ========== 修改后的日志配置 ==========
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
         "json": {
             "()": "lung_cancer_care.logging_utils.JsonFormatter",
+        },
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
         },
     },
     "handlers": {
@@ -237,83 +278,49 @@ LOGGING = {
             "formatter": "json",
         },
         "file": {
-            "class": "logging.handlers.TimedRotatingFileHandler",
+            "level": "INFO",
+            # 使用自定义的Windows安全日志处理器
+            "class": __name__ + ".WindowsSafeRotatingFileHandler",
             "filename": LOG_DIR / "lung_cancer_care.log",
-            "when": "midnight",
-            "interval": 1,
-            "backupCount": 20,
-            "formatter": "json",
-            "encoding": "utf-8", # 建议加上编码
+            "maxBytes": 10 * 1024 * 1024,  # 10MB
+            "backupCount": 10,
+            "encoding": "utf-8",
+            "formatter": "json",  # 保持你原有的json格式化器
         },
     },
-    "root": {  # 新增
+    "root": {
         "handlers": ["console", "file"],
         "level": "INFO",
     },
     "loggers": {
-        "django": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.server": {
-            "handlers": ["console", "file"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "django.request": {
-            "handlers": ["console", "file"],
-            "level": "ERROR",
-            "propagate": False,
-        },
         "lung_cancer_care": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "lung_cancer_care.request": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        # 【新增】专门打印 SQL 语句的配置
-        "django.db.backends": {
-            "handlers": ["console"],
+            "handlers": ["file"],
             "level": "INFO",
             "propagate": False,
         },
     },
 }
-
 
 # 测试环境下禁用控制台日志输出，避免污染测试结果
 if 'test' in sys.argv:
     LOGGING['handlers']['console'] = {'class': 'logging.NullHandler'}
     LOGGING['handlers']['file'] = {'class': 'logging.NullHandler'}
 
-
-#短信配置
+# 短信配置
 SMS_CONFIG = {
     'API_URL': os.environ.get('SMS_API_URL', 'http://124.172.234.157:8180/service.asmx/SendMessageStr'),
     'ORG_ID': os.environ.get('SMS_ORG_ID'),
     'USERNAME': os.environ.get('SMS_USERNAME'),
     'PASSWORD': os.environ.get('SMS_PASSWORD'), 
-    'SIGNATURE': '【岱劲信息】', # 建议配置签名，避免被拦截
+    'SIGNATURE': '【岱劲信息】',
 }
 
-#智能手表配置
+# 智能手表配置
 SMARTWATCH_CONFIG = {
     'APP_KEY': os.environ.get('SMARTWATCH_APP_KEY'),
     'APP_SECRET': os.environ.get('SMARTWATCH_APP_SECRET'),
-    'API_BASE_URL': 'https://apibff.scheartmed.com',  # [cite: 412]
+    'API_BASE_URL': 'https://apibff.scheartmed.com',
 }
-
-"""
-初始化数据库
-CREATE DATABASE IF NOT EXISTS `lung_cancer_care`
-  DEFAULT CHARACTER SET utf8mb4
-  DEFAULT COLLATE utf8mb4_0900_ai_ci;
-"""
 
 # shell_plus
 SHELL_PLUS = "ipython"
