@@ -943,6 +943,19 @@
     try {
       const flag = localStorage.getItem('refresh_flag');
       if (flag === 'true') {
+        try {
+          const metricRaw = localStorage.getItem('metric_data');
+          if (metricRaw) {
+            const metric = JSON.parse(metricRaw);
+            if (metric && metric.followup === 'completed') {
+              const subtitleEl = document.getElementById('plan-subtitle-followup');
+              if (subtitleEl) subtitleEl.textContent = '今日已完成';
+              const actionEl = document.getElementById('plan-action-followup');
+              if (actionEl) actionEl.innerHTML = '';
+            }
+            localStorage.removeItem('metric_data');
+          }
+        } catch(e) {}
         refreshMetricData();
         localStorage.removeItem('refresh_flag');
       }

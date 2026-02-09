@@ -4,8 +4,12 @@ from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.utils import timezone
 from users.decorators import auto_wechat_login, check_patient
 from core.service.questionnaire import QuestionnaireService
+from core.service import tasks as task_service
+from core.models import DailyTask
+from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from django.core.exceptions import ValidationError
 
@@ -18,29 +22,45 @@ def daily_survey(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】今日随访问卷 `/p/followup/daily/`
     """
-    # 1. 获取所有启用的问卷 ID
-    active_questionnaires = QuestionnaireService.get_active_questionnaires()
-    
-    # 根据URL参数过滤问卷
-    target_ids_str = request.GET.get('ids')
+    target_ids = None
+    target_ids_str = request.GET.get("ids")
     if target_ids_str:
         try:
-            target_ids = {int(i) for i in target_ids_str.split(',') if i.strip()}
-            original_count = len(active_questionnaires)
-            # 只保留在 active_questionnaires 中且在 target_ids 中的问卷
-            active_questionnaires = [q for q in active_questionnaires if q.id in target_ids]
-            logger.info(f"Filtered questionnaires for patient {request.patient.id}: {original_count} -> {len(active_questionnaires)}. Target IDs: {target_ids}")
+            target_ids = {int(i) for i in target_ids_str.split(",") if i.strip()}
         except ValueError:
-            logger.warning(f"Invalid questionnaire IDs provided for patient {request.patient.id}: {target_ids_str}")
+            target_ids = None
+            logger.warning(
+                f"Invalid questionnaire IDs provided for patient {request.patient.id}: {target_ids_str}"
+            )
 
-    survey_ids = [q.id for q in active_questionnaires]
+    today = timezone.localdate()
+    window_start, window_end = task_service.resolve_task_valid_window(
+        task_type=PlanItemCategory.QUESTIONNAIRE,
+        as_of_date=today,
+    )
+
+    pending_qs = DailyTask.objects.filter(
+        patient=request.patient,
+        task_type=PlanItemCategory.QUESTIONNAIRE,
+        task_date__range=(window_start, window_end),
+        status=TaskStatus.PENDING,
+        plan_item__isnull=False,
+    )
+    if target_ids:
+        pending_qs = pending_qs.filter(plan_item__template_id__in=target_ids)
+
+    survey_ids = list(
+        pending_qs.values_list("plan_item__template_id", flat=True).distinct()
+    )
 
     if not survey_ids:
         # 如果没有问卷，直接显示空状态或错误
         return render(request, "web_patient/followup/daily_survey.html", {
             "error": "暂无需要填写的随访问卷",
-            "survey_ids": [],
-            "all_surveys_data": None
+            "survey_ids": "[]",
+            "all_surveys_data": "[]",
+            "total_count": 0,
+            "patient_id": request.patient.id,
         })
 
     # 2. 一次性获取所有问卷的详情数据

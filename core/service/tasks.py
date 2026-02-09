@@ -132,6 +132,8 @@ def get_daily_plan_summary(
         if task_type == choices.PlanItemCategory.QUESTIONNAIRE:
             seen = set()
             for task in task_list:
+                if task.status != choices.TaskStatus.PENDING:
+                    continue
                 if not task.plan_item_id:
                     continue
                 questionnaire_id = task.plan_item.template_id
