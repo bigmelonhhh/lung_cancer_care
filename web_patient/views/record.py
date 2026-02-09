@@ -957,6 +957,17 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
         .order_by("task_date", "id")
     )
 
+    def _resolve_checkup_id(task_obj):
+        if getattr(task_obj, "plan_item_id", None):
+            try:
+                return int(task_obj.plan_item.template_id)
+            except Exception:
+                pass
+        try:
+            return int((task_obj.interaction_payload or {}).get("checkup_id")) if (task_obj.interaction_payload or {}).get("checkup_id") else None
+        except Exception:
+            return None
+
     if request.method == "POST":
         try:
             with transaction.atomic():
@@ -992,20 +1003,25 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                 # 保存所有图片并构造上传负载（保持 record_type=CHECKUP，report_date=today）
                 image_payloads = []
                 for task_id, files in task_files_map.items():
+                    checkup_id = None
+                    task_obj = DailyTask.objects.filter(id=task_id, patient=patient).first()
+                    if task_obj:
+                        checkup_id = _resolve_checkup_id(task_obj)
                     for f in files:
                         file_path = f"checkup_reports/{patient.id}/{today}/{uuid.uuid4()}{os.path.splitext(f.name)[1].lower()}"
                         saved_path = default_storage.save(file_path, ContentFile(f.read()))
                         image_url = default_storage.url(saved_path)
-                        image_payloads.append(
-                            {
-                                "image_url": image_url,
-                                "record_type": ReportImage.RecordType.CHECKUP,
-                                "report_date": today,
-                            }
-                        )
+                        payload = {
+                            "image_url": image_url,
+                            "record_type": ReportImage.RecordType.CHECKUP,
+                            "report_date": today,
+                        }
+                        if checkup_id:
+                            payload["checkup_item_id"] = checkup_id
+                        image_payloads.append(payload)
  
-                # 创建上传批次（不传 checkup_item_id，避免 service 层按项目再次自动核销误完成）
-                ReportUploadService.create_upload(
+                # 创建上传批次
+                upload = ReportUploadService.create_upload(
                     patient=patient,
                     images=image_payloads,
                     uploader=request.user,
@@ -1019,6 +1035,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                 if affected_task_ids:
                     for task in DailyTask.objects.filter(id__in=affected_task_ids):
                         payload = task.interaction_payload or {}
+                        payload["report_id"] = upload.id
                         task.status = TaskStatus.COMPLETED
                         task.completed_at = now_ts
                         task.interaction_payload = payload
@@ -1050,45 +1067,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
             messages.error(request, "上传失败，请重试")
             return redirect(request.path)
 
-    # 构造前端所需的数据结构（筛选两条：今日最早 + 非今日最早，按 (plan_date, checkup_item_id) 去重）
-    # 解析 pending 任务，提取 checkup_item_id
-    def _resolve_checkup_id(task_obj):
-        if getattr(task_obj, "plan_item_id", None):
-            try:
-                return int(task_obj.plan_item.template_id)
-            except Exception:
-                pass
-        try:
-            return int((task_obj.interaction_payload or {}).get("checkup_id")) if (task_obj.interaction_payload or {}).get("checkup_id") else None
-        except Exception:
-            return None
- 
-    # 去重集合
-    seen_keys = set()
-    selected_tasks = []
-    # 今日最早
-    for t in pending_qs:
-        if t.task_date != today:
-            continue
-        cid = _resolve_checkup_id(t)
-        key = (t.task_date, cid)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        selected_tasks.append(t)
-        break
-    # 非今日最早（7 天内）
-    for t in pending_qs:
-        if t.task_date >= today:
-            continue
-        cid = _resolve_checkup_id(t)
-        key = (t.task_date, cid)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        selected_tasks.append(t)
-        break
- 
+    selected_tasks = list(pending_qs)
     checkup_items = []
     for task in selected_tasks:
         # 获取该任务已上传的图片

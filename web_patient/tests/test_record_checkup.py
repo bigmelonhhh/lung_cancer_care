@@ -108,7 +108,8 @@ class RecordCheckupTests(TestCase):
         # 3. ReportImage 创建
         images = ReportImage.objects.filter(upload=upload)
         self.assertEqual(images.count(), 1)
-        self.assertIsNone(images.first().checkup_item)
+        # 现在视图会在可识别时携带 checkup_item_id，期望不为空
+        self.assertIsNotNone(images.first().checkup_item)
 
     def test_record_checkup_post_no_files(self):
         """测试未上传文件提交"""
@@ -285,8 +286,8 @@ class RecordCheckupTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
         items = response.context['checkup_items']
-        # 仅展示2条：今日最早 + 非今日最早
-        self.assertEqual(len(items), 2)
+        # 展示近7天全部 pending（含今日两条与昨日两条）
+        self.assertEqual(len(items), 4)
 
     def test_delete_report_image(self):
         """测试删除已上传图片"""

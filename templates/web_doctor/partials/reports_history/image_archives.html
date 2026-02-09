@@ -169,13 +169,13 @@
                     <div class="relative w-[160px] flex flex-col gap-2 image-item-data" 
                          data-id="{{ img.id }}"
                          x-data="{ 
-                             tempCat: '{{ img.category }}'.split('-')[0] || '',
-                             tempSub: '{{ img.category }}'.split('-')[1] || '',
+                             tempCat: '{{ img.record_type|default:"" }}',
+                             tempSub: '{{ img.sub_category|default:"" }}',
                              tempDate: '{{ img.report_date }}',
                              searchOpen: false,
                              searchQuery: ''
                          }"
-                         @reset-edit.window="tempCat = '{{ img.category }}'.split('-')[0] || ''; tempSub = '{{ img.category }}'.split('-')[1] || ''; tempDate = '{{ img.report_date }}'"
+                         @reset-edit.window="tempCat = '{{ img.record_type|default:"" }}'; tempSub = '{{ img.sub_category|default:"" }}'; tempDate = '{{ img.report_date }}'"
                     >
                         {# 图片本体 #}
                         <div class="w-full h-[160px] bg-slate-100 rounded-lg border border-slate-200 overflow-hidden relative cursor-pointer group/img"

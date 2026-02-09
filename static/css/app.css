@@ -1256,10 +1256,6 @@ video {
   height: 1px;
 }
 
-.h-2 {
-  height: 0.5rem;
-}
-
 .max-h-24 {
   max-height: 6rem;
 }
@@ -5160,12 +5156,12 @@ video {
     width: 50%;
   }
 
-  .md\:w-2\/3 {
-    width: 66.666667%;
-  }
-
   .md\:w-10 {
     width: 2.5rem;
+  }
+
+  .md\:w-2\/3 {
+    width: 66.666667%;
   }
 
   .md\:translate-x-0 {

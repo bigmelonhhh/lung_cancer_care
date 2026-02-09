@@ -197,12 +197,83 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
     # 优化：预加载当前页关联的图片和诊疗记录
     upload_ids = [u.id for u in uploads_page.object_list]
     
-    uploads_with_data = ReportUpload.objects.filter(id__in=upload_ids).prefetch_related(
+    uploads_with_data = (
+        ReportUpload.objects.filter(id__in=upload_ids)
+        .select_related("related_task", "related_task__plan_item")
+        .prefetch_related(
         Prefetch(
             'images',
             queryset=ReportImage.objects.select_related('clinical_event', 'checkup_item', 'archived_by', 'archived_by__user').order_by('id')
         )
-    ).order_by("-created_at")
+        )
+        .order_by("-created_at")
+    )
+
+    candidate_checkup_ids: set[int] = set()
+    candidate_checkup_names: set[str] = set()
+    upload_checkup_id: dict[int, int] = {}
+    upload_checkup_name: dict[int, str] = {}
+
+    for upload in uploads_with_data:
+        if upload.upload_source != UploadSource.CHECKUP_PLAN:
+            continue
+        task = getattr(upload, "related_task", None)
+        if not task:
+            continue
+
+        checkup_id = None
+        if getattr(task, "plan_item_id", None) and getattr(getattr(task, "plan_item", None), "template_id", None):
+            try:
+                checkup_id = int(task.plan_item.template_id)
+            except Exception:
+                checkup_id = None
+
+        if not checkup_id:
+            payload = task.interaction_payload or {}
+            raw_id = payload.get("checkup_id")
+            if raw_id not in (None, ""):
+                try:
+                    checkup_id = int(raw_id)
+                except Exception:
+                    checkup_id = None
+
+        if checkup_id:
+            upload_checkup_id[upload.id] = checkup_id
+            candidate_checkup_ids.add(checkup_id)
+            continue
+
+        title = (task.title or "").strip()
+        if title:
+            upload_checkup_name[upload.id] = title
+            candidate_checkup_names.add(title)
+
+    checkup_id_to_name: dict[int, str] = {}
+    if candidate_checkup_ids:
+        checkup_id_to_name = {
+            item.id: item.name
+            for item in CheckupLibrary.objects.filter(id__in=candidate_checkup_ids).only("id", "name")
+        }
+
+    checkup_name_exists: set[str] = set()
+    if candidate_checkup_names:
+        checkup_name_exists = set(
+            CheckupLibrary.objects.filter(name__in=candidate_checkup_names).values_list("name", flat=True)
+        )
+
+    upload_checkup_sub_name: dict[int, str] = {}
+    for upload in uploads_with_data:
+        if upload.upload_source != UploadSource.CHECKUP_PLAN:
+            continue
+        if upload.id in upload_checkup_id:
+            raw_name = checkup_id_to_name.get(upload_checkup_id[upload.id]) or ""
+            clean_name = raw_name.strip()
+            if clean_name:
+                upload_checkup_sub_name[upload.id] = clean_name
+            continue
+        if upload.id in upload_checkup_name:
+            raw_name = upload_checkup_name[upload.id]
+            if raw_name in checkup_name_exists:
+                upload_checkup_sub_name[upload.id] = raw_name
     
     # 2. 遍历上传记录，按日期聚合图片
     grouped_archives: Dict[tuple, Dict[str, Any]] = {}
@@ -243,6 +314,8 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
         
         for img in upload_images:
             category_str = ""
+            record_type_display = ""
+            sub_category = ""
             if img.record_type:
                 type_map = {
                     ReportImage.RecordType.OUTPATIENT: "门诊",
@@ -250,10 +323,17 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
                     ReportImage.RecordType.CHECKUP: "复查",
                 }
                 cat_name = type_map.get(img.record_type, "")
+                record_type_display = cat_name
                 category_str = cat_name
-                
-                if img.record_type == ReportImage.RecordType.CHECKUP and img.checkup_item:
-                    category_str = f"{cat_name}-{img.checkup_item.name}"
+
+                if img.record_type == ReportImage.RecordType.CHECKUP:
+                    if img.checkup_item and (img.checkup_item.name or "").strip():
+                        sub_category = img.checkup_item.name.strip()
+                    elif upload.upload_source == UploadSource.CHECKUP_PLAN:
+                        sub_category = upload_checkup_sub_name.get(upload.id, "")
+
+                    if sub_category:
+                        category_str = f"{cat_name}-{sub_category}"
             
             if not img.clinical_event:
                 current_group["is_archived"] = False
@@ -262,22 +342,19 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
                     current_group["archiver"] = img.archived_by.name or img.archived_by.user.username
                 if not current_group["archived_date"] and img.archived_at:
                     current_group["archived_date"] = img.archived_at.strftime("%Y-%m-%d")
-                
-                if not current_group["record_type"] and category_str:
-                    parts = category_str.split("-")
-                    current_group["record_type"] = parts[0]
-                    if len(parts) > 1:
-                        current_group["sub_category"] = parts[1]
-            
-            if not current_group["record_type"] and category_str:
-                 parts = category_str.split("-")
-                 current_group["record_type"] = parts[0]
+
+            if not current_group["record_type"] and record_type_display:
+                current_group["record_type"] = record_type_display
+            if not current_group["sub_category"] and sub_category:
+                current_group["sub_category"] = sub_category
 
             current_group["images"].append({
                 "id": img.id,
                 "name": f"图片-{img.id}", 
                 "url": img.image_url,
                 "category": category_str,
+                "record_type": record_type_display,
+                "sub_category": sub_category,
                 "report_date": img.report_date.strftime("%Y-%m-%d") if img.report_date else "",
                 "is_archived": bool(img.clinical_event)
             })
