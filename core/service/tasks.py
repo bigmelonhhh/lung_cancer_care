@@ -8,7 +8,7 @@ from typing import Any, Dict, Iterable, List
 from django.db import models
 from django.utils import timezone
 
-from core.models import DailyTask, MonitoringTemplate, choices
+from core.models import DailyTask, MonitoringTemplate, TreatmentCycle, choices
 from health_data.models import MetricType
 from users.models import PatientProfile
 
@@ -66,8 +66,16 @@ def get_daily_plan_summary(
       问卷类型会额外返回 questionnaire_ids（具体问卷 ID 列表）。
     """
 
-    if task_date is None:
+    is_default_date = task_date is None
+    if is_default_date:
         task_date = timezone.localdate()
+
+    in_cycle = TreatmentCycle.objects.filter(
+        patient=patient,
+        start_date__lte=task_date,
+    ).filter(models.Q(end_date__isnull=True) | models.Q(end_date__gte=task_date)).exists()
+    if not in_cycle:
+        return []
 
     task_types = (
         choices.PlanItemCategory.MEDICATION,
@@ -82,8 +90,11 @@ def get_daily_plan_summary(
         choices.PlanItemCategory.MEDICATION: task_date,
         choices.PlanItemCategory.MONITORING: task_date,
         choices.PlanItemCategory.CHECKUP: task_date
-        - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.CHECKUP]),
+        if not is_default_date
+        else task_date - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.CHECKUP]),
         choices.PlanItemCategory.QUESTIONNAIRE: task_date
+        if not is_default_date
+        else task_date
         - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.QUESTIONNAIRE]),
     }
     min_window_start = min(window_start_by_type.values())
