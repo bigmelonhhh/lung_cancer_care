@@ -71,6 +71,25 @@ class RecordCheckupTests(TestCase):
         self.assertEqual(response.context['checkup_items'][0]['name'], "血常规")
         self.assertEqual(response.context['checkup_items'][0]['id'], self.task.id)
 
+    def test_record_checkup_get_selected_date_only(self):
+        """测试健康日历入口：按 selected_date 仅返回当日未完成复查任务"""
+        from datetime import timedelta
+        yesterday = self.today - timedelta(days=1)
+        task_yesterday = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=yesterday,
+            task_type=PlanItemCategory.CHECKUP,
+            title="昨日血常规",
+            status=TaskStatus.PENDING,
+            interaction_payload={"checkup_id": self.checkup_lib.id},
+        )
+        response = self.client.get(self.url, {"selected_date": yesterday.strftime("%Y-%m-%d")})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["checkup_date"], yesterday.strftime("%Y-%m-%d"))
+        items = response.context["checkup_items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["id"], task_yesterday.id)
+
     def test_record_checkup_post_success(self):
         """测试成功上传图片并完成任务"""
         # 模拟图片文件

@@ -40,7 +40,7 @@
                 <div class="space-y-8">
                     {% regroup checkup_items by plan_date as date_groups %}
                     {% for group in date_groups %}
-                    <div class="rounded-xl border border-gray-100 p-4">
+                    <div class="rounded-xl ">
                         <div class="text-xs font-bold text-gray-500 mb-2">{{ group.grouper }}</div>
                         <div class="space-y-6">
                             {% for item in group.list %}
@@ -498,17 +498,17 @@ function submitCheckup() {
     const i18nEl = document.getElementById('i18n-texts');
     const T = (key, fallback) => (i18nEl?.dataset?.[key] || fallback);
 
-    // 当日分组校验：至少一项有图片（预览或已有）
-    const today = document.getElementById('checkup-date')?.textContent?.trim();
     const items = Array.from(document.querySelectorAll('.checkup-item'));
-    const todayItems = items.filter(el => el.getAttribute('data-date') === today);
-    const hasAnyUploadToday = todayItems.some(el => {
+    if (!items.length) {
+        showStatus(T('submitAtLeastOne', '请至少上传一项复查报告图片后再提交'), 'error');
+        return;
+    }
+
+    const hasAnyNewUpload = items.some(el => {
         const itemId = el.getAttribute('data-id');
-        const hasNew = uploads[itemId] && uploads[itemId].length > 0;
-        const hasExisting = (document.getElementById(`existing-container-${itemId}`)?.children?.length || 0) > 0;
-        return hasNew || hasExisting;
+        return uploads[itemId] && uploads[itemId].length > 0;
     });
-    if (!hasAnyUploadToday) {
+    if (!hasAnyNewUpload) {
         showStatus(T('submitAtLeastOne', '请至少上传一项复查报告图片后再提交'), 'error');
         return;
     }
