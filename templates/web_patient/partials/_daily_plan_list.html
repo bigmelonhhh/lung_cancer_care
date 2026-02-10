@@ -147,7 +147,13 @@
 
     <!-- Status Action -->
     <div id="plan-action-{{ plan.type }}">
-      {% if plan.status == 'completed' %}
+      {% if not action_enabled %}
+      <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      {% elif plan.status == 'completed' %}
       <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />

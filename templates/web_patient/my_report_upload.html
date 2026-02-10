@@ -261,11 +261,7 @@ function submitReport() {
             
             setTimeout(() => {
                 // 优先返回上一页
-                if (document.referrer && document.referrer.includes(window.location.host)) {
                     history.back();
-                } else {
-                    window.location.href = "{% url 'web_patient:report_list' %}";
-                }
             }, 500);
         } else {
             throw new Error('Upload failed');

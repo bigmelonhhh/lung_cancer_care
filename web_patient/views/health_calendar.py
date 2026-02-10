@@ -7,6 +7,7 @@ from django.utils import timezone
 from users.decorators import auto_wechat_login, check_patient
 from core.service.tasks import get_daily_plan_summary
 from core.models import choices as core_choices
+from core.service.treatment_cycle import get_active_treatment_cycle
 from health_data.models import MetricType, HealthMetric
 from health_data.services.health_metric import HealthMetricService
 from users.services.patient import PatientService
@@ -67,6 +68,15 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
             target_date = timezone.localdate()
     else:
         target_date = timezone.localdate()
+
+    active_cycle = get_active_treatment_cycle(patient)
+    action_enabled = False
+    if active_cycle:
+        cycle_end = active_cycle.end_date
+        if cycle_end is None:
+            action_enabled = target_date >= active_cycle.start_date
+        else:
+            action_enabled = active_cycle.start_date <= target_date <= cycle_end
         
     # 2. 获取该日期的计划摘要
     summary_list = []
@@ -295,6 +305,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
         "daily_plans": daily_plans,
         "menuUrl": task_url_mapping,
         "today": timezone.localdate(), # 用于前端判断是否是今天
+        "action_enabled": action_enabled,
     }
     
     # AJAX 请求返回局部模板

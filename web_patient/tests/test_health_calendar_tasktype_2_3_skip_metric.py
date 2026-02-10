@@ -10,6 +10,8 @@ from health_data.models import HealthMetric, MetricType
 from market.models import Order, Product
 from users import choices as user_choices
 from users.models import CustomUser, PatientProfile
+from core.models import TreatmentCycle
+from core.models import choices as core_choices
 
 
 class HealthCalendarTaskTypeSkipMetricTests(TestCase):
@@ -38,6 +40,14 @@ class HealthCalendarTaskTypeSkipMetricTests(TestCase):
         self.client.force_login(self.user)
         self.calendar_url = reverse("web_patient:health_calendar")
         self.today = timezone.localdate().strftime("%Y-%m-%d")
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="进行中疗程",
+            start_date=today,
+            end_date=today,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
 
     @patch("web_patient.views.health_calendar.get_daily_plan_summary")
     @patch("web_patient.views.health_calendar.HealthMetric.objects.filter")
