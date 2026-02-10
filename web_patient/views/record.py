@@ -939,6 +939,13 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     patient_id = patient.id or None
     today = timezone.localdate()
+    selected_date_str = (request.GET.get("selected_date") or "").strip()
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            selected_date = None
 
     task_service.refresh_task_statuses(as_of_date=today, patient_id=patient.id)
     window_start, window_end = task_service.resolve_task_valid_window(
@@ -946,16 +953,20 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
         as_of_date=today,
     )
 
-    # 查询有效期内复查任务（近 7 天，仅 pending）
-    pending_qs = (
-        DailyTask.objects.filter(
+    if selected_date is not None:
+        pending_qs = DailyTask.objects.filter(
+            patient=patient,
+            task_date=selected_date,
+            task_type=PlanItemCategory.CHECKUP,
+            status=TaskStatus.PENDING,
+        ).order_by("id")
+    else:
+        pending_qs = DailyTask.objects.filter(
             patient=patient,
             task_date__range=(window_start, window_end),
             task_type=PlanItemCategory.CHECKUP,
             status=TaskStatus.PENDING,
-        )
-        .order_by("task_date", "id")
-    )
+        ).order_by("task_date", "id")
 
     def _resolve_checkup_id(task_obj):
         if getattr(task_obj, "plan_item_id", None):
@@ -1000,13 +1011,16 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                     messages.error(request, "未检测到有效的图片上传")
                     return redirect(request.path)
  
-                # 保存所有图片并构造上传负载（保持 record_type=CHECKUP，report_date=today）
+                # 保存所有图片并构造上传负载（保持 record_type=CHECKUP）
                 image_payloads = []
                 for task_id, files in task_files_map.items():
                     checkup_id = None
                     task_obj = DailyTask.objects.filter(id=task_id, patient=patient).first()
+                    report_date = today
                     if task_obj:
                         checkup_id = _resolve_checkup_id(task_obj)
+                        if task_obj.task_date:
+                            report_date = task_obj.task_date
                     for f in files:
                         file_path = f"checkup_reports/{patient.id}/{today}/{uuid.uuid4()}{os.path.splitext(f.name)[1].lower()}"
                         saved_path = default_storage.save(file_path, ContentFile(f.read()))
@@ -1014,7 +1028,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                         payload = {
                             "image_url": image_url,
                             "record_type": ReportImage.RecordType.CHECKUP,
-                            "report_date": today,
+                            "report_date": report_date,
                         }
                         if checkup_id:
                             payload["checkup_item_id"] = checkup_id
@@ -1110,7 +1124,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     logging.info(f"检查复查计划: {checkup_items}")
     context = {
         "patient_id": patient_id,
-        "checkup_date": today.strftime("%Y-%m-%d"),
+        "checkup_date": (selected_date or today).strftime("%Y-%m-%d"),
         "checkup_items": checkup_items,
     }
 
