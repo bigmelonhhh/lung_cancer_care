@@ -6,11 +6,11 @@
     <div class="bg-white sticky top-0 z-30 border-b border-gray-100 shadow-sm">
         <div class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <a href="{% url 'web_patient:patient_dashboard' %}" class="text-gray-500 hover:text-gray-700">
+                <div  onclick="window.history.back()"  class="text-gray-500 hover:text-gray-700">
                     <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
                     </svg>
-                </a>
+                </div>
                 <h1 class="text-lg font-bold text-gray-900">检查报告</h1>
             </div>
             <a href="{% url 'web_patient:report_upload' %}" class="flex items-center gap-1 text-blue-600 font-medium text-sm bg-blue-50 px-3 py-1.5 rounded-full active:bg-blue-100 transition">

@@ -1340,10 +1340,6 @@ video {
   min-height: 40px;
 }
 
-.min-h-\[6rem\] {
-  min-height: 6rem;
-}
-
 .min-h-\[88px\] {
   min-height: 88px;
 }

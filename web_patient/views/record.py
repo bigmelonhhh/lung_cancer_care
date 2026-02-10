@@ -1107,7 +1107,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
             "checkup_item_id": _resolve_checkup_id(task),
             "plan_date": task.task_date.strftime("%Y-%m-%d"),
         })
-
+    logging.info(f"检查复查计划: {checkup_items}")
     context = {
         "patient_id": patient_id,
         "checkup_date": today.strftime("%Y-%m-%d"),
