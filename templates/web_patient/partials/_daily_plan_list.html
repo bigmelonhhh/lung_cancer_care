@@ -140,7 +140,7 @@
       <div>
         <h4 class="font-bold text-slate-800 text-base">{{ plan.title }}</h4>
         <p id="plan-subtitle-{{ plan.type }}" class="text-sm text-slate-500 mt-1 {% if plan.status == 'completed' %}text-emerald-600 font-medium{% endif %}">
-          {{ plan.subtitle }}
+          {% if plan.type == 'checkup' or plan.type == 'followup' %}{% if plan.status == 'completed' %}已完成{% else %}未完成{% endif %}{% else %}{{ plan.subtitle }}{% endif %}
         </p>
       </div>
     </div>

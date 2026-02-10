@@ -1,4 +1,5 @@
 from datetime import datetime, date
+import logging
 from django.shortcuts import render, redirect
 from django.urls import reverse
 from django.http import HttpRequest, HttpResponse
@@ -72,6 +73,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
     # 只有当目标日期不晚于今天时，才查询计划
     if target_date <= timezone.localdate():
         summary_list = get_daily_plan_summary(patient, task_date=target_date)
+        logging.info(f"[health_calendar] 获取计划摘要: {summary_list}")
     
     # 3. 获取该日期的具体指标数据（用于回显数值）
     # 注意：这里需要查询指定日期的指标，而不是最新指标
@@ -100,17 +102,31 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
             }
         return None
 
-    # 预加载所需的指标数据
-    metric_types_to_query = [
-        MetricType.BODY_TEMPERATURE,
-        MetricType.BLOOD_PRESSURE,
-        MetricType.HEART_RATE,
-        MetricType.BLOOD_OXYGEN,
-        MetricType.WEIGHT,
-        MetricType.USE_MEDICATED
-    ]
-    
-    for m_type in metric_types_to_query:
+    metric_types_to_query = set()
+    for item in summary_list:
+        task_type_val = item.get("task_type")
+        if task_type_val in (
+            core_choices.PlanItemCategory.CHECKUP,
+            core_choices.PlanItemCategory.QUESTIONNAIRE,
+        ):
+            continue
+
+        title_val = item.get("title") or ""
+        if "步数" in title_val:
+            continue
+        if "用药" in title_val:
+            metric_types_to_query.add(MetricType.USE_MEDICATED)
+        elif "体温" in title_val:
+            metric_types_to_query.add(MetricType.BODY_TEMPERATURE)
+        elif "血压" in title_val or "心率" in title_val:
+            metric_types_to_query.add(MetricType.BLOOD_PRESSURE)
+            metric_types_to_query.add(MetricType.HEART_RATE)
+        elif "血氧" in title_val:
+            metric_types_to_query.add(MetricType.BLOOD_OXYGEN)
+        elif "体重" in title_val:
+            metric_types_to_query.add(MetricType.WEIGHT)
+
+    for m_type in sorted(metric_types_to_query):
         daily_metrics[m_type] = query_metric_for_date(patient.id, m_type, target_date)
 
     metric_plan_cache = request.session.get("metric_plan_cache") or {}
@@ -123,6 +139,10 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
         status_val = item.get("status")
         is_completed = status_val == core_choices.TaskStatus.COMPLETED
         task_type_val = item.get("task_type")
+        skip_metric_query = task_type_val in (
+            core_choices.PlanItemCategory.CHECKUP,
+            core_choices.PlanItemCategory.QUESTIONNAIRE,
+        )
         
         # 默认值
         plan_data = {
@@ -178,7 +198,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
             action_url = reverse("web_patient:daily_survey")
             if q_ids:
                  ids_str = ",".join(map(str, q_ids))
-                 action_url = f"{action_url}?ids={ids_str}"
+                 action_url = f"{action_url}?ids={ids_str}" 
             plan_data.update({
                 "type": "followup",
                 "subtitle": "请及时完成随访" if not is_completed else "已完成",
@@ -194,14 +214,25 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
         else:
             continue
 
-        cached_plan = cached_plans.get(plan_data["type"]) if cached_plans else None
-        if cached_plan:
-            cached_status = cached_plan.get("status")
-            if cached_status in ("completed", "pending"):
-                plan_data["status"] = cached_status
-            cached_subtitle = cached_plan.get("subtitle")
-            if cached_subtitle:
-                plan_data["subtitle"] = cached_subtitle
+        if skip_metric_query:
+            plan_data["status"] = (
+                "completed"
+                if status_val == core_choices.TaskStatus.COMPLETED
+                else "pending"
+            )
+            if plan_data["type"] == "checkup":
+                plan_data["subtitle"] = "已完成" if plan_data["status"] == "completed" else "未完成"
+            if plan_data["type"] == "followup":
+                plan_data["subtitle"] = "已完成" if plan_data["status"] == "completed" else "未完成"
+        else:
+            cached_plan = cached_plans.get(plan_data["type"]) if cached_plans else None
+            if cached_plan:
+                cached_status = cached_plan.get("status")
+                if cached_status in ("completed", "pending"):
+                    plan_data["status"] = cached_status
+                cached_subtitle = cached_plan.get("subtitle")
+                if cached_subtitle:
+                    plan_data["subtitle"] = cached_subtitle
 
         # 尝试填充具体的数值（如果已完成）
         metric_config = None

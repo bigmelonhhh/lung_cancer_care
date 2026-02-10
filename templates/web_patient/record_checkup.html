@@ -26,33 +26,37 @@
         <div class="bg-white rounded-xl shadow-sm p-6 mb-4">
             <!-- Date -->
             <div class="mb-6">
-                <h2 class="text-base font-bold text-gray-800 mb-1">本次复查日期</h2>
-                <p class="text-2xl font-medium text-gray-500">{{ checkup_date }}</p>
+                <!-- 标题文案：运营可直接在HTML中修改 -->
+                <h2 class="text-base font-bold text-gray-800 mb-1">上传日期</h2>
+                <p id="checkup-date" class="text-2xl font-medium text-gray-500">{{ checkup_date }}</p>
             </div>
 
             <!-- Items -->
             <div>
-                <h2 class="text-base font-bold text-gray-800 mb-4">本次复查项目：</h2>
+                <!-- 标题文案：运营可直接在HTML中修改 -->
+                <h2 class="text-base font-bold text-gray-800 mb-4">上传复查结果：</h2>
                 
+                <!-- 按日期分组渲染：避免视觉混淆 -->
                 <div class="space-y-8">
-                    {% for item in checkup_items %}
-                    <div class="checkup-item" data-id="{{ item.id }}" data-name="{{ item.name }}">
-                        <div class="flex items-center justify-between mb-4">
-                            <h3 class="text-lg font-bold text-gray-800">{{ item.name }}</h3>
-                            {% if item.is_completed %}
-                            <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">已完成</span>
-                            {% else %}
-                            <span class="px-2 py-1 bg-gray-100 text-gray-500 text-xs rounded-full">待上传</span>
-                            {% endif %}
-                        </div>
+                    {% regroup checkup_items by plan_date as date_groups %}
+                    {% for group in date_groups %}
+                    <div class="rounded-xl border border-gray-100 p-4">
+                        <div class="text-xs font-bold text-gray-500 mb-2">{{ group.grouper }}</div>
+                        <div class="space-y-6">
+                            {% for item in group.list %}
+                            <div class="checkup-item" data-id="{{ item.id }}" data-name="{{ item.name }}" data-date="{{ item.plan_date }}">
+                                <div class="flex items-center justify-between mb-4">
+                                    <!-- 展示格式：名称(yyyy-mm-dd) -->
+                                    <h3 class="text-lg font-bold text-gray-800">{{ item.name }} ({{ item.plan_date }})</h3>
+                                </div>
 
                         <!-- 现有图片展示区域 -->
                         {% if item.existing_images %}
                         <div class="mb-4">
                             <p class="text-xs text-gray-500 mb-2">已上传图片：</p>
-                            <div class="flex gap-2 overflow-x-auto pb-2" id="existing-container-{{ item.id }}">
+                            <div class="grid grid-cols-3 gap-3 pb-2" id="existing-container-{{ item.id }}">
                                 {% for img in item.existing_images %}
-                                <div class="w-24 h-24 rounded-lg overflow-hidden border border-gray-200 relative group shrink-0" id="existing-img-{{ img.id }}">
+                                <div class="relative group rounded-lg overflow-hidden border border-gray-200 w-full aspect-square" id="existing-img-{{ img.id }}">
                                     <img src="{{ img.url }}" class="w-full h-full object-cover">
                                     <button type="button" 
                                             onclick="deleteExistingImage({{ img.id }}, '{{ item.id }}')"
@@ -68,9 +72,9 @@
                         {% endif %}
 
                         <!-- 图片预览区域 -->
-                        <div id="preview-container-{{ item.id }}" class="flex gap-2 overflow-x-auto pb-2 min-h-[6rem]">
+                        <div id="preview-container-{{ item.id }}" class="grid grid-cols-3 gap-3 pb-2">
                             <!-- 添加按钮 -->
-                            <div onclick="triggerUpload('{{ item.id }}')" class="flex flex-col w-24 h-24 bg-gray-50 border border-gray-200 rounded-lg  items-center justify-center cursor-pointer active:bg-gray-100 transition shrink-0">
+                            <div onclick="triggerUpload('{{ item.id }}')" class="flex flex-col w-full aspect-square bg-gray-50 border border-gray-200 rounded-lg items-center justify-center cursor-pointer active:bg-gray-100 transition">
                                 <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                 </svg>
@@ -83,7 +87,8 @@
                         
                         <!-- Error Message -->
                         <p id="error-{{ item.id }}" class="text-red-500 text-xs mt-2 hidden">请上传{{ item.name }}的检查报告照片</p>
-                    </div>
+                            </div>
+                            {% endfor %}
                     {% endfor %}
                 </div>
             </div>
@@ -95,6 +100,18 @@
         <button onclick="submitCheckup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-full shadow-lg shadow-blue-200 active:scale-95 transition">
             提交
         </button>
+    </div>
+
+    <!-- 文案占位：JS 读取 data-*，避免写死 -->
+    <div id="i18n-texts" class="hidden"
+         data-upload-date-label="上传日期"
+         data-upload-result-label="上传复查结果"
+         data-submit-at-least-one="请至少上传一项复查报告图片后再提交"
+         data-submitting="提交中..."
+         data-upload-success="上传成功"
+         data-upload-failed="上传失败，请重试"
+         data-server-error="服务器异常，请联系管理员"
+         data-network-error="网络不可用或服务器未响应">
     </div>
 
     <!-- Upload Instructions Modal -->
@@ -392,7 +409,7 @@ function addPreviewElement(itemId, url, fileId) {
     // Create preview wrapper
     const wrapper = document.createElement('div');
     wrapper.id = `preview-${fileId}`;
-    wrapper.className = 'w-24 h-24 rounded-lg overflow-hidden border border-gray-200 relative group shrink-0';
+    wrapper.className = 'relative group rounded-lg overflow-hidden border border-gray-200 w-full aspect-square';
     
     // Image
     const img = document.createElement('img');
@@ -477,52 +494,45 @@ function closeModal() {
 }
 
 function submitCheckup() {
-    const items = document.querySelectorAll('.checkup-item');
-    let isValid = true;
-    const formData = new FormData();
-    let hasUploads = false;
-    
-    items.forEach(item => {
-        const itemId = item.getAttribute('data-id');
-        const itemName = item.getAttribute('data-name');
-        const itemUploads = uploads[itemId];
-        
-        // 检查是否有新上传的图片
-        if (itemUploads && itemUploads.length > 0) {
-            hasUploads = true;
-            itemUploads.forEach(u => {
-                // 直接使用 File 对象 (FormData 会自动处理为二进制流)
-                formData.append(`images_${itemId}`, u.file);
-            });
-        }
-        
-        // 校验：如果是必须完成但未完成且无上传，提示错误
-        // 注意：这里需要根据业务逻辑调整。如果允许只传部分项目的图片，可以放宽。
-        // 目前逻辑：如果该项目既没有已上传图片(existing_images为空，需后端配合判断，前端这里简化判断)，也没有新上传，则报错
-        // 简单起见，只要总共有图片上传即可，具体每个项目的校验由后端或更细致的前端逻辑控制
-        // 这里暂时保留原有逻辑：只要有文件在 uploads 里就算有效。
-        // 如果需要强制每个项目都有图片：
-        /*
-        const hasExisting = document.getElementById(`existing-container-${itemId}`)?.children.length > 0;
-        if ((!itemUploads || itemUploads.length === 0) && !hasExisting) {
-             document.getElementById(`error-${itemId}`).classList.remove('hidden');
-             isValid = false;
-        }
-        */
+    // 文案读取工具
+    const i18nEl = document.getElementById('i18n-texts');
+    const T = (key, fallback) => (i18nEl?.dataset?.[key] || fallback);
+
+    // 当日分组校验：至少一项有图片（预览或已有）
+    const today = document.getElementById('checkup-date')?.textContent?.trim();
+    const items = Array.from(document.querySelectorAll('.checkup-item'));
+    const todayItems = items.filter(el => el.getAttribute('data-date') === today);
+    const hasAnyUploadToday = todayItems.some(el => {
+        const itemId = el.getAttribute('data-id');
+        const hasNew = uploads[itemId] && uploads[itemId].length > 0;
+        const hasExisting = (document.getElementById(`existing-container-${itemId}`)?.children?.length || 0) > 0;
+        return hasNew || hasExisting;
     });
-    
-    if (!hasUploads) {
-        // 再次检查是否真的没有任何新文件（可能是用户只想删除旧文件？）
-        // 如果是纯删除操作，不需要 submitCheckup，直接在删除按钮触发。
-        // 所以这里 submit 主要是为了提交新文件。
-        alert("请至少上传一张新图片");
+    if (!hasAnyUploadToday) {
+        showStatus(T('submitAtLeastOne', '请至少上传一项复查报告图片后再提交'), 'error');
         return;
     }
 
-    // CSRF Token - Get from input
+    // 构建日期 -> 任务文件 批次
+    const batches = {};
+    items.forEach(el => {
+        const dateStr = el.getAttribute('data-date');
+        const itemId = el.getAttribute('data-id');
+        const queue = uploads[itemId] || [];
+        if (!queue.length) return;
+        if (!batches[dateStr]) batches[dateStr] = [];
+        batches[dateStr].push({ itemId, files: queue });
+    });
+
+    // 若无任何新文件（例如仅删除操作），则不提交
+    if (Object.keys(batches).length === 0) {
+        showStatus(T('submitAtLeastOne', '请至少上传一项复查报告图片后再提交'), 'error');
+        return;
+    }
+
+    // CSRF
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    
-    // Disable button to prevent double submit
+    // 按钮禁用与文案
     const submitBtn = document.querySelector('button[onclick="submitCheckup()"]');
     const originalText = submitBtn.innerText;
     submitBtn.disabled = true;
@@ -531,57 +541,85 @@ function submitCheckup() {
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
-        提交中... 
+        ${T('submitting', '提交中...')}
     `;
 
-    fetch("{% url 'web_patient:record_checkup' %}", {
-        method: 'POST',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': csrfToken
-        },
-        body: formData
-    })
-    .then(async (response) => {
+    // 串行提交批次
+    const dates = Object.keys(batches);
+    const postOneBatch = async (dateStr) => {
+        const formData = new FormData();
+        batches[dateStr].forEach(({ itemId, files }) => {
+            files.forEach(u => formData.append(`images_${itemId}`, u.file));
+        });
+        const resp = await fetch("{% url 'web_patient:record_checkup' %}", {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken },
+            body: formData
+        });
         let data = null;
+        try { data = await resp.json(); } catch (e) { data = null; }
+        if (!resp.ok) {
+            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : T('serverError', '服务器异常，请联系管理员');
+            throw new Error(msg);
+        }
+        // 成功标准：沿用现有接口（code===200）
+        if (!data || data.code !== 200) {
+            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : T('uploadFailed', '上传失败，请重试');
+            throw new Error(msg);
+        }
+        return data;
+    };
+
+    (async () => {
         try {
-            data = await response.json();
-        } catch (e) {
-            data = null;
-        }
-        if (!response.ok) {
-            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : '服务器异常，请联系管理员';
-            showStatus(msg, 'error');
-            submitBtn.disabled = false;
-            submitBtn.innerText = originalText;
-            return;
-        }
-        if (data && data.code === 200) {
-            submitBtn.innerText = "上传成功";
+            for (const d of dates) {
+                await postOneBatch(d);
+            }
+            // 全部成功
+            submitBtn.innerText = T('uploadSuccess', '上传成功');
             submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
             submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-            showStatus('上传成功，即将返回...', 'success');
-            localStorage.setItem('refresh_flag', 'true');
-            setTimeout(() => {
-                if (document.referrer && document.referrer.includes(window.location.host)) {
-                    history.back();
-                } else {
-                    window.location.replace(data.redirect_url);
-                }
-            }, 500);
-        } else {
-            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : '上传失败，请重试';
-            showStatus(msg, 'error');
+            showStatus(T('uploadSuccess', '上传成功'), 'success');
+            // 联动刷新首页近7天完成度
+            const allCompleted = await refreshHomeCheckupStatus();
+            try { localStorage.setItem('refresh_flag', 'true'); } catch(e) {}
+            try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
+            setTimeout(() => { try { history.back(); } catch(e) {} }, 200);
+        } catch (err) {
+            showStatus(err.message || T('uploadFailed', '上传失败，请重试'), 'error');
             submitBtn.disabled = false;
             submitBtn.innerText = originalText;
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showStatus('网络不可用或服务器未响应', 'error');
-        submitBtn.disabled = false;
-        submitBtn.innerText = originalText;
+    })();
+}
+
+// 近7天完成度查询并通知首页
+async function refreshHomeCheckupStatus() {
+    const todayStr = document.getElementById('checkup-date')?.textContent?.trim();
+    if (!todayStr) return;
+    const dayMs = 24 * 60 * 60 * 1000;
+    const base = new Date(todayStr.replace(/-/g, '/')).getTime();
+    const dates = Array.from({ length: 7 }).map((_, i) => {
+        const d = new Date(base - (6 - i) * dayMs);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const da = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${da}`;
     });
+    const results = await Promise.all(dates.map(async (d) => {
+        try {
+            const resp = await fetch("{% url 'web_patient:query_last_metric' %}" + `?date=${encodeURIComponent(d)}`, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const data = await resp.json();
+            const status = data?.plans?.checkup?.status || 'pending';
+            return status === 'completed';
+        } catch { return false; }
+    }));
+    const allCompleted = results.every(Boolean);
+    // 通知首页模块
+    try {
+        window.parent?.postMessage?.({ type: 'CHECKUP_COMPLETION_UPDATED', allCompleted }, '*');
+    } catch {}
+    return allCompleted;
 }
 
 function showStatus(message, type) {
