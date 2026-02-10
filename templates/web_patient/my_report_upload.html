@@ -1,4 +1,5 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
 
 {% block body %}
 <div class="min-h-screen bg-[#F5F7FA] flex flex-col">
@@ -56,85 +57,26 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+<script src="{% static 'web_patient/image_compression.js' %}"></script>
 <script>
 // State to store uploaded files
 let uploads = [];
 const compressQueue = [];
 let compressActiveCount = 0;
 
-// 图片压缩逻辑与 record_checkup.html 保持一致：
-// - 最大边长 1920px（保持宽高比）
-// - 初始质量 0.75（约 0.7~0.8）
-// - 目标体积 ≤ 500KB
-// - 单张压缩超时 30s
-const COMPRESS_OPTIONS = {
-    maxWidthOrHeight: 1920,
-    maxSizeMB: 0.7,
-    initialQuality: 0.75,
-    useWebWorker: true,
-};
+const formatBytes = (window.LCCImageCompression && window.LCCImageCompression.formatBytes)
+    ? window.LCCImageCompression.formatBytes
+    : (bytes) => `${bytes || 0}B`;
 
-function formatBytes(bytes) {
-    if (!bytes && bytes !== 0) return '';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    let val = bytes;
-    while (val >= 1024 && i < units.length - 1) {
-        val /= 1024;
-        i += 1;
-    }
-    return `${val.toFixed(i === 0 ? 0 : 1)}${units[i]}`;
-}
-
-function withTimeout(promise, ms) {
-    return new Promise((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('compress_timeout')), ms);
-        promise.then(
-            (v) => {
-                clearTimeout(t);
-                resolve(v);
-            },
-            (e) => {
-                clearTimeout(t);
-                reject(e);
-            }
-        );
-    });
-}
-
-function hideStatus() {
-    const statusEl = document.getElementById('status-message');
-    if (!statusEl) return;
-    statusEl.classList.add('hidden');
-}
+function isOriginalUploadEnabled() { return false; }
 
 function updateCompressStatus(text) {
     if (!text) {
-        hideStatus();
+        const statusEl = document.getElementById('status-message');
+        if (statusEl) statusEl.classList.add('hidden');
         return;
     }
     showStatus(text, 'info');
-}
-
-async function compressImage(file, onProgress) {
-    const originalSize = file.size || 0;
-    const lib = window.imageCompression;
-    if (typeof lib === 'function') {
-        const opts = {
-            ...COMPRESS_OPTIONS,
-            onProgress: typeof onProgress === 'function' ? onProgress : undefined,
-            fileType: file.type || undefined,
-        };
-        const blob = await withTimeout(lib(file, opts), 30_000);
-        const outFile = blob instanceof File
-            ? blob
-            : new File([blob], file.name, { type: blob.type || file.type, lastModified: Date.now() });
-        if (outFile.size > originalSize && originalSize > 0) {
-            return { file, usedOriginal: true };
-        }
-        return { file: outFile, usedOriginal: false };
-    }
-    return { file, usedOriginal: true };
 }
 
 function runCompressQueue() {
@@ -186,12 +128,16 @@ function handleFileChange(event) {
 
         const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const originalUrl = URL.createObjectURL(file);
+        const originalUpload = false;
         uploads.push({
             id: fileId,
             file: file,
             originalSize: file.size,
             compressedSize: file.size,
             fileName: file.name,
+            usedOriginal: originalUpload,
+            policy: null,
+            networkInfo: null,
         });
         addPreviewElement(originalUrl, fileId, { originalSize: file.size, compressedSize: file.size, statusText: '压缩中...' });
 
@@ -202,13 +148,17 @@ function handleFileChange(event) {
                 updateCompressStatus(`正在压缩图片...(${Math.min(99, Math.max(0, Math.floor(p)))}%)`);
             };
             try {
-                const { file: outFile, usedOriginal } = await compressImage(file, onProgress);
+                const result = await window.LCCImageCompression.compressOne(file, { allowOriginal: true, timeoutMs: 30_000, onProgress, preScaleTo1080p: true });
+                const outFile = result.file;
+                const usedOriginal = !!result.usedOriginal;
                 const compressedSize = outFile.size;
                 const entry = uploads.find(x => x.id === fileId);
                 if (entry) {
                     entry.file = outFile;
                     entry.compressedSize = compressedSize;
                     entry.usedOriginal = usedOriginal;
+                    entry.policy = result.policy || null;
+                    entry.networkInfo = result.networkInfo || null;
                 }
                 const wrapper = document.getElementById(`preview-${fileId}`);
                 if (wrapper) {
@@ -219,7 +169,7 @@ function handleFileChange(event) {
                     const sizeEl = wrapper.querySelector('[data-role="size"]');
                     if (sizeEl) sizeEl.textContent = `${formatBytes(file.size)} → ${formatBytes(compressedSize)}`;
                     const statusEl = wrapper.querySelector('[data-role="status"]');
-                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>500KB)');
+                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>阈值)');
                 }
                 if (!usedOriginal && compressedSize > 500 * 1024) {
                     showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
@@ -297,6 +247,11 @@ function removeFile(fileId) {
 }
 
 function submitReport() {
+    if (compressActiveCount > 0 || (compressQueue && compressQueue.length > 0)) {
+        showStatus('请等待图片压缩完成后再提交', 'info');
+        return;
+    }
+
     if (uploads.length === 0) {
         alert("请至少上传一张图片");
         return;
@@ -314,6 +269,25 @@ function submitReport() {
     uploads.forEach(u => {
         formData.append('images', u.file);
     });
+    try {
+        const networkInfo = window.LCCImageCompression ? window.LCCImageCompression.getNetworkInfo() : {};
+        const meta = {
+            page: 'my_report_upload',
+            strategy: 'tiered_network_v1',
+            original_upload: false,
+            network: networkInfo,
+            files: uploads.map(u => ({
+                name: u.fileName || (u.file && u.file.name) || '',
+                type: (u.file && u.file.type) || '',
+                original_bytes: u.originalSize || 0,
+                compressed_bytes: u.compressedSize || (u.file && u.file.size) || 0,
+                used_original: !!u.usedOriginal,
+                policy: u.policy || null,
+                network: u.networkInfo || null,
+            })),
+        };
+        formData.append('upload_meta', JSON.stringify(meta));
+    } catch (e) {}
     
     const submitBtn = document.querySelector('button[onclick="submitReport()"]');
     const originalText = submitBtn.innerText;

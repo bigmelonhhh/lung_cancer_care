@@ -97,6 +97,12 @@ def upload_report(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         patient = request.patient
         report_date_str = request.POST.get("report_date")
+        upload_meta = request.POST.get("upload_meta")
+        if upload_meta:
+            try:
+                logger.info(f"[personal_report_upload_meta] patient_id={patient.id} meta={upload_meta[:2000]}")
+            except Exception:
+                pass
         
         if not report_date_str:
             report_date = timezone.now().date()

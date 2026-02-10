@@ -172,6 +172,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+<script src="{% static 'web_patient/image_compression.js' %}"></script>
 <script>
 // State to store uploaded files per item
 const uploads = {};
@@ -279,40 +280,9 @@ function triggerUpload(itemId) {
     document.getElementById(`file-input-${itemId}`).click();
 }
 
-const COMPRESS_OPTIONS = {
-    maxWidthOrHeight: 1920,
-    maxSizeMB: 0.7,
-    initialQuality: 0.75,
-    useWebWorker: true,
-};
-
-function formatBytes(bytes) {
-    if (!bytes && bytes !== 0) return '';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let i = 0;
-    let val = bytes;
-    while (val >= 1024 && i < units.length - 1) {
-        val /= 1024;
-        i += 1;
-    }
-    return `${val.toFixed(i === 0 ? 0 : 1)}${units[i]}`;
-}
-
-function withTimeout(promise, ms) {
-    return new Promise((resolve, reject) => {
-        const t = setTimeout(() => reject(new Error('compress_timeout')), ms);
-        promise.then(
-            (v) => {
-                clearTimeout(t);
-                resolve(v);
-            },
-            (e) => {
-                clearTimeout(t);
-                reject(e);
-            }
-        );
-    });
-}
+const formatBytes = (window.LCCImageCompression && window.LCCImageCompression.formatBytes)
+    ? window.LCCImageCompression.formatBytes
+    : (bytes) => `${bytes || 0}B`;
 
 function updateCompressStatus(text) {
     const el = document.getElementById('status-message');
@@ -327,24 +297,7 @@ function updateCompressStatus(text) {
     el.textContent = text;
 }
 
-async function compressImage(file, onProgress) {
-    const originalSize = file.size || 0;
-    const lib = window.imageCompression;
-    if (typeof lib === 'function') {
-        const opts = {
-            ...COMPRESS_OPTIONS,
-            onProgress: typeof onProgress === 'function' ? onProgress : undefined,
-            fileType: file.type || undefined,
-        };
-        const blob = await withTimeout(lib(file, opts), 30_000);
-        const outFile = blob instanceof File ? blob : new File([blob], file.name, { type: blob.type || file.type, lastModified: Date.now() });
-        if (outFile.size > originalSize && originalSize > 0) {
-            return { file, usedOriginal: true };
-        }
-        return { file: outFile, usedOriginal: false };
-    }
-    return { file, usedOriginal: true };
-}
+function isOriginalUploadEnabled() { return false; }
 
 function runCompressQueue() {
     if (compressActiveCount >= 2) return;
@@ -403,7 +356,8 @@ function handleFileChange(event, itemId) {
 
         const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
         const originalUrl = URL.createObjectURL(file);
-        uploads[itemId].push({ id: fileId, file, originalSize: file.size, compressedSize: file.size, fileName: file.name });
+        const originalUpload = false;
+        uploads[itemId].push({ id: fileId, file, originalSize: file.size, compressedSize: file.size, fileName: file.name, usedOriginal: originalUpload, policy: null, networkInfo: null });
         addPreviewElement(itemId, originalUrl, fileId, { originalSize: file.size, compressedSize: file.size, statusText: '压缩中...' });
         const errorEl = document.getElementById(`error-${itemId}`);
         if (errorEl) errorEl.classList.add('hidden');
@@ -415,9 +369,11 @@ function handleFileChange(event, itemId) {
                 updateCompressStatus(`正在压缩图片...(${Math.min(99, Math.max(0, Math.floor(p)))}%)`);
             };
             try {
-                const startedAt = performance.now();
-                const { file: outFile, usedOriginal } = await compressImage(file, onProgress);
-                const durationMs = Math.round(performance.now() - startedAt);
+                const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                const result = await window.LCCImageCompression.compressOne(file, { allowOriginal: true, timeoutMs: 30_000, onProgress, preScaleTo1080p: true });
+                const outFile = result.file;
+                const usedOriginal = !!result.usedOriginal;
+                const durationMs = result.durationMs || Math.round((((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - startedAt));
                 const compressedSize = outFile.size;
                 const entry = uploads[itemId].find(x => x.id === fileId);
                 if (entry) {
@@ -425,6 +381,8 @@ function handleFileChange(event, itemId) {
                     entry.compressedSize = compressedSize;
                     entry.usedOriginal = usedOriginal;
                     entry.durationMs = durationMs;
+                    entry.policy = result.policy || null;
+                    entry.networkInfo = result.networkInfo || null;
                 }
                 const wrapper = document.getElementById(`preview-${fileId}`);
                 if (wrapper) {
@@ -435,7 +393,7 @@ function handleFileChange(event, itemId) {
                     const sizeEl = wrapper.querySelector('[data-role="size"]');
                     if (sizeEl) sizeEl.textContent = `${formatBytes(file.size)} → ${formatBytes(compressedSize)}`;
                     const statusEl = wrapper.querySelector('[data-role="status"]');
-                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>500KB)');
+                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>阈值)');
                 }
                 if (!usedOriginal && compressedSize > 500 * 1024) {
                     showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
@@ -566,6 +524,11 @@ function submitCheckup() {
     const i18nEl = document.getElementById('i18n-texts');
     const T = (key, fallback) => (i18nEl?.dataset?.[key] || fallback);
 
+    if (compressActiveCount > 0 || (compressQueue && compressQueue.length > 0)) {
+        showStatus(T('waitCompress', '请等待图片压缩完成后再提交'), 'info');
+        return;
+    }
+
     const items = Array.from(document.querySelectorAll('.checkup-item'));
     if (!items.length) {
         showStatus(T('submitAtLeastOne', '请至少上传一项复查报告图片后再提交'), 'error');
@@ -619,6 +582,33 @@ function submitCheckup() {
         batches[dateStr].forEach(({ itemId, files }) => {
             files.forEach(u => formData.append(`images_${itemId}`, u.file));
         });
+        try {
+            const networkInfo = window.LCCImageCompression ? window.LCCImageCompression.getNetworkInfo() : {};
+            const metaFiles = [];
+            batches[dateStr].forEach(({ itemId, files }) => {
+                files.forEach(u => {
+                    metaFiles.push({
+                        item_id: itemId,
+                        name: u.fileName || (u.file && u.file.name) || '',
+                        type: (u.file && u.file.type) || '',
+                        original_bytes: u.originalSize || 0,
+                        compressed_bytes: u.compressedSize || (u.file && u.file.size) || 0,
+                        used_original: !!u.usedOriginal,
+                        policy: u.policy || null,
+                        network: u.networkInfo || null,
+                    });
+                });
+            });
+            const meta = {
+                page: 'record_checkup',
+                strategy: 'tiered_network_v1',
+                batch_date: dateStr,
+                original_upload: false,
+                network: networkInfo,
+                files: metaFiles,
+            };
+            formData.append('upload_meta', JSON.stringify(meta));
+        } catch (e) {}
         const resp = await fetch("{% url 'web_patient:record_checkup' %}", {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken },
