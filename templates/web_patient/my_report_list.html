@@ -87,11 +87,10 @@
 <script>
 // Check for refresh flag on page load
 window.addEventListener('pageshow', function(event) {
-    // If navigating back from upload page or if persisted flag is set
-    if (event.persisted || localStorage.getItem('refresh_report_list') === 'true') {
-        localStorage.removeItem('refresh_report_list');
-        window.location.reload();
-    }
+    const shouldRefresh = localStorage.getItem('refresh_report_list') === 'true';
+    if (!shouldRefresh) return;
+    localStorage.removeItem('refresh_report_list');
+    window.location.reload();
 });
 
 function deleteReportGroup(ids) {

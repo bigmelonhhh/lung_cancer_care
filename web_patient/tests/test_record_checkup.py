@@ -182,6 +182,53 @@ class RecordCheckupTests(TestCase):
         finally:
             logging.disable(logging.NOTSET)
 
+    def test_record_checkup_post_gif_file_ignored(self):
+        """测试上传 GIF（前端可能出现，但后端应忽略并视为未上传有效图片）"""
+        logging.disable(logging.CRITICAL)
+        try:
+            gif_file = SimpleUploadedFile(
+                "test.gif",
+                b"GIF89a",
+                content_type="image/gif"
+            )
+            data = {
+                f'images_{self.task.id}': [gif_file]
+            }
+            response = self.client.post(
+                self.url,
+                data,
+                HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json().get('code'), 400)
+            self.assertEqual(ReportImage.objects.count(), 0)
+        finally:
+            logging.disable(logging.NOTSET)
+
+    def test_record_checkup_post_large_file_filtered(self):
+        """测试上传超过10MB的图片会被过滤"""
+        logging.disable(logging.CRITICAL)
+        try:
+            big_content = b"a" * (10 * 1024 * 1024 + 1)
+            big_file = SimpleUploadedFile(
+                "big.jpg",
+                big_content,
+                content_type="image/jpeg"
+            )
+            data = {
+                f'images_{self.task.id}': [big_file]
+            }
+            response = self.client.post(
+                self.url,
+                data,
+                HTTP_X_REQUESTED_WITH='XMLHttpRequest'
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json().get('code'), 400)
+            self.assertEqual(ReportImage.objects.count(), 0)
+        finally:
+            logging.disable(logging.NOTSET)
+
     def test_record_checkup_multiple_tasks(self):
         """测试多个任务同时上传"""
         # 创建第二个任务对应的 CheckupLibrary
