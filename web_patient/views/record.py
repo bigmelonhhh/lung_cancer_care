@@ -982,6 +982,12 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         try:
             with transaction.atomic():
+                upload_meta = request.POST.get("upload_meta")
+                if upload_meta:
+                    try:
+                        logging.info(f"[checkup_upload_meta] patient_id={patient_id} meta={upload_meta[:2000]}")
+                    except Exception:
+                        pass
                 # 解析按任务分组的上传文件：字段形如 images_{task_id}
                 task_files_map = {}
                 for field_name, files in request.FILES.lists():

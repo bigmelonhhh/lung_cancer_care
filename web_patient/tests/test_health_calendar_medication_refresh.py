@@ -4,6 +4,8 @@ from django.utils import timezone
 from users.models import CustomUser, PatientProfile, PatientRelation
 from users import choices
 from unittest.mock import patch
+from core.models import TreatmentCycle
+from core.models import choices as core_choices
 
 class HealthCalendarMedicationRefreshTests(TestCase):
   def setUp(self):
@@ -22,6 +24,14 @@ class HealthCalendarMedicationRefreshTests(TestCase):
     self.calendar_url = reverse("web_patient:health_calendar")
     self.submit_url = reverse("web_patient:submit_medication")
     self.today = timezone.localdate().strftime("%Y-%m-%d")
+    today = timezone.localdate()
+    TreatmentCycle.objects.create(
+      patient=self.patient,
+      name="进行中疗程",
+      start_date=today,
+      end_date=today,
+      status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+    )
 
   @patch("web_patient.views.health_calendar.get_daily_plan_summary")
   def test_patient_medication_refresh_to_completed(self, mock_summary):

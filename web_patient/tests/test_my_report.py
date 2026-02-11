@@ -74,6 +74,14 @@ class MyReportTests(TestCase):
         self.assertEqual(group['date'], date(2023, 1, 1))
         self.assertIn("/media/test.jpg", group['images'])
 
+    def test_report_list_refresh_flag_script_does_not_force_reload_on_persisted(self):
+        """Test list page refresh logic only relies on refresh_report_list flag"""
+        resp = self.client.get(self.list_url)
+        self.assertEqual(resp.status_code, 200)
+        html = resp.content.decode("utf-8")
+        self.assertIn("refresh_report_list", html)
+        self.assertNotIn("event.persisted", html)
+
     def test_upload_report_success(self):
         """Test uploading a report"""
         image = SimpleUploadedFile("test.jpg", b"content", content_type="image/jpeg")

@@ -1,4 +1,5 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
 
 {% block body %}
 <div class="min-h-screen bg-[#F5F7FA] flex flex-col">
@@ -55,68 +56,48 @@
     </form>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+<script src="{% static 'web_patient/image_compression.js' %}"></script>
 <script>
 // State to store uploaded files
 let uploads = [];
+const compressQueue = [];
+let compressActiveCount = 0;
 
-// Image compression config
-const COMPRESS_CONFIG = {
-    maxWidth: 1920,
-    maxHeight: 1920,
-    quality: 0.8,
-    type: 'image/jpeg'
-};
+const formatBytes = (window.LCCImageCompression && window.LCCImageCompression.formatBytes)
+    ? window.LCCImageCompression.formatBytes
+    : (bytes) => `${bytes || 0}B`;
 
-// Compress image function
-function compressImage(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = function(e) {
-            const img = new Image();
-            img.src = e.target.result;
-            img.onload = function() {
-                let width = img.width;
-                let height = img.height;
-                
-                // Calculate scale ratio
-                if (width > COMPRESS_CONFIG.maxWidth || height > COMPRESS_CONFIG.maxHeight) {
-                    const ratio = Math.max(width / COMPRESS_CONFIG.maxWidth, height / COMPRESS_CONFIG.maxHeight);
-                    width = Math.floor(width / ratio);
-                    height = Math.floor(height / ratio);
-                } else {
-                    width = Math.floor(width);
-                    height = Math.floor(height);
-                }
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                canvas.toBlob(function(blob) {
-                    if (!blob || blob.size > file.size) {
-                        resolve(file);
-                    } else {
-                        const newFile = new File([blob], file.name, {
-                            type: COMPRESS_CONFIG.type,
-                            lastModified: Date.now()
-                        });
-                        resolve(newFile);
-                    }
-                }, COMPRESS_CONFIG.type, COMPRESS_CONFIG.quality);
-            };
-            img.onerror = function(err) {
-                console.warn('Image load failed, using original file', err);
-                resolve(file);
-            };
-        };
-        reader.onerror = function(err) {
-            console.warn('FileReader failed, using original file', err);
-            resolve(file);
-        };
-    });
+function isOriginalUploadEnabled() { return false; }
+
+function updateCompressStatus(text) {
+    if (!text) {
+        const statusEl = document.getElementById('status-message');
+        if (statusEl) statusEl.classList.add('hidden');
+        return;
+    }
+    showStatus(text, 'info');
+}
+
+function runCompressQueue() {
+    if (compressActiveCount >= 2) return;
+    const task = compressQueue.shift();
+    if (!task) return;
+    compressActiveCount += 1;
+    task()
+        .catch(() => {})
+        .finally(() => {
+            compressActiveCount -= 1;
+            if (compressQueue.length === 0 && compressActiveCount === 0) {
+                updateCompressStatus('');
+            }
+            runCompressQueue();
+        });
+}
+
+function enqueueCompressTask(fn) {
+    compressQueue.push(fn);
+    runCompressQueue();
 }
 
 function handleFileChange(event) {
@@ -126,45 +107,94 @@ function handleFileChange(event) {
     const files = Array.from(fileList);
     event.target.value = ''; // Reset input
     
-    showStatus('正在处理图片...', 'info');
+    updateCompressStatus('正在压缩图片...');
 
-    const processPromises = files.map(async file => {
-        if (!file.type.startsWith('image/')) {
-            showStatus(`文件 ${file.name} 格式不支持`, 'error');
-            return null;
+    files.forEach((file) => {
+        if (!file.type || !file.type.startsWith('image/')) {
+            showStatus(`文件 ${file.name} 格式不支持，请上传图片`, 'error');
+            return;
+        }
+        const lowerName = (file.name || '').toLowerCase();
+        const isJpeg = file.type === 'image/jpeg' || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg');
+        const isPng = file.type === 'image/png' || lowerName.endsWith('.png');
+        if (!isJpeg && !isPng) {
+            showStatus(`文件 ${file.name} 格式不支持，请上传JPG/PNG图片`, 'error');
+            return;
+        }
+        if (file.size > 10 * 1024 * 1024) {
+            showStatus(`文件 ${file.name} 超过10MB限制`, 'error');
+            return;
         }
 
-        if (file.size > 20 * 1024 * 1024) {
-             showStatus(`文件 ${file.name} 超过20MB限制`, 'error');
-             return null;
-        }
+        const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+        const originalUrl = URL.createObjectURL(file);
+        const originalUpload = false;
+        uploads.push({
+            id: fileId,
+            file: file,
+            originalSize: file.size,
+            compressedSize: file.size,
+            fileName: file.name,
+            usedOriginal: originalUpload,
+            policy: null,
+            networkInfo: null,
+        });
+        addPreviewElement(originalUrl, fileId, { originalSize: file.size, compressedSize: file.size, statusText: '压缩中...' });
 
-        try {
-            const compressedFile = await compressImage(file);
-            const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            
-            uploads.push({ id: fileId, file: compressedFile });
-            
-            const previewUrl = URL.createObjectURL(compressedFile);
-            addPreviewElement(previewUrl, fileId);
-            
-            return fileId;
-        } catch (err) {
-            console.error('Image processing error:', err);
-            showStatus(`图片 ${file.name} 处理失败`, 'error');
-            return null;
-        }
-    });
-
-    Promise.all(processPromises).then(() => {
-        const statusEl = document.getElementById('status-message');
-        if (statusEl && statusEl.textContent === '正在处理图片...') {
-             statusEl.classList.add('hidden');
-        }
+        enqueueCompressTask(async () => {
+            let progress = 0;
+            const onProgress = (p) => {
+                progress = p;
+                updateCompressStatus(`正在压缩图片...(${Math.min(99, Math.max(0, Math.floor(p)))}%)`);
+            };
+            try {
+                const result = await window.LCCImageCompression.compressOne(file, { allowOriginal: true, timeoutMs: 30_000, onProgress, preScaleTo1080p: true });
+                const outFile = result.file;
+                const usedOriginal = !!result.usedOriginal;
+                const compressedSize = outFile.size;
+                const entry = uploads.find(x => x.id === fileId);
+                if (entry) {
+                    entry.file = outFile;
+                    entry.compressedSize = compressedSize;
+                    entry.usedOriginal = usedOriginal;
+                    entry.policy = result.policy || null;
+                    entry.networkInfo = result.networkInfo || null;
+                }
+                const wrapper = document.getElementById(`preview-${fileId}`);
+                if (wrapper) {
+                    const img = wrapper.querySelector('img');
+                    if (img && img.src) URL.revokeObjectURL(img.src);
+                    const newUrl = URL.createObjectURL(outFile);
+                    if (img) img.src = newUrl;
+                    const sizeEl = wrapper.querySelector('[data-role="size"]');
+                    if (sizeEl) sizeEl.textContent = `${formatBytes(file.size)} → ${formatBytes(compressedSize)}`;
+                    const statusEl = wrapper.querySelector('[data-role="status"]');
+                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>阈值)');
+                }
+                if (!usedOriginal && compressedSize > 500 * 1024) {
+                    showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
+                }
+            } catch (err) {
+                const entry = uploads.find(x => x.id === fileId);
+                if (entry) entry.failed = true;
+                const wrapper = document.getElementById(`preview-${fileId}`);
+                if (wrapper) {
+                    const statusEl = wrapper.querySelector('[data-role="status"]');
+                    if (statusEl) statusEl.textContent = '压缩失败';
+                }
+                if (err && err.message === 'compress_timeout') {
+                    showStatus(`图片 ${file.name} 压缩超时(30秒)，将使用原图上传`, 'error');
+                } else {
+                    showStatus(`图片 ${file.name} 压缩失败，将使用原图上传`, 'error');
+                }
+            } finally {
+                if (progress >= 99) updateCompressStatus('正在压缩图片...');
+            }
+        });
     });
 }
 
-function addPreviewElement(url, fileId) {
+function addPreviewElement(url, fileId, meta) {
     const container = document.getElementById('image-preview-container');
     const uploadBtn = document.getElementById('upload-btn');
     
@@ -175,6 +205,17 @@ function addPreviewElement(url, fileId) {
     const img = document.createElement('img');
     img.src = url;
     img.className = 'w-full h-full object-cover';
+
+    const badge = document.createElement('div');
+    badge.className = 'absolute left-2 bottom-2 right-2 bg-black/60 text-white text-[10px] leading-tight px-2 py-1 rounded';
+    const sizeText = (meta && (meta.originalSize || meta.originalSize === 0))
+        ? `${formatBytes(meta.originalSize)} → ${formatBytes(meta.compressedSize)}`
+        : '';
+    const statusText = meta && meta.statusText ? meta.statusText : '';
+    badge.innerHTML = `
+        <div data-role="size">${sizeText}</div>
+        <div data-role="status">${statusText}</div>
+    `;
     
     // Delete Button
     const deleteBtn = document.createElement('button');
@@ -187,6 +228,7 @@ function addPreviewElement(url, fileId) {
     };
     
     div.appendChild(img);
+    div.appendChild(badge);
     div.appendChild(deleteBtn);
     
     container.insertBefore(div, uploadBtn);
@@ -205,6 +247,11 @@ function removeFile(fileId) {
 }
 
 function submitReport() {
+    if (compressActiveCount > 0 || (compressQueue && compressQueue.length > 0)) {
+        showStatus('请等待图片压缩完成后再提交', 'info');
+        return;
+    }
+
     if (uploads.length === 0) {
         alert("请至少上传一张图片");
         return;
@@ -222,6 +269,25 @@ function submitReport() {
     uploads.forEach(u => {
         formData.append('images', u.file);
     });
+    try {
+        const networkInfo = window.LCCImageCompression ? window.LCCImageCompression.getNetworkInfo() : {};
+        const meta = {
+            page: 'my_report_upload',
+            strategy: 'tiered_network_v1',
+            original_upload: false,
+            network: networkInfo,
+            files: uploads.map(u => ({
+                name: u.fileName || (u.file && u.file.name) || '',
+                type: (u.file && u.file.type) || '',
+                original_bytes: u.originalSize || 0,
+                compressed_bytes: u.compressedSize || (u.file && u.file.size) || 0,
+                used_original: !!u.usedOriginal,
+                policy: u.policy || null,
+                network: u.networkInfo || null,
+            })),
+        };
+        formData.append('upload_meta', JSON.stringify(meta));
+    } catch (e) {}
     
     const submitBtn = document.querySelector('button[onclick="submitReport()"]');
     const originalText = submitBtn.innerText;
@@ -245,14 +311,6 @@ function submitReport() {
         body: formData
     })
     .then(response => {
-        if (response.redirected) {
-            window.location.href = response.url;
-            return;
-        }
-        // Handle JSON response if we changed view to return JSON (which we haven't strictly, but redirect works via 302)
-        // Actually, fetch follows redirects automatically. 
-        // If the view returns redirect, fetch follows it and returns the page content of list page.
-        // We should check response.url
         if (response.ok) {
             showStatus('上传成功', 'success');
             
@@ -261,11 +319,7 @@ function submitReport() {
             
             setTimeout(() => {
                 // 优先返回上一页
-                if (document.referrer && document.referrer.includes(window.location.host)) {
                     history.back();
-                } else {
-                    window.location.href = "{% url 'web_patient:report_list' %}";
-                }
             }, 500);
         } else {
             throw new Error('Upload failed');
