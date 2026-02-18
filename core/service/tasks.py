@@ -32,15 +32,12 @@ MONITORING_ADHERENCE_TYPES = (
 _TASK_MAX_OVERDUE_DAYS = {
     choices.PlanItemCategory.MEDICATION: 0,
     choices.PlanItemCategory.MONITORING: 0,
-    choices.PlanItemCategory.CHECKUP: 7,
+    choices.PlanItemCategory.CHECKUP: 6,
     choices.PlanItemCategory.QUESTIONNAIRE: 6,
 }
 
-
-
-
 # TODO 查询复查档案的记录数（需要支持到二级分类）。
-# TODO 根据日期来查询复查的图像。  
+# TODO 根据日期来查询复查的图像。
 
 def get_daily_plan_summary(
     patient: PatientProfile,
@@ -48,9 +45,11 @@ def get_daily_plan_summary(
 ) -> List[Dict[str, Any]]:
     """
     【功能说明】
-    - 汇总患者当天及有效期内的计划任务，用于患者端列表展示。
+    - 汇总患者计划任务，用于患者端列表展示。
+      - 默认查询（task_date=None）：按首页规则展示。
       - 用药/监测：仅统计当天。
-      - 复查/问卷：统计最近 7 天内任务。
+      - 复查/问卷：统计最近 7 天（含当天）内任务。
+    - 指定日期查询（task_date=某天）：仅统计该日期当天任务。
 
     【使用方法】
     - `get_daily_plan_summary(patient)` 返回今天的计划摘要；
@@ -89,14 +88,16 @@ def get_daily_plan_summary(
     window_start_by_type = {
         choices.PlanItemCategory.MEDICATION: task_date,
         choices.PlanItemCategory.MONITORING: task_date,
-        choices.PlanItemCategory.CHECKUP: task_date
-        if not is_default_date
-        else task_date - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.CHECKUP]),
-        choices.PlanItemCategory.QUESTIONNAIRE: task_date
-        if not is_default_date
-        else task_date
-        - timedelta(days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.QUESTIONNAIRE]),
+        choices.PlanItemCategory.CHECKUP: task_date,
+        choices.PlanItemCategory.QUESTIONNAIRE: task_date,
     }
+    if is_default_date:
+        window_start_by_type[choices.PlanItemCategory.CHECKUP] = task_date - timedelta(
+            days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.CHECKUP]
+        )
+        window_start_by_type[choices.PlanItemCategory.QUESTIONNAIRE] = task_date - timedelta(
+            days=_TASK_MAX_OVERDUE_DAYS[choices.PlanItemCategory.QUESTIONNAIRE]
+        )
     min_window_start = min(window_start_by_type.values())
 
     tasks = (
@@ -104,7 +105,8 @@ def get_daily_plan_summary(
             patient=patient,
             task_date__range=(min_window_start, task_date),
             task_type__in=task_types,
-        ) .exclude(
+        )
+        .exclude(
             status__in=[
                 choices.TaskStatus.NOT_STARTED,
                 choices.TaskStatus.TERMINATED,
@@ -119,6 +121,18 @@ def get_daily_plan_summary(
     for task in tasks:
         window_start = window_start_by_type.get(task.task_type, task_date)
         if task.task_date < window_start:
+            continue
+        if (
+            is_default_date
+            and task.task_type
+            in (
+                choices.PlanItemCategory.CHECKUP,
+                choices.PlanItemCategory.QUESTIONNAIRE,
+            )
+            and task.task_date < task_date
+            and task.status == choices.TaskStatus.COMPLETED
+            and _resolve_task_completion_date(task) < task_date
+        ):
             continue
         tasks_by_type[task.task_type].append(task)
 
@@ -180,6 +194,14 @@ def get_daily_plan_summary(
 
 def _get_task_max_overdue_days(task_type: int) -> int:
     return _TASK_MAX_OVERDUE_DAYS.get(task_type, 0)
+
+
+def _resolve_task_completion_date(task: DailyTask) -> date:
+    if not task.completed_at:
+        return task.task_date
+    if timezone.is_naive(task.completed_at):
+        return task.completed_at.date()
+    return timezone.localtime(task.completed_at).date()
 
 
 def resolve_task_valid_window(

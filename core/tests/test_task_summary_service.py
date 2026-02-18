@@ -1,9 +1,10 @@
 """Task summary service tests."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from unittest.mock import patch
 
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import DailyTask, PlanItem, Questionnaire, TreatmentCycle, choices
 from core.service.tasks import get_daily_plan_summary
@@ -303,3 +304,160 @@ class TaskSummaryServiceTest(TestCase):
         )
         self.assertIsNotNone(explicit_q)
         self.assertEqual(explicit_q["questionnaire_ids"], [])
+
+    def test_default_date_uses_recent_7_day_window(self):
+        today = date(2025, 1, 10)
+        within_window = today - timedelta(days=6)
+        outside_window = today - timedelta(days=7)
+        outside_checkup = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=outside_window,
+            task_type=choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=choices.TaskStatus.PENDING,
+        )
+        outside_questionnaire = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=outside_window,
+            task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+            plan_item=self.questionnaire_plan,
+            title="问卷提醒",
+            status=choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=within_window,
+            task_type=choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=within_window,
+            task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+            plan_item=self.questionnaire_plan,
+            title="问卷提醒",
+            status=choices.TaskStatus.PENDING,
+        )
+
+        with patch("core.service.tasks.timezone.localdate", return_value=today):
+            summary = get_daily_plan_summary(self.patient)
+
+        checkup_summary = next(
+            (s for s in summary if s["task_type"] == int(choices.PlanItemCategory.CHECKUP)),
+            None,
+        )
+        self.assertIsNotNone(checkup_summary)
+        self.assertEqual(checkup_summary["status"], int(choices.TaskStatus.PENDING))
+
+        questionnaire_summary = next(
+            (
+                s
+                for s in summary
+                if s["task_type"] == int(choices.PlanItemCategory.QUESTIONNAIRE)
+            ),
+            None,
+        )
+        self.assertIsNotNone(questionnaire_summary)
+        self.assertEqual(questionnaire_summary["questionnaire_ids"], [self.questionnaire.id])
+
+        outside_checkup.refresh_from_db()
+        outside_questionnaire.refresh_from_db()
+        self.assertEqual(outside_checkup.status, choices.TaskStatus.TERMINATED)
+        self.assertEqual(outside_questionnaire.status, choices.TaskStatus.TERMINATED)
+
+    def test_default_date_shows_backlog_completed_only_on_completion_day(self):
+        completed_day = date(2025, 1, 10)
+        backlog_date = completed_day - timedelta(days=2)
+        completed_at = timezone.make_aware(datetime(2025, 1, 10, 9, 0, 0))
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=backlog_date,
+            task_type=choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=choices.TaskStatus.COMPLETED,
+            completed_at=completed_at,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=backlog_date,
+            task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+            plan_item=self.questionnaire_plan,
+            title="问卷提醒",
+            status=choices.TaskStatus.COMPLETED,
+            completed_at=completed_at,
+        )
+
+        with patch("core.service.tasks.timezone.localdate", return_value=completed_day):
+            summary_on_completed_day = get_daily_plan_summary(self.patient)
+
+        self.assertTrue(
+            any(
+                item["task_type"] == int(choices.PlanItemCategory.CHECKUP)
+                and item["status"] == int(choices.TaskStatus.COMPLETED)
+                for item in summary_on_completed_day
+            )
+        )
+        self.assertTrue(
+            any(
+                item["task_type"] == int(choices.PlanItemCategory.QUESTIONNAIRE)
+                and item["status"] == int(choices.TaskStatus.COMPLETED)
+                for item in summary_on_completed_day
+            )
+        )
+
+        with patch(
+            "core.service.tasks.timezone.localdate",
+            return_value=completed_day + timedelta(days=1),
+        ):
+            summary_next_day = get_daily_plan_summary(self.patient)
+
+        self.assertFalse(
+            any(
+                item["task_type"] == int(choices.PlanItemCategory.CHECKUP)
+                for item in summary_next_day
+            )
+        )
+        self.assertFalse(
+            any(
+                item["task_type"] == int(choices.PlanItemCategory.QUESTIONNAIRE)
+                for item in summary_next_day
+            )
+        )
+
+    def test_default_date_fallbacks_task_date_when_completed_at_missing(self):
+        today = date(2025, 1, 10)
+        yesterday = today - timedelta(days=1)
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=yesterday,
+            task_type=choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=choices.TaskStatus.COMPLETED,
+            completed_at=None,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=yesterday,
+            task_type=choices.PlanItemCategory.QUESTIONNAIRE,
+            plan_item=self.questionnaire_plan,
+            title="问卷提醒",
+            status=choices.TaskStatus.COMPLETED,
+            completed_at=None,
+        )
+
+        with patch("core.service.tasks.timezone.localdate", return_value=today):
+            summary = get_daily_plan_summary(self.patient)
+
+        self.assertFalse(
+            any(
+                item["task_type"] == int(choices.PlanItemCategory.CHECKUP)
+                for item in summary
+            )
+        )
+        self.assertFalse(
+            any(
+                item["task_type"] == int(choices.PlanItemCategory.QUESTIONNAIRE)
+                for item in summary
+            )
+        )
