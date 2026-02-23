@@ -1,8 +1,9 @@
 import json
+from decimal import Decimal
 import shutil
 import tempfile
 import logging
-from datetime import date
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -10,10 +11,12 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import DailyTask, CheckupLibrary
+from core.models import DailyTask, CheckupLibrary, TreatmentCycle
+from core.models import choices as core_choices
 from core.models.choices import PlanItemCategory, TaskStatus, ReportType, CheckupCategory
 from health_data.models.report_upload import ReportUpload, ReportImage
 from users.models import CustomUser, PatientProfile
+from market.models import Product, Order
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
@@ -70,6 +73,13 @@ class RecordCheckupTests(TestCase):
         self.assertEqual(len(response.context['checkup_items']), 1)
         self.assertEqual(response.context['checkup_items'][0]['name'], "血常规")
         self.assertEqual(response.context['checkup_items'][0]['id'], self.task.id)
+        self.assertEqual(response.context["entry_source"], "home")
+
+    def test_record_checkup_get_entry_source_from_calendar(self):
+        """测试健康日历入口携带来源参数"""
+        response = self.client.get(self.url, {"selected_date": self.today.strftime("%Y-%m-%d"), "source": "calendar"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["entry_source"], "calendar")
 
     def test_record_checkup_get_selected_date_only(self):
         """测试健康日历入口：按 selected_date 仅返回当日未完成复查任务"""
@@ -129,6 +139,45 @@ class RecordCheckupTests(TestCase):
         self.assertEqual(images.count(), 1)
         # 现在视图会在可识别时携带 checkup_item_id，期望不为空
         self.assertIsNotNone(images.first().checkup_item)
+
+    def test_query_last_metric_checkup_and_followup_completed_subtitle(self):
+        """测试复查与随访完成后返回新文案"""
+        product = Product.objects.create(
+            name="VIP 服务包", price=Decimal("99.00"), duration_days=30, is_active=True
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("99.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.now(),
+        )
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="进行中疗程",
+            start_date=self.today,
+            end_date=self.today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        self.task.status = TaskStatus.COMPLETED
+        self.task.save(update_fields=["status"])
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=self.today,
+            task_type=PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=TaskStatus.COMPLETED,
+        )
+
+        response = self.client.get(
+            reverse("web_patient:query_last_metric"),
+            {"date": self.today.strftime("%Y-%m-%d")},
+        )
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["plans"]["checkup"]["subtitle"], "已完成复查任务")
+        self.assertEqual(data["plans"]["followup"]["subtitle"], "已完成随访任务")
 
     def test_record_checkup_post_no_files(self):
         """测试未上传文件提交"""

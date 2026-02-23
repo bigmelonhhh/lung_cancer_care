@@ -99,9 +99,9 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         elif plan_type == "weight":
             default_subtitle = "请记录今日体重"
         elif plan_type == "followup":
-            default_subtitle = "请及时完成您的随访任务" if not is_completed else "今日已完成"
+            default_subtitle = "请及时完成您的随访任务" if not is_completed else "已完成随访任务"
         elif plan_type == "checkup":
-            default_subtitle = "请及时完成您的复查任务" if not is_completed else "今日已完成"
+            default_subtitle = "请及时完成您的复查任务" if not is_completed else "已完成复查任务"
 
         plan_data = {
             "type": plan_type,
@@ -139,10 +139,10 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
                  plan_data["subtitle"] = "今日已服药"
 
             elif plan_type == "followup":
-                 plan_data["subtitle"] = "今日已完成"
+                 plan_data["subtitle"] = "已完成随访任务"
                      
             elif plan_type == "checkup":
-                 plan_data["subtitle"] = "今日已完成"
+                 plan_data["subtitle"] = "已完成复查任务"
 
         result[plan_type] = plan_data
 
@@ -940,6 +940,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
     patient_id = patient.id or None
     today = timezone.localdate()
     selected_date_str = (request.GET.get("selected_date") or "").strip()
+    entry_source = (request.GET.get("source") or "home").strip()
     selected_date = None
     if selected_date_str:
         try:
@@ -1067,7 +1068,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
                     day_cache = metric_plan_cache.get(date_key) or {}
                     day_cache["checkup"] = {
                         "status": "completed",
-                        "subtitle": "已完成"
+                        "subtitle": "已完成复查任务"
                     }
                     metric_plan_cache[date_key] = day_cache
                     request.session["metric_plan_cache"] = metric_plan_cache
@@ -1132,6 +1133,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
         "patient_id": patient_id,
         "checkup_date": (selected_date or today).strftime("%Y-%m-%d"),
         "checkup_items": checkup_items,
+        "entry_source": entry_source,
     }
 
     return render(request, "web_patient/record_checkup.html", context)

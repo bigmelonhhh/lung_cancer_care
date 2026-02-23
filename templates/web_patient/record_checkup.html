@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block body %}
-<div class="min-h-screen bg-gray-50 pb-24 relative">
+<div class="min-h-screen bg-gray-50 pb-24 relative" data-entry-source="{{ entry_source|default:'' }}">
     <!-- Explicit CSRF Token -->
     {% csrf_token %}
     
@@ -638,10 +638,12 @@ function submitCheckup() {
             submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
             submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
             showStatus(T('uploadSuccess', '上传成功'), 'success');
-            // 联动刷新首页近7天完成度
-            const allCompleted = await refreshHomeCheckupStatus();
+            const entrySource = getEntrySource();
+            if (entrySource === 'home') {
+                const allCompleted = await refreshHomeCheckupStatus();
+                try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
+            }
             try { localStorage.setItem('refresh_flag', 'true'); } catch(e) {}
-            try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
             setTimeout(() => { try { history.back(); } catch(e) {} }, 200);
         } catch (err) {
             showStatus(err.message || T('uploadFailed', '上传失败，请重试'), 'error');
@@ -652,9 +654,14 @@ function submitCheckup() {
 }
 
 // 近7天完成度查询并通知首页
+function getEntrySource() {
+    const container = document.querySelector('.min-h-screen[data-entry-source]');
+    return (container?.dataset?.entrySource || 'home').trim();
+}
+
 async function refreshHomeCheckupStatus() {
     const todayStr = document.getElementById('checkup-date')?.textContent?.trim();
-    if (!todayStr) return;
+    if (!todayStr) return false;
     const dayMs = 24 * 60 * 60 * 1000;
     const base = new Date(todayStr.replace(/-/g, '/')).getTime();
     const dates = Array.from({ length: 7 }).map((_, i) => {
@@ -664,15 +671,20 @@ async function refreshHomeCheckupStatus() {
         const da = String(d.getDate()).padStart(2, '0');
         return `${y}-${m}-${da}`;
     });
+    let hasCheckup = false;
     const results = await Promise.all(dates.map(async (d) => {
         try {
             const resp = await fetch("{% url 'web_patient:query_last_metric' %}" + `?date=${encodeURIComponent(d)}`, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await resp.json();
+            if (!data?.plans?.checkup) {
+                return null;
+            }
+            hasCheckup = true;
             const status = data?.plans?.checkup?.status || 'pending';
             return status === 'completed';
         } catch { return false; }
     }));
-    const allCompleted = results.every(Boolean);
+    const allCompleted = hasCheckup && results.filter(r => r !== null).every(Boolean);
     // 通知首页模块
     try {
         window.parent?.postMessage?.({ type: 'CHECKUP_COMPLETION_UPDATED', allCompleted }, '*');

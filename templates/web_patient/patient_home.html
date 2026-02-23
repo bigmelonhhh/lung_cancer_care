@@ -796,7 +796,12 @@
               // 判断URL是否已经包含参数
               const separator = urlA.includes('?') ? '&' : '?';
               // 如果specificUrl已经包含了ids参数，我们仍然追加patient_id，不影响
-              window.location.href = urlA + separator + "patient_id=" + patientId;
+              let finalUrl = urlA + separator + "patient_id=" + patientId;
+              if (type === 'checkup') {
+                  const sep2 = finalUrl.includes('?') ? '&' : '?';
+                  finalUrl = finalUrl + sep2 + "source=home";
+              }
+              window.location.href = finalUrl;
          } else {
               console.error("未找到对应类型的跳转链接:", type);
               // 可以在这里添加默认跳转或提示
@@ -907,9 +912,9 @@
   window.addEventListener('message', function(e) {
     const data = e.data || {};
     if (data.type === 'CHECKUP_COMPLETION_UPDATED') {
-      if (data.allCompleted) {
+        if (data.allCompleted) {
         const subtitleEl = document.getElementById('plan-subtitle-checkup');
-        if (subtitleEl) subtitleEl.textContent = '已完成近 7 天复查任务';
+        if (subtitleEl) subtitleEl.textContent = '已完成复查任务';
         const actionEl = document.getElementById('plan-action-checkup');
         if (actionEl) actionEl.innerHTML = '';
       } else {
@@ -926,7 +931,7 @@
       if (flag) {
         if (flag === 'true') {
           const subtitleEl = document.getElementById('plan-subtitle-checkup');
-          if (subtitleEl) subtitleEl.textContent = '已完成近 7 天复查任务';
+          if (subtitleEl) subtitleEl.textContent = '已完成复查任务';
           const actionEl = document.getElementById('plan-action-checkup');
           if (actionEl) actionEl.innerHTML = '';
         } else {
@@ -949,7 +954,7 @@
             const metric = JSON.parse(metricRaw);
             if (metric && metric.followup === 'completed') {
               const subtitleEl = document.getElementById('plan-subtitle-followup');
-              if (subtitleEl) subtitleEl.textContent = '今日已完成';
+              if (subtitleEl) subtitleEl.textContent = '已完成随访任务';
               const actionEl = document.getElementById('plan-action-followup');
               if (actionEl) actionEl.innerHTML = '';
             }
