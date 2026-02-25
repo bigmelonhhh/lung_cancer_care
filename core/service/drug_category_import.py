@@ -268,9 +268,7 @@ def parse_category_file(html_path: str | Path = DEFAULT_SAMPLE_HTML) -> List[Par
 
 def _print_items(items: Iterable[ParsedDrugItem]) -> None:
     for item in items:
-        print(
-            f"{item.full_name}\t商品名：{item.trade_name}\t厂商：{item.manufacturer}"
-        )
+       pass
 
 
 def print_category_file(html_path: str | Path = DEFAULT_SAMPLE_HTML) -> List[ParsedDrugItem]:
