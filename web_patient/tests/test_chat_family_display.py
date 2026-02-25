@@ -106,7 +106,7 @@ class PatientFamilyChatDisplayTests(TestCase):
     dm = msgs[1]
     self.assertEqual(dm["id"], self.doctor_msg.id)
     self.assertFalse(dm["is_patient_side"])
-    self.assertIn("医生丁", dm["sender_name"])
+    self.assertEqual(dm["sender_name"], self.studio.name)
     self.assertEqual(dm["text_content"], "医生回复内容B")
 
   def test_family_view_same_conversation_patient_side_flag(self):

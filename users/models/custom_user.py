@@ -151,6 +151,7 @@ class CustomUser(TimeStampedModel, AbstractBaseUser, PermissionsMixin):
     def __str__(self) -> str:
         """
         【业务说明】统一对象的可读展示，用于 admin、日志等。
+        【用法】print(user) 或管理后台展示。
         【参数】self：当前对象。
         【返回值】str，包含昵称与角色。
         【使用示例】`str(user)` -> `张三(主治医生)`。

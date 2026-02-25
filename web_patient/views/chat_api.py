@@ -4,7 +4,7 @@ from django.views.decorators.http import require_GET, require_POST
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from chat.services.chat import ChatService
-from chat.models import MessageContentType
+from chat.models import MessageContentType, MessageSenderRole
 from users.decorators import check_patient, auto_wechat_login
 from web_patient.views.chat import get_patient_chat_title
 from users.models import CustomUser
@@ -27,6 +27,13 @@ def list_messages(request: HttpRequest):
     """获取消息列表"""
     patient = request.patient
     service = ChatService() 
+
+    def _resolve_sender_name(msg) -> str:
+        role = msg.sender_role_snapshot
+        if role in (MessageSenderRole.PATIENT, MessageSenderRole.FAMILY):
+            return msg.sender_display_name_snapshot
+        return msg.studio_name_snapshot or msg.sender_display_name_snapshot
+
     
     try:
         conversation = service.get_or_create_patient_conversation(patient=patient)
@@ -50,8 +57,8 @@ def list_messages(request: HttpRequest):
                 'id': msg.id,
                 'sender_id': msg.sender_id,
                 'sender_role': msg.sender_role_snapshot,
-                # 修复：患者端应显示真实发送者名称（本人/家属/医生等），而非工作室名称
-                'sender_name': msg.sender_display_name_snapshot,
+                # 患者/家属显示真实姓名，医护侧显示工作室名称
+                'sender_name': _resolve_sender_name(msg),
                 'studio_name': msg.studio_name_snapshot,
                 # 新增：标记患者侧（本人/家属）用于前端正确判断左右气泡
                 'is_patient_side': msg.sender_role_snapshot in (1, 2),
