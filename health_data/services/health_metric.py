@@ -44,6 +44,7 @@ _MONITORING_TASK_TYPES = {
     MetricType.BLOOD_PRESSURE,
     MetricType.BLOOD_OXYGEN,
     MetricType.HEART_RATE,
+    MetricType.STEPS,
     MetricType.WEIGHT,
 }
 
@@ -281,6 +282,12 @@ class HealthMetricService:
         )
         end_of_day = start_of_day + datetime.timedelta(days=1)
 
+        _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
+            patient_id=context.patient_id,
+            metric_type=MetricType.STEPS,
+            occurred_at=context.measured_at,
+        )
+
         metric = (
             HealthMetric.objects.filter(
                 patient_id=context.patient_id,
@@ -296,7 +303,11 @@ class HealthMetricService:
             # 当天已有记录：覆盖为当前上报的“当日累计步数”
             metric.value_main = step_delta
             metric.measured_at = context.measured_at
-            metric.save(update_fields=["value_main", "measured_at"])
+            update_fields = ["value_main", "measured_at"]
+            if task_id is not None and metric.task_id != task_id:
+                metric.task_id = task_id
+                update_fields.append("task_id")
+            metric.save(update_fields=update_fields)
         else:
             cls._persist_metric(
                 patient_id=context.patient_id,
@@ -304,6 +315,7 @@ class HealthMetricService:
                 value_main=step_delta,
                 measured_at=context.measured_at,
                 source=MetricSource.DEVICE,
+                task_id=task_id,
             )
 
     @classmethod
