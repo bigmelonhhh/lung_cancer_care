@@ -6,9 +6,10 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from business_support.models import Device
 from core.models import DailyTask, MonitoringTemplate, PlanItem, TreatmentCycle, choices
 from core.service import tasks as task_service
-from health_data.models import MetricType
+from health_data.models import HealthMetric, MetricType
 from health_data.services.health_metric import HealthMetricService
 from users.models import PatientProfile
 
@@ -302,3 +303,95 @@ class TaskCompletionServiceTest(TestCase):
         task_today.refresh_from_db()
         self.assertEqual(task_yesterday.status, choices.TaskStatus.COMPLETED)
         self.assertEqual(task_today.status, choices.TaskStatus.COMPLETED)
+
+    def test_save_manual_steps_completes_task_and_sets_task_id(self):
+        steps_template, _ = MonitoringTemplate.objects.get_or_create(
+            code="M_STEPS",
+            defaults={
+                "name": "步数监测",
+                "metric_type": "steps",
+                "is_active": True,
+            },
+        )
+        steps_plan = PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MONITORING,
+            template_id=steps_template.id,
+            item_name=steps_template.name,
+            schedule_days=[1],
+            status=choices.PlanItemStatus.ACTIVE,
+        )
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=steps_plan,
+            task_date=self.task_date,
+            task_type=choices.PlanItemCategory.MONITORING,
+            title=steps_plan.item_name,
+            status=choices.TaskStatus.PENDING,
+        )
+
+        metric = HealthMetricService.save_manual_metric(
+            patient_id=self.patient.id,
+            metric_type=MetricType.STEPS,
+            measured_at=self.occurred_at,
+            value_main=Decimal("1234"),
+        )
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
+        self.assertEqual(metric.task_id, task.id)
+
+    def test_handle_payload_steps_completes_task_and_backfills_task_id(self):
+        steps_template, _ = MonitoringTemplate.objects.get_or_create(
+            code="M_STEPS",
+            defaults={
+                "name": "步数监测",
+                "metric_type": "steps",
+                "is_active": True,
+            },
+        )
+        steps_plan = PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MONITORING,
+            template_id=steps_template.id,
+            item_name=steps_template.name,
+            schedule_days=[1],
+            status=choices.PlanItemStatus.ACTIVE,
+        )
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=steps_plan,
+            task_date=self.task_date,
+            task_type=choices.PlanItemCategory.MONITORING,
+            title=steps_plan.item_name,
+            status=choices.TaskStatus.PENDING,
+        )
+        device = Device.objects.create(
+            sn="SN-STEPS-TEST-001",
+            imei="IMEI-STEPS-TEST-001",
+            current_patient=self.patient,
+        )
+
+        payload = {
+            "type": "WATCH",
+            "deviceNo": device.imei,
+            "recordTime": int(self.occurred_at.timestamp() * 1000),
+            "watchData": {"pedo": {"step": 1234}},
+        }
+
+        HealthMetricService.handle_payload(payload)
+
+        task.refresh_from_db()
+        self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.task_id, task.id)
+
+        payload["watchData"]["pedo"]["step"] = 2345
+        HealthMetricService.handle_payload(payload)
+        metric.refresh_from_db()
+        self.assertEqual(metric.value_main, Decimal("2345"))
+        self.assertEqual(metric.task_id, task.id)
