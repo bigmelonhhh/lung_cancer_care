@@ -129,6 +129,10 @@ class LoggingConfigTests(unittest.TestCase):
             config["handlers"]["file"]["filename"],
             Path("/tmp") / "lung_cancer_care.log",
         )
+        self.assertEqual(
+            config["handlers"]["file"]["class"],
+            "concurrent_log_handler.ConcurrentTimedRotatingFileHandler",
+        )
         self.assertEqual(config["handlers"]["console"]["class"], "logging.StreamHandler")
 
     def test_build_logging_config_in_test_mode(self):

@@ -17,7 +17,8 @@ def build_logging_config(log_dir: Path, log_level: str = "INFO"):
                 "formatter": "json",
             },
             "file": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
+                # TimedRotatingFileHandler is not process-safe with gunicorn/celery multi-process writes.
+                "class": "concurrent_log_handler.ConcurrentTimedRotatingFileHandler",
                 "filename": log_dir / "lung_cancer_care.log",
                 "when": "midnight",
                 "interval": 1,
