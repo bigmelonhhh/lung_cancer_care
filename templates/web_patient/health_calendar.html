@@ -389,7 +389,12 @@
            const selectedDate = dateDisplayEl ? dateDisplayEl.textContent.trim() : '';
            const sep = url.includes('?') ? '&' : '?';
            const dateParam = selectedDate ? `&selected_date=${encodeURIComponent(selectedDate)}` : '';
-           window.location.href = url + sep + "patient_id={{ patient.id }}" + dateParam;
+           let finalUrl = url + sep + "patient_id={{ patient.id }}" + dateParam;
+           if (type === 'checkup') {
+               const sep2 = finalUrl.includes('?') ? '&' : '?';
+               finalUrl = finalUrl + sep2 + "source=calendar";
+           }
+           window.location.href = finalUrl;
       }
   }
 

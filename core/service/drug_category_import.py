@@ -266,17 +266,17 @@ def parse_category_file(html_path: str | Path = DEFAULT_SAMPLE_HTML) -> List[Par
     return parse_category_html(html)
 
 
-def _print_items(items: Iterable[ParsedDrugItem]) -> None:
-    for item in items:
-        print(
-            f"{item.full_name}\t商品名：{item.trade_name}\t厂商：{item.manufacturer}"
-        )
+# def _print_items(items: Iterable[ParsedDrugItem]) -> None:
+#     for item in items:
+#        print(
+#             f"{item.full_name}\t商品名：{item.trade_name}\t厂商：{item.manufacturer}"
+#         )
 
 
-def print_category_file(html_path: str | Path = DEFAULT_SAMPLE_HTML) -> List[ParsedDrugItem]:
-    items = parse_category_file(html_path)
-    _print_items(items)
-    return items
+# def print_category_file(html_path: str | Path = DEFAULT_SAMPLE_HTML) -> List[ParsedDrugItem]:
+#     items = parse_category_file(html_path)
+#     _print_items(items)
+#     return items
 
 
 def iter_category_page_html(

@@ -167,7 +167,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                         {
                             "type": "followup",
                             "subtitle": item.get("subtitle")
-                            or ("请及时完成您的随访任务" if not is_completed else "今日已完成"),
+                            or ("请及时完成您的随访任务" if not is_completed else "已完成随访任务"),
                             "action_text": "去完成",
                             "url": action_url,
                         }
@@ -177,7 +177,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                         {
                             "type": "checkup",
                             "subtitle": item.get("subtitle")
-                            or ("请及时完成您的复查任务" if not is_completed else "今日已完成"),
+                            or ("请及时完成您的复查任务" if not is_completed else "已完成复查任务"),
                             "action_text": "去完成",
                         }
                     )

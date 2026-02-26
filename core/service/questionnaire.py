@@ -44,7 +44,6 @@ class QuestionnaireService:
         >>> from core.service.questionnaire import QuestionnaireService
         >>> qs = QuestionnaireService.get_active_questionnaires()
         >>> for q in qs:
-        ...     print(q.name, q.code)
         """
         return list(
             Questionnaire.objects.filter(is_active=True).order_by("sort_order", "name")
@@ -232,6 +231,3 @@ class QuestionnaireService:
             f"questions={question_count}, options={option_count}",
         )
         lines.insert(1, "")
-
-        for line in lines:
-            print(line)

@@ -2,7 +2,7 @@
 {% load static %}
 
 {% block body %}
-<div class="min-h-screen bg-gray-50 pb-24 relative">
+<div class="min-h-screen bg-gray-50 pb-24 relative" data-entry-source="{{ entry_source|default:'' }}">
     <!-- Explicit CSRF Token -->
     {% csrf_token %}
     
@@ -390,10 +390,6 @@ function handleFileChange(event, itemId) {
                     if (img && img.src) URL.revokeObjectURL(img.src);
                     const newUrl = URL.createObjectURL(outFile);
                     if (img) img.src = newUrl;
-                    const sizeEl = wrapper.querySelector('[data-role="size"]');
-                    if (sizeEl) sizeEl.textContent = `${formatBytes(file.size)} → ${formatBytes(compressedSize)}`;
-                    const statusEl = wrapper.querySelector('[data-role="status"]');
-                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>阈值)');
                 }
                 if (!usedOriginal && compressedSize > 500 * 1024) {
                     showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
@@ -402,10 +398,6 @@ function handleFileChange(event, itemId) {
                 const entry = uploads[itemId].find(x => x.id === fileId);
                 if (entry) entry.failed = true;
                 const wrapper = document.getElementById(`preview-${fileId}`);
-                if (wrapper) {
-                    const statusEl = wrapper.querySelector('[data-role="status"]');
-                    if (statusEl) statusEl.textContent = '压缩失败';
-                }
                 if (err && err.message === 'compress_timeout') {
                     showStatus(`图片 ${file.name} 压缩超时(30秒)，将使用原图上传`, 'error');
                 } else {
@@ -431,18 +423,6 @@ function addPreviewElement(itemId, url, fileId, meta) {
     img.className = 'w-full h-full object-cover';
     wrapper.appendChild(img);
 
-    const badge = document.createElement('div');
-    badge.className = 'absolute left-2 bottom-2 right-2 bg-black/60 text-white text-[10px] leading-tight px-2 py-1 rounded';
-    const sizeText = (meta && (meta.originalSize || meta.originalSize === 0))
-        ? `${formatBytes(meta.originalSize)} → ${formatBytes(meta.compressedSize)}`
-        : '';
-    const statusText = meta && meta.statusText ? meta.statusText : '';
-    badge.innerHTML = `
-        <div data-role="size">${sizeText}</div>
-        <div data-role="status">${statusText}</div>
-    `;
-    wrapper.appendChild(badge);
-    
     // Delete Button (UI spec: 20x20, red, top-right 10px - using absolute positioning relative to wrapper)
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10';
@@ -638,10 +618,12 @@ function submitCheckup() {
             submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
             submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
             showStatus(T('uploadSuccess', '上传成功'), 'success');
-            // 联动刷新首页近7天完成度
-            const allCompleted = await refreshHomeCheckupStatus();
+            const entrySource = getEntrySource();
+            if (entrySource === 'home') {
+                const allCompleted = await refreshHomeCheckupStatus();
+                try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
+            }
             try { localStorage.setItem('refresh_flag', 'true'); } catch(e) {}
-            try { localStorage.setItem('checkup_all_completed', allCompleted ? 'true' : 'false'); } catch(e) {}
             setTimeout(() => { try { history.back(); } catch(e) {} }, 200);
         } catch (err) {
             showStatus(err.message || T('uploadFailed', '上传失败，请重试'), 'error');
@@ -652,9 +634,14 @@ function submitCheckup() {
 }
 
 // 近7天完成度查询并通知首页
+function getEntrySource() {
+    const container = document.querySelector('.min-h-screen[data-entry-source]');
+    return (container?.dataset?.entrySource || 'home').trim();
+}
+
 async function refreshHomeCheckupStatus() {
     const todayStr = document.getElementById('checkup-date')?.textContent?.trim();
-    if (!todayStr) return;
+    if (!todayStr) return false;
     const dayMs = 24 * 60 * 60 * 1000;
     const base = new Date(todayStr.replace(/-/g, '/')).getTime();
     const dates = Array.from({ length: 7 }).map((_, i) => {
@@ -664,15 +651,20 @@ async function refreshHomeCheckupStatus() {
         const da = String(d.getDate()).padStart(2, '0');
         return `${y}-${m}-${da}`;
     });
+    let hasCheckup = false;
     const results = await Promise.all(dates.map(async (d) => {
         try {
             const resp = await fetch("{% url 'web_patient:query_last_metric' %}" + `?date=${encodeURIComponent(d)}`, { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await resp.json();
+            if (!data?.plans?.checkup) {
+                return null;
+            }
+            hasCheckup = true;
             const status = data?.plans?.checkup?.status || 'pending';
             return status === 'completed';
         } catch { return false; }
     }));
-    const allCompleted = results.every(Boolean);
+    const allCompleted = hasCheckup && results.filter(r => r !== null).every(Boolean);
     // 通知首页模块
     try {
         window.parent?.postMessage?.({ type: 'CHECKUP_COMPLETION_UPDATED', allCompleted }, '*');
