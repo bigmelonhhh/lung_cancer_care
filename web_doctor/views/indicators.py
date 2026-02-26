@@ -1,5 +1,6 @@
 import logging
 from datetime import date, timedelta, datetime
+from decimal import Decimal, ROUND_CEILING, InvalidOperation
 from django.utils import timezone
 from django.core.cache import cache
 from core.models import TreatmentCycle, choices, QuestionnaireCode
@@ -169,6 +170,50 @@ def build_indicators_context(
     # 2. 获取常规指标数据
     charts = {}
 
+    def _to_decimal(value):
+        if value is None:
+            return None
+        try:
+            return Decimal(str(value))
+        except (InvalidOperation, TypeError, ValueError):
+            return None
+
+    def _calc_dynamic_y_max(values, default_max, y_min, baselines=None, decimals=0):
+        candidates = []
+        for val in values or []:
+            dec_val = _to_decimal(val)
+            if dec_val is not None:
+                candidates.append(dec_val)
+        for baseline in baselines or []:
+            dec_val = _to_decimal(baseline)
+            if dec_val is not None:
+                candidates.append(dec_val)
+
+        if not candidates:
+            return default_max
+
+        raw_max = max(candidates)
+        scaled = raw_max * Decimal("1.2")
+
+        if decimals <= 0:
+            y_max = scaled.to_integral_value(rounding=ROUND_CEILING)
+            epsilon = Decimal("1")
+        else:
+            quant = Decimal("1").scaleb(-decimals)
+            y_max = (scaled / quant).to_integral_value(rounding=ROUND_CEILING) * quant
+            epsilon = quant
+
+        y_min_dec = _to_decimal(y_min)
+        if y_min_dec is not None and y_max < (y_min_dec + epsilon):
+            y_max = y_min_dec + epsilon
+
+        if decimals <= 0:
+            try:
+                return int(y_max)
+            except (TypeError, ValueError):
+                return float(y_max)
+        return float(y_max)
+
     def get_daily_values(metric_type, value_key='value_main'):
         """获取指定指标范围内的每日数据（取每日最新一条）"""
         page = HealthMetricService.query_metrics_by_type(
@@ -188,10 +233,19 @@ def build_indicators_context(
             if val is not None:
                 data_map[d] = float(val)
         
-        return [data_map.get(d, 0) for d in date_list]
+        series = [data_map.get(d, 0) for d in date_list]
+        values = list(data_map.values())
+        return series, values
 
     # SpO2
-    spo2_data = get_daily_values(MetricType.BLOOD_OXYGEN)
+    spo2_data, spo2_values = get_daily_values(MetricType.BLOOD_OXYGEN)
+    spo2_y_max = _calc_dynamic_y_max(
+        spo2_values,
+        default_max=100,
+        y_min=80,
+        baselines=[patient.baseline_blood_oxygen],
+        decimals=0,
+    )
     charts['spo2'] = {
         "id": "chart-spo2",
         "title": "静息血氧 SpO2 (%)",
@@ -205,12 +259,19 @@ def build_indicators_context(
             }
         ],
         "y_min": 80,
-        "y_max": 100
+        "y_max": spo2_y_max
     }
 
     # BP (需要主值和副值)
-    bp_sbp = get_daily_values(MetricType.BLOOD_PRESSURE, 'value_main')
-    bp_dbp = get_daily_values(MetricType.BLOOD_PRESSURE, 'value_sub')
+    bp_sbp, bp_sbp_values = get_daily_values(MetricType.BLOOD_PRESSURE, 'value_main')
+    bp_dbp, bp_dbp_values = get_daily_values(MetricType.BLOOD_PRESSURE, 'value_sub')
+    bp_y_max = _calc_dynamic_y_max(
+        bp_sbp_values + bp_dbp_values,
+        default_max=220,
+        y_min=40,
+        baselines=[patient.baseline_blood_pressure_sbp, patient.baseline_blood_pressure_dbp],
+        decimals=0,
+    )
     charts['bp'] = {
         "id": "chart-bp",
         "title": "血压 收缩压/舒张压 (mmHg)",
@@ -230,11 +291,18 @@ def build_indicators_context(
             }
         ],
         "y_min": 40,
-        "y_max": 220
+        "y_max": bp_y_max
     }
 
     # Heart Rate
-    hr_data = get_daily_values(MetricType.HEART_RATE)
+    hr_data, hr_values = get_daily_values(MetricType.HEART_RATE)
+    hr_y_max = _calc_dynamic_y_max(
+        hr_values,
+        default_max=180,
+        y_min=40,
+        baselines=[patient.baseline_heart_rate],
+        decimals=0,
+    )
     charts['hr'] = {
         "id": "chart-hr",
         "title": "静息心率 (次/min)",
@@ -248,11 +316,18 @@ def build_indicators_context(
             }
         ],
         "y_min": 40,
-        "y_max": 180
+        "y_max": hr_y_max
     }
 
     # Weight
-    weight_data = get_daily_values(MetricType.WEIGHT)
+    weight_data, weight_values = get_daily_values(MetricType.WEIGHT)
+    weight_y_max = _calc_dynamic_y_max(
+        weight_values,
+        default_max=150,
+        y_min=30,
+        baselines=[patient.baseline_weight],
+        decimals=1,
+    )
     charts['weight'] = {
         "id": "chart-weight",
         "title": "体重 (KG)",
@@ -266,11 +341,18 @@ def build_indicators_context(
             }
         ],
         "y_min": 30,
-        "y_max": 150
+        "y_max": weight_y_max
     }
 
     # Temperature
-    temp_data = get_daily_values(MetricType.BODY_TEMPERATURE)
+    temp_data, temp_values = get_daily_values(MetricType.BODY_TEMPERATURE)
+    temp_y_max = _calc_dynamic_y_max(
+        temp_values,
+        default_max=42,
+        y_min=34,
+        baselines=[patient.baseline_body_temperature],
+        decimals=1,
+    )
     charts['temp'] = {
         "id": "chart-temp",
         "title": "体温 (℃)",
@@ -284,11 +366,18 @@ def build_indicators_context(
             }
         ],
         "y_min": 34,
-        "y_max": 42
+        "y_max": temp_y_max
     }
 
     # Steps
-    steps_data = get_daily_values(MetricType.STEPS)
+    steps_data, steps_values = get_daily_values(MetricType.STEPS)
+    steps_y_max = _calc_dynamic_y_max(
+        steps_values,
+        default_max=30000,
+        y_min=0,
+        baselines=[patient.baseline_steps],
+        decimals=0,
+    )
     charts['steps'] = {
         "id": "chart-steps",
         "title": "步数",
@@ -302,7 +391,7 @@ def build_indicators_context(
             }
         ],
         "y_min": 0,
-        "y_max": 30000 
+        "y_max": steps_y_max 
     }
 
     # 3. 服药记录

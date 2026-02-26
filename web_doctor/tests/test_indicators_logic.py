@@ -171,3 +171,97 @@ class IndicatorsLogicTests(TestCase):
         _, kwargs = mock_query.call_args
         self.assertEqual(kwargs["end_date"].date(), end_date + timedelta(days=1))
         self.assertEqual(kwargs["end_date"].time(), datetime.min.time())
+
+
+@patch("web_doctor.views.indicators.get_treatment_cycles", return_value=SimpleNamespace(object_list=[]))
+@patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+@patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+@patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+class IndicatorsYAxisMaxTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="testpatient_ymax", password="password", wx_openid="test_openid_ymax_123")
+        self.patient = PatientProfile.objects.create(user=self.user, name="Test Patient YMax")
+        self.today = timezone.localdate()
+        self.start_date = self.today - timedelta(days=2)
+        self.end_date = self.today
+
+    def _metric(self, day_offset, value_main=None, value_sub=None):
+        measured_at = timezone.make_aware(
+            datetime.combine(self.start_date + timedelta(days=day_offset), datetime.min.time())
+        )
+        return SimpleNamespace(measured_at=measured_at, value_main=value_main, value_sub=value_sub)
+
+    def _build_context(self):
+        return build_indicators_context(
+            self.patient,
+            start_date_str=self.start_date.isoformat(),
+            end_date_str=self.end_date.isoformat(),
+            filter_type="date",
+        )
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_spo2_ymax_from_data(self, mock_query, *_mocks):
+        self.patient.baseline_blood_oxygen = 90
+        self.patient.save(update_fields=["baseline_blood_oxygen"])
+
+        def side_effect(*args, **kwargs):
+            metric_type = kwargs.get("metric_type")
+            if metric_type == MetricType.BLOOD_OXYGEN:
+                return SimpleNamespace(object_list=[self._metric(0, value_main=95)])
+            return SimpleNamespace(object_list=[])
+
+        mock_query.side_effect = side_effect
+        context = self._build_context()
+        self.assertEqual(context["charts"]["spo2"]["y_max"], 114)
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_hr_ymax_uses_baseline(self, mock_query, *_mocks):
+        self.patient.baseline_heart_rate = 100
+        self.patient.save(update_fields=["baseline_heart_rate"])
+
+        def side_effect(*args, **kwargs):
+            metric_type = kwargs.get("metric_type")
+            if metric_type == MetricType.HEART_RATE:
+                return SimpleNamespace(object_list=[self._metric(1, value_main=70)])
+            return SimpleNamespace(object_list=[])
+
+        mock_query.side_effect = side_effect
+        context = self._build_context()
+        self.assertEqual(context["charts"]["hr"]["y_max"], 120)
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_weight_ymax_defaults_when_no_data(self, mock_query, *_mocks):
+        mock_query.return_value = SimpleNamespace(object_list=[])
+        context = self._build_context()
+        self.assertEqual(context["charts"]["weight"]["y_max"], 150)
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_bp_ymax_combines_sbp_dbp_and_baselines(self, mock_query, *_mocks):
+        self.patient.baseline_blood_pressure_sbp = 140
+        self.patient.baseline_blood_pressure_dbp = 90
+        self.patient.save(update_fields=["baseline_blood_pressure_sbp", "baseline_blood_pressure_dbp"])
+
+        def side_effect(*args, **kwargs):
+            metric_type = kwargs.get("metric_type")
+            if metric_type == MetricType.BLOOD_PRESSURE:
+                return SimpleNamespace(object_list=[self._metric(0, value_main=130, value_sub=85)])
+            return SimpleNamespace(object_list=[])
+
+        mock_query.side_effect = side_effect
+        context = self._build_context()
+        self.assertEqual(context["charts"]["bp"]["y_max"], 168)
+
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_temp_ymax_rounds_to_one_decimal(self, mock_query, *_mocks):
+        self.patient.baseline_body_temperature = 36.1
+        self.patient.save(update_fields=["baseline_body_temperature"])
+
+        def side_effect(*args, **kwargs):
+            metric_type = kwargs.get("metric_type")
+            if metric_type == MetricType.BODY_TEMPERATURE:
+                return SimpleNamespace(object_list=[self._metric(0, value_main=36.6)])
+            return SimpleNamespace(object_list=[])
+
+        mock_query.side_effect = side_effect
+        context = self._build_context()
+        self.assertEqual(context["charts"]["temp"]["y_max"], 44.0)
