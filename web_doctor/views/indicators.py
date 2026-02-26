@@ -211,8 +211,8 @@ def build_indicators_context(
             try:
                 return int(y_max)
             except (TypeError, ValueError):
-                return float(y_max)
-        return float(y_max)
+                return int(y_max)
+        return int(y_max)
 
     def get_daily_values(metric_type, value_key='value_main'):
         """获取指定指标范围内的每日数据（取每日最新一条）"""
