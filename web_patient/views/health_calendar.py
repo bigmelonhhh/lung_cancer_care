@@ -83,7 +83,7 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
     # 只有当目标日期不晚于今天时，才查询计划
     if target_date <= timezone.localdate():
         summary_list = get_daily_plan_summary(patient, task_date=target_date)
-        logging.info(f"[health_calendar] 获取计划摘要: {summary_list}")
+        # logging.info(f"[health_calendar] 获取计划摘要: {summary_list}")
     
     # 3. 获取该日期的具体指标数据（用于回显数值）
     # 注意：这里需要查询指定日期的指标，而不是最新指标

@@ -243,7 +243,7 @@ class ManagementStatsView:
                 start_date=start_date,
                 end_date=end_date
             )
-            logging.info(f"数据: {stats}")
+            # logging.info(f"数据: {stats}")
         except Exception as e:
             # 如果服务调用失败，返回空数据
             return empty_result

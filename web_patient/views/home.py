@@ -92,7 +92,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         service_days = served_days
         try:
             summary_list = get_daily_plan_summary(patient)
-            logging.info(summary_list)
+            # logging.info(summary_list)
             for item in summary_list:
                 status_val = item.get("status")
                 is_completed = status_val == core_choices.TaskStatus.COMPLETED

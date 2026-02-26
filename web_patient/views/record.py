@@ -345,7 +345,7 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                     value_main=Decimal(heart_val),
                     measured_at=record_time,
                 )
-                logging.info(f"血氧数据保存成功: patient_id={patient_id}")
+                # logging.info(f"血氧数据保存成功: patient_id={patient_id}")
                 
                 try:
                     date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
@@ -458,9 +458,9 @@ def record_spo2(request: HttpRequest) -> HttpResponse:
                     value_main=Decimal(weight_val),
                     measured_at=record_time,
                 )
-                logging.info(
-                    f"血氧数据保存成功: patient_id={patient_id}, weight={weight_val}"
-                )
+                # logging.info(
+                #     f"血氧数据保存成功: patient_id={patient_id}, weight={weight_val}"
+                # )
                 
                 try:
                     date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
@@ -863,7 +863,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
             for chk in checkup_library_items:
                 lib_id = chk.get("lib_id")
                 code = chk.get("code")
-                logging.info(f"111查询复查档案统计成功 code={code}")
+                
                 if not lib_id:
                     continue
 
@@ -1128,7 +1128,7 @@ def record_checkup(request: HttpRequest) -> HttpResponse:
             "checkup_item_id": _resolve_checkup_id(task),
             "plan_date": task.task_date.strftime("%Y-%m-%d"),
         })
-    logging.info(f"检查复查计划: {checkup_items}")
+    # logging.info(f"检查复查计划: {checkup_items}")
     context = {
         "patient_id": patient_id,
         "checkup_date": (selected_date or today).strftime("%Y-%m-%d"),
