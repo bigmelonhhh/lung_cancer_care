@@ -395,3 +395,63 @@ class TaskCompletionServiceTest(TestCase):
         metric.refresh_from_db()
         self.assertEqual(metric.value_main, Decimal("2345"))
         self.assertEqual(metric.task_id, task.id)
+
+    def test_handle_payload_steps_ignores_decrease_within_same_day(self):
+        steps_template, _ = MonitoringTemplate.objects.get_or_create(
+            code="M_STEPS",
+            defaults={
+                "name": "步数监测",
+                "metric_type": "steps",
+                "is_active": True,
+            },
+        )
+        steps_plan = PlanItem.objects.create(
+            cycle=self.cycle,
+            category=choices.PlanItemCategory.MONITORING,
+            template_id=steps_template.id,
+            item_name=steps_template.name,
+            schedule_days=[1],
+            status=choices.PlanItemStatus.ACTIVE,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=steps_plan,
+            task_date=self.task_date,
+            task_type=choices.PlanItemCategory.MONITORING,
+            title=steps_plan.item_name,
+            status=choices.TaskStatus.PENDING,
+        )
+        device = Device.objects.create(
+            sn="SN-STEPS-TEST-002",
+            imei="IMEI-STEPS-TEST-002",
+            current_patient=self.patient,
+        )
+
+        base_at = self.occurred_at.replace(hour=9, minute=0, second=0, microsecond=0)
+
+        payload = {
+            "type": "WATCH",
+            "deviceNo": device.imei,
+            "recordTime": int(base_at.timestamp() * 1000),
+            "watchData": {"pedo": {"step": 1000}},
+        }
+        HealthMetricService.handle_payload(payload)
+
+        payload["recordTime"] = int((base_at + timedelta(minutes=10)).timestamp() * 1000)
+        payload["watchData"]["pedo"]["step"] = 1200
+        HealthMetricService.handle_payload(payload)
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        updated_measured_at = metric.measured_at
+        self.assertEqual(metric.value_main, Decimal("1200"))
+
+        payload["recordTime"] = int((base_at + timedelta(minutes=20)).timestamp() * 1000)
+        payload["watchData"]["pedo"]["step"] = 1100
+        HealthMetricService.handle_payload(payload)
+
+        metric.refresh_from_db()
+        self.assertEqual(metric.value_main, Decimal("1200"))
+        self.assertEqual(metric.measured_at, updated_measured_at)

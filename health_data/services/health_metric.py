@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
@@ -29,7 +29,6 @@ from health_data.models import HealthMetric, MetricSource, MetricType
 from core.service import tasks as task_service
 from core.utils.sentinel import UNSET
 from patient_alerts.services.metric_alerts import MetricAlertService
-import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -273,14 +272,8 @@ class HealthMetricService:
             logger.warning("步数数据格式错误，跳过。payload=%s", payload)
             return
 
-        date = context.measured_at.date()
-        
-        
-        # 避免因北京时间与 UTC 时间的日期差异导致查询失败
-        start_of_day = context.measured_at.replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
-        end_of_day = start_of_day + datetime.timedelta(days=1)
+        # 按本地时区（当前配置为 Asia/Shanghai）切自然日，避免 UTC 日期偏移。
+        start_of_day, end_of_day = cls._resolve_local_day_window(context.measured_at)
 
         _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
             patient_id=context.patient_id,
@@ -300,6 +293,14 @@ class HealthMetricService:
         )
 
         if metric:
+            if metric.value_main is not None and step_delta < metric.value_main:
+                logger.info(
+                    "患者 %s 当天步数回退（new=%s < old=%s），忽略本次上报。",
+                    context.patient_id,
+                    step_delta,
+                    metric.value_main,
+                )
+                return
             # 当天已有记录：覆盖为当前上报的“当日累计步数”
             metric.value_main = step_delta
             metric.measured_at = context.measured_at
@@ -558,10 +559,10 @@ class HealthMetricService:
 
         target_types = [metric_type] if metric_type else MetricType.values
         start_dt = timezone.make_aware(
-            datetime.datetime.combine(target_date, datetime.datetime.min.time())
+            datetime.combine(target_date, datetime.min.time())
         )
         end_dt = timezone.make_aware(
-            datetime.datetime.combine(target_date, datetime.datetime.max.time())
+            datetime.combine(target_date, datetime.max.time())
         )
 
         result = {}
@@ -624,10 +625,10 @@ class HealthMetricService:
         if start_date > end_date:
             raise ValueError("start_date 不能晚于 end_date")
 
-        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
-        end_dt = datetime.datetime.combine(
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(
             end_date,
-            datetime.datetime.max.time(),
+            datetime.max.time(),
         )
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -691,10 +692,10 @@ class HealthMetricService:
         else:
             raise ValueError("不支持的指标类型")
 
-        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
-        end_dt = datetime.datetime.combine(
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(
             end_date,
-            datetime.datetime.max.time(),
+            datetime.max.time(),
         )
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -781,10 +782,10 @@ class HealthMetricService:
         }
         month_index = {label: idx for idx, label in enumerate(month_labels)}
 
-        start_dt = datetime.datetime.combine(start_date, datetime.datetime.min.time())
-        end_dt = datetime.datetime.combine(
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(
             end_date,
-            datetime.datetime.max.time(),
+            datetime.max.time(),
         )
         if timezone.is_aware(timezone.now()):
             start_dt = timezone.make_aware(start_dt)
@@ -812,7 +813,7 @@ class HealthMetricService:
                 continue
             month_date = (
                 month_value.date()
-                if isinstance(month_value, datetime.datetime)
+                if isinstance(month_value, datetime)
                 else month_value
             )
             month_label = f"{month_date.year:04d}-{month_date.month:02d}"
@@ -1118,6 +1119,24 @@ class HealthMetricService:
             return timezone.now()
 
     @staticmethod
+    def _resolve_local_day_window(measured_at: datetime) -> tuple[datetime, datetime]:
+        """
+        基于当前 Django 时区计算“自然日”时间窗口 [start, end)。
+
+        用于统一“按天”口径：
+        - 步数当天覆盖写入；
+        - 其他指标每日条数上限统计。
+        """
+        tz = timezone.get_current_timezone()
+        if timezone.is_naive(measured_at):
+            local_dt = timezone.make_aware(measured_at, tz)
+        else:
+            local_dt = timezone.localtime(measured_at, tz)
+        start_of_day = local_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+        return start_of_day, end_of_day
+
+    @staticmethod
     def _can_store_today(
         patient_id: int, metric_type: str, measured_at: datetime
     ) -> bool:
@@ -1128,11 +1147,14 @@ class HealthMetricService:
 
         这里接收的数据来自设备
         """
-        date = measured_at.date()
+        start_of_day, end_of_day = HealthMetricService._resolve_local_day_window(
+            measured_at
+        )
         count = HealthMetric.objects.filter(
             patient_id=patient_id,
             metric_type=metric_type,
-            measured_at__date=date,
+            measured_at__gte=start_of_day,
+            measured_at__lt=end_of_day,
         ).count()
         return count < MAX_DAILY_RECORDS
 
