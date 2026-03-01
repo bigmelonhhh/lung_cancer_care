@@ -37,11 +37,12 @@ class HealthRecordDetailReviewRecordTests(TestCase):
         blood = CheckupLibrary.objects.create(name="血常规", code="BLOOD_ROUTINE", is_active=True)
 
         today = timezone.localdate()
-        month = today.strftime("%Y-%m")
+        base_date = today.replace(day=15)
+        month = base_date.strftime("%Y-%m")
 
         DailyTask.objects.create(
             patient=self.patient,
-            task_date=today,
+            task_date=base_date,
             task_type=PlanItemCategory.CHECKUP,
             title="胸部CT",
             status=TaskStatus.COMPLETED,
@@ -50,7 +51,7 @@ class HealthRecordDetailReviewRecordTests(TestCase):
         )
         DailyTask.objects.create(
             patient=self.patient,
-            task_date=today - timedelta(days=1),
+            task_date=base_date - timedelta(days=1),
             task_type=PlanItemCategory.CHECKUP,
             title="胸部CT",
             status=TaskStatus.PENDING,
@@ -58,7 +59,7 @@ class HealthRecordDetailReviewRecordTests(TestCase):
         )
         DailyTask.objects.create(
             patient=self.patient,
-            task_date=today,
+            task_date=base_date,
             task_type=PlanItemCategory.CHECKUP,
             title="血常规",
             status=TaskStatus.COMPLETED,

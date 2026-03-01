@@ -40,7 +40,8 @@
                     color: '{{ s.color }}',
                     borderRadius: [4, 4, 0, 0]
                 },
-                data: {{ s.data|safe }}
+                data: {{ s.data|safe }},
+                missing: {{ s.missing|default:"[]"|safe }}
             },
             {% endfor %}
         ];
@@ -79,6 +80,22 @@
                     trigger: 'axis',
                     axisPointer: {
                         type: 'shadow'
+                    },
+                    formatter: function(params) {
+                        if (!params || !params.length) return '';
+                        var lines = [params[0].axisValue];
+                        params.forEach(function(param) {
+                            var series = seriesData[param.seriesIndex] || {};
+                            var missingList = series.missing || [];
+                            var isMissing = missingList[param.dataIndex] === 1;
+                            var value = param.value;
+                            if ((value === undefined || value === null) && param.data && param.data.value !== undefined) {
+                                value = param.data.value;
+                            }
+                            var display = isMissing ? '无' : value;
+                            lines.push(param.marker + ' ' + param.seriesName + ': ' + display);
+                        });
+                        return lines.join('<br/>');
                     }
                 },
                 legend: {

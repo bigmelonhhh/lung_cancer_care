@@ -8,6 +8,7 @@ from core.service.treatment_cycle import get_treatment_cycles as _get_treatment_
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
+from health_data.models import QuestionnaireSubmission
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from users.models import PatientProfile
 
@@ -487,6 +488,21 @@ def build_indicators_context(
     # ==========================================
     
     def fetch_chart_data(code, title, y_min, y_max,series_name, color="#3b82f6"):
+        submission_dates = None
+        try:
+            submission_times = QuestionnaireSubmission.objects.filter(
+                patient_id=patient.id,
+                questionnaire__code=code,
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
+            ).values_list("created_at", flat=True)
+            submission_dates = {
+                timezone.localtime(created_at).date()
+                for created_at in submission_times
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch questionnaire submission dates for {code}: {e}")
+
         try:
             results = QuestionnaireSubmissionService.list_daily_questionnaire_scores(
                 patient=patient,
@@ -496,10 +512,20 @@ def build_indicators_context(
             )
             # Map results to date_strs
             score_map = {res["date"]: res["score"] for res in results}
-            data = [float(score_map.get(d, 0)) for d in date_list]
+            data = []
+            missing_flags = []
+            has_submission_dates = submission_dates is not None
+            submission_dates = submission_dates or set()
+            for d in date_list:
+                data.append(float(score_map.get(d, 0)))
+                if has_submission_dates:
+                    missing_flags.append(0 if d in submission_dates else 1)
+                else:
+                    missing_flags.append(0)
         except Exception as e:
             logger.error(f"Failed to fetch questionnaire scores for {code}: {e}")
             data = [0] * len(date_strs)
+            missing_flags = [0] * len(date_strs)
 
         # Generate a unique ID based on code, handle special cases if needed (e.g. psych/depressive)
         chart_id_suffix = code.lower().replace("q_", "")
@@ -510,7 +536,7 @@ def build_indicators_context(
             "id": f"chart-{chart_id_suffix}", 
             "title": title,
             "dates": date_strs,
-            "series": [{"name": series_name, "data": data, "color": color}],
+            "series": [{"name": series_name, "data": data, "missing": missing_flags, "color": color}],
             "y_min": y_min,
             "y_max": y_max
         }

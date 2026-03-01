@@ -1,4 +1,5 @@
 from datetime import timedelta, datetime
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -6,8 +7,8 @@ from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from users.models import PatientProfile
-from core.models import TreatmentCycle, choices
-from health_data.models import HealthMetric, MetricType
+from core.models import TreatmentCycle, choices, Questionnaire, QuestionnaireCode
+from health_data.models import HealthMetric, MetricType, QuestionnaireSubmission
 from web_doctor.views.indicators import build_indicators_context
 
 User = get_user_model()
@@ -171,6 +172,53 @@ class IndicatorsLogicTests(TestCase):
         _, kwargs = mock_query.call_args
         self.assertEqual(kwargs["end_date"].date(), end_date + timedelta(days=1))
         self.assertEqual(kwargs["end_date"].time(), datetime.min.time())
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_questionnaire_chart_missing_flags(self, mock_query, *_mocks):
+        mock_query.return_value = SimpleNamespace(object_list=[])
+
+        questionnaire_specs = [
+            (QuestionnaireCode.Q_PHYSICAL, "体能评估"),
+            (QuestionnaireCode.Q_BREATH, "呼吸评估"),
+            (QuestionnaireCode.Q_COUGH, "咳嗽与痰色评估"),
+            (QuestionnaireCode.Q_APPETITE, "食欲评估"),
+            (QuestionnaireCode.Q_PAIN, "身体疼痛评估"),
+            (QuestionnaireCode.Q_SLEEP, "睡眠质量评估"),
+            (QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估"),
+            (QuestionnaireCode.Q_ANXIETY, "焦虑评估"),
+        ]
+        for code, name in questionnaire_specs:
+            Questionnaire.objects.get_or_create(code=code, defaults={"name": name})
+
+        start_date = self.today - timedelta(days=2)
+        end_date = self.today
+
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=Questionnaire.objects.get(code=QuestionnaireCode.Q_PHYSICAL),
+            total_score=Decimal("0"),
+        )
+        QuestionnaireSubmission.objects.filter(id=submission.id).update(
+            created_at=timezone.make_aware(
+                datetime.combine(start_date, datetime.min.time())
+            )
+        )
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=start_date.isoformat(),
+            end_date_str=end_date.isoformat(),
+            filter_type="date",
+        )
+
+        series = context["charts"]["physical"]["series"][0]
+        self.assertEqual(len(series["missing"]), 3)
+        self.assertEqual(series["missing"], [0, 1, 1])
+        self.assertEqual(series["data"][0], 0.0)
+        self.assertEqual(series["data"][1], 0.0)
+        self.assertEqual(series["data"][2], 0.0)
 
 
 @patch("web_doctor.views.indicators.get_treatment_cycles", return_value=SimpleNamespace(object_list=[]))
