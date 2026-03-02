@@ -71,3 +71,11 @@ class PatientHomeUnreadBadgeTests(TestCase):
     html = self._get_home_html()
     self.assertIn('id="unread-badge"', html)
     self.assertIn('style="display:none"', html)
+
+  @patch("web_patient.views.chat_api.get_unread_chat_count", return_value=0)
+  def test_step_card_before_daily_plan(self, mock_func):
+    html = self._get_home_html()
+    self.assertRegex(
+      html,
+      r"<h3 class=\"text-lg font-bold text-slate-800\">今日计划</h3>[\s\S]*今日步数",
+    )
