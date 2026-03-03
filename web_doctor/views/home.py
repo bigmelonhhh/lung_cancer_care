@@ -340,10 +340,8 @@ def build_home_context(patient: PatientProfile) -> dict:
 
     def _format_adherence_display(metrics: dict) -> str:
         rate = metrics.get("rate")
-        completed = metrics.get("completed", 0)
-        total = metrics.get("total", 0)
         percent = "--" if rate is None else f"{rate * 100:.0f}%"
-        return f"{percent}（{completed}/{total}）"
+        return percent
 
     medication_adherence_display = _format_adherence_display(medication_adherence)
     monitoring_adherence_display = _format_adherence_display(monitoring_adherence)

@@ -68,8 +68,8 @@ class HomeAdherenceTests(TestCase):
 
         self.assertIn("medication_adherence", context)
         self.assertIn("monitoring_adherence", context)
-        self.assertEqual(context["medication_adherence_display"], "50%（5/10）")
-        self.assertEqual(context["monitoring_adherence_display"], "50%（10/20）")
+        self.assertEqual(context["medication_adherence_display"], "50%")
+        self.assertEqual(context["monitoring_adherence_display"], "50%")
         self.assertTrue(context["adherence_date_range"])
 
         mock_get_adherence_metrics.assert_any_call(
@@ -146,10 +146,10 @@ class HomeAdherenceTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode("utf-8")
         self.assertTrue(
-            "用药依从率：50%（5/10）" in content,
+            "用药依从率：50%" in content,
             "依从性展示缺少用药依从率（未开始输出预期文本）。",
         )
         self.assertTrue(
-            "常规监测综合依从率：50%（10/20）" in content,
+            "常规监测综合依从率：50%" in content,
             "依从性展示缺少常规监测综合依从率（未开始输出预期文本）。",
         )

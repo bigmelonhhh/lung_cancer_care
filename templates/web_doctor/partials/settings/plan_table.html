@@ -1,26 +1,49 @@
 {# 单个疗程的计划视图：用药 + 复查 + 随访 #}
 {% load plan_dates %}
 
-<div id="plan-table-container" class="overflow-x-auto mt-3">
-  <table class="w-full text-left border-collapse">
-    <thead>
-      <tr class="bg-slate-50 text-sm uppercase text-slate-500 border-b border-slate-200">
-        <th class="px-4 py-3 font-semibold w-48">项目名称</th>
-        <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
-        <th class="px-2 py-3 font-semibold w-24">默认频次</th>
-        {% for i in "x"|rjust:"21" %}
-        <th
-          class="cursor-pointer px-1 py-3 font-medium text-center w-8 {% if forloop.counter == 1 or forloop.counter == 8 or forloop.counter == 15 %}text-sm text-slate-800{% else %}text-[10px] text-slate-400{% endif %} {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}"
-          data-plan-day="{{ forloop.counter }}"
-          data-plan-label="D{{ forloop.counter }}"
-          data-plan-date="{% if cycle and cycle.start_date %}{{ cycle.start_date|add_days:forloop.counter0|date:'m/d' }}{% endif %}"
-        >
-          D{{ forloop.counter }}
-        </th>
-        {% endfor %}
-      </tr>
-    </thead>
+<div id="plan-table-container" class="mt-3">
+  <div class="sticky top-0 z-20 bg-slate-50">
+    <div class="overflow-hidden" data-plan-table-head-clip>
+      <table class="w-full text-left border-separate border-spacing-0 table-fixed min-w-[1056px]" data-plan-table-head aria-hidden="true">
+        <colgroup>
+          <col class="w-48">
+          <col class="w-24">
+          <col class="w-24">
+          {% for i in "x"|rjust:"21" %}
+          <col class="w-8">
+          {% endfor %}
+        </colgroup>
+        <thead>
+          <tr class="bg-slate-50 text-sm uppercase text-slate-500 border-b border-slate-200">
+            <th class="px-4 py-3 font-semibold w-48">项目名称</th>
+            <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
+            <th class="px-2 py-3 font-semibold w-24">默认频次</th>
+            {% for i in "x"|rjust:"21" %}
+            <th
+              class="cursor-pointer px-1 py-3 font-medium text-center w-8 {% if forloop.counter == 1 or forloop.counter == 8 or forloop.counter == 15 %}text-sm text-slate-800{% else %}text-[10px] text-slate-400{% endif %} {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}"
+              data-plan-day="{{ forloop.counter }}"
+              data-plan-label="D{{ forloop.counter }}"
+              data-plan-date="{% if cycle and cycle.start_date %}{{ cycle.start_date|add_days:forloop.counter0|date:'m/d' }}{% endif %}"
+            >
+              D{{ forloop.counter }}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+      </table>
+    </div>
+  </div>
 
+  <div class="overflow-x-auto" data-plan-table-body-scroll>
+    <table class="w-full text-left border-separate border-spacing-0 table-fixed min-w-[1056px]">
+      <colgroup>
+        <col class="w-48">
+        <col class="w-24">
+        <col class="w-24">
+        {% for i in "x"|rjust:"21" %}
+        <col class="w-8">
+        {% endfor %}
+      </colgroup>
     <tbody class="divide-y divide-slate-100 group-section">
       <tr class="bg-slate-50/30">
         <td colspan="24" class="px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50/40">
@@ -33,7 +56,6 @@
       {% endfor %}
       {% endwith %}
     </tbody>
-
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
         <td colspan="24" class="px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50/30">
@@ -107,7 +129,6 @@
       {% endfor %}
       {% endwith %}
     </tbody>
-
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
         <td colspan="24" class="px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50/30">
@@ -120,7 +141,8 @@
       {% endfor %}
       {% endwith %}
     </tbody>
-  </table>
+    </table>
+  </div>
 
   <div
     id="plan-day-tooltip"
@@ -281,6 +303,46 @@
       var tooltipEl = getTooltipEl();
       if (!tooltipEl) return;
       positionTooltip(tooltipEl, activeTarget);
+    });
+  })();
+</script>
+
+<script>
+  (function() {
+    function initPlanTableStickyHead(root) {
+      var container = null;
+      if (root && root.id === 'plan-table-container') {
+        container = root;
+      } else if (root && root.closest) {
+        container = root.closest('#plan-table-container');
+      } else {
+        container = document.getElementById('plan-table-container');
+      }
+      if (!container || container.dataset.planStickyBound === '1') return;
+
+      var bodyScroll = container.querySelector('[data-plan-table-body-scroll]');
+      var headTable = container.querySelector('[data-plan-table-head]');
+      if (!bodyScroll || !headTable) return;
+
+      function syncHeader() {
+        var offset = bodyScroll.scrollLeft || 0;
+        headTable.style.transform = 'translateX(' + (-offset) + 'px)';
+      }
+
+      bodyScroll.addEventListener('scroll', syncHeader, { passive: true });
+      window.addEventListener('resize', syncHeader);
+      syncHeader();
+      container.dataset.planStickyBound = '1';
+    }
+
+    initPlanTableStickyHead();
+
+    document.body.addEventListener('htmx:afterSwap', function(event) {
+      var target = event.target;
+      if (!target) return;
+      if (target.id === 'plan-table-container' || (target.closest && target.closest('#plan-table-container'))) {
+        initPlanTableStickyHead(target);
+      }
     });
   })();
 </script>
