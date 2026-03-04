@@ -1,0 +1,8 @@
+<div class="flex-1 overflow-y-auto p-4 pb-20">
+    <p class="text-xs text-slate-500 mb-3">建议横屏查看，可完整浏览当月日期数据。</p>
+    {% if chart_mode == "medication_table" %}
+        {% include "web_patient/partials/health_record_chart_medication_table.html" %}
+    {% else %}
+        {% include "web_patient/partials/health_record_chart_line.html" %}
+    {% endif %}
+</div>

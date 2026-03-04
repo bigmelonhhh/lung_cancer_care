@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -36,11 +37,21 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
             initial["phone"] = phone
         form = PatientEntryVerificationForm(initial=initial)
 
+    base_url = getattr(settings, "WEB_BASE_URL", "").rstrip("/")
+
+    def _full_url(path: str) -> str:
+        if not base_url:
+            return path
+        return f"{base_url}{path}"
+
     return render(
         request,
         "web_patient/patient_entry.html",
         {
             "form": form,
+            "urls": {
+                "user_policy": _full_url("/p/docs/User_Policy/"),
+            },
         },
     )
 

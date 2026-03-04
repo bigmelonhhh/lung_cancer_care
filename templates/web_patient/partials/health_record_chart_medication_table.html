@@ -1,0 +1,36 @@
+<div class="bg-white rounded-xl shadow-sm overflow-hidden">
+    <div class="overflow-y-auto max-h-[80vh]">
+        <table class="w-full border-separate border-spacing-0 text-center">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="sticky top-0 z-20 px-4 py-3 text-sm font-semibold text-slate-700 bg-slate-50 border-b border-slate-200">日期</th>
+                    <th class="sticky top-0 z-20 px-4 py-3 text-sm font-semibold text-slate-700 bg-slate-50 border-b border-slate-200">是否服药</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in chart_payload.items %}
+                <tr class="border-t border-slate-100">
+                    <td class="px-4 py-3 text-sm text-slate-600">{{ item.date }}</td>
+                    <td class="px-4 py-3">
+                        {% if item.status == "completed" %}
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-500 text-white">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7" />
+                            </svg>
+                        </span>
+                        {% elif item.status == "pending" %}
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-rose-500 text-white">
+                            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 6l12 12M18 6l-12 12" />
+                            </svg>
+                        </span>
+                        {% else %}
+                        <span class="text-sm text-slate-400">无</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
