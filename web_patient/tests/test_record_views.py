@@ -106,7 +106,7 @@ class RecordViewTests(TestCase):
         ).last()
         self.assertTrue(timezone.is_aware(metric.measured_at))
 
-    def test_health_record_detail_end_date_inclusive(self):
+    def test_health_record_detail_month_boundary_excludes_next_month_midnight(self):
         tz = timezone.get_current_timezone()
         month = "2025-01"
         month_end = timezone.make_aware(
@@ -137,4 +137,4 @@ class RecordViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         records = response.context["records"]
         dates = sorted(item["date"] for item in records)
-        self.assertEqual(dates, ["2025-01-31", "2025-02-01"])
+        self.assertEqual(dates, ["2025-01-31"])
