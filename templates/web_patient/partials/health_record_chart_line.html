@@ -1,10 +1,32 @@
 <div class="bg-white rounded-xl border border-slate-200 p-3">
-    <div id="health-record-line-chart" style="width: 100%; height: 72vh; min-height: 520px;"></div>
+    <div id="health-record-line-chart" style="width: 100%; height: 75vh; min-height: 520px;"></div>
 </div>
 
 <script>
     (function () {
         const payload = JSON.parse('{{ chart_payload_json|escapejs }}');
+        const recordType = '{{ record_type|default:""|escapejs }}';
+        const questionnaireTypes = new Set([
+            'physical',
+            'breath',
+            'cough',
+            'appetite',
+            'pain',
+            'sleep',
+            'psych',
+            'anxiety'
+        ]);
+
+        function resolveTooltipUnit(type) {
+            if (type === 'temperature') return '(°C)';
+            if (type === 'spo2') return '(%)';
+            if (type === 'weight') return '(Kg)';
+            if (type === 'bp') return '(mmHg)';
+            if (type === 'heart') return '(次/分钟)';
+            if (type === 'step') return '(步)';
+            if (questionnaireTypes.has(type)) return '(评分)';
+            return '';
+        }
 
         window.renderHealthRecordLineChart = function () {
             const chartDom = document.getElementById('health-record-line-chart');
@@ -124,6 +146,7 @@
                     formatter: function (params) {
                         if (!Array.isArray(params) || params.length === 0) return '';
                         const dateLabel = params[0].axisValue || '';
+                        const unit = resolveTooltipUnit(recordType);
                         const rows = params.map(function (item) {
                             const dataItem = item.data || {};
                             let displayValue = '0';
@@ -138,7 +161,8 @@
                                 const numericValue = Number(rawValue);
                                 displayValue = Number.isFinite(numericValue) ? String(numericValue) : '0';
                             }
-                            return item.marker + item.seriesName + ': ' + displayValue;
+                            const valueWithUnit = displayValue === '无' ? '无' : (displayValue + unit);
+                            return item.marker + item.seriesName + ': ' + valueWithUnit;
                         });
                         return [dateLabel].concat(rows).join('<br/>');
                     },
