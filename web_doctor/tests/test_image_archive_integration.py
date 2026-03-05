@@ -3,12 +3,13 @@ import json
 from datetime import date, timedelta
 from django.test import TestCase, RequestFactory
 from django.contrib.auth import get_user_model
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from users.models import AssistantProfile, DoctorProfile, PatientProfile
 from users import choices
 from health_data.models import ReportUpload, ReportImage, ClinicalEvent, UploadSource
-from core.models import CheckupLibrary
+from core.models import CheckupLibrary, DailyTask, choices as core_choices
 from web_doctor.views.reports_history_data import handle_reports_history_section, batch_archive_images
 
 from django.core.exceptions import PermissionDenied
@@ -362,3 +363,203 @@ class ImageArchiveIntegrationTest(TestCase):
         handle_reports_history_section(request, context)
         archives = context['archives_list']
         self.assertEqual(len(archives), 2)
+
+    def test_checkup_plan_unarchived_badge_visible_and_hidden_after_archive(self):
+        # 先将 setUp 中个人中心图片归档，避免干扰“未归档”文案计数
+        existing_event = ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_date=date(2023, 1, 1),
+            event_type=ReportImage.RecordType.OUTPATIENT,
+            created_by_doctor=self.doctor_profile,
+            archiver_name="Dr. Test",
+        )
+        ReportImage.objects.filter(id__in=[self.img1.id, self.img2.id]).update(
+            clinical_event=existing_event,
+            record_type=ReportImage.RecordType.OUTPATIENT,
+            report_date=date(2023, 1, 1),
+        )
+
+        checkup_task = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date(2023, 1, 3),
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            title="复查任务-胸部CT",
+            interaction_payload={"checkup_id": self.ct_checkup.id},
+        )
+        upload = ReportUpload.objects.create(
+            patient=self.patient,
+            upload_source=UploadSource.CHECKUP_PLAN,
+            related_task=checkup_task,
+        )
+        upload_time = timezone.datetime(2023, 1, 3, 8, 0, 0, tzinfo=timezone.get_current_timezone())
+        ReportUpload.objects.filter(pk=upload.pk).update(created_at=upload_time)
+        plan_img = ReportImage.objects.create(
+            upload=upload,
+            image_url="http://test.com/checkup-plan.jpg",
+            record_type=ReportImage.RecordType.CHECKUP,
+            report_date=date(2023, 1, 3),
+        )
+
+        request = self.factory.get('/?tab=images')
+        request.user = self.doctor_user
+        context = {"patient": self.patient}
+        template_name = handle_reports_history_section(request, context)
+        html_before = render_to_string(template_name, context=context, request=request)
+
+        self.assertIn("复查-胸部CT", html_before)
+        self.assertIn("bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-br-lg", html_before)
+
+        payload = {
+            "updates": [
+                {
+                    "image_id": plan_img.id,
+                    "category": "复查-胸部CT",
+                    "report_date": "2023-01-03",
+                }
+            ]
+        }
+        request_archive = self.factory.post(
+            f'/doctor/workspace/patient/{self.patient.id}/reports/archive/',
+            data=json.dumps(payload),
+            content_type='application/json'
+        )
+        request_archive.user = self.doctor_user
+        response = batch_archive_images(request_archive, self.patient.id)
+        self.assertEqual(response.status_code, 200)
+
+        plan_img.refresh_from_db()
+        self.assertIsNotNone(plan_img.clinical_event_id)
+
+        context_after = {"patient": self.patient}
+        template_name_after = handle_reports_history_section(request, context_after)
+        html_after = render_to_string(template_name_after, context=context_after, request=request)
+
+        self.assertIn("复查-胸部CT", html_after)
+        self.assertNotIn("bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-br-lg", html_after)
+
+    def test_second_submit_ignores_archived_images_and_archives_remaining(self):
+        task = DailyTask.objects.create(
+            patient=self.patient,
+            task_date=date(2023, 1, 5),
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            title="复查任务-胸部CT",
+            interaction_payload={"checkup_id": self.ct_checkup.id},
+        )
+        upload = ReportUpload.objects.create(
+            patient=self.patient,
+            upload_source=UploadSource.CHECKUP_PLAN,
+            related_task=task,
+        )
+        upload_time = timezone.datetime(2023, 1, 5, 8, 0, 0, tzinfo=timezone.get_current_timezone())
+        ReportUpload.objects.filter(pk=upload.pk).update(created_at=upload_time)
+
+        plan_imgs = [
+            ReportImage.objects.create(
+                upload=upload,
+                image_url=f"http://test.com/checkup-plan-{idx}.jpg",
+                record_type=ReportImage.RecordType.CHECKUP,
+                report_date=date(2023, 1, 5),
+            )
+            for idx in range(4)
+        ]
+
+        first_payload = {
+            "updates": [
+                {
+                    "image_id": plan_imgs[0].id,
+                    "category": "复查-胸部CT",
+                    "report_date": "2023-01-05",
+                },
+                {
+                    "image_id": plan_imgs[1].id,
+                    "category": "复查-胸部CT",
+                    "report_date": "2023-01-05",
+                },
+            ]
+        }
+        req_first = self.factory.post(
+            f"/doctor/workspace/patient/{self.patient.id}/reports/archive/",
+            data=json.dumps(first_payload),
+            content_type="application/json",
+        )
+        req_first.user = self.doctor_user
+        first_resp = batch_archive_images(req_first, self.patient.id)
+        self.assertEqual(first_resp.status_code, 200)
+
+        for img in plan_imgs:
+            img.refresh_from_db()
+        self.assertIsNotNone(plan_imgs[0].clinical_event_id)
+        self.assertIsNotNone(plan_imgs[1].clinical_event_id)
+        self.assertIsNone(plan_imgs[2].clinical_event_id)
+        self.assertIsNone(plan_imgs[3].clinical_event_id)
+
+        # 第二次提交故意混入已归档 ID，后端应忽略并仅归档剩余未归档图片
+        second_payload = {
+            "updates": [
+                {
+                    "image_id": img.id,
+                    "category": "复查-胸部CT",
+                    "report_date": "2023-01-05",
+                }
+                for img in plan_imgs
+            ]
+        }
+        req_second = self.factory.post(
+            f"/doctor/workspace/patient/{self.patient.id}/reports/archive/",
+            data=json.dumps(second_payload),
+            content_type="application/json",
+        )
+        req_second.user = self.doctor_user
+        second_resp = batch_archive_images(req_second, self.patient.id)
+        self.assertEqual(second_resp.status_code, 200)
+
+        for img in plan_imgs:
+            img.refresh_from_db()
+            self.assertIsNotNone(img.clinical_event_id)
+
+        request_get = self.factory.get("/?tab=images")
+        request_get.user = self.doctor_user
+        context = {"patient": self.patient}
+        handle_reports_history_section(request_get, context)
+        all_images = []
+        for group in context["archives_list"]:
+            all_images.extend(group.get("images") or [])
+        archived_map = {item["id"]: item["is_archived"] for item in all_images}
+        for img in plan_imgs:
+            self.assertTrue(archived_map.get(img.id))
+
+    def test_all_archived_submit_returns_200_with_info_toast(self):
+        payload = {
+            "updates": [
+                {
+                    "image_id": self.img1.id,
+                    "category": "门诊",
+                    "report_date": "2023-05-01",
+                }
+            ]
+        }
+
+        req_first = self.factory.post(
+            f"/doctor/workspace/patient/{self.patient.id}/reports/archive/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        req_first.user = self.doctor_user
+        first_resp = batch_archive_images(req_first, self.patient.id)
+        self.assertEqual(first_resp.status_code, 200)
+
+        req_second = self.factory.post(
+            f"/doctor/workspace/patient/{self.patient.id}/reports/archive/",
+            data=json.dumps(payload),
+            content_type="application/json",
+        )
+        req_second.user = self.doctor_user
+        second_resp = batch_archive_images(req_second, self.patient.id)
+        self.assertEqual(second_resp.status_code, 200)
+        self.assertIn("HX-Trigger", second_resp)
+        trigger_payload = json.loads(second_resp["HX-Trigger"])
+        self.assertEqual(trigger_payload["show-toast"]["message"], "无未归档图片需要归档")
+        self.assertEqual(trigger_payload["show-toast"]["type"], "info")
+
+        self.img1.refresh_from_db()
+        self.assertIsNotNone(self.img1.clinical_event_id)

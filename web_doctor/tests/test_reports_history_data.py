@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 
 from core.models import CheckupLibrary, DailyTask, choices as core_choices
-from health_data.models import ReportImage, ReportUpload
+from health_data.models import ClinicalEvent, ReportImage, ReportUpload
 from health_data.models.report_upload import UploadSource
 from users import choices
 from users.models import PatientProfile
@@ -163,3 +163,37 @@ class ReportsHistoryDataArchivesCategoryTests(TestCase):
         self.assertEqual(categories_by_date["2025-02-02"], "复查")
         self.assertEqual(categories_by_date["2025-02-03"], "复查")
 
+    def test_checkup_plan_image_archived_flag_follows_clinical_event(self):
+        lib_ct = CheckupLibrary.objects.create(name="胸部CT", code="CT_CHECKUP_ARCHIVE_FLAG", is_active=True)
+        task_ct = self._create_task("复查任务-胸部CT", {"checkup_id": lib_ct.id})
+
+        upload = self._create_upload_with_image(
+            source=UploadSource.CHECKUP_PLAN,
+            created_at=datetime(2025, 3, 1, 10, 0, 0),
+            report_date=date(2025, 3, 1),
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item=None,
+            related_task=task_ct,
+        )
+        image = upload.images.first()
+
+        archives_list, _page_obj = _get_archives_data(self.patient, page=1, page_size=10)
+        images = self._flatten_images(archives_list)
+        img_payload = next(img for img in images if img["id"] == image.id)
+        self.assertEqual(img_payload["category"], "复查-胸部CT")
+        self.assertFalse(img_payload["is_archived"])
+
+        event = ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_date=date(2025, 3, 1),
+            event_type=ReportImage.RecordType.CHECKUP,
+            archiver_name="测试归档人",
+        )
+        image.clinical_event = event
+        image.save(update_fields=["clinical_event"])
+
+        archives_list_after, _page_obj = _get_archives_data(self.patient, page=1, page_size=10)
+        images_after = self._flatten_images(archives_list_after)
+        img_payload_after = next(img for img in images_after if img["id"] == image.id)
+        self.assertEqual(img_payload_after["category"], "复查-胸部CT")
+        self.assertTrue(img_payload_after["is_archived"])
