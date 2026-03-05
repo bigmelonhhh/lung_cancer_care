@@ -1,15 +1,18 @@
 import logging
-from datetime import datetime
+import calendar
+import json
+from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 
-from core.models import DailyTask, QuestionnaireCode
+from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
-from health_data.models import MetricType
+from health_data.models import HealthMetric, MetricType
 from health_data.services.health_metric import HealthMetricService
 from market.service.order import get_paid_orders_for_patient
 from patient_alerts.services.todo_list import TodoListService
@@ -25,6 +28,31 @@ def _is_member(patient) -> bool:
         getattr(patient, "is_member", False)
         and getattr(patient, "membership_expire_date", None)
     )
+
+
+QUESTIONNAIRE_RECORD_TYPE_MAP = {
+    "physical": QuestionnaireCode.Q_PHYSICAL,
+    "breath": QuestionnaireCode.Q_BREATH,
+    "cough": QuestionnaireCode.Q_COUGH,
+    "appetite": QuestionnaireCode.Q_APPETITE,
+    "pain": QuestionnaireCode.Q_PAIN,
+    "sleep": QuestionnaireCode.Q_SLEEP,
+    "psych": QuestionnaireCode.Q_PSYCH,
+    "anxiety": QuestionnaireCode.Q_ANXIETY,
+}
+
+RECORD_TYPE_METRIC_MAP = {
+    "medical": MetricType.USE_MEDICATED,
+    "temperature": MetricType.BODY_TEMPERATURE,
+    "bp": MetricType.BLOOD_PRESSURE,
+    "spo2": MetricType.BLOOD_OXYGEN,
+    "weight": MetricType.WEIGHT,
+    "step": MetricType.STEPS,
+    "heart": MetricType.HEART_RATE,
+    **QUESTIONNAIRE_RECORD_TYPE_MAP,
+}
+
+QUESTIONNAIRE_RECORD_TYPES = set(QUESTIONNAIRE_RECORD_TYPE_MAP.keys())
 
 
 def _get_patient_from_query(request: HttpRequest):
@@ -271,6 +299,208 @@ def health_records(request: HttpRequest) -> HttpResponse:
     return render(request, "web_doctor/mobile/health_records.html", context)
 
 
+def _resolve_month_window(current_month: str) -> tuple[str, datetime, datetime, int]:
+    """解析月份窗口，返回规范化月份、月起始、下月起始、当月天数。"""
+    try:
+        month_start = datetime.strptime(current_month, "%Y-%m")
+    except ValueError:
+        month_start = timezone.localtime(timezone.now()).replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        current_month = month_start.strftime("%Y-%m")
+
+    if month_start.month == 12:
+        month_end_exclusive = month_start.replace(year=month_start.year + 1, month=1)
+    else:
+        month_end_exclusive = month_start.replace(month=month_start.month + 1)
+
+    days_in_month = calendar.monthrange(month_start.year, month_start.month)[1]
+    return current_month, month_start, month_end_exclusive, days_in_month
+
+
+def _build_medication_chart_payload(
+    *,
+    patient,
+    month_start_date,
+    month_end_exclusive_date,
+    month_days,
+) -> dict:
+    task_map = {}
+    task_qs = DailyTask.objects.filter(
+        patient=patient,
+        task_type=PlanItemCategory.MEDICATION,
+        task_date__gte=month_start_date,
+        task_date__lt=month_end_exclusive_date,
+    ).only("task_date", "status")
+
+    for task in task_qs:
+        task_map.setdefault(task.task_date, []).append(task.status)
+
+    items = []
+    for day in month_days:
+        statuses = task_map.get(day) or []
+        if not statuses:
+            status = "none"
+        elif all(status_val == TaskStatus.COMPLETED for status_val in statuses):
+            status = "completed"
+        else:
+            status = "pending"
+
+        items.append(
+            {
+                "full_date": day.strftime("%Y-%m-%d"),
+                "date": day.strftime("%m-%d"),
+                "status": status,
+            }
+        )
+
+    return {"items": items}
+
+
+def _build_line_chart_payload(
+    *,
+    patient_id: int,
+    metric_type: str,
+    record_type: str,
+    title: str,
+    start_date: datetime,
+    end_date_exclusive: datetime,
+    month_days,
+) -> dict:
+    color_map = {
+        "temperature": "#ef4444",
+        "weight": "#06b6d4",
+        "spo2": "#3b82f6",
+        "heart": "#f97316",
+        "step": "#22c55e",
+        "bp": "#2563eb",
+    }
+    day_set = set(month_days)
+    latest_map = {}
+    questionnaire_task_dates = set()
+
+    if record_type in QUESTIONNAIRE_RECORD_TYPES and month_days:
+        questionnaire_code = QUESTIONNAIRE_RECORD_TYPE_MAP.get(record_type)
+        questionnaire_id = (
+            Questionnaire.objects.filter(code=questionnaire_code)
+            .values_list("id", flat=True)
+            .first()
+        )
+        task_filters = Q(interaction_payload__questionnaire_code=questionnaire_code)
+        if questionnaire_id:
+            task_filters = task_filters | Q(plan_item__template_id=questionnaire_id)
+
+        questionnaire_task_dates = set(
+            DailyTask.objects.filter(
+                patient_id=patient_id,
+                task_type=PlanItemCategory.QUESTIONNAIRE,
+                task_date__gte=month_days[0],
+                task_date__lt=end_date_exclusive.date(),
+            )
+            .filter(task_filters)
+            .values_list("task_date", flat=True)
+        )
+
+    metrics = (
+        HealthMetric.objects.filter(
+            patient_id=patient_id,
+            metric_type=metric_type,
+            measured_at__gte=start_date,
+            measured_at__lt=end_date_exclusive,
+        )
+        .order_by("measured_at", "id")
+        .only("measured_at", "value_main", "value_sub")
+    )
+
+    for metric in metrics:
+        local_dt = timezone.localtime(metric.measured_at)
+        local_day = local_dt.date()
+        if local_day not in day_set:
+            continue
+
+        if record_type == "bp":
+            latest_map[local_day] = {
+                "ssy": int(metric.value_main) if metric.value_main is not None else None,
+                "szy": int(metric.value_sub) if metric.value_sub is not None else None,
+            }
+        elif metric.value_main is not None:
+            if record_type in {"temperature", "weight"}:
+                latest_map[local_day] = float(metric.value_main)
+            elif record_type in {"spo2", "heart", "step"}:
+                latest_map[local_day] = int(metric.value_main)
+            else:
+                latest_map[local_day] = float(metric.value_main)
+
+    dates = [day.strftime("%m-%d") for day in month_days]
+    full_dates = [day.strftime("%Y-%m-%d") for day in month_days]
+
+    if record_type == "bp":
+        ssy_data = []
+        szy_data = []
+        for day in month_days:
+            day_values = latest_map.get(day)
+            ssy_data.append(day_values.get("ssy") if day_values else 0)
+            szy_data.append(day_values.get("szy") if day_values else 0)
+
+        return {
+            "dates": dates,
+            "full_dates": full_dates,
+            "series": [
+                {"name": "收缩压", "data": ssy_data, "color": "#ef4444"},
+                {"name": "舒张压", "data": szy_data, "color": "#2563eb"},
+            ],
+        }
+
+    if record_type in QUESTIONNAIRE_RECORD_TYPES:
+        series_data = []
+        for day in month_days:
+            has_task = day in questionnaire_task_dates
+            day_score = latest_map.get(day)
+            if not has_task:
+                series_data.append(
+                    {
+                        "value": 0,
+                        "raw_value": None,
+                        "is_no_task": True,
+                    }
+                )
+                continue
+
+            normalized_score = day_score if day_score is not None else 0
+            series_data.append(
+                {
+                    "value": normalized_score,
+                    "raw_value": normalized_score,
+                    "is_no_task": False,
+                }
+            )
+
+        return {
+            "dates": dates,
+            "full_dates": full_dates,
+            "series": [
+                {
+                    "name": title,
+                    "data": series_data,
+                    "color": color_map.get(record_type, "#3b82f6"),
+                }
+            ],
+        }
+
+    series_data = [latest_map.get(day, 0) for day in month_days]
+    return {
+        "dates": dates,
+        "full_dates": full_dates,
+        "series": [
+            {
+                "name": title,
+                "data": series_data,
+                "color": color_map.get(record_type, "#3b82f6"),
+            }
+        ],
+    }
+
+
 @login_required
 @check_doctor_or_assistant
 def health_record_detail(request: HttpRequest) -> HttpResponse:
@@ -327,33 +557,64 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
             )
         return redirect(buy_url)
 
+    chart_record_types = {
+        "medical",
+        "temperature",
+        "bp",
+        "spo2",
+        "weight",
+        "step",
+        "heart",
+        "bp_hr",
+        "physical",
+        "breath",
+        "cough",
+        "appetite",
+        "pain",
+        "sleep",
+        "psych",
+        "anxiety",
+    }
+
     current_month = request.GET.get("month", datetime.now().strftime("%Y-%m"))
-    try:
-        start_date = datetime.strptime(current_month, "%Y-%m")
-        if start_date.month == 12:
-            end_date = start_date.replace(year=start_date.year + 1, month=1)
-        else:
-            end_date = start_date.replace(month=start_date.month + 1)
-    except ValueError:
-        start_date = datetime.now().replace(day=1)
-        if start_date.month == 12:
-            end_date = start_date.replace(year=start_date.year + 1, month=1)
-        else:
-            end_date = start_date.replace(month=start_date.month + 1)
-        current_month = start_date.strftime("%Y-%m")
+    current_month, month_start, month_end_exclusive, days_in_month = _resolve_month_window(
+        current_month
+    )
 
     tz = timezone.get_current_timezone()
-    if timezone.is_naive(start_date):
-        start_date = timezone.make_aware(start_date, tz)
-    if timezone.is_naive(end_date):
-        end_date = timezone.make_aware(end_date, tz)
+    start_date = (
+        timezone.make_aware(month_start, tz) if timezone.is_naive(month_start) else month_start
+    )
+    end_date_exclusive = (
+        timezone.make_aware(month_end_exclusive, tz)
+        if timezone.is_naive(month_end_exclusive)
+        else month_end_exclusive
+    )
+    # HealthMetricService.query_metrics_by_type 使用 <= 结束时间，这里转成“下月起始前1微秒”避免跨月误纳入
+    end_date_inclusive = end_date_exclusive - timedelta(microseconds=1)
+    month_start_date = month_start.date()
+    month_end_exclusive_date = month_end_exclusive.date()
+    month_days = [month_start_date + timedelta(days=i) for i in range(days_in_month)]
 
     try:
-        page = int(request.GET.get("page", 1))
-        limit = int(request.GET.get("limit", 30))
+        page = max(1, int(request.GET.get("page", 1)))
     except (TypeError, ValueError):
         page = 1
-        limit = 30
+
+    limit_raw = request.GET.get("limit")
+    if limit_raw is None:
+        limit = days_in_month
+    else:
+        try:
+            limit = int(limit_raw)
+        except (TypeError, ValueError):
+            limit = days_in_month
+    limit = max(1, min(limit, days_in_month))
+
+    chart_available = bool(record_type in chart_record_types)
+    chart_mode = "medication_table" if record_type == "medical" else "line"
+    chart_payload = {"items": []} if chart_mode == "medication_table" else {"dates": [], "series": []}
+    chart_canvas_width = max(days_in_month * 48, 640)
 
     records = []
     has_more = False
@@ -369,8 +630,6 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                 if not checkup_id_int:
                     records = []
                 else:
-                    month_start_date = start_date.date()
-                    month_end_exclusive = end_date.date()
                     today = timezone.localdate()
                     weekday_map = {
                         0: "星期一",
@@ -387,7 +646,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             patient=patient,
                             task_type=PlanItemCategory.CHECKUP,
                             task_date__gte=month_start_date,
-                            task_date__lt=month_end_exclusive,
+                            task_date__lt=month_end_exclusive_date,
                             interaction_payload__checkup_id=checkup_id_int,
                         )
                         .order_by("-task_date", "-id")
@@ -449,6 +708,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     "record_type": record_type,
                     "title": title,
                     "records": records,
+                    "has_records": bool(records),
                     "current_month": current_month,
                     "patient_id": patient_id,
                     "has_more": has_more,
@@ -457,28 +717,16 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     "source": source,
                     "show_operation_controls": show_operation_controls,
                     "show_add_button": show_add_button,
+                    "days_in_month": days_in_month,
+                    "chart_mode": chart_mode,
+                    "chart_available": chart_available,
+                    "chart_payload": chart_payload,
+                    "chart_payload_json": json.dumps(chart_payload, ensure_ascii=False),
+                    "chart_canvas_width": chart_canvas_width,
                 }
                 return render(request, "web_doctor/mobile/health_record_detail.html", context)
 
-            metric_type_map = {
-                "medical": MetricType.USE_MEDICATED,
-                "temperature": MetricType.BODY_TEMPERATURE,
-                "bp": MetricType.BLOOD_PRESSURE,
-                "spo2": MetricType.BLOOD_OXYGEN,
-                "weight": MetricType.WEIGHT,
-                "step": MetricType.STEPS,
-                "heart": MetricType.HEART_RATE,
-                "physical": QuestionnaireCode.Q_PHYSICAL,
-                "breath": QuestionnaireCode.Q_BREATH,
-                "cough": QuestionnaireCode.Q_COUGH,
-                "appetite": QuestionnaireCode.Q_APPETITE,
-                "pain": QuestionnaireCode.Q_PAIN,
-                "sleep": QuestionnaireCode.Q_SLEEP,
-                "psych": QuestionnaireCode.Q_PSYCH,
-                "anxiety": QuestionnaireCode.Q_ANXIETY,
-            }
-
-            db_metric_type = metric_type_map.get(record_type)
+            db_metric_type = RECORD_TYPE_METRIC_MAP.get(record_type)
 
             if db_metric_type:
                 page_obj = HealthMetricService.query_metrics_by_type(
@@ -487,7 +735,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     page=page,
                     page_size=limit,
                     start_date=start_date,
-                    end_date=end_date,
+                    end_date=end_date_inclusive,
                 )
 
                 raw_list = page_obj.object_list
@@ -586,6 +834,25 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                         }
                     )
 
+                if chart_available:
+                    if record_type == "medical":
+                        chart_payload = _build_medication_chart_payload(
+                            patient=patient,
+                            month_start_date=month_start_date,
+                            month_end_exclusive_date=month_end_exclusive_date,
+                            month_days=month_days,
+                        )
+                    else:
+                        chart_payload = _build_line_chart_payload(
+                            patient_id=int(patient_id),
+                            metric_type=db_metric_type,
+                            record_type=record_type,
+                            title=title,
+                            start_date=start_date,
+                            end_date_exclusive=end_date_exclusive,
+                            month_days=month_days,
+                        )
+
         except Exception:
             logging.exception("查询详情失败")
             records = []
@@ -608,6 +875,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "record_type": record_type,
         "title": title,
         "records": records,
+        "has_records": bool(records),
         "current_month": current_month,
         "patient_id": patient_id,
         "has_more": has_more,
@@ -616,6 +884,12 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "source": source,
         "show_operation_controls": show_operation_controls,
         "show_add_button": show_add_button,
+        "days_in_month": days_in_month,
+        "chart_mode": chart_mode,
+        "chart_available": chart_available,
+        "chart_payload": chart_payload,
+        "chart_payload_json": json.dumps(chart_payload, ensure_ascii=False),
+        "chart_canvas_width": chart_canvas_width,
     }
 
     return render(request, "web_doctor/mobile/health_record_detail.html", context)

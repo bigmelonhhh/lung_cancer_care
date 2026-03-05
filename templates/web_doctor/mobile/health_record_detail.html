@@ -22,7 +22,7 @@
         <!-- 2. Date & Chart Switch -->
         <div class="flex items-center border-t border-slate-100 h-12">
             <!-- Date Picker -->
-            <div class="flex-1 flex items-center justify-center border-r border-slate-100 active:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('month-picker').showPicker()">
+            <div class="flex-1 flex items-center justify-center {% if chart_available %}border-r border-slate-100{% endif %} active:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('month-picker').showPicker()">
                  <input type="month" id="month-picker" class="absolute inset-0 opacity-0 cursor-pointer" onchange="updateMonthDisplay(this)" value="{{ current_month }}">
                  <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -33,18 +33,21 @@
                  </svg>
             </div>
             <!-- Chart Switch -->
-            <div onclick="showChartToast()" class="flex-1 flex items-center justify-center transition cursor-pointer">
+            {% if chart_available %}
+            <div id="chart-switch-btn" onclick="toggleViewMode()" class="flex-1 flex items-center justify-center transition cursor-pointer">
                 <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                 </svg>
-                <span class="text-slate-800 font-medium ml-1">切换图表</span>
+                <span id="chart-switch-text" class="text-slate-800 font-medium ml-1">切换图表</span>
             </div>
+            {% endif %}
         </div>
     </div>
 
-    <!-- Scrollable List Area -->
+    <div id="record-list-wrapper" class="flex-1 flex flex-col">
+      <!-- Scrollable List Area -->
       {% if records %}
-    <div id="record-list" class="flex-1 overflow-y-auto p-4 space-y-3 pb-20" onscroll="handleScroll(this)">
+      <div id="record-list" class="flex-1 overflow-y-auto p-4 space-y-3 pb-20" onscroll="handleScroll(this)">
         {% for record in records %}
         <div class="bg-white rounded-xl shadow-sm p-4 relative group record-item" data-id="{{ record.id }}">
             <!-- Header -->
@@ -113,7 +116,7 @@
         <div id="no-more-data" class="hidden py-4 text-center text-slate-400 text-sm">
             已全部加载
         </div>
-    </div>
+      </div>
       {% else %}
         <!-- Empty State -->
         <div class="flex flex-col items-center justify-center py-10 pt-10" style="margin-top: 100px;">
@@ -122,6 +125,13 @@
             </div>
             <p class="text-slate-500 font-medium text-sm">暂无记录</p>
         </div>
+      {% endif %}
+    </div>
+
+    {% if chart_available %}
+    <div id="record-chart-wrapper" class="flex-1 hidden">
+        {% include "web_patient/partials/health_record_chart_container.html" %}
+    </div>
     {% endif %}
 </div>
 
@@ -132,6 +142,7 @@
     let isLoading = false;
     let hasMore = {{ has_more|yesno:"true,false" }};
     let nextPage = {{ next_page|default:"null" }};
+    let isChartMode = false;
     const currentType = "{{ record_type }}";
     const currentTitle = "{{ title }}";
     const patientId = "{{ patient_id }}";
@@ -139,9 +150,12 @@
     const currentCheckupId = "{{ checkup_id|default:'' }}";
     const currentSource = "{{ source|default:'' }}";
     const showOperationControls = {{ show_operation_controls|yesno:"true,false" }};
+    const hasRecords = {{ has_records|yesno:"true,false" }};
+    const chartAvailable = {{ chart_available|yesno:"true,false" }};
+    const currentChartMode = "{{ chart_mode }}";
 
     function handleScroll(el) {
-        if (isLoading || !hasMore) return;
+        if (isChartMode || isLoading || !hasMore) return;
         
         // Check if near bottom
         if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
@@ -153,7 +167,7 @@
        history.back();
     }
     function loadMoreData() {
-        if (isLoading || !hasMore) return;
+        if (isChartMode || isLoading || !hasMore) return;
         isLoading = true;
         
         document.getElementById('loading-spinner').classList.remove('hidden');
@@ -282,9 +296,33 @@
         }, 2200);
       }
 
-    // 切换图表提示
-    function showChartToast() {
-        showToast('即将上线，敬请期待');
+    function toggleViewMode() {
+        if (!chartAvailable) {
+            showToast('当前类型暂无图表', 'info');
+            return;
+        }
+        if (!hasRecords) {
+            showToast('暂无数据', 'info');
+            return;
+        }
+        const listWrapper = document.getElementById('record-list-wrapper');
+        const chartWrapper = document.getElementById('record-chart-wrapper');
+        const switchText = document.getElementById('chart-switch-text');
+        if (!listWrapper || !chartWrapper || !switchText) return;
+
+        isChartMode = !isChartMode;
+        if (isChartMode) {
+            listWrapper.classList.add('hidden');
+            chartWrapper.classList.remove('hidden');
+            switchText.innerText = '切换列表';
+            if (currentChartMode === 'line' && typeof window.renderHealthRecordLineChart === 'function') {
+                window.renderHealthRecordLineChart();
+            }
+        } else {
+            chartWrapper.classList.add('hidden');
+            listWrapper.classList.remove('hidden');
+            switchText.innerText = '切换图表';
+        }
     }
     
     // 更新月份显示并刷新数据

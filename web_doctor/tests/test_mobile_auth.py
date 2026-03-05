@@ -8,7 +8,15 @@ from django.utils import timezone
 from chat.models import Conversation, Message
 from chat.models.choices import ConversationType, MessageContentType
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
-from users.models import CustomUser, DoctorProfile, DoctorStudio, PatientProfile, SalesProfile
+from users.models import (
+    AssistantProfile,
+    CustomUser,
+    DoctorAssistantMap,
+    DoctorProfile,
+    DoctorStudio,
+    PatientProfile,
+    SalesProfile,
+)
 from users import choices
 from users.services.auth import AuthService
 
@@ -42,6 +50,23 @@ class MobileAuthTests(TestCase):
         )
         self.doctor_profile.studio = self.studio
         self.doctor_profile.save(update_fields=["studio"])
+
+        # Create an assistant user
+        self.assistant = CustomUser.objects.create_user(
+            username="assistant_test",
+            phone="13800000003",
+            password=self.password,
+            user_type=choices.UserType.ASSISTANT,
+        )
+        self.assistant_profile = AssistantProfile.objects.create(
+            user=self.assistant,
+            name="医助A",
+            status=choices.AssistantStatus.ACTIVE,
+        )
+        DoctorAssistantMap.objects.create(
+            doctor=self.doctor_profile,
+            assistant=self.assistant_profile,
+        )
         
         # Create a sales user
         self.sales = CustomUser.objects.create_user(
@@ -87,6 +112,24 @@ class MobileAuthTests(TestCase):
             HTTP_USER_AGENT="Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.106 Mobile Safari/537.36"
         )
         self.assertRedirects(response, self.mobile_home_url)
+
+    def test_assistant_mobile_login_redirects_to_mobile_home(self):
+        """测试移动端医助登录跳转到移动端首页"""
+        response = self.client.post(
+            self.login_url,
+            {"phone": self.assistant.phone, "password": self.password},
+            HTTP_USER_AGENT="Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1"
+        )
+        self.assertRedirects(response, self.mobile_home_url)
+
+    def test_assistant_pc_login_redirects_to_workspace(self):
+        """测试PC端医助登录跳转到工作台"""
+        response = self.client.post(
+            self.login_url,
+            {"phone": self.assistant.phone, "password": self.password},
+            HTTP_USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        )
+        self.assertRedirects(response, self.doctor_workspace_url)
 
     def test_sales_login_redirects_to_dashboard_regardless_of_device(self):
         """测试销售登录始终跳转到销售看板，不受设备影响"""
