@@ -894,17 +894,144 @@
             }
         }
 
+        /* Hamburger Menu */
+        .hamburger {
+            display: none;
+            cursor: pointer;
+            width: 30px;
+            height: 24px;
+            flex-direction: column;
+            justify-content: space-between;
+            z-index: 1001;
+        }
+        
+        .hamburger span {
+            display: block;
+            height: 3px;
+            width: 100%;
+            background-color: var(--primary);
+            border-radius: 3px;
+            transition: all 0.3s ease;
+        }
+
         @media (max-width: 768px) {
+            nav {
+                padding: 0.75rem 1.5rem;
+            }
+            
+            .hamburger {
+                display: flex;
+            }
+            
             .nav-links {
-                display: none; /* Ideally replace with hamburger menu, but simple hide for now */
+                display: flex;
+                position: absolute;
+                top: calc(100% + 1rem);
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(20px);
+                -webkit-backdrop-filter: blur(20px);
+                flex-direction: column;
+                align-items: center;
+                gap: 1.5rem;
+                padding: 2rem;
+                border-radius: var(--radius-lg);
+                border: 1px solid rgba(255, 255, 255, 0.5);
+                box-shadow: var(--shadow-lg);
+                
+                /* Hidden state */
+                opacity: 0;
+                transform: translateY(-10px);
+                pointer-events: none;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            
+            .nav-links.active {
+                opacity: 1;
+                transform: translateY(0);
+                pointer-events: all;
+            }
+            
+            .nav-links a {
+                font-size: 1.1rem;
+                width: 100%;
+                text-align: center;
+                padding: 0.5rem 0;
+            }
+
+            /* Hamburger Animation */
+            .hamburger.active span:nth-child(1) {
+                transform: translateY(10.5px) rotate(45deg);
+            }
+            .hamburger.active span:nth-child(2) {
+                opacity: 0;
+            }
+            .hamburger.active span:nth-child(3) {
+                transform: translateY(-10.5px) rotate(-45deg);
             }
             
             .hero-content h1 {
-                font-size: 2.5rem;
+                font-size: 2.2rem;
+            }
+
+            section {
+                padding: 4rem 1.5rem;
+            }
+            
+            /* Hero Visual Mobile Adaptation */
+            .hero {
+                padding-top: 8rem;
+                padding-left: 1.5rem;
+                padding-right: 1.5rem;
+                overflow: hidden; /* Ensure no horizontal scroll */
+            }
+
+            .hero::before {
+                width: 300px;
+                height: 300px;
+                right: -50px;
+                top: 50px;
+            }
+
+            .hero::after {
+                width: 250px;
+                height: 250px;
+                left: -50px;
+                bottom: 50px;
+            }
+
+            .medical-ai-visual {
+                width: 280px;
+                height: 280px;
+            }
+
+            .ai-core {
+                width: 80px;
+                height: 80px;
+            }
+
+            .ai-core svg {
+                width: 40px;
+                height: 40px;
+            }
+
+            .ai-ring:nth-child(2) {
+                width: 180px;
+                height: 180px;
+            }
+
+            .ai-ring:nth-child(3) {
+                width: 260px;
+                height: 260px;
             }
             
             .carrier-grid, .dtx-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            .mockup-container img {
+                width: 100% !important;
             }
         }
     </style>
@@ -913,7 +1040,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{% static 'website1.png' %}" alt="智医康科技 Logo" height="40">
+            <img src="{% static 'website1.webp' %}" alt="智医康科技 Logo" height="40">
         </div>
         <div class="nav-links">
             <a href="#home">首页</a>
@@ -921,7 +1048,11 @@
             <a href="#dtx">数字疗法</a>
             <a href="#about">关于我们</a>
         </div>
-        <!-- Mobile Menu Placeholder -->
+        <div class="hamburger">
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
     </nav>
 
     <section class="hero" id="home">
@@ -959,7 +1090,7 @@
                 <h3>智能腕表 (Smart Watch)</h3>
                 <p>核心中枢，内置4G模组可独立通讯。支持动态血压、心率、血氧饱和度实时监测。</p>
                 <div class="device-watch">
-                    <img src="{% static 'website2.png' %}" alt="智能腕表" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="{% static 'website2.webp' %}" alt="智能腕表" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <ul>
                     <li>无感采集体征数据</li>
@@ -971,7 +1102,7 @@
                 <h3>医疗级物联网外设</h3>
                 <p>实时监测，异常报警。集成智能血压计、血氧计、体重秤，自动同步数据至云端。</p>
                 <div class="device-box">
-                    <img src="{% static 'website3.png' %}" alt="医疗级物联网外设" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="{% static 'website3.webp' %}" alt="医疗级物联网外设" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <ul>
                     <li>上臂式医疗级精准测量</li>
@@ -1047,14 +1178,14 @@
         </div>
         <div class="system-display">
             <div class="mockup-container">
-                <img src="{% static 'website4.png' %}" alt="医生驾驶舱" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+                <img src="{% static 'website4.webp' %}" alt="医生驾驶舱" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             </div>
             
             <div class="mockup-container">
                 <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
-                    <img src="{% static 'website5.png' %}" alt="患者端1" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <img src="{% static 'website6.png' %}" alt="患者端2" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <img src="{% static 'website7.png' %}" alt="患者端3" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website5.webp' %}" alt="患者端1" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website6.webp' %}" alt="患者端2" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website7.webp' %}" alt="患者端3" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 </div>
             </div>
         </div>
@@ -1086,6 +1217,25 @@
                 nav.classList.remove('scrolled');
             }
         });
+
+        // Mobile Menu Toggle
+        const hamburger = document.querySelector('.hamburger');
+        const navLinks = document.querySelector('.nav-links');
+        const navLinksItems = document.querySelectorAll('.nav-links a');
+
+        if (hamburger) {
+            hamburger.addEventListener('click', () => {
+                hamburger.classList.toggle('active');
+                navLinks.classList.toggle('active');
+            });
+
+            navLinksItems.forEach(link => {
+                link.addEventListener('click', () => {
+                    hamburger.classList.remove('active');
+                    navLinks.classList.remove('active');
+                });
+            });
+        }
     </script>
 </body>
 </html>

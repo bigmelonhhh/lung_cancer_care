@@ -10,6 +10,7 @@ from django.utils import timezone
 from chat.models.choices import MessageContentType
 from chat.services.chat import ChatService
 from patient_alerts.services.todo_list import TodoListService
+from users import choices
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 
@@ -40,17 +41,35 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
             return value
         return value[:limit] + "......"
 
+    def resolve_primary_studio(profile):
+        if profile is None:
+            return None
+        if profile.studio is not None:
+            return profile.studio
+        owned_studios = list(profile.owned_studios.all())
+        if owned_studios:
+            return owned_studios[0]
+        return None
+
     doctor_profile = getattr(request.user, "doctor_profile", None)
     assistant_profile = getattr(request.user, "assistant_profile", None)
+    is_assistant = request.user.user_type == choices.UserType.ASSISTANT
+    assistant_doctors_qs = None
+    if assistant_profile is not None:
+        assistant_doctors_qs = (
+            assistant_profile.doctors.select_related("studio")
+            .prefetch_related("owned_studios")
+            .distinct()
+        )
     acting_doctor_profile = doctor_profile
-    if acting_doctor_profile is None and assistant_profile is not None:
-        acting_doctor_profile = assistant_profile.doctors.first()
+    if acting_doctor_profile is None and assistant_doctors_qs is not None:
+        acting_doctor_profile = assistant_doctors_qs.first()
 
     if acting_doctor_profile is None:
         context = {
             "doctor": {
                 "name": request.user.wx_nickname or request.user.username or "--",
-                "title": "--",
+                "title": "平台助理" if is_assistant else "--",
                 "department": "--",
                 "hospital": "--",
                 "phone": getattr(request.user, "phone", "") or "--",
@@ -66,34 +85,69 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
             "alerts": [],
             "consultations": [],
             "doctor_error": "未找到医生档案信息，请联系管理员完善医生资料。",
+            "is_director": False,
+            "is_assistant": is_assistant,
+            "show_department": False,
+            "show_hospital": False,
+            "show_my_assistant": False,
         }
         return render(request, "web_doctor/mobile/index.html", context, status=404)
 
-    studio = acting_doctor_profile.studio
-    if studio is None:
-        owned_studio = acting_doctor_profile.owned_studios.first()
-        if owned_studio:
-            studio = owned_studio
+    studio = resolve_primary_studio(acting_doctor_profile)
+
+    is_director = bool(
+        doctor_profile is not None
+        and studio is not None
+        and studio.owner_doctor_id == doctor_profile.id
+    )
+    show_department = is_director
+    show_hospital = is_director
+    show_my_assistant = is_director
+
+    stats_doctor_ids: list[int] = []
+    if is_assistant:
+        display_name = (
+            getattr(assistant_profile, "name", "")
+            or request.user.wx_nickname
+            or request.user.username
+            or "--"
+        )
+        display_title = "平台助理"
+        assistant_doctors = list(assistant_doctors_qs) if assistant_doctors_qs is not None else []
+        stats_doctor_ids = [doctor.id for doctor in assistant_doctors]
+        studio_names = []
+        for doctor in assistant_doctors:
+            doctor_studio = resolve_primary_studio(doctor)
+            if doctor_studio and doctor_studio.name:
+                studio_names.append(doctor_studio.name)
+        studio_name_display = "、".join(sorted(set(studio_names))) if studio_names else "--"
+    else:
+        display_name = getattr(acting_doctor_profile, "name", "") or "--"
+        doctor_title = getattr(acting_doctor_profile, "title", "") or ""
+        display_title = f"({doctor_title})" if doctor_title else "--"
+        stats_doctor_ids = [acting_doctor_profile.id]
+        studio_name_display = getattr(studio, "name", "") if studio else "--"
 
     doctor_info = {
-        "name": getattr(acting_doctor_profile, "name", "") or "--",
-        "title": '('+getattr(acting_doctor_profile, "title", "")+')' or "--",
+        "name": display_name,
+        "title": display_title,
         "department": getattr(acting_doctor_profile, "department", "") or "--",
         "hospital": getattr(acting_doctor_profile, "hospital", "") or "--",
         "phone": getattr(request.user, "phone", "") or "--",
-        "studio_name": getattr(studio, "name", "") if studio else "--",
+        "studio_name": studio_name_display,
         "avatar_url": None,
     }
 
     today = timezone.localdate()
-    managed_patients = PatientProfile.objects.filter(
-        doctor=acting_doctor_profile, is_active=True
-    ).count()
-    today_active = PatientProfile.objects.filter(
-        doctor=acting_doctor_profile,
-        is_active=True,
-        last_active_at__date=today,
-    ).count()
+    managed_patients = 0
+    today_active = 0
+    if stats_doctor_ids:
+        patient_qs = PatientProfile.objects.filter(
+            doctor_id__in=stats_doctor_ids,
+            is_active=True,
+        )
+        managed_patients = patient_qs.count()
+        today_active = patient_qs.filter(last_active_at__date=today).count()
 
     alerts_page_number = get_positive_int(request.GET.get("alerts_page"), 1)
     alerts_page_size = get_positive_int(request.GET.get("alerts_size"), 1)
@@ -159,6 +213,11 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
         "alerts": alerts,
         "consultations": consultations,
         "doctor_error": "",
+        "is_director": is_director,
+        "is_assistant": is_assistant,
+        "show_department": show_department,
+        "show_hospital": show_hospital,
+        "show_my_assistant": show_my_assistant,
     }
 
     return render(request, "web_doctor/mobile/index.html", context)
