@@ -14,11 +14,19 @@
                     <h1 class="text-xl font-bold">{{ doctor.name }}</h1>
                     <span class="text-xl font-bold ">{{doctor.title }}</span>
                 </div>
+                {% if show_department or show_hospital %}
                 <div class="flex items-center gap-1 mt-1">
+                {% if show_department %}
                 <p class="text-sm font-medium ">{{ doctor.department }}</p>
+                {% if show_hospital %}
                 <p class="text-sm font-medium ">/</p>
-                <p class="text-sm font-medium">{{ doctor.hospital }}</p>
+                {% endif %}
+                {% endif %}
+                {% if show_hospital %}
+                <p class="text-sm font-medium ">{{ doctor.hospital }}</p>
+                {% endif %}
                 </div>
+                {% endif %}
                 <p class="text-sm mt-0.5 ">工作室：{{ doctor.studio_name }}</p>
             </div>
         </div>
@@ -40,7 +48,7 @@
             </div>
             <div class="flex-1 text-center">
                 <p class="text-xs text-slate-500 font-bold mb-1">今日活跃</p>
-                <p class="text-lg font-bold text-slate-800">{{ stats.managed_patients }} <span class="text-xs font-normal text-slate-400">人</span></p>
+                <p class="text-lg font-bold text-slate-800">{{ stats.today_active }} <span class="text-xs font-normal text-slate-400">人</span></p>
             </div>
         </div>
 
@@ -118,7 +126,7 @@
         </a>
 
         <!-- Bottom Actions -->
-        <div class="grid grid-cols-2 gap-4 pt-2">
+        <div class="grid {% if show_my_assistant %}grid-cols-2{% else %}grid-cols-1{% endif %} gap-4 pt-2">
             <!-- Patient Management -->
             <a href="{% url 'web_doctor:mobile_patient_list' %}" class="bg-white p-6 rounded-xl shadow-sm flex flex-col items-center justify-center gap-3 active:scale-95 transition h-32">
                 <div class="w-12 h-12 rounded-full bg-[#4DB6AC]/10 flex items-center justify-center text-[#4DB6AC]">
@@ -129,6 +137,7 @@
                 <span class="font-bold text-slate-700">患者管理</span>
             </a>
             
+            {% if show_my_assistant %}
             <!-- My Assistant -->
             <a href="{% url 'web_doctor:mobile_my_assistant' %}" class="bg-white p-6 rounded-xl shadow-sm flex flex-col items-center justify-center gap-3 active:scale-95 transition h-32">
                 <div class="w-12 h-12 rounded-full bg-[#4DB6AC]/10 flex items-center justify-center text-[#4DB6AC]">
@@ -138,6 +147,7 @@
                 </div>
                 <span class="font-bold text-slate-700">我的助理</span>
             </a>
+            {% endif %}
         </div>
     </div>
 </div>

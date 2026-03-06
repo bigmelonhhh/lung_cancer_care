@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from users import choices
 from users.models import (
@@ -8,6 +11,7 @@ from users.models import (
     DoctorAssistantMap,
     DoctorProfile,
     DoctorStudio,
+    PatientProfile,
 )
 
 
@@ -91,7 +95,7 @@ class MobileMyAssistantTests(TestCase):
             name="李医生",
             title="主治医师",
             hospital="测试医院",
-            department="测试科室",
+            department="非主任科室",
             studio=self.studio,
         )
 
@@ -114,3 +118,160 @@ class MobileMyAssistantTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("web_doctor:mobile_my_assistant"))
+        self.assertTrue(response.context["show_my_assistant"])
+        self.assertTrue(response.context["show_department"])
+        self.assertTrue(response.context["show_hospital"])
+        self.assertContains(response, "测试医院")
+
+    def test_mobile_home_assistant_identity_and_visibility(self):
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(reverse("web_doctor:mobile_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["doctor"]["name"], "平台助理A")
+        self.assertEqual(response.context["doctor"]["title"], "平台助理")
+        self.assertFalse(response.context["show_my_assistant"])
+        self.assertFalse(response.context["show_department"])
+        self.assertFalse(response.context["show_hospital"])
+        self.assertNotContains(response, reverse("web_doctor:mobile_my_assistant"))
+        self.assertNotContains(response, "测试科室")
+        self.assertNotContains(response, "测试医院")
+
+    def test_mobile_home_non_chief_hides_department_and_my_assistant(self):
+        other_doctor = CustomUser.objects.create_user(
+            username="doctor_my_assistant_other_home",
+            phone="13800001005",
+            password=self.password,
+            user_type=choices.UserType.DOCTOR,
+        )
+        DoctorProfile.objects.create(
+            user=other_doctor,
+            name="王医生",
+            title="主治医师",
+            hospital="测试医院",
+            department="非主任科室",
+            studio=self.studio,
+        )
+
+        self.client.force_login(other_doctor)
+        response = self.client.get(reverse("web_doctor:mobile_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["show_my_assistant"])
+        self.assertFalse(response.context["show_department"])
+        self.assertFalse(response.context["show_hospital"])
+        self.assertNotContains(response, reverse("web_doctor:mobile_my_assistant"))
+        self.assertNotContains(response, "非主任科室")
+        self.assertNotContains(response, "测试医院")
+
+    def test_mobile_home_assistant_aggregates_multi_doctor_studios_and_stats(self):
+        second_doctor = CustomUser.objects.create_user(
+            username="doctor_my_assistant_second",
+            phone="13800001006",
+            password=self.password,
+            user_type=choices.UserType.DOCTOR,
+        )
+        second_profile = DoctorProfile.objects.create(
+            user=second_doctor,
+            name="李主任",
+            title="主任医师",
+            hospital="第二医院",
+            department="第二科室",
+        )
+        second_studio = DoctorStudio.objects.create(
+            name="李主任工作室",
+            code="STU_MYASST_002",
+            owner_doctor=second_profile,
+        )
+        second_profile.studio = second_studio
+        second_profile.save(update_fields=["studio"])
+
+        DoctorAssistantMap.objects.create(
+            doctor=second_profile,
+            assistant=self.assistant_profile,
+        )
+
+        patient_user_1 = CustomUser.objects.create_user(
+            username="patient_my_assistant_1",
+            wx_openid="openid_my_assistant_1",
+            user_type=choices.UserType.PATIENT,
+        )
+        PatientProfile.objects.create(
+            user=patient_user_1,
+            phone="13911111001",
+            name="患者甲",
+            doctor=self.doctor_profile,
+            is_active=True,
+            last_active_at=timezone.now(),
+        )
+        patient_user_2 = CustomUser.objects.create_user(
+            username="patient_my_assistant_2",
+            wx_openid="openid_my_assistant_2",
+            user_type=choices.UserType.PATIENT,
+        )
+        PatientProfile.objects.create(
+            user=patient_user_2,
+            phone="13911111002",
+            name="患者乙",
+            doctor=second_profile,
+            is_active=True,
+            last_active_at=timezone.now(),
+        )
+        patient_user_3 = CustomUser.objects.create_user(
+            username="patient_my_assistant_3",
+            wx_openid="openid_my_assistant_3",
+            user_type=choices.UserType.PATIENT,
+        )
+        PatientProfile.objects.create(
+            user=patient_user_3,
+            phone="13911111003",
+            name="患者丙",
+            doctor=second_profile,
+            is_active=True,
+            last_active_at=timezone.now() - timedelta(days=1),
+        )
+        PatientProfile.objects.create(
+            phone="13911111004",
+            name="患者丁",
+            doctor=self.doctor_profile,
+            is_active=False,
+            last_active_at=timezone.now(),
+        )
+
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(reverse("web_doctor:mobile_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["doctor"]["name"], "平台助理A")
+        self.assertEqual(response.context["doctor"]["title"], "平台助理")
+        self.assertFalse(response.context["show_department"])
+        self.assertFalse(response.context["show_hospital"])
+        self.assertFalse(response.context["show_my_assistant"])
+
+        studio_names = set(response.context["doctor"]["studio_name"].split("、"))
+        self.assertEqual(studio_names, {"张主任工作室", "李主任工作室"})
+        self.assertEqual(response.context["stats"]["managed_patients"], 3)
+        self.assertEqual(response.context["stats"]["today_active"], 2)
+
+    def test_mobile_home_assistant_without_linked_doctor_keeps_404(self):
+        no_link_user = CustomUser.objects.create_user(
+            username="assistant_my_assistant_no_link",
+            phone="13800001007",
+            password=self.password,
+            user_type=choices.UserType.ASSISTANT,
+        )
+        AssistantProfile.objects.create(
+            user=no_link_user,
+            name="平台助理B",
+            status=choices.AssistantStatus.ACTIVE,
+        )
+
+        self.client.force_login(no_link_user)
+        response = self.client.get(reverse("web_doctor:mobile_home"))
+
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(
+            response,
+            "未找到医生档案信息，请联系管理员完善医生资料。",
+            status_code=404,
+        )
