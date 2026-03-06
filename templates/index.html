@@ -1029,10 +1029,6 @@
             .carrier-grid, .dtx-grid {
                 grid-template-columns: 1fr;
             }
-            
-            .mockup-container img {
-                width: 100% !important;
-            }
         }
     </style>
 </head>
@@ -1040,7 +1036,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{% static 'website1.webp' %}" alt="智医康科技 Logo" height="40">
+            <img src="{% static 'website1.png' %}" alt="智医康科技 Logo" height="40">
         </div>
         <div class="nav-links">
             <a href="#home">首页</a>
@@ -1090,7 +1086,7 @@
                 <h3>智能腕表 (Smart Watch)</h3>
                 <p>核心中枢，内置4G模组可独立通讯。支持动态血压、心率、血氧饱和度实时监测。</p>
                 <div class="device-watch">
-                    <img src="{% static 'website2.webp' %}" alt="智能腕表" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="{% static 'website2.png' %}" alt="智能腕表" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <ul>
                     <li>无感采集体征数据</li>
@@ -1102,7 +1098,7 @@
                 <h3>医疗级物联网外设</h3>
                 <p>实时监测，异常报警。集成智能血压计、血氧计、体重秤，自动同步数据至云端。</p>
                 <div class="device-box">
-                    <img src="{% static 'website3.webp' %}" alt="医疗级物联网外设" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="{% static 'website3.png' %}" alt="医疗级物联网外设" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <ul>
                     <li>上臂式医疗级精准测量</li>
@@ -1178,14 +1174,14 @@
         </div>
         <div class="system-display">
             <div class="mockup-container">
-                <img src="{% static 'website4.webp' %}" alt="医生驾驶舱" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+                <img src="{% static 'website4.png' %}" alt="医生驾驶舱" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
             </div>
             
             <div class="mockup-container">
-                <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
-                    <img src="{% static 'website5.webp' %}" alt="患者端1" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <img src="{% static 'website6.webp' %}" alt="患者端2" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <img src="{% static 'website7.webp' %}" alt="患者端3" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="patient-screens" style="display: flex; gap: 8px; width: 100%; justify-content: center; overflow: visible;">
+                    <img src="{% static 'website5.png' %}" alt="患者端1" style="width: 32%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website6.png' %}" alt="患者端2" style="width: 32%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website7.png' %}" alt="患者端3" style="width: 32%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                 </div>
             </div>
         </div>

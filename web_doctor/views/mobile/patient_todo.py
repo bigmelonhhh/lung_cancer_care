@@ -2,6 +2,7 @@ import logging
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.views.decorators.http import require_GET
 
 from patient_alerts.services.todo_list import TodoListService
@@ -98,6 +99,7 @@ def mobile_patient_todo_list(request: HttpRequest) -> HttpResponse:
                     "pagesize": pagesize,
                     "patient": patient,
                     "patient_no": patient_no,
+                    "can_handle_todo": request.user.user_type == choices.UserType.ASSISTANT,
                 },
             )
 
@@ -110,6 +112,8 @@ def mobile_patient_todo_list(request: HttpRequest) -> HttpResponse:
                 "pagesize": pagesize,
                 "patient": patient,
                 "patient_no": patient_no,
+                "can_handle_todo": request.user.user_type == choices.UserType.ASSISTANT,
+                "todo_update_url": reverse("web_doctor:doctor_todo_update_status"),
             },
         )
     except ValueError as exc:

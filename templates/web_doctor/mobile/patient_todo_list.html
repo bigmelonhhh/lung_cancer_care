@@ -39,12 +39,14 @@
   </div>
 </div>
 
+{% csrf_token %}
+
 <div id="todo-detail-modal" class="fixed inset-0 z-50 hidden">
   <div class="absolute inset-0 bg-black/40"></div>
   <div class="absolute inset-0 flex items-center justify-center p-4">
     <div class="w-full max-w-[92vw] sm:max-w-lg bg-white rounded-2xl shadow-xl overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-        <div class="text-sm font-bold text-slate-800 truncate pr-3" id="todo-detail-title"></div>
+        <div class="text-sm font-bold text-slate-800 truncate pr-3" id="todo-detail-title">处理患者待办</div>
         <button type="button" id="todo-detail-close" class="w-8 h-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center active:scale-95 transition">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
@@ -56,7 +58,33 @@
         <div class="space-y-3">
           <div>
             <div class="text-xs text-slate-500 mb-1">待处理事件内容</div>
+            <div class="text-slate-700 text-sm bg-slate-50 rounded-xl p-3 break-words mb-2" id="todo-detail-event-title"></div>
             <div class="text-slate-700 text-sm bg-slate-50 rounded-xl p-3 break-words" id="todo-detail-content"></div>
+          </div>
+
+          <div>
+            <label for="todo-detail-handle-input" class="text-xs text-slate-500 mb-1 block">
+              事件处理情况 <span class="text-rose-500" id="todo-handle-required">*</span>
+            </label>
+            <textarea
+              id="todo-detail-handle-input"
+              class="w-full p-2 border border-slate-300 rounded-lg focus:ring-rose-500 focus:border-rose-500 outline-none transition disabled:bg-slate-50 disabled:text-slate-500"
+              rows="3"
+              placeholder="请填写处理详情..."></textarea>
+          </div>
+
+          <div>
+            <label for="todo-detail-status-select" class="text-xs text-slate-500 mb-1 block">
+              事件状态 <span class="text-rose-500" id="todo-status-required">*</span>
+            </label>
+            <select
+              id="todo-detail-status-select"
+              class="w-full p-2 border border-slate-300 rounded-lg focus:ring-rose-500 focus:border-rose-500 outline-none bg-white disabled:bg-slate-50 disabled:text-slate-500">
+              <option value="" disabled>请选择状态</option>
+              <option value="pending">待跟进</option>
+              <option value="escalate">升级主任</option>
+              <option value="completed">已完成</option>
+            </select>
           </div>
 
           <div class="grid grid-cols-1 gap-2 text-xs">
@@ -77,16 +105,14 @@
               <span class="text-slate-700 min-w-0 truncate" id="todo-detail-handler"></span>
             </div>
           </div>
-
-          <div id="todo-detail-handle-content-wrap" class="hidden">
-            <div class="text-xs text-slate-500 mb-1">处理说明</div>
-            <div class="text-slate-700 text-sm bg-slate-50 rounded-xl p-3 break-words" id="todo-detail-handle-content"></div>
-          </div>
         </div>
       </div>
-      <div class="px-4 py-3 border-t border-slate-100 flex justify-end">
-        <button type="button" id="todo-detail-bottom-close" class="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-bold active:scale-[0.99] transition">
+      <div class="px-4 py-3 border-t border-slate-100 flex justify-end gap-2">
+        <button type="button" id="todo-detail-bottom-close" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium active:scale-[0.99] transition">
           关闭
+        </button>
+        <button type="button" id="todo-detail-save" class="px-4 py-2 rounded-xl bg-rose-600 text-white text-sm font-bold active:scale-[0.99] transition hidden" data-test="todo-save-btn">
+          保存
         </button>
       </div>
     </div>
@@ -97,67 +123,195 @@
 {% block extra_head %}
 <script>
   (function () {
-    const getModalEls = function () {
+    const TODO_MODE = {
+      VIEW: "view",
+      PROCESS: "process",
+    };
+
+    const state = {
+      mode: TODO_MODE.VIEW,
+      currentTodoId: null,
+      currentPatientId: null,
+      todoUpdateUrl: "{{ todo_update_url|default:'' }}",
+    };
+
+    const getModalEls = () => {
       return {
         modal: document.getElementById("todo-detail-modal"),
         titleEl: document.getElementById("todo-detail-title"),
+        eventTitleEl: document.getElementById("todo-detail-event-title"),
         contentEl: document.getElementById("todo-detail-content"),
+        handleInputEl: document.getElementById("todo-detail-handle-input"),
+        statusSelectEl: document.getElementById("todo-detail-status-select"),
+        saveBtn: document.getElementById("todo-detail-save"),
+        handleRequiredEl: document.getElementById("todo-handle-required"),
+        statusRequiredEl: document.getElementById("todo-status-required"),
         statusEl: document.getElementById("todo-detail-status"),
         eventTimeEl: document.getElementById("todo-detail-event-time"),
         handleTimeEl: document.getElementById("todo-detail-handle-time"),
         handlerEl: document.getElementById("todo-detail-handler"),
-        handleWrapEl: document.getElementById("todo-detail-handle-content-wrap"),
-        handleContentEl: document.getElementById("todo-detail-handle-content"),
       };
     };
 
-    const openModal = function (payload) {
+    const getCsrfToken = () => {
+      const el = document.querySelector("[name=csrfmiddlewaretoken]");
+      return el ? el.value : "";
+    };
+
+    const refreshTodoList = () => {
+      const target = document.getElementById("mobile-todo-list-content");
+      if (!target) {
+        window.location.reload();
+        return;
+      }
+      const queryEl = document.getElementById("mobile-todo-current-query");
+      const query = (queryEl && queryEl.dataset && queryEl.dataset.query) || window.location.search || "";
+      if (window.htmx) {
+        window.htmx.ajax("GET", `${window.location.pathname}${query}`, {
+          target: "#mobile-todo-list-content",
+          swap: "innerHTML",
+        });
+      } else {
+        window.location.reload();
+      }
+    };
+
+    const setModalMode = (mode, payload) => {
       const els = getModalEls();
       if (!els.modal) return;
+      state.mode = mode;
 
-      if (els.titleEl) els.titleEl.textContent = payload.title || "";
-      if (els.contentEl) els.contentEl.textContent = payload.content || "-";
-      if (els.statusEl) els.statusEl.textContent = payload.statusDisplay || "-";
-      if (els.eventTimeEl) els.eventTimeEl.textContent = payload.eventTime || "-";
-      if (els.handleTimeEl) els.handleTimeEl.textContent = payload.handleTime || "-";
-      if (els.handlerEl) els.handlerEl.textContent = payload.handler || "-";
-
-      const handleContent = payload.handleContent || "";
-      if (els.handleWrapEl && els.handleContentEl) {
-        if (handleContent.trim()) {
-          els.handleContentEl.textContent = handleContent;
-          els.handleWrapEl.classList.remove("hidden");
-        } else {
-          els.handleWrapEl.classList.add("hidden");
-        }
+      if (els.titleEl) {
+        els.titleEl.textContent = mode === TODO_MODE.PROCESS ? "处理患者待办" : "查看待办详情";
+      }
+      if (els.eventTitleEl) {
+        els.eventTitleEl.textContent = payload.title || "-";
+      }
+      if (els.contentEl) {
+        els.contentEl.textContent = payload.content || "-";
+      }
+      if (els.statusEl) {
+        els.statusEl.textContent = payload.statusDisplay || "-";
+      }
+      if (els.eventTimeEl) {
+        els.eventTimeEl.textContent = payload.eventTime || "-";
+      }
+      if (els.handleTimeEl) {
+        els.handleTimeEl.textContent = payload.handleTime || "-";
+      }
+      if (els.handlerEl) {
+        els.handlerEl.textContent = payload.handler || "-";
       }
 
+      const isEdit = mode === TODO_MODE.PROCESS;
+      if (els.handleInputEl) {
+        els.handleInputEl.disabled = !isEdit;
+        els.handleInputEl.value = isEdit ? "" : (payload.handleContent || "");
+      }
+      if (els.statusSelectEl) {
+        els.statusSelectEl.disabled = !isEdit;
+        if (isEdit) {
+          const defaultStatus = payload.status || "pending";
+          els.statusSelectEl.value = defaultStatus;
+        } else {
+          els.statusSelectEl.value = payload.status || "";
+        }
+      }
+      if (els.saveBtn) {
+        els.saveBtn.classList.toggle("hidden", !isEdit);
+      }
+      if (els.handleRequiredEl) {
+        els.handleRequiredEl.classList.toggle("hidden", !isEdit);
+      }
+      if (els.statusRequiredEl) {
+        els.statusRequiredEl.classList.toggle("hidden", !isEdit);
+      }
+    };
+
+    const openModal = () => {
+      const els = getModalEls();
+      if (!els.modal) return;
       els.modal.classList.remove("hidden");
       document.body.classList.add("overflow-hidden");
     };
 
-    const closeModal = function () {
+    const closeModal = () => {
       const els = getModalEls();
       if (!els.modal) return;
       els.modal.classList.add("hidden");
       document.body.classList.remove("overflow-hidden");
     };
 
+    const parsePayloadFromBtn = (btn) => {
+      const patientName = btn.dataset.patientName || "";
+      const eventTitle = btn.dataset.eventTitle || "";
+      return {
+        id: btn.dataset.todoId || "",
+        patientId: btn.dataset.patientId || "",
+        title: patientName ? `${patientName} - ${eventTitle}` : eventTitle,
+        content: btn.dataset.eventContent || "",
+        handleContent: btn.dataset.handleContent || "",
+        eventTime: btn.dataset.eventTime || "",
+        handleTime: btn.dataset.handleTime || "",
+        handler: btn.dataset.handler || "",
+        status: btn.dataset.status || "",
+        statusDisplay: btn.dataset.statusDisplay || "",
+      };
+    };
+
+    const submitTodoUpdate = async () => {
+      const els = getModalEls();
+      if (!state.currentTodoId || !state.todoUpdateUrl) return;
+      if (!els.handleInputEl || !els.statusSelectEl) return;
+
+      const handleContent = els.handleInputEl.value.trim();
+      const status = els.statusSelectEl.value;
+      if (!handleContent) {
+        alert("请填写事件处理情况");
+        return;
+      }
+      if (!status) {
+        alert("请选择事件状态");
+        return;
+      }
+
+      const payload = {
+        id: Number(state.currentTodoId),
+        handle_content: handleContent,
+        status: status,
+      };
+
+      try {
+        const response = await fetch(state.todoUpdateUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": getCsrfToken(),
+          },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+          throw new Error((data && data.message) || "保存失败");
+        }
+
+        closeModal();
+        refreshTodoList();
+      } catch (error) {
+        alert(`保存失败: ${error.message}`);
+      }
+    };
+
     window.addEventListener("DOMContentLoaded", function () {
       document.addEventListener("click", function (event) {
-        const btn = event.target.closest("button[data-todo-detail-trigger]");
+        const btn = event.target.closest("button[data-todo-action]");
         if (btn) {
-          const patientName = btn.dataset.patientName || "";
-          const eventTitle = btn.dataset.eventTitle || "";
-          openModal({
-            title: patientName ? (patientName + " - " + eventTitle) : eventTitle,
-            content: btn.dataset.eventContent || "",
-            handleContent: btn.dataset.handleContent || "",
-            eventTime: btn.dataset.eventTime || "",
-            handleTime: btn.dataset.handleTime || "",
-            handler: btn.dataset.handler || "",
-            statusDisplay: btn.dataset.statusDisplay || "",
-          });
+          const mode = btn.dataset.todoAction === TODO_MODE.PROCESS ? TODO_MODE.PROCESS : TODO_MODE.VIEW;
+          const payload = parsePayloadFromBtn(btn);
+          state.currentTodoId = payload.id;
+          state.currentPatientId = payload.patientId;
+          setModalMode(mode, payload);
+          openModal();
           return;
         }
 
@@ -180,6 +334,13 @@
           closeModal();
         }
       });
+
+      const saveBtn = document.getElementById("todo-detail-save");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", function () {
+          submitTodoUpdate();
+        });
+      }
 
       document.addEventListener("keydown", function (event) {
         if (event.key === "Escape") {
