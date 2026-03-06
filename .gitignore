@@ -9,7 +9,6 @@ __pycache__/
 *.pkl
 *.log
 logs/
-*.log.*git
 *.sqlite3
 .Python
 env/
@@ -35,7 +34,6 @@ pip-wheel-metadata/
 
 # Django
 *.db
-*.sqlite3
 db.sqlite3
 media/
 staticfiles/
@@ -80,7 +78,6 @@ Thumbs.db
 *.swo
 *.orig
 *.tmp
-*.log
 *.log.*
 .daphne_pids_development/
 .daphne_pids_production/
@@ -94,4 +91,3 @@ package-lock.json
 *.map
 .venv
 .editorconfig
-logs/.__lung_cancer_care.lock

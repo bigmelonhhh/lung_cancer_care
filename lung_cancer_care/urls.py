@@ -21,8 +21,13 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import Http404, HttpResponse
 from django.urls import include, path
+from django.views.generic import TemplateView
 
 from business_support.views import smartwatch_data_callback
+
+
+site_home_view = TemplateView.as_view(template_name="index.html")
+
 
 def wechat_verify_view(request):
     # 文件名必须与微信后台提供的一致
@@ -46,6 +51,8 @@ if getattr(settings, "WECHAT_VERIFY_FILENAME", ""):
     urlpatterns.append(path(settings.WECHAT_VERIFY_FILENAME, wechat_verify_view))
 
 urlpatterns += [
+    path("", site_home_view, name="site_home"),
+    path("index.html", site_home_view, name="site_home_index"),
 
     path('admin/', admin.site.urls),
     
