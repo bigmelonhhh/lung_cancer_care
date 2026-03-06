@@ -7,7 +7,7 @@ from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from users.models import PatientProfile
-from core.models import TreatmentCycle, choices, Questionnaire, QuestionnaireCode
+from core.models import DailyTask, TreatmentCycle, choices, Questionnaire, QuestionnaireCode
 from health_data.models import HealthMetric, MetricType, QuestionnaireSubmission
 from web_doctor.views.indicators import build_indicators_context
 
@@ -111,15 +111,32 @@ class IndicatorsLogicTests(TestCase):
         # Set range covering yesterday, today, tomorrow
         start_date = self.today - timedelta(days=1)
         end_date = self.today + timedelta(days=1)
-        
-        # Create record for yesterday
-        # Note: HealthMetric uses DateTimeField, so we need make_aware
-        measured_at = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
+
+        # 昨日有用药任务并已完成
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=start_date,
+            task_type=choices.PlanItemCategory.MEDICATION,
+            title="昨日用药",
+            status=choices.TaskStatus.COMPLETED,
+        )
+
+        # 今日有用药任务但未完成
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=self.today,
+            task_type=choices.PlanItemCategory.MEDICATION,
+            title="今日用药",
+            status=choices.TaskStatus.PENDING,
+        )
+
+        # 即使有用药打卡，表格状态仍以任务状态为准（今日应显示未完成）
+        measured_at = timezone.make_aware(datetime.combine(self.today, datetime.min.time()))
         HealthMetric.objects.create(
             patient=self.patient,
             metric_type=MetricType.USE_MEDICATED,
             measured_at=measured_at,
-            value_main=1
+            value_main=1,
         )
         
         context = build_indicators_context(
@@ -139,12 +156,18 @@ class IndicatorsLogicTests(TestCase):
         tomorrow_rec = med_data[2]
         
         self.assertEqual(yesterday_rec['date'], start_date)
+        self.assertTrue(yesterday_rec['has_task'])
+        self.assertEqual(yesterday_rec['status'], 'taken')
         self.assertTrue(yesterday_rec['taken'])
         
         self.assertEqual(today_rec['date'], self.today)
+        self.assertTrue(today_rec['has_task'])
+        self.assertEqual(today_rec['status'], 'missed')
         self.assertFalse(today_rec['taken'])
         
         self.assertEqual(tomorrow_rec['date'], end_date)
+        self.assertFalse(tomorrow_rec['has_task'])
+        self.assertEqual(tomorrow_rec['status'], 'future')
         self.assertFalse(tomorrow_rec['taken'])
         
         # Verify comparison logic logic works (conceptually)
@@ -155,6 +178,34 @@ class IndicatorsLogicTests(TestCase):
         self.assertFalse(yesterday_rec['date'] > current_date)
         self.assertFalse(today_rec['date'] > current_date)
         self.assertTrue(tomorrow_rec['date'] > current_date)
+
+    def test_medication_data_day_without_task_status_none(self):
+        start_date = self.today
+        end_date = self.today
+
+        # 无用药任务日即使有用药记录，也应显示“无”
+        measured_at = timezone.make_aware(datetime.combine(self.today, datetime.min.time()))
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.USE_MEDICATED,
+            measured_at=measured_at,
+            value_main=1,
+        )
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=start_date.isoformat(),
+            end_date_str=end_date.isoformat(),
+            filter_type='date',
+        )
+
+        med_data = context['medication_data']
+        self.assertEqual(len(med_data), 1)
+        rec = med_data[0]
+        self.assertEqual(rec['date'], self.today)
+        self.assertFalse(rec['has_task'])
+        self.assertEqual(rec['status'], 'none')
+        self.assertFalse(rec['taken'])
 
     @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
     def test_indicators_query_end_date_inclusive(self, mock_query):

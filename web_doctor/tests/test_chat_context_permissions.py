@@ -75,6 +75,7 @@ class ChatContextPermissionsTest(TestCase):
         self.assertTrue(data["is_director"])
         self.assertFalse(data["can_send_patient"])
         self.assertTrue(data["can_send_internal"])
+        self.assertEqual(data["tab_internal_label"], "医生助理")
 
     def test_platform_doctor_can_chat_both_tabs(self):
         self.client.force_login(self.platform_user)
@@ -95,4 +96,3 @@ class ChatContextPermissionsTest(TestCase):
         self.assertFalse(data["is_director"])
         self.assertTrue(data["can_send_patient"])
         self.assertTrue(data["can_send_internal"])
-

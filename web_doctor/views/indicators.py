@@ -1,9 +1,10 @@
 import logging
 from datetime import date, timedelta, datetime
 from decimal import Decimal, ROUND_CEILING, InvalidOperation
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.core.cache import cache
-from core.models import TreatmentCycle, choices, QuestionnaireCode
+from core.models import DailyTask, TreatmentCycle, choices, QuestionnaireCode
 from core.service.treatment_cycle import get_treatment_cycles as _get_treatment_cycles
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
@@ -396,33 +397,57 @@ def build_indicators_context(
     }
 
     # 3. 服药记录
-    med_page = HealthMetricService.query_metrics_by_type(
-        patient_id=patient.id,
-        metric_type=MetricType.USE_MEDICATED,
-        start_date=start_dt,
-        end_date=end_dt,
-        page_size=2000,
-        sort_order='asc'
+    # 口径说明：
+    # 1) 当天无用药任务 -> 显示“无”
+    # 2) 当天有用药任务且全部完成 -> 显示对勾
+    # 3) 当天有用药任务但未全部完成 -> 显示 X
+    med_task_daily = (
+        DailyTask.objects.filter(
+            patient=patient,
+            task_type=choices.PlanItemCategory.MEDICATION,
+            task_date__range=(start_date, end_date),
+        )
+        .values("task_date")
+        .annotate(
+            total_count=Count("id"),
+            completed_count=Count("id", filter=Q(status=choices.TaskStatus.COMPLETED)),
+        )
     )
-    med_map = {}
-    for m in med_page.object_list:
-        local_dt = timezone.localtime(m.measured_at)
-        med_map[local_dt.date()] = True 
+    med_task_map = {}
+    for row in med_task_daily:
+        total_count = int(row.get("total_count") or 0)
+        completed_count = int(row.get("completed_count") or 0)
+        med_task_map[row["task_date"]] = {
+            "has_task": total_count > 0,
+            "completed_all": total_count > 0 and completed_count >= total_count,
+        }
 
     medication_data = []
     med_count = 0
     # 重构 medication_data 循环，同时生成 display_date 和 real_date
     for day_date in date_list:
         d_str = day_date.strftime(display_date_fmt)
+        day_task = med_task_map.get(day_date)
+        has_task = bool(day_task and day_task.get("has_task"))
 
-        taken = med_map.get(day_date, False)
-        if taken:
-            med_count += 1
-            
+        if day_date > today:
+            status = "future"
+            taken = False
+        elif not has_task:
+            status = "none"
+            taken = False
+        else:
+            taken = bool(day_task.get("completed_all"))
+            status = "taken" if taken else "missed"
+            if taken:
+                med_count += 1
+
         medication_data.append({
             "date": day_date, # 真实日期对象，用于比较
             "display_date": d_str, # 显示用的格式化日期
-            "taken": taken
+            "taken": taken,
+            "has_task": has_task,
+            "status": status,
         })
     
     total_days = len(date_strs)

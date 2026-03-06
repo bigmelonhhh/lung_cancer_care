@@ -60,7 +60,13 @@
                      const items = $el.querySelectorAll('.image-item-data');
                      
                      let hasError = false;
+                     let errorMessage = '';
                      items.forEach(item => {
+                         const isArchived = item.dataset.isArchived === '1';
+                         if (isArchived) {
+                             return;
+                         }
+
                          const imgId = item.dataset.id;
                          // Alpine context for each item is tricky to access directly from parent
                          // So we rely on input values bound by Alpine inside the loop
@@ -73,30 +79,30 @@
                          const dateVal = dateInput ? dateInput.value : '';
                          
                          if (!catVal || !dateVal) {
-                             // Minimal validation: must have category and date
-                             // If category is '复查', sub is required (checked below)
+                             hasError = true;
+                             errorMessage = '请完善未归档图片的类目和报告日期';
+                             return;
                          }
                          
                          let fullCat = catVal;
                          if (catVal === '复查') {
                              if (!subVal) {
                                  hasError = true;
+                                 errorMessage = '请为复查类型的图片选择二级分类';
                                  return; 
                              }
                              fullCat = `${catVal}-${subVal}`;
                          }
                          
-                         if (catVal) {
-                             updates.push({
-                                 image_id: imgId,
-                                 category: fullCat,
-                                 report_date: dateVal
-                             });
-                         }
+                         updates.push({
+                             image_id: imgId,
+                             category: fullCat,
+                             report_date: dateVal
+                         });
                      });
                      
                      if (hasError) {
-                         alert('请为复查类型的图片选择二级分类');
+                         alert(errorMessage || '请完善未归档图片信息');
                          this.isSaving = false;
                          return;
                      }
@@ -104,6 +110,7 @@
                      if (updates.length === 0) {
                          this.isGroupEditing = false;
                          this.isSaving = false;
+                         alert('当前无未归档图片可提交');
                          return;
                      }
 
@@ -168,14 +175,28 @@
                     {% for img in report.images %}
                     <div class="relative w-[160px] flex flex-col gap-2 image-item-data" 
                          data-id="{{ img.id }}"
+                         data-is-archived="{{ img.is_archived|yesno:'1,0' }}"
                          x-data="{ 
-                             tempCat: '{{ img.record_type|default:"" }}',
-                             tempSub: '{{ img.sub_category|default:"" }}',
-                             tempDate: '{{ img.report_date }}',
+                             initialCategory: '{{ img.category|default:""|escapejs }}',
+                             initialRecordType: '{{ img.record_type|default:""|escapejs }}',
+                             initialSubCategory: '{{ img.sub_category|default:""|escapejs }}',
+                             initialReportDate: '{{ img.report_date|default:"" }}',
+                             tempCat: '',
+                             tempSub: '',
+                             tempDate: '{{ img.report_date|default:"" }}',
+                             itemIsArchived: {{ img.is_archived|yesno:'true,false' }},
                              searchOpen: false,
-                             searchQuery: ''
+                             searchQuery: '',
+                             init() {
+                                 this.resetEditValues();
+                             },
+                             resetEditValues() {
+                                 this.tempCat = this.initialRecordType || ((this.initialCategory || '').split('-', 1)[0] || '');
+                                 this.tempSub = this.initialSubCategory || (this.initialCategory.startsWith('复查-') ? this.initialCategory.slice(3) : '');
+                                 this.tempDate = this.initialReportDate;
+                             }
                          }"
-                         @reset-edit.window="tempCat = '{{ img.record_type|default:"" }}'; tempSub = '{{ img.sub_category|default:"" }}'; tempDate = '{{ img.report_date }}'"
+                         @reset-edit.window="resetEditValues()"
                     >
                         {# 图片本体 #}
                         <div class="w-full h-[160px] bg-slate-100 rounded-lg border border-slate-200 overflow-hidden relative cursor-pointer group/img"
@@ -183,7 +204,7 @@
                             <img src="{{ img.url }}" class="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105">
                             
                             {# 归档状态标签 (仅未归档且非编辑态显示) #}
-                            {% if not img.category %}
+                            {% if not img.is_archived %}
                             <div x-show="!isGroupEditing" class="absolute top-0 left-0 bg-red-500 text-white text-[10px] px-2 py-0.5 rounded-br-lg font-medium shadow-sm">
                                 未归档
                             </div>
@@ -207,13 +228,21 @@
 
                         {# 编辑态控件 #}
                         <div x-show="isGroupEditing" class="space-y-2 animate-fade-in" style="display: none;">
+                            <div x-show="itemIsArchived" class="text-[10px] text-slate-500 bg-slate-100 border border-slate-200 rounded px-2 py-1 inline-block">
+                                已归档
+                            </div>
+
                             {# 类目选择 (Popover Trigger) #}
                             <div class="relative">
-                                <select x-model="tempCat" class="border cat-select block w-full text-xs border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2">
+                                <select x-model="tempCat"
+                                        :value="tempCat"
+                                        :disabled="itemIsArchived"
+                                        :class="itemIsArchived ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''"
+                                        class="border cat-select block w-full text-xs border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2">
                                     <option value="">类目: 请选择</option>
-                                    <template x-for="c in categories" :key="c">
-                                        <option :value="c" x-text="c"></option>
-                                    </template>
+                                    <option value="门诊">门诊</option>
+                                    <option value="住院">住院</option>
+                                    <option value="复查">复查</option>
                                 </select>
                             </div>
                             
@@ -221,12 +250,14 @@
                             <div x-show="tempCat === '复查'" class="relative">
                                 <input type="text" 
                                        x-model="tempSub" 
-                                       @focus="searchOpen=true" 
+                                       @focus="if(!itemIsArchived) searchOpen=true" 
                                        @click.away="searchOpen=false"
+                                       :disabled="itemIsArchived"
+                                       :class="itemIsArchived ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''"
                                        class="border sub-input block w-full text-xs border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2" 
                                        placeholder="选择检查项目...">
                                 
-                                <ul x-show="searchOpen" class="absolute z-20 w-full bg-white border border-slate-200 mt-1 max-h-32 overflow-y-auto rounded shadow-lg text-xs left-0 bottom-full mb-1">
+                                <ul x-show="searchOpen && !itemIsArchived" class="absolute z-20 w-full bg-white border border-slate-200 mt-1 max-h-32 overflow-y-auto rounded shadow-lg text-xs left-0 bottom-full mb-1">
                                     <template x-for="s in subcategories.filter(x=>x.includes(tempSub))">
                                         <li @click="tempSub=s; searchOpen=false" class="px-2 py-1.5 hover:bg-indigo-50 cursor-pointer" x-text="s"></li>
                                     </template>
@@ -235,7 +266,11 @@
                             
                             {# 日期选择 #}
                             <div>
-                                <input type="date" x-model="tempDate" class="border date-input block w-full text-xs border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2">
+                                <input type="date"
+                                       x-model="tempDate"
+                                       :disabled="itemIsArchived"
+                                       :class="itemIsArchived ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''"
+                                       class="border date-input block w-full text-xs border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2">
                             </div>
                         </div>
                     </div>

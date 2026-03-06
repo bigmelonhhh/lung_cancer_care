@@ -503,6 +503,20 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     批量归档图片 (保持不变，已使用真实 Service)
     """
     import json
+
+    def _render_images_tab_response(message: str, toast_type: str = "success") -> HttpResponse:
+        patient = get_object_or_404(PatientProfile, pk=patient_id)
+        context = {"patient": patient}
+
+        request.GET._mutable = True
+        request.GET["tab"] = "images"
+        request.GET._mutable = False
+
+        template_name = handle_reports_history_section(request, context)
+        response = render(request, template_name, context)
+        response["HX-Trigger"] = json.dumps({"show-toast": {"message": message, "type": toast_type}})
+        return response
+
     try:
         data = json.loads(request.body)
     except json.JSONDecodeError:
@@ -525,6 +539,39 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     
     if not updates:
         return HttpResponse("参数不完整", status=400)
+
+    # 防御：只处理仍未归档的图片，已归档图片不参与本次提交
+    submitted_image_ids: list[int] = []
+    for update in updates:
+        raw_id = update.get("image_id")
+        try:
+            submitted_image_ids.append(int(raw_id))
+        except (TypeError, ValueError):
+            continue
+
+    archived_image_ids = set(
+        ReportImage.objects.filter(
+            id__in=submitted_image_ids,
+            clinical_event__isnull=False,
+        ).values_list("id", flat=True)
+    )
+
+    filtered_updates = []
+    for update in updates:
+        raw_id = update.get("image_id")
+        try:
+            image_id = int(raw_id)
+        except (TypeError, ValueError):
+            filtered_updates.append(update)
+            continue
+
+        if image_id in archived_image_ids:
+            continue
+        filtered_updates.append(update)
+
+    updates = filtered_updates
+    if not updates:
+        return _render_images_tab_response("无未归档图片需要归档", toast_type="info")
         
     service_updates = []
     checkup_libs = {lib.name: lib.id for lib in CheckupLibrary.objects.all()}
@@ -536,7 +583,7 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
         if not img_id or not category_str or not report_date_str:
             return HttpResponse(f"第{idx + 1}条归档数据缺少必填字段", status=400)
             
-        parts = str(category_str).split("-")
+        parts = str(category_str).split("-", 1)
         type_name = parts[0]
         sub_name = parts[1] if len(parts) > 1 else None
         
@@ -598,19 +645,8 @@ def batch_archive_images(request: HttpRequest, patient_id: int) -> HttpResponse:
     except Exception as e:
         logger.exception("归档失败")
         return HttpResponse(f"归档失败: {str(e)}", status=400)
-    
-    patient = get_object_or_404(PatientProfile, pk=patient_id)
-    context = {"patient": patient}
-    
-    request.GET._mutable = True
-    request.GET["tab"] = "images"
-    request.GET._mutable = False
-    
-    template_name = handle_reports_history_section(request, context)
-    response = render(request, template_name, context)
-    response["HX-Trigger"] = '{"show-toast": {"message": "归档保存成功", "type": "success"}}'
-    
-    return response
+
+    return _render_images_tab_response("归档保存成功", toast_type="success")
 
 @login_required
 @check_doctor_or_assistant

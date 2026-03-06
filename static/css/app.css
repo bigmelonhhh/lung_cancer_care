@@ -1288,8 +1288,8 @@ video {
   max-height: 60vh;
 }
 
-.max-h-\[70vh\] {
-  max-height: 70vh;
+.max-h-\[80vh\] {
+  max-height: 80vh;
 }
 
 .max-h-\[82vh\] {
@@ -1310,10 +1310,6 @@ video {
 
 .max-h-screen {
   max-height: 100vh;
-}
-
-.max-h-\[80vh\] {
-  max-height: 80vh;
 }
 
 .min-h-0 {

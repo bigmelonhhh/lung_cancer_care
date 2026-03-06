@@ -168,16 +168,9 @@ def get_chat_context(request: HttpRequest):
                     # 主任视角
                     can_send_patient = False # 主任对患者会话只读
                     can_send_internal = True
-                    
-                    # 内部会话对方标签：显示关联的平台医生/助理
-                    # 优先显示正在处理该患者的非主任医生或助理
-                    # 简化逻辑：显示“平台医生”或具体助理名
-                    # 如果有 assistants，取第一个
-                    assistant = doctor_profile.assistants.first()
-                    if assistant:
-                        tab_internal_label = f"{assistant.name}(平台医生)"
-                    else:
-                        tab_internal_label = "平台医生(平台医生)"
+
+                    # 需求：主任端内部会话标签统一固定为“医生助理”
+                    tab_internal_label = "医生助理"
                 else:
                     # 平台医生/助理视角
                     can_send_patient = True

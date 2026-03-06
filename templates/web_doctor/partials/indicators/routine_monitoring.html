@@ -111,6 +111,8 @@
                         <td class="p-1 border border-slate-200 min-w-[30px]">
                             {% if record.date > current_date %}
                             <div class="w-6 h-6 bg-transparent rounded-full mx-auto"></div>
+                            {% elif record.status == 'none' %}
+                            <div class="w-6 h-6 text-slate-400 text-xs leading-6 text-center mx-auto">无</div>
                             {% elif record.taken %}
                             <div class="w-6 h-6 bg-green-500 rounded-full text-white flex items-center justify-center mx-auto">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
