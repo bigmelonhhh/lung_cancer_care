@@ -1,0 +1,1091 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智医康 - 基于AI与智能硬件的肺癌数字化康复管理</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* 
+         * Organic Tech Design System (Balanced)
+         * Primary: #0891B2 (Cyan 600) - Precision Tech
+         * Secondary: #10B981 (Emerald 500) - Vitality/Nature
+         * Accent: #14B8A6 (Teal 500) - Healing
+         * Background: #F0FDFA (Slate/Cyan Tint) - Organic Mist
+         * Text Main: #134E4A (Teal 900) - Deep, Natural
+         * Text Muted: #334155 (Slate 700)
+         */
+        :root {
+            --primary: #0891B2;
+            --secondary: #10B981;
+            --accent: #14B8A6;
+            --cta: #0891B2;
+            --cta-hover: #0E7490;
+            --bg-light: #F0FDFA;
+            --bg-white: #FFFFFF;
+            --text-main: #134E4A;
+            --text-muted: #334155;
+            --border-light: #CCFBF1;
+            
+            --font-heading: 'Lora', serif;
+            --font-body: 'Raleway', sans-serif;
+            
+            --shadow-sm: 0 4px 6px -1px rgba(8, 145, 178, 0.05), 0 2px 4px -1px rgba(8, 145, 178, 0.03);
+            --shadow-md: 0 10px 15px -3px rgba(8, 145, 178, 0.08), 0 4px 6px -2px rgba(8, 145, 178, 0.04);
+            --shadow-lg: 0 20px 25px -5px rgba(8, 145, 178, 0.1), 0 10px 10px -5px rgba(8, 145, 178, 0.04);
+            --shadow-organic: 0 25px 50px -12px rgba(16, 185, 129, 0.15);
+            
+            --radius-md: 1rem;
+            --radius-lg: 1.5rem;
+            --radius-xl: 2.5rem;
+            --radius-full: 9999px;
+            --radius-blob: 60% 40% 30% 70% / 60% 30% 70% 40%;
+        }
+
+        /* Global Reset */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background-color: var(--bg-light);
+            color: var(--text-main);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* Typography */
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-heading);
+            line-height: 1.2;
+            font-weight: 400; /* Varela Round is 400 only usually, but let's keep it clean */
+            color: var(--text-main);
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        /* Focus States for Accessibility */
+        :focus-visible {
+            outline: 3px solid var(--secondary);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 1.5rem;
+            left: 5%;
+            right: 5%;
+            width: 90%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 2rem;
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            border-radius: var(--radius-full);
+            z-index: 1000;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-sm);
+        }
+
+        nav.scrolled {
+            top: 0.5rem;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: var(--shadow-md);
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: var(--primary);
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2.5rem;
+        }
+
+        .nav-links a {
+            font-weight: 500;
+            color: var(--text-muted);
+            font-size: 1rem;
+            position: relative;
+        }
+
+        .nav-links a:hover, .nav-links a:focus {
+            color: var(--primary);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            width: 0;
+            height: 2px;
+            bottom: -4px;
+            left: 0;
+            background-color: var(--primary);
+            transition: width 0.3s;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.875rem 2.5rem;
+            background-color: var(--cta);
+            color: white;
+            font-weight: 600;
+            font-size: 1rem;
+            border-radius: var(--radius-full);
+            transition: all 0.2s;
+            box-shadow: var(--shadow-md);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background-color: var(--cta-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* Sections */
+        section {
+            padding: 6rem 8%;
+            position: relative;
+        }
+
+        .title-group {
+            text-align: center;
+            margin-bottom: 4rem;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .title-group h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            letter-spacing: -0.03em;
+        }
+
+        .title-group p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            padding-top: 10rem; /* Account for fixed nav */
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 4rem;
+            align-items: center;
+            background: radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 40%),
+                        radial-gradient(circle at bottom left, rgba(8, 145, 178, 0.1), transparent 40%);
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Organic Background Shapes */
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -10%;
+            right: -5%;
+            width: 600px;
+            height: 600px;
+            background: linear-gradient(135deg, rgba(8, 145, 178, 0.1), rgba(16, 185, 129, 0.1));
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+            z-index: 0;
+            animation: float 8s ease-in-out infinite;
+            filter: blur(40px);
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -10%;
+            left: -10%;
+            width: 500px;
+            height: 500px;
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(8, 145, 178, 0.05));
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+            z-index: 0;
+            animation: float 10s ease-in-out infinite reverse;
+            filter: blur(40px);
+        }
+
+        .hero-content {
+            z-index: 2;
+            position: relative;
+        }
+
+        .hero-content h1 {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            letter-spacing: -0.03em;
+            color: var(--text-main);
+            font-weight: 700;
+            line-height: 1.1;
+        }
+
+        .hero-content p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+            line-height: 1.7;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            50% { transform: translate(20px, 20px) rotate(5deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        .hero-visual {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Enhanced Hero Visual */
+        .medical-ai-visual {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .ai-core {
+            width: 120px;
+            height: 120px;
+            background: radial-gradient(circle at 30% 30%, var(--secondary), var(--primary));
+            border-radius: 50%;
+            box-shadow: 0 0 30px rgba(20, 184, 166, 0.4);
+            position: relative;
+            z-index: 10;
+            animation: core-pulse 3s infinite ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ai-core svg {
+            width: 60px;
+            height: 60px;
+            color: white;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+        }
+
+        .ai-ring {
+            position: absolute;
+            border: 1px solid rgba(14, 165, 233, 0.2);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .ai-ring:nth-child(2) { width: 260px; height: 260px; border-color: rgba(20, 184, 166, 0.3); animation: spin 20s linear infinite; }
+        .ai-ring:nth-child(3) { width: 380px; height: 380px; border-style: dashed; animation: spin-reverse 30s linear infinite; }
+
+        .ai-node {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: var(--bg-white);
+            border: 2px solid var(--primary);
+            border-radius: 50%;
+            top: 50%;
+            left: 100%; /* On the ring edge */
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 10px var(--secondary);
+        }
+        
+        /* Positioning nodes on rings */
+        .ai-ring:nth-child(2) .ai-node:nth-child(1) { top: 0; left: 50%; }
+        .ai-ring:nth-child(2) .ai-node:nth-child(2) { top: 100%; left: 50%; }
+        .ai-ring:nth-child(3) .ai-node:nth-child(1) { top: 50%; left: 0; }
+        .ai-ring:nth-child(3) .ai-node:nth-child(2) { top: 14.6%; left: 85.4%; } /* approx 45deg */
+
+        @keyframes core-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(20, 184, 166, 0.4); }
+            50% { transform: scale(1.05); box-shadow: 0 0 50px rgba(20, 184, 166, 0.6); }
+        }
+
+        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+        @keyframes spin-reverse { 100% { transform: translate(-50%, -50%) rotate(-360deg); } }
+
+        /* Device Placeholders */
+        .device-watch {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-light);
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+        }
+
+        .watch-body {
+            width: 80px;
+            height: 96px;
+            background: #1E293B;
+            border-radius: 16px;
+            position: relative;
+            z-index: 2;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+            border: 2px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        
+        .watch-screen {
+            width: 70px;
+            height: 86px;
+            background: black;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .watch-strap {
+            position: absolute;
+            width: 44px;
+            height: 140px;
+            background: #94A3B8;
+            border-radius: 8px;
+            z-index: 1;
+        }
+        
+        .watch-pulse {
+             width: 50px;
+             height: 30px;
+        }
+        
+        .watch-pulse path {
+            stroke: var(--secondary);
+            stroke-width: 2;
+            fill: none;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: dash 2s linear infinite;
+        }
+
+        .device-box {
+            position: relative;
+            width: 100%;
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-light);
+            border-radius: var(--radius-md);
+            margin-bottom: 1.5rem;
+        }
+        
+        .box-body {
+            position: relative;
+            width: 140px;
+            height: 100px;
+            background: white;
+            border: 1px solid var(--border-light);
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+        
+        .box-screen {
+            width: 100%;
+            height: 40px;
+            background: #EEF2FF;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            font-size: 1.2rem;
+            color: var(--text-main);
+            letter-spacing: 2px;
+            font-weight: 700;
+        }
+        
+        .box-buttons {
+            display: flex;
+            gap: 12px;
+        }
+        
+        .box-btn {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--border-light);
+            border: 1px solid #CBD5E1;
+        }
+        
+        .box-btn.primary { background: var(--primary); border-color: var(--primary); }
+
+        /* Mockups */
+        .mockup-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mockup-monitor {
+            width: 100%;
+            height: 100%;
+            background: #1E293B;
+            border-radius: 8px;
+            border: 8px solid #334155;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+        
+        .monitor-stand {
+            width: 120px;
+            height: 40px;
+            background: #334155;
+            margin: 0 auto;
+            border-radius: 0 0 8px 8px;
+            position: relative;
+            top: 0;
+            z-index: 1;
+        }
+        
+        .monitor-stand::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -40px;
+            width: 200px;
+            height: 10px;
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        .monitor-screen {
+            flex: 1;
+            background: #0F172A;
+            padding: 15px;
+            display: grid;
+            grid-template-columns: 60px 1fr;
+            gap: 15px;
+        }
+        
+        .monitor-sidebar {
+            background: #1E293B;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 8px;
+        }
+        
+        .sidebar-item { height: 6px; width: 100%; background: #475569; border-radius: 2px; }
+        .sidebar-item.active { background: var(--secondary); width: 60%; }
+        
+        .monitor-content {
+            display: grid;
+            grid-template-rows: 20px 1fr 1fr;
+            gap: 10px;
+        }
+        
+        .monitor-header { background: #1E293B; border-radius: 4px; }
+        
+        .monitor-charts {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 10px;
+        }
+        
+        .chart-box { background: #1E293B; border-radius: 4px; position: relative; overflow: hidden; }
+        .chart-line {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            height: 30px;
+            border-bottom: 2px solid var(--primary);
+        }
+        .chart-line::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(14, 165, 233, 0.2), transparent);
+        }
+        .chart-bar {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            width: 10px;
+            height: 20px;
+            background: var(--cta);
+        }
+        .chart-bar:nth-child(2) { left: 25px; height: 30px; }
+        .chart-bar:nth-child(3) { left: 40px; height: 15px; }
+        .chart-bar:nth-child(4) { left: 55px; height: 35px; }
+
+        .mockup-phone {
+            width: 180px;
+            height: 320px;
+            background: #1E293B;
+            border-radius: 24px;
+            border: 6px solid #334155;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+            margin: 0 auto;
+        }
+        
+        .phone-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            height: 18px;
+            background: #334155;
+            border-radius: 0 0 8px 8px;
+            z-index: 10;
+        }
+        
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: #FFFFFF;
+            padding: 25px 12px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .phone-header {
+            height: 40px;
+            background: var(--bg-light);
+            border-radius: 8px;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+        }
+        
+        .phone-header-circle { width: 24px; height: 24px; border-radius: 50%; background: var(--primary); opacity: 0.2; }
+        
+        .phone-item {
+            height: 30px;
+            border: 1px solid var(--border-light);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            padding: 0 8px;
+            gap: 6px;
+        }
+        
+        .phone-icon { width: 16px; height: 16px; background: var(--secondary); border-radius: 4px; opacity: 0.5; }
+        .phone-text { height: 4px; width: 60%; background: #E2E8F0; border-radius: 2px; }
+
+        @keyframes dash {
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* Service Carrier Section */
+        .section-carrier {
+            background: #FFFFFF;
+        }
+
+        .carrier-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2.5rem;
+        }
+
+        .carrier-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            padding: 2.5rem;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .carrier-card:hover {
+            transform: translateY(-10px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--secondary);
+        }
+
+        .carrier-card::before {
+            content: '';
+            position: absolute;
+            top: -50px;
+            right: -50px;
+            width: 150px;
+            height: 150px;
+            background: linear-gradient(135deg, rgba(8, 145, 178, 0.1), transparent);
+            border-radius: 50%;
+            z-index: 0;
+            transition: all 0.5s ease;
+        }
+
+        .carrier-card:hover::before {
+            transform: scale(1.5);
+        }
+
+        .carrier-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .carrier-card p {
+            color: var(--text-muted);
+            margin-bottom: 1.5rem;
+        }
+
+        .device-placeholder {
+            background: var(--bg-light);
+            border: 2px dashed var(--secondary);
+            border-radius: var(--radius-md);
+            height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            opacity: 0.8;
+        }
+
+        .carrier-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .carrier-card li {
+            padding-left: 1.5rem;
+            position: relative;
+            margin-bottom: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .carrier-card li::before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: var(--cta);
+            font-weight: bold;
+        }
+
+        /* DTx Section */
+        .section-dtx {
+            background: var(--bg-light);
+        }
+
+        .dtx-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .dtx-item {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            border: 1px solid rgba(8, 145, 178, 0.05);
+            box-shadow: var(--shadow-sm);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .dtx-item:hover {
+            box-shadow: var(--shadow-md);
+            border-color: var(--secondary);
+            transform: translateY(-5px);
+        }
+
+        .dtx-item h4 {
+            font-size: 1.25rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .dtx-icon {
+            font-size: 1.5rem;
+        }
+
+        .dtx-item ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .dtx-item li {
+            padding-left: 1rem;
+            position: relative;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .dtx-item li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--secondary);
+            font-weight: bold;
+        }
+
+        /* System Section */
+        .section-system {
+            background: #1E293B; /* Deep Slate */
+            color: white;
+            padding-bottom: 8rem;
+        }
+
+        .section-system h2 {
+            color: var(--text-main);
+        }
+
+        .section-system p {
+            color: var(--text-muted);
+        }
+
+        .system-display {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 2rem;
+            margin-top: 4rem;
+        }
+
+        .mockup {
+            background: #1E293B; /* Slate 800 */
+            border: 1px solid #334155; /* Slate 700 */
+            border-radius: var(--radius-lg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94A3B8;
+            font-family: monospace;
+            padding: 2rem;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+
+        .mockup-main {
+            height: 450px;
+        }
+
+        .mockup-side {
+            height: 450px;
+        }
+
+        /* Footer */
+        footer {
+            background: #F8FAFC;
+            color: var(--text-muted);
+            padding: 5rem 8% 3rem;
+            text-align: center;
+            font-size: 0.9rem;
+            position: relative;
+            border-top: 1px solid var(--border-light);
+        }
+
+        footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            opacity: 0.3;
+        }
+
+        footer p {
+            margin-bottom: 0.75rem;
+            opacity: 0.9;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .hero {
+                grid-template-columns: 1fr;
+                text-align: center;
+                padding-top: 10rem;
+                gap: 3rem;
+            }
+
+            .hero-content p {
+                margin-left: auto;
+                margin-right: auto;
+            }
+            
+            .system-display {
+                grid-template-columns: 1fr;
+            }
+            
+            .mockup {
+                height: 300px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none; /* Ideally replace with hamburger menu, but simple hide for now */
+            }
+            
+            .hero-content h1 {
+                font-size: 2.5rem;
+            }
+            
+            .carrier-grid, .dtx-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <div class="logo">
+            <img src="{% static 'website1.png' %}" alt="智医康科技 Logo" height="40">
+        </div>
+        <div class="nav-links">
+            <a href="#home">首页</a>
+            <a href="#carrier">服务载体</a>
+            <a href="#dtx">数字疗法</a>
+            <a href="#about">关于我们</a>
+        </div>
+        <!-- Mobile Menu Placeholder -->
+    </nav>
+
+    <section class="hero" id="home">
+        <div class="hero-content">
+            <h1>基于AI与智能硬件的<br>肺癌数字化康复管理</h1>
+            <p>连接患者与医生的数字化桥梁。通过医疗级物联网硬件实现连续体征监测，将院外康复由“盲盒”状态转为精细化管理。</p>
+            <a href="#carrier" class="btn">了解详情</a>
+        </div>
+        <div class="hero-visual">
+            <div class="medical-ai-visual">
+                <div class="ai-core">
+                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                    </svg>
+                </div>
+                <div class="ai-ring">
+                    <div class="ai-node"></div>
+                    <div class="ai-node"></div>
+                </div>
+                <div class="ai-ring">
+                    <div class="ai-node"></div>
+                    <div class="ai-node"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-carrier" id="carrier">
+        <div class="title-group">
+            <h2>服务载体</h2>
+            <p>由软/硬件系统驱动，构建居家康复数据基座</p>
+        </div>
+        <div class="carrier-grid">
+            <div class="carrier-card">
+                <h3>智能腕表 (Smart Watch)</h3>
+                <p>核心中枢，内置4G模组可独立通讯。支持动态血压、心率、血氧饱和度实时监测。</p>
+                <div class="device-watch">
+                    <img src="{% static 'website2.png' %}" alt="智能腕表" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <ul>
+                    <li>无感采集体征数据</li>
+                    <li>任务提醒实时通知</li>
+                    <li>AI智能问卷交互</li>
+                </ul>
+            </div>
+            <div class="carrier-card">
+                <h3>医疗级物联网外设</h3>
+                <p>实时监测，异常报警。集成智能血压计、血氧计、体重秤，自动同步数据至云端。</p>
+                <div class="device-box">
+                    <img src="{% static 'website3.png' %}" alt="医疗级物联网外设" style="width: 100%; height: 100%; object-fit: contain;">
+                </div>
+                <ul>
+                    <li>上臂式医疗级精准测量</li>
+                    <li>恶液质风险监控 (体重) </li>
+                    <li>指夹式血氧饱和度监测</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-dtx" id="dtx">
+        <div class="title-group">
+            <h2>数字疗法内容</h2>
+            <p>全方位的院外“治、管、防”闭环体系</p>
+        </div>
+        <div class="dtx-grid">
+            <div class="dtx-item">
+                <h4><span class="dtx-icon">💊</span> 药物管理</h4>
+                <ul>
+                    <li>个性化用药方案制定</li>
+                    <li>居家服药依从性提醒</li>
+                    <li>药品副作用监测与预警</li>
+                </ul>
+            </div>
+            <div class="dtx-item">
+                <h4><span class="dtx-icon">📈</span> 指标监测</h4>
+                <ul>
+                    <li>血压、心率、血氧连续追踪</li>
+                    <li>运动步数与睡眠质量分析</li>
+                    <li>基线指标异常自动预警</li>
+                </ul>
+            </div>
+            <div class="dtx-item">
+                <h4><span class="dtx-icon">🗣️</span> 症状跟踪</h4>
+                <ul>
+                    <li>气促、胸闷、咳嗽评估</li>
+                    <li>咯血/痰色风险评估</li>
+                    <li>疼痛量表定期随访评估</li>
+                </ul>
+            </div>
+            <div class="dtx-item">
+                <h4><span class="dtx-icon">📑</span> 复查解读</h4>
+                <ul>
+                    <li>CT影像/生化报告解读</li>
+                    <li>根据预后调整复查计划 </li>
+                    <li>肿瘤标志物趋势化分析</li>
+                </ul>
+            </div>
+            <div class="dtx-item">
+                <h4><span class="dtx-icon">🥗</span> 膳食营养</h4>
+                <ul>
+                    <li>肺癌专病定制化食谱建议</li>
+                    <li>体重波动风险评估与干预</li>
+                    <li>营养健康宣教指导</li>
+                </ul>
+            </div>
+            <div class="dtx-item">
+                <h4><span class="dtx-icon">💪</span> 心理/运动</h4>
+                <ul>
+                    <li>焦虑/抑郁量表定期评估</li>
+                    <li>术后肺功能康复运动指导</li>
+                    <li>情感关怀与陪伴交互</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <section class="section-system" style="background: linear-gradient(180deg, var(--bg-light) 0%, rgba(8, 145, 178, 0.05) 100%); position: relative; overflow: hidden;">
+        <div style="position: absolute; top: -20%; left: -10%; width: 600px; height: 600px; background: radial-gradient(circle, rgba(16, 185, 129, 0.05) 0%, transparent 70%); border-radius: 50%; z-index: 0;"></div>
+        <div class="title-group">
+            <h2>三端协同数字化平台</h2>
+            <p>医生驾驶舱 + 患者端贴身管家</p>
+        </div>
+        <div class="system-display">
+            <div class="mockup-container">
+                <img src="{% static 'website4.png' %}" alt="医生驾驶舱" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+            </div>
+            
+            <div class="mockup-container">
+                <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
+                    <img src="{% static 'website5.png' %}" alt="患者端1" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website6.png' %}" alt="患者端2" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <img src="{% static 'website7.png' %}" alt="患者端3" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="about" style="text-align: center; background: rgba(255,255,255,0.6); backdrop-filter: blur(10px); margin: 4rem 8%; border-radius: var(--radius-xl); border: 1px solid var(--border-light);">
+        <div class="title-group">
+            <h2>关于智医康</h2>
+            <p>连接生命，赋能健康</p>
+        </div>
+        <p style="max-width: 800px; margin: 0 auto; color: var(--text-muted); font-size: 1.125rem;">
+            上海智医康科技有限公司是一家专注于慢病数字化疗法的前沿医疗科技企业。我们深度融合AI大模型能力与医疗级物联网硬件，通过结构化真实世界数据（RWD）赋能医生决策，提升患者生存质量与生存期。
+            智医康创始团队由来自平安、哈啰、上海三甲医院的人工智能、医学、物联网专家组成，我们致力于帮助慢病患者科学康复，并坚持以循证医学为底座，助力“健康中国2030”癌症防治行动实施方案。
+        </p>
+    </section>
+
+    <footer style="background:  #1B4332;color: #fff;">
+        <p>© 2026 上海智医康科技有限公司 | 沪ICP备2024092528号-2</p>
+        <p>地址：上海市徐汇区龙漕路200弄28号302   |   邮箱：kefu@imht.site   |   电话：4006898982</p>
+    </footer>
+
+    <script>
+        // Navbar scroll effect
+        window.addEventListener('scroll', () => {
+            const nav = document.querySelector('nav');
+            if (window.scrollY > 20) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+    </script>
+</body>
+</html>
