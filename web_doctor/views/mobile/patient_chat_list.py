@@ -3,9 +3,11 @@ import json
 from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 
 from chat.models import ConversationReadState, Message
 from chat.services.chat import ChatService
+from users import choices
 from users.decorators import check_doctor_or_assistant
 from web_doctor.views.chat_api import _can_view_conversation, _serialize_message
 from web_doctor.views.workspace import _get_workspace_patients
@@ -93,6 +95,13 @@ def patient_chat_list(request: HttpRequest, patient_id: int) -> HttpResponse:
         "messages": json.dumps(data, ensure_ascii=False),
         "has_next": has_next,
         "next_cursor": next_cursor,
+        "conversation_id": conversation.id,
+        "can_chat": request.user.user_type == choices.UserType.ASSISTANT,
+        "chat_api_urls": {
+            "list": reverse("web_doctor:chat_api_list_messages"),
+            "send": reverse("web_doctor:chat_api_send_text"),
+            "upload": reverse("web_doctor:chat_api_upload_image"),
+            "read": reverse("web_doctor:chat_api_mark_read"),
+        },
     }
     return render(request, "web_doctor/mobile/patient_chat_list.html", context)
-

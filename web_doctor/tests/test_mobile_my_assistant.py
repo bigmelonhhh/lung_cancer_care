@@ -251,7 +251,7 @@ class MobileMyAssistantTests(TestCase):
         studio_names = set(response.context["doctor"]["studio_name"].split("、"))
         self.assertEqual(studio_names, {"张主任工作室", "李主任工作室"})
         self.assertEqual(response.context["stats"]["managed_patients"], 3)
-        self.assertEqual(response.context["stats"]["today_active"], 2)
+        self.assertEqual(response.context["stats"]["today_active"], 3)
 
     def test_mobile_home_assistant_without_linked_doctor_keeps_404(self):
         no_link_user = CustomUser.objects.create_user(

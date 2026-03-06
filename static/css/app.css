@@ -1124,10 +1124,6 @@ video {
   height: 0.125rem;
 }
 
-.h-1\.5 {
-  height: 0.375rem;
-}
-
 .h-10 {
   height: 2.5rem;
 }
@@ -3482,10 +3478,6 @@ video {
 
 .align-top {
   vertical-align: top;
-}
-
-.align-middle {
-  vertical-align: middle;
 }
 
 .font-mono {

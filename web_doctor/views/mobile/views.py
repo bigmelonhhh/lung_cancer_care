@@ -138,7 +138,6 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
         "avatar_url": None,
     }
 
-    today = timezone.localdate()
     managed_patients = 0
     today_active = 0
     if stats_doctor_ids:
@@ -147,7 +146,8 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
             is_active=True,
         )
         managed_patients = patient_qs.count()
-        today_active = patient_qs.filter(last_active_at__date=today).count()
+        # 业务要求：移动端首页“今日活跃”默认与“管理患者”保持一致。
+        today_active = managed_patients
 
     alerts_page_number = get_positive_int(request.GET.get("alerts_page"), 1)
     alerts_page_size = get_positive_int(request.GET.get("alerts_size"), 1)
