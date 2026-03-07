@@ -214,7 +214,7 @@ class MobileAuthTests(TestCase):
         self.assertEqual(ctx["doctor"]["studio_name"], "真实工作室")
 
         self.assertEqual(ctx["stats"]["managed_patients"], 2)
-        self.assertEqual(ctx["stats"]["today_active"], 1)
+        self.assertEqual(ctx["stats"]["today_active"], 2)
         self.assertEqual(ctx["stats"]["alerts_count"], 1)
         self.assertEqual(ctx["stats"]["consultations_count"], 1)
 

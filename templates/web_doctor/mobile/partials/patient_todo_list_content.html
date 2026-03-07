@@ -1,3 +1,9 @@
+<div
+  id="mobile-todo-current-query"
+  class="hidden"
+  data-query="?page={{ todo_page.number }}&pagesize={{ pagesize }}{% if patient %}&patient_id={{ patient.id }}{% endif %}">
+</div>
+
 {% for item in todo_page %}
   <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-4">
     <div class="flex items-start gap-3">
@@ -24,36 +30,79 @@
     </div>
 
     <div class="mt-3 grid grid-cols-1 gap-2 text-xs">
-      <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center  gap-3">
         <span class="text-slate-500 shrink-0">事件时间</span>
         <span class="text-slate-700 min-w-0 truncate">{{ item.event_time|default:"-" }}</span>
       </div>
-      <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center  gap-3">
         <span class="text-slate-500 shrink-0">处理时间</span>
         <span class="text-slate-700 min-w-0 truncate">{{ item.handle_time|default:"-" }}</span>
       </div>
-      <div class="flex items-center justify-between gap-3">
+      <div class="flex items-center  gap-3">
         <span class="text-slate-500 shrink-0">处理人</span>
         <span class="text-slate-700 min-w-0 truncate">{{ item.handler|default:"-" }}</span>
       </div>
     </div>
 
     <div class="mt-4 flex items-center justify-end">
-      <button
-        type="button"
-        data-todo-detail-trigger
-        data-event-title="{{ item.event_title|default:'' }}"
-        data-patient-name="{{ item.patient_name|default:'' }}"
-        data-event-content="{{ item.event_content|default:'' }}"
-        data-handle-content="{{ item.handle_content|default:'' }}"
-        data-event-time="{{ item.event_time|default:'' }}"
-        data-handle-time="{{ item.handle_time|default:'' }}"
-        data-handler="{{ item.handler|default:'' }}"
-        data-status-display="{{ item.status_display|default:'' }}"
-        class="text-blue-600 font-medium text-xs px-3 py-1.5 border border-blue-200 rounded-lg active:scale-[0.99] transition bg-blue-50/40"
-      >
-        查看详情
-      </button>
+      {% if item.status == 'completed' %}
+        <button
+          type="button"
+          data-todo-action="view"
+          data-todo-id="{{ item.id }}"
+          data-event-title="{{ item.event_title|default:'' }}"
+          data-patient-name="{{ item.patient_name|default:'' }}"
+          data-event-content="{{ item.event_content|default:'' }}"
+          data-handle-content="{{ item.handle_content|default:'' }}"
+          data-event-time="{{ item.event_time|default:'' }}"
+          data-handle-time="{{ item.handle_time|default:'' }}"
+          data-handler="{{ item.handler|default:'' }}"
+          data-status="{{ item.status|default:'' }}"
+          data-status-display="{{ item.status_display|default:'' }}"
+          data-patient-id="{{ item.patient_id|default:'' }}"
+          data-test="todo-action-view"
+          class="text-blue-600 font-medium text-xs px-3 py-1.5 border border-blue-200 rounded-lg active:scale-[0.99] transition bg-blue-50/40">
+          去查看
+        </button>
+      {% elif can_handle_todo %}
+        <button
+          type="button"
+          data-todo-action="process"
+          data-todo-id="{{ item.id }}"
+          data-event-title="{{ item.event_title|default:'' }}"
+          data-patient-name="{{ item.patient_name|default:'' }}"
+          data-event-content="{{ item.event_content|default:'' }}"
+          data-handle-content="{{ item.handle_content|default:'' }}"
+          data-event-time="{{ item.event_time|default:'' }}"
+          data-handle-time="{{ item.handle_time|default:'' }}"
+          data-handler="{{ item.handler|default:'' }}"
+          data-status="{{ item.status|default:'' }}"
+          data-status-display="{{ item.status_display|default:'' }}"
+          data-patient-id="{{ item.patient_id|default:'' }}"
+          data-test="todo-action-process"
+          class="text-rose-600 font-medium text-xs px-3 py-1.5 border border-rose-200 rounded-lg active:scale-[0.99] transition bg-rose-50/40">
+          去处理
+        </button>
+      {% else %}
+        <button
+          type="button"
+          data-todo-action="view"
+          data-todo-id="{{ item.id }}"
+          data-event-title="{{ item.event_title|default:'' }}"
+          data-patient-name="{{ item.patient_name|default:'' }}"
+          data-event-content="{{ item.event_content|default:'' }}"
+          data-handle-content="{{ item.handle_content|default:'' }}"
+          data-event-time="{{ item.event_time|default:'' }}"
+          data-handle-time="{{ item.handle_time|default:'' }}"
+          data-handler="{{ item.handler|default:'' }}"
+          data-status="{{ item.status|default:'' }}"
+          data-status-display="{{ item.status_display|default:'' }}"
+          data-patient-id="{{ item.patient_id|default:'' }}"
+          data-test="todo-action-view"
+          class="text-blue-600 font-medium text-xs px-3 py-1.5 border border-blue-200 rounded-lg active:scale-[0.99] transition bg-blue-50/40">
+          去查看
+        </button>
+      {% endif %}
     </div>
   </div>
 {% empty %}
@@ -93,4 +142,3 @@
     {% endif %}
   </div>
 {% endif %}
-

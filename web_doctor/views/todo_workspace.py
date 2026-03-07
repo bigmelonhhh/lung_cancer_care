@@ -5,6 +5,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.http import HttpRequest, HttpResponse, Http404
 from django.shortcuts import render
 from users.decorators import check_doctor_or_assistant
+from users import choices
 from web_doctor.views.workspace import _get_workspace_identities, _get_workspace_patients, get_user_display_name
 
 from patient_alerts.services.todo_list import TodoListService
@@ -93,6 +94,7 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
     """
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     display_name = get_user_display_name(request.user)
+    can_handle_todo = request.user.user_type == choices.UserType.ASSISTANT
     
     # 接收筛选参数
     page = request.GET.get('page', 1)
@@ -118,6 +120,7 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
         "assistant": assistant_profile,
         "workspace_display_name": display_name,
         "todo_page": todo_page,
+        "can_handle_todo": can_handle_todo,
         # 参数回显
         "current_status": status,
         "start_date": start_date,
@@ -158,5 +161,6 @@ def patient_todo_sidebar(request: HttpRequest, patient_id: int) -> HttpResponse:
             "todo_list": todo_page.object_list,
             "current_patient": patient,
             "todo_total": todo_page.paginator.count,
+            "can_handle_todo": request.user.user_type == choices.UserType.ASSISTANT,
         },
     )

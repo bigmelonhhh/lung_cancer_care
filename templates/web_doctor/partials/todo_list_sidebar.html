@@ -26,15 +26,17 @@
             <div class="flex justify-between items-center">
             <div class="mt-1 text-slate-400 text-xs">{{ item.event_time }}</div>
             <div class="flex justify-end">
-                <button 
-                    data-todo-id="{{ item.id }}"
-                    data-todo-title="{{ item.patient_name }} - {{ item.event_title }}"
-                    data-todo-content="{{ item.event_content }}"
-                    data-todo-status="{{ item.status }}"
-                    data-todo-handle-content="{{ item.handle_content|default:'' }}"
-                    data-patient-id="{{ item.patient_id|default:'' }}"
-                    onclick="handleTodoModalTrigger(this, true)"
-                    class="text-rose-600 hover:text-rose-800 font-medium handle-btn">去处理</button>
+                {% if can_handle_todo or request.user.user_type == 5 %}
+                    <button 
+                        data-todo-id="{{ item.id }}"
+                        data-todo-title="{{ item.patient_name }} - {{ item.event_title }}"
+                        data-todo-content="{{ item.event_content }}"
+                        data-todo-status="{{ item.status }}"
+                        data-todo-handle-content="{{ item.handle_content|default:'' }}"
+                        data-patient-id="{{ item.patient_id|default:'' }}"
+                        onclick="handleTodoModalTrigger(this, true)"
+                        class="text-rose-600 hover:text-rose-800 font-medium handle-btn">去处理</button>
+                {% endif %}
             </div></div>
             <button class="absolute top-0 right-0 pl-2 pr-2 bg-[#ff0000] rounded-tr-[10px] rounded-bl-[10px] text-white font-medium text-sm ">{{item.status_display}}</button>
         </div>

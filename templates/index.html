@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <style>
+      <style>
         /* 
          * Organic Tech Design System (Balanced)
          * Primary: #0891B2 (Cyan 600) - Precision Tech
@@ -485,6 +485,8 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            width: 100%;
+            min-width: 0;
         }
 
         .mockup-monitor {
@@ -748,7 +750,7 @@
 
         .dtx-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 2rem;
         }
 
@@ -844,6 +846,31 @@
             height: 450px;
         }
 
+        .patient-screens {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            overflow: visible;
+        }
+
+        .patient-screens img {
+            width: 32%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            flex: 0 0 32%;
+        }
+
+        .doctor-screen {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 8px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
         /* Footer */
         footer {
             background: #F8FAFC;
@@ -891,6 +918,10 @@
             
             .mockup {
                 height: 300px;
+            }
+
+            .dtx-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
@@ -1029,9 +1060,21 @@
             .carrier-grid, .dtx-grid {
                 grid-template-columns: 1fr;
             }
-            
-            .mockup-container img {
-                width: 100% !important;
+
+            .patient-screens {
+                justify-content: flex-start;
+                overflow-x: auto;
+                overflow-y: hidden;
+                scroll-snap-type: x mandatory;
+                -webkit-overflow-scrolling: touch;
+                padding: 0 0.25rem 0.5rem;
+            }
+
+            .patient-screens img {
+                width: 68vw;
+                max-width: 260px;
+                flex: 0 0 68vw;
+                scroll-snap-align: start;
             }
         }
     </style>
@@ -1178,14 +1221,14 @@
         </div>
         <div class="system-display">
             <div class="mockup-container">
-                <img src="{% static 'website4.webp' %}" alt="医生驾驶舱" style="width: 100%; height: auto; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);">
+                <img src="{% static 'website4.webp' %}" alt="医生驾驶舱" class="doctor-screen">
             </div>
             
             <div class="mockup-container">
-                <div style="display: flex; gap: 10px; width: 100%; justify-content: center;">
-                    <img src="{% static 'website5.webp' %}" alt="患者端1" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <img src="{% static 'website6.webp' %}" alt="患者端2" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                    <img src="{% static 'website7.webp' %}" alt="患者端3" style="width: 30%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                <div class="patient-screens">
+                    <img src="{% static 'website5.webp' %}" alt="患者端1">
+                    <img src="{% static 'website6.webp' %}" alt="患者端2">
+                    <img src="{% static 'website7.webp' %}" alt="患者端3">
                 </div>
             </div>
         </div>

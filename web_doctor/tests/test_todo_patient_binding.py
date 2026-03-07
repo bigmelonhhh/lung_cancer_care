@@ -1,7 +1,13 @@
 
 from django.test import TestCase, Client
 from django.urls import reverse
-from users.models import CustomUser, DoctorProfile, PatientProfile
+from users.models import (
+    AssistantProfile,
+    CustomUser,
+    DoctorAssistantMap,
+    DoctorProfile,
+    PatientProfile,
+)
 from users.choices import UserType
 from patient_alerts.models import PatientAlert, AlertEventType, AlertLevel, AlertStatus
 from patient_alerts.services.todo_list import TodoListService
@@ -17,6 +23,20 @@ class TodoPatientBindingTests(TestCase):
         )
         self.doctor_profile = DoctorProfile.objects.create(
             user=self.doctor_user, name='Dr. Test'
+        )
+        self.assistant_user = CustomUser.objects.create_user(
+            username='assistant',
+            password='password123',
+            user_type=UserType.ASSISTANT,
+            phone='13800000003'
+        )
+        self.assistant_profile = AssistantProfile.objects.create(
+            user=self.assistant_user,
+            name='Assistant Test'
+        )
+        DoctorAssistantMap.objects.create(
+            doctor=self.doctor_profile,
+            assistant=self.assistant_profile
         )
         
         # Create Patients
@@ -172,6 +192,7 @@ class TodoPatientBindingTests(TestCase):
 
     def test_patient_todo_sidebar_view(self):
         """Test the new patient_todo_sidebar view for partial refresh"""
+        self.client.force_login(self.assistant_user)
         url = reverse('web_doctor:patient_todo_sidebar', args=[self.patient1.id])
         response = self.client.get(url)
         
@@ -190,6 +211,7 @@ class TodoPatientBindingTests(TestCase):
         self.assertIn(f'data-patient-id="{self.patient1.id}"', content)
 
     def test_todo_list_table_buttons_include_data_patient_id(self):
+        self.client.force_login(self.assistant_user)
         url = reverse('web_doctor:doctor_todo_list')
         response = self.client.get(
             url,
@@ -206,3 +228,39 @@ class TodoPatientBindingTests(TestCase):
         self.assertEqual(response.status_code, 200)
         content = response.content.decode('utf-8')
         self.assertIn('todo_pending_jump', content)
+
+    def test_doctor_todo_list_hides_process_button(self):
+        self.client.force_login(self.doctor_user)
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'pending'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '去处理')
+
+    def test_assistant_todo_list_shows_process_button(self):
+        self.client.force_login(self.assistant_user)
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'pending'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '去处理')
+
+    def test_doctor_sidebar_hides_process_button(self):
+        self.client.force_login(self.doctor_user)
+        url = reverse('web_doctor:patient_todo_sidebar', args=[self.patient1.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '去处理')
+
+    def test_assistant_sidebar_shows_process_button(self):
+        self.client.force_login(self.assistant_user)
+        url = reverse('web_doctor:patient_todo_sidebar', args=[self.patient1.id])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '去处理')
