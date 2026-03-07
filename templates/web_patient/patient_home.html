@@ -700,12 +700,87 @@
       </div>
     </div>
   </div>
+
+  <!-- Member Only Modal -->
+  <div
+    id="member-only-modal"
+    class="fixed inset-0 z-50 hidden"
+    style="display: none"
+    aria-hidden="true"
+  >
+    <div
+      class="absolute inset-0 bg-black/55"
+      onclick="closeMemberOnlyModal()"
+    ></div>
+    <div class="relative min-h-screen flex items-center justify-center p-5">
+      <div
+        class="w-full max-w-[320px] rounded-2xl bg-white shadow-2xl px-5 py-6"
+        role="dialog"
+        aria-modal="true"
+      >
+        <h4 class="text-base font-bold text-slate-900 text-center">温馨提示</h4>
+        <p id="member-only-message" class="mt-3 text-sm text-slate-600 text-center leading-6">
+          该功能为会员专属，请先开通会员
+        </p>
+        <div class="mt-5 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onclick="closeMemberOnlyModal()"
+            class="h-10 rounded-lg border border-slate-200 text-slate-600 font-medium active:bg-slate-50"
+          >
+            稍后再说
+          </button>
+          <button
+            type="button"
+            onclick="confirmMemberOnlyModal()"
+            class="h-10 rounded-lg bg-blue-600 text-white font-medium active:bg-blue-700"
+          >
+            去开通
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
   const IS_MEMBER = {{ is_member|yesno:"true,false" }};
   const BUY_URL = "{{ buy_url|escapejs }}";
   let UNREAD_CHAT_COUNT = parseInt('{{ unread_chat_count|default:0 }}', 10) || 0;
+  let MEMBER_ONLY_REDIRECT_URL = BUY_URL;
+
+  function showMemberOnlyModal(message, redirectUrl) {
+    const modal = document.getElementById('member-only-modal');
+    const messageEl = document.getElementById('member-only-message');
+    if (!modal || !messageEl) {
+      alert(message || '该功能为会员专属，请先开通会员');
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
+      }
+      return;
+    }
+    MEMBER_ONLY_REDIRECT_URL = redirectUrl || BUY_URL;
+    messageEl.textContent = message || '该功能为会员专属，请先开通会员';
+    modal.classList.remove('hidden');
+    modal.style.display = 'block';
+    modal.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeMemberOnlyModal() {
+    const modal = document.getElementById('member-only-modal');
+    if (!modal) {
+      return;
+    }
+    modal.classList.add('hidden');
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function confirmMemberOnlyModal() {
+    const targetUrl = MEMBER_ONLY_REDIRECT_URL || BUY_URL;
+    closeMemberOnlyModal();
+    window.location.href = targetUrl;
+  }
 
   function handleMemberOnlyNavigation(event) {
     if (IS_MEMBER) {
@@ -714,8 +789,7 @@
     if (event) {
       event.preventDefault();
     }
-    alert('该功能为会员专属，请先开通会员');
-    window.location.href = BUY_URL;
+    showMemberOnlyModal('该功能为会员专属，请先开通会员', BUY_URL);
     return false;
   }
 
@@ -767,8 +841,7 @@
 
   function handleTaskClick(title, type, specificUrl) {
       if (!IS_MEMBER) {
-          alert('该功能为会员专属，请先开通会员');
-          window.location.href = BUY_URL;
+          showMemberOnlyModal('该功能为会员专属，请先开通会员', BUY_URL);
           return;
       }
       // 获取当前用户openid
