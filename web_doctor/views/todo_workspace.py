@@ -95,6 +95,7 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
     doctor_profile, assistant_profile = _get_workspace_identities(request.user)
     display_name = get_user_display_name(request.user)
     can_handle_todo = request.user.user_type == choices.UserType.ASSISTANT
+    can_view_todo = request.user.user_type == choices.UserType.DOCTOR
     
     # 接收筛选参数
     page = request.GET.get('page', 1)
@@ -121,6 +122,7 @@ def doctor_todo_list_page(request: HttpRequest) -> HttpResponse:
         "workspace_display_name": display_name,
         "todo_page": todo_page,
         "can_handle_todo": can_handle_todo,
+        "can_view_todo": can_view_todo,
         # 参数回显
         "current_status": status,
         "start_date": start_date,

@@ -92,6 +92,15 @@ class TodoPatientBindingTests(TestCase):
             event_title='P2 Alert 1',
             status=AlertStatus.PENDING
         )
+        PatientAlert.objects.create(
+            patient=self.patient1,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.OTHER,
+            event_level=AlertLevel.MILD,
+            event_title='P1 Alert Completed',
+            status=AlertStatus.COMPLETED,
+            handle_content='已处理'
+        )
         
         self.client = Client()
         self.client.login(username='doctor', password='password123')
@@ -250,6 +259,52 @@ class TodoPatientBindingTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, '去处理')
+
+    def test_doctor_todo_list_shows_view_button_for_pending(self):
+        self.client.force_login(self.doctor_user)
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'pending'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, '去查看')
+        self.assertContains(response, 'data-todo-status="pending"')
+        self.assertNotContains(response, '去处理')
+
+    def test_assistant_todo_list_does_not_show_view_button_for_pending(self):
+        self.client.force_login(self.assistant_user)
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'pending'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, '去查看')
+        self.assertContains(response, '去处理')
+
+    def test_completed_status_shows_view_button_for_doctor_and_assistant(self):
+        url = reverse('web_doctor:doctor_todo_list')
+
+        self.client.force_login(self.doctor_user)
+        response_doctor = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'completed'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response_doctor.status_code, 200)
+        self.assertContains(response_doctor, '去查看')
+
+        self.client.force_login(self.assistant_user)
+        response_assistant = self.client.get(
+            url,
+            {'patient_id': self.patient1.id, 'status': 'completed'},
+            headers={'HX-Request': 'true'}
+        )
+        self.assertEqual(response_assistant.status_code, 200)
+        self.assertContains(response_assistant, '去查看')
 
     def test_doctor_sidebar_hides_process_button(self):
         self.client.force_login(self.doctor_user)

@@ -60,7 +60,7 @@
             <div class="flex gap-3" :class="isSelf(msg) ? 'flex-row-reverse' : 'flex-row'">
                 <!-- Avatar -->
                 <div class="w-10 h-10 shrink-0 rounded-full bg-slate-200 overflow-hidden shadow-sm">
-                    <img :src="isSelf(msg) ? currentUserAvatar : getDoctorAvatar(msg)" class="w-full h-full object-cover">
+                    <img :src="isSelf(msg) ? getPatientAvatar(msg) : getDoctorAvatar(msg)" class="w-full h-full object-cover">
                 </div>
                 
                 <!-- Content Bubble -->
@@ -163,14 +163,17 @@
             loading: false,
             previewUrl: null,
             currentUserId: {{ request.user.id|default:0 }},
-            currentUserAvatar: 'https://ui-avatars.com/api/?name={{ patient.name|default:"Me" }}&background=3b82f6&color=fff',
-            defaultDoctorAvatar: 'https://ui-avatars.com/api/?name=Doc&background=94a3b8&color=fff',
+            currentUserDisplayName: "{{ current_user_display_name|default:''|escapejs }}",
+            fallbackPatientAvatar: "{% static 'paitent.png' %}",
+            currentUserAvatar: "",
+            defaultDoctorAvatar: "{% static 'doctor.png' %}",
             lastMessageId: null,
             pollInterval: null,
             currentRole: '{{ is_family|yesno:"family,patient" }}',
             roleLocked: true,
 
             init() {
+                this.currentUserAvatar = this.buildAvatarByName(this.currentUserDisplayName, this.fallbackPatientAvatar);
                 this.loadMessages();
                 this.pollInterval = setInterval(() => this.loadMessages(true), 5000);
                 this.$watch('messages', () => this.scrollToBottom());
@@ -186,6 +189,19 @@
             getDoctorAvatar(msg) {
                 // Future: Use real doctor avatar if available in message payload
                 return this.defaultDoctorAvatar;
+            },
+
+            getPatientAvatar(msg) {
+                if (msg && (msg.sender_role === 1 || msg.sender_role === 2)) {
+                    return this.buildAvatarByName(msg.sender_name, this.fallbackPatientAvatar);
+                }
+                return this.currentUserAvatar || this.fallbackPatientAvatar;
+            },
+
+            buildAvatarByName(name, fallback) {
+                const cleaned = (name || '').trim();
+                if (!cleaned) return fallback;
+                return `https://ui-avatars.com/api/?name=${encodeURIComponent(cleaned)}&background=3b82f6&color=fff`;
             },
 
             async loadMessages(isPoll = false) {
@@ -249,6 +265,8 @@
                 const tempMsg = {
                     id: tempId,
                     sender_id: this.currentUserId,
+                    sender_role: this.currentRole === 'family' ? 2 : 1,
+                    sender_name: this.currentUserDisplayName,
                     is_patient_side: true,
                     content_type: 'text',
                     text_content: text,
@@ -311,6 +329,8 @@
                  const tempMsg = {
                     id: tempId,
                     sender_id: this.currentUserId,
+                    sender_role: this.currentRole === 'family' ? 2 : 1,
+                    sender_name: this.currentUserDisplayName,
                     is_patient_side: true,
                     content_type: 'image',
                     image_url: URL.createObjectURL(file), // Local preview
