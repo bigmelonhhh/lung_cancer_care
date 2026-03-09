@@ -48,6 +48,22 @@ class MobileManageMetricsTests(TestCase):
         response_invalid = self.client.get(f"{url}?patient_id=abc")
         self.assertEqual(response_invalid.status_code, 400)
 
+    def test_health_records_page_contains_core_ui_elements(self):
+        self.client.force_login(self.doctor_user)
+        url = reverse("web_doctor:mobile_health_records")
+        response = self.client.get(f"{url}?patient_id={self.patient.id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "web_doctor/mobile/health_records.html")
+        self.assertContains(response, "健康档案")
+        self.assertContains(response, "一般监测指标")
+        self.assertContains(response, "用药")
+        self.assertContains(
+            response,
+            f'patient_id={self.patient.id}',
+        )
+        self.assertContains(response, "查看详情")
+
     def test_health_record_detail_returns_empty_list_when_no_data(self):
         self.client.force_login(self.doctor_user)
         url = reverse("web_doctor:mobile_health_record_detail")

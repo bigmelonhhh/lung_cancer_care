@@ -86,6 +86,16 @@ class MobileAuthTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "login.html")
 
+    def test_login_page_contains_core_ui_elements(self):
+        """测试登录页核心UI元素是否存在"""
+        response = self.client.get(self.login_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "请登录您的医生/助理/销售账号")
+        self.assertContains(response, 'name="phone"', html=False)
+        self.assertContains(response, 'name="password"', html=False)
+        self.assertContains(response, "使用手机号登录")
+
     def test_pc_login_redirects_to_workspace(self):
         """测试PC端医生登录跳转到工作台"""
         response = self.client.post(

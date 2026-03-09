@@ -34,3 +34,18 @@ class DoctorWorkspaceChatLayoutTest(TestCase):
         self.assertNotIn("clamp(120px, 16vh, 360px)", content)
         self.assertNotIn("--doctor-chat-input-height", content)
         self.assertIn("this.canChat ? 120 : 0", content)
+
+    @patch("web_doctor.views.workspace.enrich_patients_with_counts", return_value=[])
+    def test_doctor_workspace_contains_core_ui_elements(self, _mock_enrich):
+        self.client.force_login(self.user)
+        url = reverse("web_doctor:doctor_workspace")
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "web_doctor/index.html")
+        self.assertContains(response, 'id="patient-search-input"', html=False)
+        self.assertContains(response, 'id="patient-search-btn"', html=False)
+        self.assertContains(response, 'id="patient-search-reset"', html=False)
+        self.assertContains(response, 'id="patient-list-container"', html=False)
+        self.assertContains(response, 'id="main-content"', html=False)
+        self.assertContains(response, "请先从左侧患者列表中选择一位患者，进入详细管理页面。")

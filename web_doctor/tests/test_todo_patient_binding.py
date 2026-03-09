@@ -171,6 +171,23 @@ class TodoPatientBindingTests(TestCase):
         # Check if hidden input exists in form (if we rendered the full page)
         self.assertContains(response, f'name="patient_id" value="{self.patient1.id}"')
 
+    def test_todo_list_page_contains_core_ui_elements(self):
+        """Test doctor_todo_list_page full page core UI elements."""
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(url, {'patient_id': self.patient1.id, 'status': 'pending'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "web_doctor/partials/todo_list/todo_list.html")
+        self.assertContains(response, "患者待办")
+        self.assertContains(response, 'id="todo-filter-form"', html=False)
+        self.assertContains(response, "事件状态：")
+        self.assertContains(response, 'name="status"', html=False)
+        self.assertContains(response, 'name="start_date"', html=False)
+        self.assertContains(response, 'name="end_date"', html=False)
+        self.assertContains(response, 'id="todo-table-container"', html=False)
+        self.assertContains(response, "搜索")
+        self.assertContains(response, "重置")
+
     def test_todo_list_page_htmx_table_only(self):
         """Test doctor_todo_list_page with HTMX request returns table only"""
         url = reverse('web_doctor:doctor_todo_list')

@@ -99,6 +99,42 @@ class MobilePatientHomeTests(TestCase):
         self.assertIn(self.patient_active.name, content)
         self.assertNotIn(f"P{self.patient_active.id:06d}", content)
 
+    def test_mobile_patient_home_contains_core_ui_elements(self):
+        self.client.force_login(self.user)
+        url = reverse("web_doctor:mobile_patient_home", args=[self.patient_active.id])
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "web_doctor/mobile/patient_home.html")
+        self.assertContains(response, f"患者：{self.patient_active.name}")
+        self.assertContains(response, "常用菜单")
+        self.assertContains(response, 'id="mobile-back-btn"', html=False)
+        self.assertContains(
+            response,
+            f'href="{reverse("web_doctor:mobile_patient_basic_info")}?patient_id={self.patient_active.id}"',
+            html=False,
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("web_doctor:mobile_health_records")}?patient_id={self.patient_active.id}"',
+            html=False,
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("web_doctor:mobile_patient_records", args=[self.patient_active.id])}"',
+            html=False,
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("web_doctor:mobile_patient_todo_list")}?patient_id={self.patient_active.id}"',
+            html=False,
+        )
+        self.assertContains(
+            response,
+            f'href="{reverse("web_doctor:mobile_patient_chat_list", kwargs={"patient_id": self.patient_active.id})}"',
+            html=False,
+        )
+
     def test_mobile_patient_home_denies_unrelated_patient(self):
         self.client.force_login(self.user)
         url = reverse("web_doctor:mobile_patient_home", args=[self.patient_other.id])
