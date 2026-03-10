@@ -91,6 +91,12 @@ class PatientAlert(models.Model):
         blank=True,
         help_text="Handling notes or resolution details.",
     )
+    handle_meta = models.JSONField(
+        "Handle meta",
+        default=dict,
+        blank=True,
+        help_text="Latest handling snapshot and full handling history.",
+    )
     source_type = models.CharField(
         "Source type",
         max_length=50,

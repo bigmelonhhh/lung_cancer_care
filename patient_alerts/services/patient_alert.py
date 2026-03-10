@@ -7,7 +7,14 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
-from users.models import PatientProfile
+from users.models import CustomUser, PatientProfile
+
+
+_STATUS_CODE_BY_VALUE = {
+    AlertStatus.PENDING: "pending",
+    AlertStatus.ESCALATED: "escalate",
+    AlertStatus.COMPLETED: "completed",
+}
 
 
 class PatientAlertService:
@@ -16,6 +23,59 @@ class PatientAlertService:
     - 负责患者报警记录的创建与状态更新。
     - Service 层统一校验输入参数并返回业务对象。
     """
+
+    @staticmethod
+    def _get_user_display_name(user: CustomUser | None) -> str:
+        if not user:
+            return ""
+
+        doctor_profile = getattr(user, "doctor_profile", None)
+        assistant_profile = getattr(user, "assistant_profile", None)
+
+        if doctor_profile and getattr(doctor_profile, "name", ""):
+            return doctor_profile.name
+        if assistant_profile and getattr(assistant_profile, "name", ""):
+            return assistant_profile.name
+        if getattr(user, "wx_nickname", ""):
+            return user.wx_nickname
+        if getattr(user, "name", ""):
+            return user.name
+        if hasattr(user, "get_full_name") and user.get_full_name():
+            return user.get_full_name()
+        return getattr(user, "username", "") or getattr(user, "phone", "")
+
+    @staticmethod
+    def _normalize_handle_meta(handle_meta: Any) -> dict[str, Any]:
+        if not isinstance(handle_meta, dict):
+            return {"latest": {}, "history": []}
+
+        latest = handle_meta.get("latest")
+        history = handle_meta.get("history")
+        return {
+            "latest": latest if isinstance(latest, dict) else {},
+            "history": history if isinstance(history, list) else [],
+        }
+
+    @staticmethod
+    def _serialize_handled_at(value: datetime | None) -> str:
+        if value is None:
+            return ""
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, timezone.get_current_timezone())
+        return timezone.localtime(value).isoformat()
+
+    @staticmethod
+    def _build_handle_snapshot(alert: PatientAlert) -> dict[str, Any]:
+        handler = getattr(alert, "handler", None)
+        return {
+            "status": alert.status,
+            "status_code": _STATUS_CODE_BY_VALUE.get(alert.status, ""),
+            "status_display": alert.get_status_display(),
+            "handle_content": alert.handle_content or "",
+            "handled_at": PatientAlertService._serialize_handled_at(alert.handle_time),
+            "handler_id": alert.handler_id,
+            "handler_name": PatientAlertService._get_user_display_name(handler),
+        }
 
     @staticmethod
     def create_alert(
@@ -253,6 +313,12 @@ class PatientAlertService:
             handled_at = timezone.now()
         alert.handle_time = handled_at
         fields.append("handle_time")
+
+        alert.handle_meta = PatientAlertService._normalize_handle_meta(alert.handle_meta)
+        snapshot = PatientAlertService._build_handle_snapshot(alert)
+        alert.handle_meta["latest"] = snapshot
+        alert.handle_meta["history"].append(snapshot)
+        fields.append("handle_meta")
 
         alert.save(update_fields=fields)
         return alert
