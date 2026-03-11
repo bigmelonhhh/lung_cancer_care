@@ -15,6 +15,11 @@ urlpatterns = [
     path("medication/", views.my_medication, name="my_medication"),
     path("health/records/", views.health_records, name="health_records"),
     path("health/record/detail/", views.health_record_detail, name="health_record_detail"),
+    path(
+        "health/questionnaire/submission/<int:submission_id>/",
+        views.questionnaire_submission_detail,
+        name="questionnaire_submission_detail",
+    ),
     path("health/review/record/detail/", views.review_record_detail, name="review_record_detail"),
     path("record/temperature/", views.record_temperature, name="record_temperature"),
     path("record/bp/", views.record_bp, name="record_bp"),

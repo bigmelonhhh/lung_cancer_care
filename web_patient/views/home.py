@@ -158,16 +158,26 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     )
                 elif "随访" in title_val or "问卷" in title_val:
                     q_ids = item.get("questionnaire_ids", [])
-                    action_url = reverse("web_patient:daily_survey")
+                    has_pending_questionnaires = bool(q_ids)
+                    followup_completed = is_completed or not has_pending_questionnaires
+                    action_url = ""
                     if q_ids:
+                        action_url = reverse("web_patient:daily_survey")
                         ids_str = ",".join(map(str, q_ids))
                         action_url = f"{action_url}?ids={ids_str}"
 
                     plan_data.update(
                         {
                             "type": "followup",
-                            "subtitle": item.get("subtitle")
-                            or ("请及时完成您的随访任务" if not is_completed else "已完成随访任务"),
+                            "status": "completed" if followup_completed else "pending",
+                            "subtitle": (
+                                "已完成随访任务"
+                                if followup_completed
+                                else (
+                                    item.get("subtitle")
+                                    or "请及时完成您的随访任务"
+                                )
+                            ),
                             "action_text": "去完成",
                             "url": action_url,
                         }

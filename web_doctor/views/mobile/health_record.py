@@ -8,12 +8,15 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import HealthMetric, MetricType
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from market.service.order import get_paid_orders_for_patient
 from patient_alerts.services.todo_list import TodoListService
 from users.decorators import check_doctor_or_assistant
@@ -510,6 +513,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     source = request.GET.get("source")
     view = request.GET.get("view")
     is_medication_detail_view = bool(record_type == "medical" and view == "detail")
+    is_questionnaire_type = bool(record_type in QUESTIONNAIRE_RECORD_TYPES)
 
     patient, patient_id_int = _get_patient_from_query(request)
     if patient is None:
@@ -706,6 +710,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     )
                 context = {
                     "record_type": record_type,
+                    "is_questionnaire_type": is_questionnaire_type,
                     "title": title,
                     "records": records,
                     "has_records": bool(records),
@@ -830,6 +835,11 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             "can_edit": metric.source == "manual"
                             and dt.date() == timezone.localdate(),
                             "can_operate": not is_medication_detail_view,
+                            "questionnaire_submission_id": (
+                                metric.questionnaire_submission_id
+                                if is_questionnaire_type
+                                else None
+                            ),
                             "data": data_fields,
                         }
                     )
@@ -873,6 +883,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
 
     context = {
         "record_type": record_type,
+        "is_questionnaire_type": is_questionnaire_type,
         "title": title,
         "records": records,
         "has_records": bool(records),
@@ -893,6 +904,49 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "web_doctor/mobile/health_record_detail.html", context)
+
+
+@login_required
+@check_doctor_or_assistant
+def mobile_questionnaire_submission_detail(
+    request: HttpRequest, submission_id: int
+) -> HttpResponse:
+    patient, _ = _get_patient_from_query(request)
+    next_url = request.GET.get("next") or ""
+
+    fallback_url = reverse("web_doctor:mobile_patient_list")
+    if patient and patient.id:
+        fallback_url = (
+            f"{reverse('web_doctor:mobile_health_records')}"
+            f"?patient_id={patient.id}"
+        )
+
+    redirect_target = fallback_url
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        redirect_target = next_url
+
+    if patient is None:
+        return redirect(redirect_target)
+
+    detail = QuestionnaireSubmissionService.get_submission_detail_for_patient(
+        submission_id=submission_id,
+        patient_id=patient.id,
+    )
+    if not detail:
+        return redirect(redirect_target)
+
+    context = {
+        "title": f"{detail.get('questionnaire_name') or '问卷'}答题详情",
+        "questionnaire_name": detail.get("questionnaire_name") or "问卷",
+        "submission_id": detail.get("submission_id"),
+        "submitted_at": detail.get("submitted_at"),
+        "questions": detail.get("questions") or [],
+        "next_url": redirect_target,
+        "patient_id": patient.id,
+    }
+    return render(request, "web_doctor/mobile/questionnaire_submission_detail.html", context)
 
 
 @login_required

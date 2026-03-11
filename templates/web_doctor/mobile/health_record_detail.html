@@ -99,7 +99,28 @@
             <!-- Footer -->
             <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
                 <div></div>
+                {% if is_questionnaire_type %}
+                    {% if record.questionnaire_submission_id %}
+                    <button
+                        data-submission-id="{{ record.questionnaire_submission_id }}"
+                        onclick="viewQuestionnaireDetail('{{ record.questionnaire_submission_id }}')"
+                        class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">
+                        查看详情
+                    </button>
+                    {% else %}
+                    <button
+                        type="button"
+                        data-submission-id=""
+                        onclick="viewQuestionnaireDetail('')"
+                        class="bg-slate-200 text-slate-500 text-xs font-bold px-4 py-1.5 rounded-full cursor-not-allowed"
+                        disabled
+                        aria-disabled="true">
+                        查看详情
+                    </button>
+                    {% endif %}
+                {% else %}
                 <div></div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -153,6 +174,8 @@
     const hasRecords = {{ has_records|yesno:"true,false" }};
     const chartAvailable = {{ chart_available|yesno:"true,false" }};
     const currentChartMode = "{{ chart_mode }}";
+    const isQuestionnaireType = {{ is_questionnaire_type|yesno:"true,false" }};
+    const questionnaireSubmissionDetailUrlTemplate = "{% url 'web_doctor:mobile_questionnaire_submission_detail' 0 %}";
 
     function handleScroll(el) {
         if (isChartMode || isLoading || !hasMore) return;
@@ -166,6 +189,17 @@
     function goListReplace() {
        history.back();
     }
+
+    function viewQuestionnaireDetail(submissionId) {
+        if (!submissionId) {
+            showToast('暂无答题详情', 'info');
+            return;
+        }
+        const currentUrl = window.location.href;
+        const detailUrl = questionnaireSubmissionDetailUrlTemplate.replace('/0/', `/${encodeURIComponent(submissionId)}/`);
+        window.location.href = `${detailUrl}?patient_id=${encodeURIComponent(patientId)}&next=${encodeURIComponent(currentUrl)}`;
+    }
+
     function loadMoreData() {
         if (isChartMode || isLoading || !hasMore) return;
         isLoading = true;
@@ -258,6 +292,13 @@
                    </div>`
                 : '';
 
+            const submissionId = record.questionnaire_submission_id ? String(record.questionnaire_submission_id) : '';
+            const questionnaireButtonHtml = !isQuestionnaireType
+                ? '<div></div>'
+                : (submissionId
+                    ? `<button data-submission-id="${submissionId}" onclick="viewQuestionnaireDetail('${submissionId}')" class="bg-blue-600 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-sm shadow-blue-200 active:scale-95 transition">查看详情</button>`
+                    : `<button type="button" data-submission-id="" onclick="viewQuestionnaireDetail('')" class="bg-slate-200 text-slate-500 text-xs font-bold px-4 py-1.5 rounded-full cursor-not-allowed" disabled aria-disabled="true">查看详情</button>`);
+
             div.innerHTML = `
                 <div class="flex items-center justify-between mb-4 border-b border-slate-50 pb-2">
                     <div class="flex items-center gap-3 text-sm">
@@ -270,7 +311,7 @@
                 ${dataHtml}
                 <div class="flex items-center justify-between pt-2 border-t border-slate-50 relative">
                     <div></div>
-                    <div></div>
+                    ${questionnaireButtonHtml}
                 </div>
             `;
             

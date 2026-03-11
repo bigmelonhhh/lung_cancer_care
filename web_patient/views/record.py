@@ -3,9 +3,11 @@ from django.urls import reverse
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.core.paginator import Paginator
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.db.models import Q
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from health_data.models import MetricType, HealthMetric
 from core.models import QuestionnaireCode, DailyTask, Questionnaire
 from core.models.choices import PlanItemCategory, TaskStatus
@@ -113,6 +115,11 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         elif "复查" in title: plan_type = "checkup"
         
         if plan_type == "unknown": continue
+
+        if plan_type == "followup":
+            has_pending_questionnaires = bool(item.get("questionnaire_ids") or [])
+            # 兜底规则：若无可填写问卷模块 ID，则视为随访已完成
+            is_completed = is_completed or not has_pending_questionnaires
         
         # Determine default subtitle based on type (Logic from home.py)
         default_subtitle = ""
@@ -1424,6 +1431,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     source = request.GET.get("source")
     view = request.GET.get("view")
     is_medication_detail_view = bool(record_type == "medical" and view == "detail")
+    is_questionnaire_type = bool(record_type in QUESTIONNAIRE_RECORD_TYPES)
 
     patient = request.patient
     patient_id = patient.id or None
@@ -1622,6 +1630,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                     )
                 context = {
                     "record_type": record_type,
+                    "is_questionnaire_type": is_questionnaire_type,
                     "title": title,
                     "records": records,
                     "has_records": bool(records),
@@ -1752,6 +1761,11 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                             "can_edit": metric.source == "manual"
                             and dt.date() == timezone.localdate(),
                             "can_operate": not is_medication_detail_view,
+                            "questionnaire_submission_id": (
+                                metric.questionnaire_submission_id
+                                if is_questionnaire_type
+                                else None
+                            ),
                             "data": data_fields,
                         }
                     )
@@ -1796,6 +1810,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
 
     context = {
         "record_type": record_type,
+        "is_questionnaire_type": is_questionnaire_type,
         "title": title,
         "records": records,
         "has_records": bool(records),
@@ -1816,6 +1831,45 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "web_patient/health_record_detail.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def questionnaire_submission_detail(
+    request: HttpRequest, submission_id: int
+) -> HttpResponse:
+    patient = request.patient
+    patient_id = patient.id if patient else None
+    next_url = request.GET.get("next") or ""
+    fallback_url = reverse("web_patient:health_records")
+
+    redirect_target = fallback_url
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        redirect_target = next_url
+
+    if not patient_id:
+        messages.error(request, "问卷答题详情不存在或无权限访问。")
+        return redirect(redirect_target)
+
+    detail = QuestionnaireSubmissionService.get_submission_detail_for_patient(
+        submission_id=submission_id,
+        patient_id=patient_id,
+    )
+    if not detail:
+        messages.error(request, "问卷答题详情不存在或无权限访问。")
+        return redirect(redirect_target)
+
+    context = {
+        "title": f"{detail.get('questionnaire_name') or '问卷'}答题详情",
+        "questionnaire_name": detail.get("questionnaire_name") or "问卷",
+        "submission_id": detail.get("submission_id"),
+        "submitted_at": detail.get("submitted_at"),
+        "questions": detail.get("questions") or [],
+        "next_url": redirect_target,
+    }
+    return render(request, "web_patient/questionnaire_submission_detail.html", context)
 
 
 @auto_wechat_login

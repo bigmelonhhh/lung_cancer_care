@@ -141,7 +141,8 @@ def submit_surveys(request: HttpRequest) -> JsonResponse:
                 "success": True, 
                 "submission_id": submission.id,
                 "metric_data": {
-                    "followup": "completed"
+                    "followup": "completed",
+                    "followup_completed": True,
                 }
             })
         except ValidationError as e:

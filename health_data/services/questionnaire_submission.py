@@ -722,6 +722,107 @@ class QuestionnaireSubmissionService:
         }
 
     @classmethod
+    def get_submission_detail_for_patient(
+        cls,
+        *,
+        submission_id: int,
+        patient_id: int,
+    ) -> dict[str, Any] | None:
+        """
+        按提交记录 ID 获取指定患者的问卷答题详情。
+
+        【功能说明】
+        - 仅返回 submission_id 与 patient_id 同时匹配的问卷提交；
+        - 按问卷题目顺序返回每题及本次选择的答案（支持单选/多选）；
+        - 若提交不存在或不属于该患者，返回 None。
+
+        【参数说明】
+        :param submission_id: 问卷提交 ID。
+        :param patient_id: 患者 ID。
+
+        【返回值说明】
+        :return: dict | None，示例：
+            {
+                "submission_id": 1,
+                "questionnaire_id": 2,
+                "questionnaire_name": "焦虑评估",
+                "submitted_at": datetime(...),
+                "questions": [
+                    {
+                        "question_id": 10,
+                        "question_text": "最近是否感到紧张？",
+                        "q_type": "SINGLE",
+                        "answers": ["经常"],
+                    },
+                    {
+                        "question_id": 11,
+                        "question_text": "出现了哪些症状？",
+                        "q_type": "MULTIPLE",
+                        "answers": ["心慌", "手抖"],
+                    },
+                ],
+            }
+        """
+        if not submission_id or not patient_id:
+            return None
+
+        submission = (
+            QuestionnaireSubmission.objects.select_related("questionnaire")
+            .filter(id=submission_id, patient_id=patient_id)
+            .first()
+        )
+        if not submission:
+            return None
+
+        answers = list(
+            QuestionnaireAnswer.objects.filter(submission_id=submission.id)
+            .select_related("question", "option")
+            .order_by("question__seq", "question_id", "option__seq", "id")
+        )
+        answers_by_question = cls._group_answers(answers)
+
+        questions = QuestionnaireQuestion.objects.filter(
+            questionnaire_id=submission.questionnaire_id
+        ).order_by("seq", "id")
+
+        question_items: list[dict[str, Any]] = []
+        for question in questions:
+            selected_answers = answers_by_question.get(question.id, [])
+
+            answer_texts: list[str] = []
+            for answer in selected_answers:
+                if answer.option and answer.option.text:
+                    answer_texts.append(answer.option.text)
+                if answer.value_text:
+                    answer_texts.append(answer.value_text)
+
+            # 去重并保持顺序，避免极端脏数据导致重复展示
+            deduped_answers: list[str] = []
+            seen_texts: set[str] = set()
+            for text in answer_texts:
+                if text in seen_texts:
+                    continue
+                seen_texts.add(text)
+                deduped_answers.append(text)
+
+            question_items.append(
+                {
+                    "question_id": question.id,
+                    "question_text": question.text,
+                    "q_type": question.q_type,
+                    "answers": deduped_answers,
+                }
+            )
+
+        return {
+            "submission_id": submission.id,
+            "questionnaire_id": submission.questionnaire_id,
+            "questionnaire_name": submission.questionnaire.name,
+            "submitted_at": cls._to_localtime(submission.created_at),
+            "questions": question_items,
+        }
+
+    @classmethod
     def get_submission_grade(cls, submission_id: int) -> int:
         """
         根据问卷类型计算当前提交的分级结果。

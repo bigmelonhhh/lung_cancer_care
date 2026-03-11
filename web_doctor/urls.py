@@ -36,6 +36,11 @@ urlpatterns = [
         name="mobile_health_record_detail",
     ),
     path(
+        "doctor/mobile/health/questionnaire/submission/<int:submission_id>/",
+        views.mobile_questionnaire_submission_detail,
+        name="mobile_questionnaire_submission_detail",
+    ),
+    path(
         "doctor/mobile/health/review/record/detail/",
         views.mobile_review_record_detail,
         name="mobile_review_record_detail",

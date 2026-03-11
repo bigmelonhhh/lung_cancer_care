@@ -1,0 +1,52 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans">
+    <div class="bg-white sticky top-0 z-30 shadow-sm">
+        <div class="pt-safe-top">
+            <div class="flex justify-center items-center h-12 px-4 relative">
+                <button type="button" onclick="goBack()" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                    </svg>
+                </button>
+                <h1 class="flex-1 max-w-[300px] text-center text-lg font-bold text-slate-800 text-ellipsis truncate whitespace-nowrap">{{ questionnaire_name }}</h1>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-4 space-y-3 pb-8">
+        {% if questions %}
+            {% for question in questions %}
+            <div class="bg-white rounded-xl shadow-sm p-4">
+                <p class="text-xs font-semibold text-slate-400 mb-1">题目 {{ forloop.counter }}</p>
+                <p class="text-base font-bold text-slate-900 leading-6">{{ question.question_text }}</p>
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                    <p class="text-xs font-semibold text-slate-400 mb-2">此次选择</p>
+                    {% if question.answers %}
+                        <div class="space-y-2">
+                            {% for answer in question.answers %}
+                            <p class="text-sm text-slate-700 leading-6 bg-slate-50 rounded-lg px-3 py-2">{{ answer }}</p>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-sm text-slate-400">未作答</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="bg-white rounded-xl shadow-sm p-6 text-center text-slate-500 text-sm">暂无答题内容</div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    const nextUrl = "{{ next_url|default:''|escapejs }}";
+    function goBack() {
+        window.history.back();
+    }
+</script>
+{% endblock %}
