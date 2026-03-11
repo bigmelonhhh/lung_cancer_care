@@ -712,6 +712,85 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         self.assertEqual(questions[0]["prev_answer"], self.q1_opt1.text)
         self.assertEqual(questions[0]["change_text"], "提升1分")
 
+    def test_get_submission_detail_for_patient_supports_single_and_multiple_answers(self):
+        multi_question = QuestionnaireQuestion.objects.create(
+            questionnaire=self.questionnaire,
+            text="问题3",
+            q_type=choices.QuestionType.MULTIPLE,
+            is_required=True,
+            seq=3,
+        )
+        multi_opt1 = QuestionnaireOption.objects.create(
+            question=multi_question,
+            text="Q3-选项1",
+            score=Decimal("1"),
+            seq=1,
+        )
+        multi_opt2 = QuestionnaireOption.objects.create(
+            question=multi_question,
+            text="Q3-选项2",
+            score=Decimal("2"),
+            seq=2,
+        )
+
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("7.00"),
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=self.q1,
+            option=self.q1_opt1,
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=self.q2,
+            option=self.q2_opt2,
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=multi_question,
+            option=multi_opt1,
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=multi_question,
+            option=multi_opt2,
+        )
+
+        detail = QuestionnaireSubmissionService.get_submission_detail_for_patient(
+            submission_id=submission.id,
+            patient_id=self.patient.id,
+        )
+
+        self.assertIsNotNone(detail)
+        self.assertEqual(detail["submission_id"], submission.id)
+        self.assertEqual(detail["questionnaire_id"], self.questionnaire.id)
+
+        questions = detail["questions"]
+        self.assertEqual([item["question_id"] for item in questions], [self.q1.id, self.q2.id, multi_question.id])
+        self.assertEqual(questions[0]["answers"], [self.q1_opt1.text])
+        self.assertEqual(questions[1]["answers"], [self.q2_opt2.text])
+        self.assertEqual(questions[2]["answers"], [multi_opt1.text, multi_opt2.text])
+
+    def test_get_submission_detail_for_patient_returns_none_when_not_owned(self):
+        other_patient = PatientProfile.objects.create(
+            phone="13900000000",
+            name="其他患者",
+        )
+        other_submission = QuestionnaireSubmission.objects.create(
+            patient=other_patient,
+            questionnaire=self.questionnaire,
+            total_score=Decimal("1.00"),
+        )
+
+        detail = QuestionnaireSubmissionService.get_submission_detail_for_patient(
+            submission_id=other_submission.id,
+            patient_id=self.patient.id,
+        )
+        self.assertIsNone(detail)
+
 
 class QuestionnaireSubmissionGradeTest(TestCase):
     def setUp(self) -> None:

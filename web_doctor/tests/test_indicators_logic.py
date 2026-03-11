@@ -20,11 +20,11 @@ class IndicatorsLogicTests(TestCase):
         self.today = timezone.localdate()
 
     def test_default_view_active_cycle(self):
-        """测试默认视图是否选中当前进行中的疗程"""
+        """测试默认视图按日期返回最近30天，不再默认选疗程"""
         # Create past cycle
         past_start = self.today - timedelta(days=60)
         past_end = self.today - timedelta(days=31)
-        c1 = TreatmentCycle.objects.create(
+        TreatmentCycle.objects.create(
             patient=self.patient, 
             name="Cycle 1", 
             start_date=past_start, 
@@ -35,7 +35,7 @@ class IndicatorsLogicTests(TestCase):
         # Create active cycle
         active_start = self.today - timedelta(days=10)
         active_end = self.today + timedelta(days=20)
-        c2 = TreatmentCycle.objects.create(
+        TreatmentCycle.objects.create(
             patient=self.patient, 
             name="Cycle 2", 
             start_date=active_start, 
@@ -44,18 +44,18 @@ class IndicatorsLogicTests(TestCase):
         )
         
         context = build_indicators_context(self.patient)
-        
-        self.assertEqual(context['current_cycle_id'], c2.id)
-        # current_start_date is empty in default view to keep inputs clear
-        self.assertEqual(context['current_start_date'], "")
-        # Verify the actual query range via 'dates'
-        # Since start and end are in the same year (2026), format is m-d
-        self.assertEqual(context['dates'][0], active_start.strftime("%m-%d"))
+
+        default_start = self.today - timedelta(days=29)
+        self.assertEqual(context["current_cycle_id"], "")
+        self.assertEqual(context["current_start_date"], default_start.isoformat())
+        self.assertEqual(context["current_end_date"], self.today.isoformat())
+        self.assertEqual(context["dates"][0], default_start.strftime("%m-%d"))
+        self.assertEqual(len(context["dates"]), 30)
         self.assertTrue(context['is_default_view'])
-        self.assertEqual(context['current_filter_type'], 'cycle')
+        self.assertEqual(context['current_filter_type'], 'date')
 
     def test_status_priority(self):
-        """测试状态优先级：即使日期吻合，也优先选中状态为 IN_PROGRESS 的疗程"""
+        """测试显式按疗程筛选时使用选中疗程，并保留疗程排序优先级"""
         # Case: Two cycles, one completed (but date matches today?), one in progress.
         # Actually, "completed" usually implies end_date < today, but let's simulate a case
         # where a cycle was manually terminated early but dates might still overlap or be irrelevant if we trust status.
@@ -82,17 +82,24 @@ class IndicatorsLogicTests(TestCase):
             status=choices.TreatmentCycleStatus.IN_PROGRESS
         )
 
-        context = build_indicators_context(self.patient)
-        
-        # Should select c2 because it is IN_PROGRESS
-        self.assertEqual(context['current_cycle_id'], c2.id)
+        context = build_indicators_context(
+            self.patient,
+            cycle_id=str(c2.id),
+            filter_type="cycle",
+        )
+
+        self.assertEqual(context["current_filter_type"], "cycle")
+        self.assertEqual(context["current_cycle_id"], c2.id)
+        self.assertEqual(context["current_start_date"], start2.isoformat())
+        self.assertEqual(context["current_end_date"], end2.isoformat())
+        self.assertEqual(context["treatment_cycles"][0].id, c2.id)
 
     def test_default_view_fallback_latest_cycle(self):
-        """测试无进行中疗程时，兜底显示最近一个疗程"""
+        """测试默认视图与疗程无关，固定返回最近30天"""
         # Create past cycle only
         past_start = self.today - timedelta(days=60)
         past_end = self.today - timedelta(days=31)
-        c1 = TreatmentCycle.objects.create(
+        TreatmentCycle.objects.create(
             patient=self.patient, 
             name="Cycle 1", 
             start_date=past_start, 
@@ -101,10 +108,43 @@ class IndicatorsLogicTests(TestCase):
         )
         
         context = build_indicators_context(self.patient)
-        
-        self.assertEqual(context['current_cycle_id'], c1.id)
-        self.assertEqual(context['current_start_date'], "")
-        self.assertEqual(context['dates'][0], past_start.strftime("%m-%d"))
+
+        default_start = self.today - timedelta(days=29)
+        self.assertEqual(context["current_cycle_id"], "")
+        self.assertEqual(context["current_filter_type"], "date")
+        self.assertEqual(context["current_start_date"], default_start.isoformat())
+        self.assertEqual(context["current_end_date"], self.today.isoformat())
+        self.assertEqual(context["dates"][0], default_start.strftime("%m-%d"))
+        self.assertEqual(len(context["dates"]), 30)
+
+    def test_default_view_without_cycles_returns_recent_30_days(self):
+        """测试无疗程时默认仍返回最近30天并回填日期"""
+        context = build_indicators_context(self.patient)
+
+        default_start = self.today - timedelta(days=29)
+        self.assertEqual(context["current_cycle_id"], "")
+        self.assertEqual(context["current_filter_type"], "date")
+        self.assertEqual(context["current_start_date"], default_start.isoformat())
+        self.assertEqual(context["current_end_date"], self.today.isoformat())
+        self.assertEqual(context["dates"][0], default_start.strftime("%m-%d"))
+        self.assertEqual(len(context["dates"]), 30)
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_default_view_questionnaire_queries_recent_30_days(self, _mock_query, _mock_adherence, mock_scores, _mock_hemoptysis):
+        """测试默认视图下问卷查询参数为最近30天"""
+        context = build_indicators_context(self.patient)
+        expected_start = self.today - timedelta(days=29)
+        expected_end = self.today
+
+        self.assertEqual(context["current_start_date"], expected_start.isoformat())
+        self.assertEqual(context["current_end_date"], expected_end.isoformat())
+        self.assertGreaterEqual(mock_scores.call_count, 1)
+        for _, kwargs in mock_scores.call_args_list:
+            self.assertEqual(kwargs["start_date"], expected_start)
+            self.assertEqual(kwargs["end_date"], expected_end)
 
     def test_medication_data_future_logic(self):
         """测试服药记录数据结构及未来日期逻辑"""

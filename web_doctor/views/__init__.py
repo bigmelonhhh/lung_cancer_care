@@ -44,6 +44,7 @@ from .mobile.patient_basic_info import (
 from .mobile.health_record import (
     health_records as mobile_health_records,
     health_record_detail as mobile_health_record_detail,
+    mobile_questionnaire_submission_detail,
     review_record_detail as mobile_review_record_detail,
     review_record_detail_data as mobile_review_record_detail_data,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "mobile_patient_todo_list",
     "mobile_health_records",
     "mobile_health_record_detail",
+    "mobile_questionnaire_submission_detail",
     "mobile_review_record_detail",
     "mobile_review_record_detail_data",
     "api_mobile_patient_profile",

@@ -62,7 +62,7 @@
         </button>
       </div>
 
-      <div class="px-5 py-5 max-h-[75vh] overflow-y-auto text-sm">
+      <div class="px-5 py-5 max-h-[60vh] overflow-y-auto text-sm">
         <div class="space-y-5">
           <div>
             <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">待处理事件内容</div>
@@ -70,6 +70,13 @@
                 <div class="text-slate-900 font-bold text-base break-words" id="todo-detail-event-title"></div>
                 <div class="text-slate-600 text-sm leading-relaxed break-words" id="todo-detail-content"></div>
             </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">处理结果列表</div>
+            <div id="mobile-todo-history-loading" class="hidden text-xs text-slate-400 py-2">加载处理中...</div>
+            <div id="mobile-todo-history-empty" class="hidden text-xs text-slate-400 py-2">暂无处理记录</div>
+            <div id="mobile-todo-history-list" class="space-y-2"></div>
           </div>
 
           <div>
@@ -152,6 +159,7 @@
       currentTodoId: null,
       currentPatientId: null,
       todoUpdateUrl: "{{ todo_update_url|default:'' }}",
+      todoDetailUrl: "{% url 'web_doctor:doctor_todo_detail' %}",
     };
 
     const getModalEls = () => {
@@ -169,6 +177,9 @@
         eventTimeEl: document.getElementById("todo-detail-event-time"),
         handleTimeEl: document.getElementById("todo-detail-handle-time"),
         handlerEl: document.getElementById("todo-detail-handler"),
+        historyLoadingEl: document.getElementById("mobile-todo-history-loading"),
+        historyEmptyEl: document.getElementById("mobile-todo-history-empty"),
+        historyListEl: document.getElementById("mobile-todo-history-list"),
       };
     };
 
@@ -192,6 +203,147 @@
         });
       } else {
         window.location.reload();
+      }
+    };
+
+    const TODO_STATUS_DISPLAY = {
+      pending: "待跟进",
+      escalate: "升级主任",
+      completed: "已完成",
+    };
+
+    const escapeHtml = (value) => {
+      return String(value || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    };
+
+    const getHistoryStatusClass = (statusCode) => {
+      if (statusCode === "pending") return "bg-amber-100 text-amber-800";
+      if (statusCode === "escalate") return "bg-rose-100 text-rose-800";
+      if (statusCode === "completed") return "bg-green-100 text-green-800";
+      return "bg-slate-100 text-slate-700";
+    };
+
+    const setHistoryLoading = (isLoading) => {
+      const els = getModalEls();
+      if (!els.historyLoadingEl) return;
+      els.historyLoadingEl.classList.toggle("hidden", !isLoading);
+    };
+
+    const clearHistoryView = () => {
+      const els = getModalEls();
+      if (els.historyListEl) {
+        els.historyListEl.innerHTML = "";
+      }
+      if (els.historyEmptyEl) {
+        els.historyEmptyEl.classList.add("hidden");
+      }
+    };
+
+    const renderHistoryRecords = (records) => {
+      const els = getModalEls();
+      if (!els.historyListEl || !els.historyEmptyEl) return;
+
+      els.historyListEl.innerHTML = "";
+      if (!Array.isArray(records) || records.length === 0) {
+        els.historyEmptyEl.classList.remove("hidden");
+        return;
+      }
+
+      els.historyEmptyEl.classList.add("hidden");
+      const html = records
+        .map((record) => {
+          const statusCode = (record && record.status_code) ? String(record.status_code) : "";
+          const statusDisplay = (record && record.status_display)
+            ? String(record.status_display)
+            : (TODO_STATUS_DISPLAY[statusCode] || "未知状态");
+          const handleContent = (record && record.handle_content)
+            ? String(record.handle_content)
+            : "-";
+          const handledAt = (record && record.handled_at)
+            ? String(record.handled_at)
+            : "-";
+          const handlerName = (record && record.handler_name)
+            ? String(record.handler_name)
+            : "-";
+
+          return ""
+            + '<div class="border border-slate-200 rounded-xl p-3 bg-slate-50">'
+            +   '<div class="flex items-center justify-between gap-2">'
+            +     '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + getHistoryStatusClass(statusCode) + '">'
+            +       escapeHtml(statusDisplay)
+            +     "</span>"
+            +     '<span class="text-xs text-slate-400">' + escapeHtml(handledAt) + "</span>"
+            +   "</div>"
+            +   '<div class="mt-2 text-sm text-slate-700 whitespace-pre-wrap break-words">' + escapeHtml(handleContent) + "</div>"
+            +   '<div class="mt-1 text-xs text-slate-500">处理人：' + escapeHtml(handlerName) + "</div>"
+            + "</div>";
+        })
+        .join("");
+      els.historyListEl.innerHTML = html;
+    };
+
+    const buildFallbackHistory = (payload) => {
+      if (!payload) return [];
+
+      const statusCode = payload.status ? String(payload.status) : "";
+      const statusDisplay = payload.statusDisplay
+        ? String(payload.statusDisplay)
+        : (TODO_STATUS_DISPLAY[statusCode] || "");
+
+      if (!statusCode && !statusDisplay && !payload.handleContent) {
+        return [];
+      }
+
+      return [
+        {
+          status_code: statusCode,
+          status_display: statusDisplay,
+          handle_content: payload.handleContent || "",
+          handled_at: payload.handleTime || "",
+          handler_name: payload.handler || "",
+        },
+      ];
+    };
+
+    const loadTodoHistory = async (payload) => {
+      clearHistoryView();
+      setHistoryLoading(true);
+
+      try {
+        if (!payload || !payload.id || !state.todoDetailUrl) {
+          renderHistoryRecords(buildFallbackHistory(payload));
+          return;
+        }
+
+        const response = await fetch(`${state.todoDetailUrl}?id=${encodeURIComponent(payload.id)}`, {
+          method: "GET",
+          headers: {
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {}
+
+        if (!response.ok || !data.success) {
+          throw new Error((data && data.message) || "加载失败");
+        }
+
+        const history = data && data.data && Array.isArray(data.data.history)
+          ? data.data.history
+          : [];
+        renderHistoryRecords(history);
+      } catch (error) {
+        renderHistoryRecords(buildFallbackHistory(payload));
+      } finally {
+        setHistoryLoading(false);
       }
     };
 
@@ -331,6 +483,7 @@
           state.currentPatientId = payload.patientId;
           setModalMode(mode, payload);
           openModal();
+          loadTodoHistory(payload);
           return;
         }
 

@@ -572,7 +572,13 @@
             </div>
           </div>
           
-          <div id="plan-action-{{ plan.type }}">
+          <div
+            id="plan-action-{{ plan.type }}"
+            data-plan-type="{{ plan.type }}"
+            data-plan-title="{{ plan.title|escape }}"
+            data-plan-url="{{ plan.url|default:''|escape }}"
+            data-action-text="{{ plan.action_text|escape }}"
+          >
           {% if plan.status != 'completed' %}
 
           <button
@@ -875,41 +881,147 @@
   }
 
   // --- Data Refresh Logic ---
-  window.addEventListener('pageshow', function(event) {
-    if (localStorage.getItem('refresh_flag') === 'true') {
-        refreshMetricData();
-        localStorage.removeItem('refresh_flag');
-    }
-  });
+  const PLAN_ACTION_BUTTON_CLASS = 'bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap';
 
-  function refreshMetricData() {
-    if (!IS_MEMBER) {
+  function setPlanActionState(type, status, plan = {}) {
+    const actionEl = document.getElementById(`plan-action-${type}`);
+    if (!actionEl) {
       return;
     }
-    fetch("{% url 'web_patient:query_last_metric' %}")
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.plans) {
-                updateMetricDisplay(data.plans);
-            }
-        })
-        .catch(error => console.error('Error refreshing metrics:', error));
+
+    if (typeof plan.title === 'string' && plan.title.length > 0) {
+      actionEl.dataset.planTitle = plan.title;
+    }
+    if (typeof plan.action_text === 'string' && plan.action_text.length > 0) {
+      actionEl.dataset.actionText = plan.action_text;
+    }
+    if (typeof plan.url === 'string') {
+      actionEl.dataset.planUrl = plan.url;
+    }
+
+    if (status === 'completed') {
+      actionEl.innerHTML = '';
+      return;
+    }
+
+    const actionText = actionEl.dataset.actionText || '去完成';
+    const planTitle = actionEl.dataset.planTitle || '';
+    const specificUrl = actionEl.dataset.planUrl || '';
+
+    actionEl.innerHTML = '';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = PLAN_ACTION_BUTTON_CLASS;
+    button.textContent = actionText;
+    button.addEventListener('click', function() {
+      handleTaskClick(planTitle, type, specificUrl);
+    });
+    actionEl.appendChild(button);
   }
 
-  function updateMetricDisplay(plans) {
+  function setPlanCardState(type, status, subtitle, plan = {}) {
+    const subtitleEl = document.getElementById(`plan-subtitle-${type}`);
+    if (subtitleEl && typeof subtitle === 'string' && subtitle.length > 0) {
+      subtitleEl.textContent = subtitle;
+    }
+    setPlanActionState(type, status, plan);
+  }
+
+  function markFollowupCompletedFallback() {
+    setPlanCardState('followup', 'completed', '已完成随访任务');
+  }
+
+  function refreshMetricData(options = {}) {
+    if (!IS_MEMBER) {
+      return Promise.resolve();
+    }
+
+    return fetch("{% url 'web_patient:query_last_metric' %}")
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          updateMetricDisplay(data.plans || {}, options);
+        }
+      })
+      .catch(error => {
+        console.error('Error refreshing metrics:', error);
+      });
+  }
+
+  function updateMetricDisplay(plans, options = {}) {
+    let hasFollowupPlan = false;
     for (const [type, plan] of Object.entries(plans)) {
-        const subtitleEl = document.getElementById(`plan-subtitle-${type}`);
-        const actionEl = document.getElementById(`plan-action-${type}`);
-        
-        if (subtitleEl) {
-            subtitleEl.textContent = plan.subtitle;
-        }
-        
-        if (actionEl && plan.status === 'completed') {
-            actionEl.innerHTML = ''; // Hide button
-        }
+      if (type === 'followup') {
+        hasFollowupPlan = true;
+      }
+      setPlanCardState(type, plan.status, plan.subtitle, plan);
+    }
+
+    // 问卷提交后兜底：若接口未返回 followup 项，仍将当前卡片置为已完成
+    if (options.followupSubmitted && !hasFollowupPlan) {
+      markFollowupCompletedFallback();
     }
   }
+
+  async function consumeRefreshMarkersAndSync() {
+    let shouldRefresh = false;
+    let followupSubmitted = false;
+
+    try {
+      const checkupFlag = localStorage.getItem('checkup_all_completed');
+      if (checkupFlag === 'true') {
+        setPlanCardState('checkup', 'completed', '已完成复查任务');
+        shouldRefresh = true;
+      } else if (checkupFlag === 'false') {
+        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
+        shouldRefresh = true;
+      }
+      if (checkupFlag !== null) {
+        localStorage.removeItem('checkup_all_completed');
+      }
+
+      const refreshFlag = localStorage.getItem('refresh_flag');
+      if (refreshFlag === 'true') {
+        shouldRefresh = true;
+      }
+
+      const metricRaw = localStorage.getItem('metric_data');
+      if (metricRaw) {
+        try {
+          const metric = JSON.parse(metricRaw);
+          followupSubmitted = Boolean(
+            metric && (
+              metric.followup_completed === true ||
+              metric.followup === 'completed'
+            )
+          );
+        } catch (error) {
+          followupSubmitted = false;
+        }
+      }
+
+      if (followupSubmitted) {
+        markFollowupCompletedFallback();
+        shouldRefresh = true;
+      }
+
+      if (!shouldRefresh) {
+        return;
+      }
+
+      await refreshMetricData({ followupSubmitted: followupSubmitted });
+    } finally {
+      localStorage.removeItem('metric_data');
+      localStorage.removeItem('refresh_flag');
+    }
+  }
+
+  async function handleHomePageShow() {
+    await consumeRefreshMarkersAndSync();
+    fetchUnreadCount();
+  }
+
+  window.addEventListener('pageshow', handleHomePageShow);
 
   function setUnreadBadge(count) {
     UNREAD_CHAT_COUNT = count;
@@ -969,72 +1081,17 @@
       return false;
     }
   }
-
-  window.addEventListener('pageshow', function() {
-    fetchUnreadCount();
-  });
   
   window.addEventListener('message', function(e) {
     const data = e.data || {};
     if (data.type === 'CHECKUP_COMPLETION_UPDATED') {
-        if (data.allCompleted) {
-        const subtitleEl = document.getElementById('plan-subtitle-checkup');
-        if (subtitleEl) subtitleEl.textContent = '已完成复查任务';
-        const actionEl = document.getElementById('plan-action-checkup');
-        if (actionEl) actionEl.innerHTML = '';
+      if (data.allCompleted) {
+        setPlanCardState('checkup', 'completed', '已完成复查任务');
       } else {
-        const subtitleEl = document.getElementById('plan-subtitle-checkup');
-        if (subtitleEl) subtitleEl.textContent = '请及时完成您的复查任务';
+        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
       }
       refreshMetricData();
     }
-  });
-  
-  window.addEventListener('pageshow', function() {
-    try {
-      const flag = localStorage.getItem('checkup_all_completed');
-      if (flag) {
-        if (flag === 'true') {
-          const subtitleEl = document.getElementById('plan-subtitle-checkup');
-          if (subtitleEl) subtitleEl.textContent = '已完成复查任务';
-          const actionEl = document.getElementById('plan-action-checkup');
-          if (actionEl) actionEl.innerHTML = '';
-        } else {
-          const subtitleEl = document.getElementById('plan-subtitle-checkup');
-          if (subtitleEl) subtitleEl.textContent = '请及时完成您的复查任务';
-        }
-        refreshMetricData();
-        localStorage.removeItem('checkup_all_completed');
-      }
-    } catch(e) {}
-  });
-  
-  function triggerHomeRefreshFromFlag() {
-    try {
-      const flag = localStorage.getItem('refresh_flag');
-      if (flag === 'true') {
-        try {
-          const metricRaw = localStorage.getItem('metric_data');
-          if (metricRaw) {
-            const metric = JSON.parse(metricRaw);
-            if (metric && metric.followup === 'completed') {
-              const subtitleEl = document.getElementById('plan-subtitle-followup');
-              if (subtitleEl) subtitleEl.textContent = '已完成随访任务';
-              const actionEl = document.getElementById('plan-action-followup');
-              if (actionEl) actionEl.innerHTML = '';
-            }
-            localStorage.removeItem('metric_data');
-          }
-        } catch(e) {}
-        refreshMetricData();
-        localStorage.removeItem('refresh_flag');
-      }
-    } catch(e) {}
-  }
-  window.addEventListener('pageshow', triggerHomeRefreshFromFlag);
-  window.addEventListener('popstate', triggerHomeRefreshFromFlag);
-  document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) triggerHomeRefreshFromFlag();
   });
 </script>
 {% endblock %}

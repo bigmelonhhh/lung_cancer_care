@@ -36,6 +36,11 @@ urlpatterns = [
         name="mobile_health_record_detail",
     ),
     path(
+        "doctor/mobile/health/questionnaire/submission/<int:submission_id>/",
+        views.mobile_questionnaire_submission_detail,
+        name="mobile_questionnaire_submission_detail",
+    ),
+    path(
         "doctor/mobile/health/review/record/detail/",
         views.mobile_review_record_detail,
         name="mobile_review_record_detail",
@@ -70,6 +75,7 @@ urlpatterns = [
     
     path("doctor/workspace/", views.doctor_workspace, name="doctor_workspace"),
     path("doctor/todo-list/", todo_workspace.doctor_todo_list_page, name="doctor_todo_list"),
+    path("doctor/todo/detail/", todo_workspace.doctor_todo_detail, name="doctor_todo_detail"),
     path("doctor/todo/update_status/", todo_workspace.update_alert_status, name="doctor_todo_update_status"),
     path(
         "doctor/workspace/patient-list/",

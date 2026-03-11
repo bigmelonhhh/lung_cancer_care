@@ -1,9 +1,15 @@
 import logging
-from datetime import datetime, timedelta
+import json
+from datetime import datetime
+
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.core.exceptions import ValidationError
 from django.http import HttpRequest, HttpResponse, Http404
 from django.shortcuts import render
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from django.views.decorators.http import require_GET, require_POST
+
 from users.decorators import check_doctor_or_assistant
 from users import choices
 from web_doctor.views.workspace import _get_workspace_identities, _get_workspace_patients, get_user_display_name
@@ -11,11 +17,122 @@ from web_doctor.views.workspace import _get_workspace_identities, _get_workspace
 from patient_alerts.services.todo_list import TodoListService
 from patient_alerts.services.patient_alert import PatientAlertService
 from patient_alerts.models import AlertStatus
-from django.views.decorators.http import require_POST
 from django.http import JsonResponse
-import json
 
 logger = logging.getLogger(__name__)
+
+_STATUS_CODE_BY_VALUE = {
+    AlertStatus.PENDING: "pending",
+    AlertStatus.ESCALATED: "escalate",
+    AlertStatus.COMPLETED: "completed",
+}
+
+_STATUS_DISPLAY_BY_CODE = {
+    "pending": "待跟进",
+    "escalate": "升级主任",
+    "completed": "已完成",
+}
+
+
+def _format_history_handled_at(value: object) -> str:
+    if not value:
+        return ""
+
+    dt = value if isinstance(value, datetime) else None
+    if isinstance(value, str):
+        dt = parse_datetime(value)
+
+    if dt is None:
+        return ""
+
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return timezone.localtime(dt).strftime("%Y-%m-%d %H:%M")
+
+
+def _get_status_code_from_snapshot(snapshot: dict) -> str:
+    status_code = snapshot.get("status_code")
+    if status_code in _STATUS_DISPLAY_BY_CODE:
+        return status_code
+
+    status_value = snapshot.get("status")
+    try:
+        status_value = int(status_value)
+    except (TypeError, ValueError):
+        return ""
+
+    return _STATUS_CODE_BY_VALUE.get(status_value, "")
+
+
+def _build_alert_history_payload(alert) -> list[dict[str, str]]:
+    history_payload: list[dict[str, str]] = []
+
+    handle_meta = alert.handle_meta if isinstance(alert.handle_meta, dict) else {}
+    raw_history = handle_meta.get("history")
+    if isinstance(raw_history, list):
+        for entry in reversed(raw_history):
+            if not isinstance(entry, dict):
+                continue
+
+            status_code = _get_status_code_from_snapshot(entry)
+            status_display = _STATUS_DISPLAY_BY_CODE.get(status_code) or str(entry.get("status_display") or "")
+            history_payload.append(
+                {
+                    "status_code": status_code,
+                    "status_display": status_display,
+                    "handle_content": str(entry.get("handle_content") or ""),
+                    "handled_at": _format_history_handled_at(entry.get("handled_at")),
+                    "handler_name": str(entry.get("handler_name") or ""),
+                }
+            )
+
+    # 兼容历史老数据：没有 history，但已有处理内容/处理时间
+    if not history_payload and (alert.handle_content or alert.handle_time):
+        status_code = _STATUS_CODE_BY_VALUE.get(alert.status, "")
+        history_payload.append(
+            {
+                "status_code": status_code,
+                "status_display": _STATUS_DISPLAY_BY_CODE.get(status_code, ""),
+                "handle_content": alert.handle_content or "",
+                "handled_at": _format_history_handled_at(alert.handle_time),
+                "handler_name": get_user_display_name(alert.handler),
+            }
+        )
+
+    return history_payload
+
+
+@login_required
+@check_doctor_or_assistant
+@require_GET
+def doctor_todo_detail(request: HttpRequest) -> JsonResponse:
+    alert_id = request.GET.get("id")
+    try:
+        alert_id = int(alert_id)
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "message": "参数错误"}, status=400)
+
+    try:
+        alert = PatientAlertService.get_detail(alert_id)
+    except ValidationError:
+        return JsonResponse({"success": False, "message": "未找到待办"}, status=404)
+    except Exception as exc:
+        logger.error("查询待办详情失败: %s", str(exc), exc_info=True)
+        return JsonResponse({"success": False, "message": "系统异常，请稍后重试"}, status=500)
+
+    has_access = _get_workspace_patients(request.user, query=None).filter(pk=alert.patient_id).exists()
+    if not has_access:
+        return JsonResponse({"success": False, "message": "未找到待办"}, status=404)
+
+    return JsonResponse(
+        {
+            "success": True,
+            "data": {
+                "id": alert.id,
+                "history": _build_alert_history_payload(alert),
+            },
+        }
+    )
 
 @login_required
 @check_doctor_or_assistant

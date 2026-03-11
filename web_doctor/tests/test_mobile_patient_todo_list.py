@@ -114,6 +114,7 @@ class MobilePatientTodoListTests(TestCase):
 
         self.mobile_todo_url = reverse("web_doctor:mobile_patient_todo_list")
         self.update_status_url = reverse("web_doctor:doctor_todo_update_status")
+        self.todo_detail_url = reverse("web_doctor:doctor_todo_detail")
 
     def test_assistant_sees_process_for_non_completed_and_view_for_completed(self):
         self.client.force_login(self.assistant_user)
@@ -206,3 +207,22 @@ class MobilePatientTodoListTests(TestCase):
         self.assertContains(response, "体温异常待处理")
         self.assertContains(response, "用药完成记录")
         self.assertNotContains(response, "其他患者告警")
+
+    def test_mobile_todo_modal_contains_history_block_and_detail_url(self):
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(self.mobile_todo_url, {"patient_id": self.patient_1.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="mobile-todo-history-loading"', html=False)
+        self.assertContains(response, 'id="mobile-todo-history-empty"', html=False)
+        self.assertContains(response, 'id="mobile-todo-history-list"', html=False)
+        self.assertContains(response, self.todo_detail_url)
+
+    def test_mobile_todo_action_buttons_keep_fallback_dataset_fields(self):
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(self.mobile_todo_url, {"patient_id": self.patient_1.id})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-status-display="待跟进"')
+        self.assertContains(response, 'data-status-display="已完成"')
+        self.assertContains(response, 'data-handle-content="医生已处理"')

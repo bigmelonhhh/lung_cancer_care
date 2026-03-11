@@ -66,86 +66,69 @@ def build_indicators_context(
 ) -> dict:
     """
     构建“患者指标”Tab 所需的上下文数据：
-    - 默认查询当前进行中的疗程（若无则取最近一个）
+    - 默认按日期查询最近30天
+    - 支持按疗程筛选（手动）
     - 支持按日期筛选
     """
     today = timezone.localdate()
-    
+    default_start_date = today - timedelta(days=29)
+    default_end_date = today
+
+    def _parse_date_range(start_raw: str | None, end_raw: str | None) -> tuple[date, date] | None:
+        if not start_raw or not end_raw:
+            return None
+        try:
+            return date.fromisoformat(start_raw), date.fromisoformat(end_raw)
+        except ValueError:
+            return None
+
     # 1. 获取疗程列表
     cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
     treatment_cycles = cycles_page.object_list
-    
-    # 确定默认显示的疗程（当前进行中 或 最近一个）
-    active_cycle = None
-    if treatment_cycles:
-        for cycle in treatment_cycles:
-            if _resolve_cycle_runtime_state(cycle, today=today) == "in_progress":
-                active_cycle = cycle
-                break
-        
-        # 如果没有进行中的，取最近一个（treatment_cycles 通常按开始时间倒序排列）
-        if not active_cycle and treatment_cycles:
-            active_cycle = treatment_cycles[0]
-    
+
     # 初始化日期范围
-    start_date = None
-    end_date = None
+    start_date: date | None = None
+    end_date: date | None = None
+    selected_cycle_id: str | None = None
+
+    normalized_filter_type = filter_type if filter_type in {"cycle", "date"} else None
     is_default_view = False
-    
-    # 逻辑分支
-    if filter_type == 'cycle':
-        # 即使 cycle_id 为空（全部疗程），也视为 cycle 模式，但使用默认日期
+
+    # 2. 解析筛选条件：
+    # - cycle(有效) -> 用疗程起止
+    # - cycle(无效) -> 回退最近30天，并归一为 date
+    # - date(有效) -> 用传入日期
+    # - date(无效) or filter_type 缺失 -> 最近30天
+    if normalized_filter_type == "cycle":
         if cycle_id:
             try:
                 cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
                 start_date = cycle.start_date
                 end_date = cycle.end_date if cycle.end_date else today
-                is_default_view = False
+                selected_cycle_id = str(cycle.id)
             except (TreatmentCycle.DoesNotExist, ValueError):
-                pass
+                start_date = default_start_date
+                end_date = default_end_date
+                normalized_filter_type = "date"
+                is_default_view = True
         else:
-            # cycle_id 为空 -> "全部疗程" -> 这里的处理可能需要明确业务需求
-            # 暂时回退到 active_cycle
-            if active_cycle:
-                start_date = active_cycle.start_date
-                end_date = active_cycle.end_date if active_cycle.end_date else today
-                cycle_id = str(active_cycle.id)
-
-    elif filter_type == 'date':
-        if start_date_str and end_date_str:
-            try:
-                start_date = date.fromisoformat(start_date_str)
-                end_date = date.fromisoformat(end_date_str)
-                is_default_view = False
-            except ValueError:
-                pass
-    
-    # 默认视图或未指定 filter_type
-    if not start_date or not end_date:
-        # 1. 优先使用自定义日期范围 (兼容旧逻辑)
-        if start_date_str and end_date_str:
-            try:
-                start_date = date.fromisoformat(start_date_str)
-                end_date = date.fromisoformat(end_date_str)
-                is_default_view = False
-                filter_type = 'date'
-            except ValueError:
-                pass 
-        
-        # 2. 其次使用 active_cycle
-        elif active_cycle:
-            start_date = active_cycle.start_date
-            end_date = active_cycle.end_date if active_cycle.end_date else today
-            cycle_id = str(active_cycle.id)
-            filter_type = 'cycle'
+            start_date = default_start_date
+            end_date = default_end_date
+            normalized_filter_type = "date"
             is_default_view = True
-        
-        # 3. 兜底：如果没有疗程，默认30天
+    elif normalized_filter_type == "date":
+        parsed_range = _parse_date_range(start_date_str, end_date_str)
+        if parsed_range:
+            start_date, end_date = parsed_range
         else:
-            start_date = today - timedelta(days=29)
-            end_date = today
+            start_date = default_start_date
+            end_date = default_end_date
             is_default_view = True
-            filter_type = 'cycle' # 默认
+    else:
+        start_date = default_start_date
+        end_date = default_end_date
+        normalized_filter_type = "date"
+        is_default_view = True
 
     # 3. 校验跨度（最大1年 = 366天）
     delta_days = (end_date - start_date).days
@@ -632,11 +615,12 @@ def build_indicators_context(
         "cough_table": cough_table,
         "treatment_cycles": treatment_cycles,
         "dates": date_strs,
-        # 回显当前的筛选条件
-        "current_cycle_id": int(cycle_id) if cycle_id else "",
-        # 如果是默认视图（未筛选），则不回填日期到 input，显示为空；否则回填
-        "current_start_date": start_date.isoformat() if not is_default_view else "",
-        "current_end_date": end_date.isoformat() if not is_default_view else "",
+        # 回显当前筛选条件：
+        # - cycle 模式仅在有效疗程时带 current_cycle_id
+        # - date 模式（含默认）始终回填日期
+        "current_cycle_id": int(selected_cycle_id) if selected_cycle_id else "",
+        "current_start_date": start_date.isoformat(),
+        "current_end_date": end_date.isoformat(),
         "is_default_view": is_default_view,
-        "current_filter_type": filter_type or "",
+        "current_filter_type": normalized_filter_type or "date",
     }

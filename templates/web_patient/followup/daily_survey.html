@@ -280,7 +280,10 @@
             // 存储刷新标记和数据
             localStorage.setItem('refresh_flag', 'true');
             // 存储最新的指标数据（可选，首页会通过接口重新拉取）
-            localStorage.setItem('metric_data', JSON.stringify({ "followup": "completed" }));
+            localStorage.setItem('metric_data', JSON.stringify({
+                "followup": "completed",
+                "followup_completed": true
+            }));
 
             setTimeout(() => {
                 // 返回上一页
