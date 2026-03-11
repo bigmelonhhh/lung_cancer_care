@@ -32,6 +32,7 @@
                         data-todo-title="{{ item.patient_name }} - {{ item.event_title }}"
                         data-todo-content="{{ item.event_content }}"
                         data-todo-status="{{ item.status }}"
+                        data-todo-status-display="{{ item.status_display|default:'' }}"
                         data-todo-handle-content="{{ item.handle_content|default:'' }}"
                         data-patient-id="{{ item.patient_id|default:'' }}"
                         onclick="handleTodoModalTrigger(this, true)"

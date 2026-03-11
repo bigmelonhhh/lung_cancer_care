@@ -1284,12 +1284,12 @@ video {
   max-height: 200px;
 }
 
-.max-h-\[60vh\] {
-  max-height: 60vh;
+.max-h-\[55vh\] {
+  max-height: 55vh;
 }
 
-.max-h-\[75vh\] {
-  max-height: 75vh;
+.max-h-\[60vh\] {
+  max-height: 60vh;
 }
 
 .max-h-\[80vh\] {
@@ -1559,14 +1559,6 @@ video {
 
 .w-screen {
   width: 100vw;
-}
-
-.w-\[400px\] {
-  width: 400px;
-}
-
-.w-\[300px\] {
-  width: 300px;
 }
 
 .min-w-0 {

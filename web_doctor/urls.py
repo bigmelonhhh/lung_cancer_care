@@ -75,6 +75,7 @@ urlpatterns = [
     
     path("doctor/workspace/", views.doctor_workspace, name="doctor_workspace"),
     path("doctor/todo-list/", todo_workspace.doctor_todo_list_page, name="doctor_todo_list"),
+    path("doctor/todo/detail/", todo_workspace.doctor_todo_detail, name="doctor_todo_detail"),
     path("doctor/todo/update_status/", todo_workspace.update_alert_status, name="doctor_todo_update_status"),
     path(
         "doctor/workspace/patient-list/",
