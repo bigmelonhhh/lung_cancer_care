@@ -105,7 +105,7 @@
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>咨询</span>
+                  <span>未读咨询数</span>
                   {% if patient.consult_count > 0 %}
                   <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
                     {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}
@@ -199,7 +199,7 @@
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>咨询</span>
+                  <span>未读咨询数</span>
                   {% if patient.consult_count > 0 %}
                   <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
                     {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}

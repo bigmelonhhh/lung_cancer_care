@@ -84,6 +84,6 @@ class MobilePatientChatListFamilyTests(TestCase):
     msgs = payload["messages"]
     fam = next(m for m in msgs if m["id"] == self.family_msg.id)
     self.assertEqual(fam["sender_role"], MessageSenderRole.FAMILY)
-    self.assertEqual(fam["sender_name"], "张父亲(父亲)")
+    self.assertEqual(fam["sender_name"], "张父亲")
     pat = next(m for m in msgs if m["id"] == self.patient_msg.id)
     self.assertEqual(pat["sender_name"], "患者Z")
