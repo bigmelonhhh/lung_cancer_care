@@ -88,8 +88,7 @@
                 <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
               </div>
               <div class="mt-1 text-xs leading-5 text-slate-500">
-                <p>所属主任医生：{{ patient.director_doctor_name|default:"--" }}</p>
-                <p>所属工作室：{{ patient.affiliated_studio_name|default:"--" }}</p>
+                <p>主任：{{ patient.director_doctor_name|default:"--" }}</p>
               </div>
               <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
                 <div class="flex items-center gap-1.5">
@@ -182,8 +181,7 @@
                 <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
               </div>
               <div class="mt-1 text-xs leading-5 text-slate-500">
-                <p>所属主任医生：{{ patient.director_doctor_name|default:"--" }}</p>
-                <p>所属工作室：{{ patient.affiliated_studio_name|default:"--" }}</p>
+                <p>主任：{{ patient.director_doctor_name|default:"--" }}</p>
               </div>
               <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
                 <div class="flex items-center gap-1.5">

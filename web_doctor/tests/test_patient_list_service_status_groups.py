@@ -141,12 +141,10 @@ class PatientListServiceStatusGroupsTest(TestCase):
         self.assertEqual(managed_patient.affiliated_studio_name, self.assignment_studio.name)
         self.assertEqual(stopped_patient.director_doctor_name, self.fallback_director.name)
         self.assertEqual(stopped_patient.affiliated_studio_name, self.fallback_studio.name)
-        self.assertFalse(hasattr(unpaid_patient, "director_doctor_name"))
-        self.assertFalse(hasattr(unpaid_patient, "affiliated_studio_name"))
+        self.assertEqual(unpaid_patient.director_doctor_name, self.fallback_director.name)
+        self.assertEqual(unpaid_patient.affiliated_studio_name, self.fallback_studio.name)
 
         content = response.content.decode("utf-8")
-        self.assertIn(f"所属主任医生：{self.assignment_director.name}", content)
-        self.assertIn(f"所属工作室：{self.assignment_studio.name}", content)
-        self.assertIn(f"所属主任医生：{self.fallback_director.name}", content)
-        self.assertIn(f"所属工作室：{self.fallback_studio.name}", content)
+        self.assertIn(f"主任：{self.assignment_director.name}", content)
+        self.assertIn(f"主任：{self.fallback_director.name}", content)
 

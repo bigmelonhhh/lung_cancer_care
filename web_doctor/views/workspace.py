@@ -269,7 +269,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
     managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
-    _attach_patients_affiliation_info(managed_patients + stopped_patients)
+    _attach_patients_affiliation_info(managed_patients + stopped_patients + unpaid_patients)
     
     display_name = get_user_display_name(request.user)
     
@@ -307,7 +307,7 @@ def doctor_workspace_patient_list(request: HttpRequest) -> HttpResponse:
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
     managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
-    _attach_patients_affiliation_info(managed_patients + stopped_patients)
+    _attach_patients_affiliation_info(managed_patients + stopped_patients + unpaid_patients)
     return render(
         request,
         "web_doctor/partials/patient_list.html",

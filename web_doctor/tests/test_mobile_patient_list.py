@@ -132,8 +132,7 @@ class MobilePatientListTests(TestCase):
         self.assertIn(self.patient_active.name, content)
         self.assertIn(self.patient_expired.name, content)
         self.assertIn(self.patient_none.name, content)
-        self.assertIn("所属主任医生：", content)
-        self.assertIn("所属工作室：", content)
+        self.assertIn("主任：", content)
 
         managed_patients = response.context["managed_patients"]
         unmanaged_patients = response.context["unmanaged_patients"]
@@ -163,10 +162,8 @@ class MobilePatientListTests(TestCase):
             patient_by_id[self.patient_none.id].affiliated_studio_name,
             self.fallback_studio.name,
         )
-        self.assertIn(f"所属主任医生：{self.assignment_director.name}", content)
-        self.assertIn(f"所属工作室：{self.assignment_studio.name}", content)
-        self.assertIn(f"所属主任医生：{self.fallback_director.name}", content)
-        self.assertIn(f"所属工作室：{self.fallback_studio.name}", content)
+        self.assertIn(f"主任：{self.assignment_director.name}", content)
+        self.assertIn(f"主任：{self.fallback_director.name}", content)
 
     @patch("web_doctor.views.workspace.TodoListService")
     @patch("web_doctor.views.workspace.ChatService")

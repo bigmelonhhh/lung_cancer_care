@@ -19,13 +19,13 @@
         </svg>
     </button>
     <div data-section-body="managed" class="overflow-hidden" style="height: auto;">
-        <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-100 bg-white shadow-sm">
+        <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-150 bg-white shadow-sm">
             {% if managed_patients %}
                 {% for patient in managed_patients %}
                     <li data-patient-entry data-section="managed">
                         <button
                             type="button"
-                            class="w-full text-left px-4 py-4 hover:bg-gray-50 focus:outline-none transition-all duration-200 rounded-md"
+                            class="w-full text-left px-4 py-4 hover:bg-gray-200 focus:outline-none transition-all duration-200 rounded-md"
                             hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
                             hx-target="#main-content"
                             hx-swap="innerHTML"
@@ -44,12 +44,7 @@
                             
                             <div class="space-y-1 mb-3">
                                 <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                    所属主任医生：{{ patient.director_doctor_name|default:"--" }}
-                                </p>
-                                <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                    所属工作室：{{ patient.affiliated_studio_name|default:"--" }}
+                                    主任：{{ patient.director_doctor_name|default:"--" }}
                                 </p>
                             </div>
 
@@ -119,23 +114,19 @@
                             
                             <div class="space-y-1 mb-3">
                                 <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                    所属主任医生：{{ patient.director_doctor_name|default:"--" }}
+                                    主任：{{ patient.director_doctor_name|default:"--" }}
                                 </p>
-                                <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                    所属工作室：{{ patient.affiliated_studio_name|default:"--" }}
-                                </p>
+                              
                             </div>
 
                             <div class="flex items-center gap-2">
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">
-                                    <span class="text-[10px] text-gray-500 font-medium">待办</span>
-                                    <span class="ml-1 text-xs font-bold text-gray-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
+                                <div class="flex items-center px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100">
+                                    <span class="text-[10px] text-rose-600 font-medium">待办</span>
+                                    <span class="ml-1 text-xs font-bold text-rose-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
                                 </div>
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">
-                                    <span class="text-[10px] text-gray-500 font-medium">未读咨询</span>
-                                    <span class="ml-1 text-xs font-bold text-gray-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
+                                <div class="flex items-center px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100">
+                                    <span class="text-[10px] text-indigo-600 font-medium">未读咨询</span>
+                                    <span class="ml-1 text-xs font-bold text-indigo-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
                                 </div>
                             </div>
                         </button>
@@ -194,22 +185,17 @@
                             
                             <div class="space-y-1 mb-3">
                                 <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                    所属主任医生：{{ patient.director_doctor_name|default:"--" }}
-                                </p>
-                                <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-gray-300"></span>
-                                    所属工作室：{{ patient.affiliated_studio_name|default:"--" }}
+                                    主任：{{ patient.director_doctor_name|default:"--" }}
                                 </p>
                             </div>
-                             <div class="flex items-center gap-2">
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">
-                                    <span class="text-[10px] text-gray-500 font-medium">待办</span>
-                                    <span class="ml-1 text-xs font-bold text-gray-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100">
+                                    <span class="text-[10px] text-rose-600 font-medium">待办</span>
+                                    <span class="ml-1 text-xs font-bold text-rose-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
                                 </div>
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">
-                                    <span class="text-[10px] text-gray-500 font-medium">未读咨询</span>
-                                    <span class="ml-1 text-xs font-bold text-gray-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
+                                <div class="flex items-center px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100">
+                                    <span class="text-[10px] text-indigo-600 font-medium">未读咨询</span>
+                                    <span class="ml-1 text-xs font-bold text-indigo-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
                                 </div>
                             </div>
                         </button>
@@ -351,9 +337,17 @@
     const btn = document.querySelector('button[data-patient-item][data-patient-id="' + selectedId + '"]');
     if (!btn) return;
     document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
-      item.classList.remove("bg-gray-50", "ring-1", "ring-inset", "ring-gray-200");
+      item.classList.remove(
+        "bg-gray-50",
+        "ring-1",
+        "ring-inset",
+        "ring-gray-200",
+        "bg-indigo-50",
+        "ring-indigo-200",
+        "text-indigo-600"
+      );
     });
-    btn.classList.add("bg-gray-50", "ring-1", "ring-inset", "ring-gray-200");
+    btn.classList.add("bg-indigo-50", "ring-1", "ring-inset", "ring-indigo-200", "text-indigo-600");
   };
 
   const applyAllUIState = function (animate) {
@@ -400,7 +394,15 @@
       sessionStorage.removeItem(SELECTED_KEY);
     } catch (e) {}
     document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
-      item.classList.remove("bg-gray-50", "ring-1", "ring-inset", "ring-gray-200");
+      item.classList.remove(
+        "bg-gray-50",
+        "ring-1",
+        "ring-inset",
+        "ring-gray-200",
+        "bg-indigo-50",
+        "ring-indigo-200",
+        "text-indigo-600"
+      );
     });
 
     const state = { managed: true, stopped: false, unpaid: false };
@@ -445,9 +447,17 @@
     }
 
     document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
-      item.classList.remove("bg-gray-50", "ring-1", "ring-inset", "ring-gray-200");
+      item.classList.remove(
+        "bg-gray-50",
+        "ring-1",
+        "ring-inset",
+        "ring-gray-200",
+        "bg-indigo-50",
+        "ring-indigo-200",
+        "text-indigo-600"
+      );
     });
-    btn.classList.add("bg-gray-50", "ring-1", "ring-inset", "ring-gray-200");
+    btn.classList.add("bg-indigo-50", "ring-1", "ring-inset", "ring-indigo-200", "text-indigo-600");
 
     const tmpl = document.getElementById("patient-main-loading-template");
     const main = document.querySelector("#main-content");
