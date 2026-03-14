@@ -87,6 +87,10 @@
                 <div class="text-base font-bold text-slate-800 truncate max-w-[9rem] group-hover:text-blue-600 transition-colors">{{ patient.name }}</div>
                 <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
               </div>
+              <div class="mt-1 text-xs leading-5 text-slate-500">
+                <p>所属主任医生：{{ patient.director_doctor_name|default:"--" }}</p>
+                <p>所属工作室：{{ patient.affiliated_studio_name|default:"--" }}</p>
+              </div>
               <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full {% if patient.todo_count > 0 %}bg-red-500{% else %}bg-slate-300{% endif %}"></span>
@@ -101,7 +105,7 @@
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>咨询</span>
+                  <span>未读咨询数</span>
                   {% if patient.consult_count > 0 %}
                   <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
                     {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}
@@ -177,6 +181,10 @@
                 <div class="text-base font-bold text-slate-800 truncate max-w-[9rem] group-hover:text-blue-600 transition-colors">{{ patient.name }}</div>
                 <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
               </div>
+              <div class="mt-1 text-xs leading-5 text-slate-500">
+                <p>所属主任医生：{{ patient.director_doctor_name|default:"--" }}</p>
+                <p>所属工作室：{{ patient.affiliated_studio_name|default:"--" }}</p>
+              </div>
               <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full {% if patient.todo_count > 0 %}bg-red-500{% else %}bg-slate-300{% endif %}"></span>
@@ -191,7 +199,7 @@
                 </div>
                 <div class="flex items-center gap-1.5">
                   <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>咨询</span>
+                  <span>未读咨询数</span>
                   {% if patient.consult_count > 0 %}
                   <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
                     {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}

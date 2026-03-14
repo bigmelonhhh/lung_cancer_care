@@ -7,8 +7,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from chat.models import PatientStudioAssignment
 from market.models import Order, Product
-from users.models import DoctorProfile, PatientProfile
+from users.models import DoctorProfile, DoctorStudio, PatientProfile
 
 User = get_user_model()
 
@@ -24,6 +25,45 @@ class PatientListServiceStatusGroupsTest(TestCase):
         self.doctor_profile = DoctorProfile.objects.create(user=self.user, name="Dr. Status")
         self.user.doctor_profile = self.doctor_profile
         self.user.save()
+
+        self.fallback_director_user = User.objects.create_user(
+            username="doc_status_fallback_director",
+            password="password",
+            user_type=2,
+            phone="13900139011",
+        )
+        self.fallback_director = DoctorProfile.objects.create(
+            user=self.fallback_director_user,
+            name="Dr. Fallback Director",
+        )
+        self.fallback_director_user.doctor_profile = self.fallback_director
+        self.fallback_director_user.save()
+
+        self.assignment_director_user = User.objects.create_user(
+            username="doc_status_assignment_director",
+            password="password",
+            user_type=2,
+            phone="13900139012",
+        )
+        self.assignment_director = DoctorProfile.objects.create(
+            user=self.assignment_director_user,
+            name="Dr. Assignment Director",
+        )
+        self.assignment_director_user.doctor_profile = self.assignment_director
+        self.assignment_director_user.save()
+
+        self.fallback_studio = DoctorStudio.objects.create(
+            name="兜底工作室",
+            code="STATUS_FALLBACK_001",
+            owner_doctor=self.fallback_director,
+        )
+        self.assignment_studio = DoctorStudio.objects.create(
+            name="归属工作室",
+            code="STATUS_ASSIGN_001",
+            owner_doctor=self.assignment_director,
+        )
+        self.doctor_profile.studio = self.fallback_studio
+        self.doctor_profile.save(update_fields=["studio"])
 
         self.product = Product.objects.create(
             name="VIP 监护服务",
@@ -62,6 +102,11 @@ class PatientListServiceStatusGroupsTest(TestCase):
             status=Order.Status.PAID,
             paid_at=timezone.now() - timedelta(days=60),
         )
+        PatientStudioAssignment.objects.create(
+            patient=self.patient_active,
+            studio=self.assignment_studio,
+            start_at=timezone.now() - timedelta(days=2),
+        )
 
     @patch("web_doctor.views.workspace.TodoListService")
     @patch("web_doctor.views.workspace.ChatService")
@@ -87,4 +132,21 @@ class PatientListServiceStatusGroupsTest(TestCase):
         self.assertSetEqual(managed_ids, {self.patient_active.id})
         self.assertSetEqual(stopped_ids, {self.patient_expired.id})
         self.assertSetEqual(unpaid_ids, {self.patient_none.id})
+
+        managed_patient = response.context["managed_patients"][0]
+        stopped_patient = response.context["stopped_patients"][0]
+        unpaid_patient = response.context["unpaid_patients"][0]
+
+        self.assertEqual(managed_patient.director_doctor_name, self.assignment_director.name)
+        self.assertEqual(managed_patient.affiliated_studio_name, self.assignment_studio.name)
+        self.assertEqual(stopped_patient.director_doctor_name, self.fallback_director.name)
+        self.assertEqual(stopped_patient.affiliated_studio_name, self.fallback_studio.name)
+        self.assertFalse(hasattr(unpaid_patient, "director_doctor_name"))
+        self.assertFalse(hasattr(unpaid_patient, "affiliated_studio_name"))
+
+        content = response.content.decode("utf-8")
+        self.assertIn(f"所属主任医生：{self.assignment_director.name}", content)
+        self.assertIn(f"所属工作室：{self.assignment_studio.name}", content)
+        self.assertIn(f"所属主任医生：{self.fallback_director.name}", content)
+        self.assertIn(f"所属工作室：{self.fallback_studio.name}", content)
 

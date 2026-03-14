@@ -135,10 +135,9 @@ class PatientFamilyChatDisplayTests(TestCase):
     msgs = data["messages"]
     # 医生端序列化不返回 is_patient_side，保持契约
     self.assertNotIn("is_patient_side", msgs[0])
-    # 名称使用快照：家属消息包含家属姓名与关系
+    # 医生端家属消息仅显示家属姓名
     fm = next(m for m in msgs if m["id"] == self.family_msg.id)
-    self.assertIn("家属乙", fm["sender_name"])
-    self.assertIn("配偶", fm["sender_name"])
+    self.assertEqual(fm["sender_name"], "家属乙")
     # 医生消息包含医生姓名
     dm = next(m for m in msgs if m["id"] == self.doctor_msg.id)
     self.assertIn("医生丁", dm["sender_name"])

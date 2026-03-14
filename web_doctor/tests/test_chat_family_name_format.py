@@ -86,9 +86,54 @@ class DoctorChatFamilyNameFormatTests(TestCase):
     msgs = data["messages"]
     fam = next(m for m in msgs if m["id"] == self.family_msg.id)
     self.assertEqual(fam["sender_role"], MessageSenderRole.FAMILY)
-    # 规范化后仅显示“姓名(关系)”
-    self.assertEqual(fam["sender_name"], "张鹏爱人(配偶)")
+    # 规范化后仅显示“家属姓名”
+    self.assertEqual(fam["sender_name"], "张鹏爱人")
     # 普通患者不受影响
     pat = next(m for m in msgs if m["id"] == self.patient_msg.id)
     self.assertEqual(pat["sender_name"], "患者Y")
 
+  def test_family_sender_name_fallback_to_snapshot_parentheses_name(self):
+    PatientRelation.objects.filter(
+      patient=self.patient,
+      user=self.family_user,
+      is_active=True,
+    ).update(name="")
+    fallback_msg = Message.objects.create(
+      conversation=self.conversation,
+      sender=self.family_user,
+      sender_role_snapshot=MessageSenderRole.FAMILY,
+      sender_display_name_snapshot="wx_alias_01(李家属)",
+      studio_name_snapshot=self.studio.name,
+      text_content="家属补充",
+    )
+
+    resp = self.client.get(self.list_url, {"conversation_id": self.conversation.id})
+    self.assertEqual(resp.status_code, 200)
+    data = resp.json()
+    self.assertEqual(data["status"], "success")
+    msgs = data["messages"]
+    fam = next(m for m in msgs if m["id"] == fallback_msg.id)
+    self.assertEqual(fam["sender_name"], "李家属")
+
+  def test_family_sender_name_fallback_to_default_family(self):
+    PatientRelation.objects.filter(
+      patient=self.patient,
+      user=self.family_user,
+      is_active=True,
+    ).update(name="")
+    fallback_msg = Message.objects.create(
+      conversation=self.conversation,
+      sender=self.family_user,
+      sender_role_snapshot=MessageSenderRole.FAMILY,
+      sender_display_name_snapshot="wx_alias_without_family_name",
+      studio_name_snapshot=self.studio.name,
+      text_content="家属补充2",
+    )
+
+    resp = self.client.get(self.list_url, {"conversation_id": self.conversation.id})
+    self.assertEqual(resp.status_code, 200)
+    data = resp.json()
+    self.assertEqual(data["status"], "success")
+    msgs = data["messages"]
+    fam = next(m for m in msgs if m["id"] == fallback_msg.id)
+    self.assertEqual(fam["sender_name"], "家属")

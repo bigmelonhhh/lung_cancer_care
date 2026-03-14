@@ -6,6 +6,7 @@ from django.core.paginator import Paginator
 from users.decorators import check_doctor_or_assistant
 
 from web_doctor.views.workspace import (
+    _attach_patients_affiliation_info,
     _attach_patients_service_status_codes,
     _get_workspace_patients,
     enrich_patients_with_counts,
@@ -39,6 +40,7 @@ def mobile_patient_list(request: HttpRequest) -> HttpResponse:
 
     managed_items = enrich_patients_with_counts(request.user, managed_page.object_list)
     unmanaged_items = enrich_patients_with_counts(request.user, unmanaged_page.object_list)
+    _attach_patients_affiliation_info(managed_items + unmanaged_items)
 
     context = {
         "q": query,

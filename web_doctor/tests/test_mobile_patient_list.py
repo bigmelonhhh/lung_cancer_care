@@ -7,8 +7,9 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from chat.models import PatientStudioAssignment
 from market.models import Order, Product
-from users.models import DoctorProfile, PatientProfile
+from users.models import DoctorProfile, DoctorStudio, PatientProfile
 
 User = get_user_model()
 
@@ -24,6 +25,45 @@ class MobilePatientListTests(TestCase):
         self.doctor_profile = DoctorProfile.objects.create(user=self.user, name="Dr. Mobile")
         self.user.doctor_profile = self.doctor_profile
         self.user.save()
+
+        self.fallback_director_user = User.objects.create_user(
+            username="doc_mobile_fallback_director",
+            password="password",
+            user_type=2,
+            phone="13900139021",
+        )
+        self.fallback_director = DoctorProfile.objects.create(
+            user=self.fallback_director_user,
+            name="Dr. Mobile Fallback Director",
+        )
+        self.fallback_director_user.doctor_profile = self.fallback_director
+        self.fallback_director_user.save()
+
+        self.assignment_director_user = User.objects.create_user(
+            username="doc_mobile_assignment_director",
+            password="password",
+            user_type=2,
+            phone="13900139022",
+        )
+        self.assignment_director = DoctorProfile.objects.create(
+            user=self.assignment_director_user,
+            name="Dr. Mobile Assignment Director",
+        )
+        self.assignment_director_user.doctor_profile = self.assignment_director
+        self.assignment_director_user.save()
+
+        self.fallback_studio = DoctorStudio.objects.create(
+            name="移动端兜底工作室",
+            code="MOBILE_FALLBACK_001",
+            owner_doctor=self.fallback_director,
+        )
+        self.assignment_studio = DoctorStudio.objects.create(
+            name="移动端归属工作室",
+            code="MOBILE_ASSIGN_001",
+            owner_doctor=self.assignment_director,
+        )
+        self.doctor_profile.studio = self.fallback_studio
+        self.doctor_profile.save(update_fields=["studio"])
 
         self.product = Product.objects.create(
             name="VIP 监护服务",
@@ -62,6 +102,11 @@ class MobilePatientListTests(TestCase):
             status=Order.Status.PAID,
             paid_at=timezone.now() - timedelta(days=60),
         )
+        PatientStudioAssignment.objects.create(
+            patient=self.patient_active,
+            studio=self.assignment_studio,
+            start_at=timezone.now() - timedelta(days=2),
+        )
 
     @patch("web_doctor.views.workspace.TodoListService")
     @patch("web_doctor.views.workspace.ChatService")
@@ -87,6 +132,41 @@ class MobilePatientListTests(TestCase):
         self.assertIn(self.patient_active.name, content)
         self.assertIn(self.patient_expired.name, content)
         self.assertIn(self.patient_none.name, content)
+        self.assertIn("所属主任医生：", content)
+        self.assertIn("所属工作室：", content)
+
+        managed_patients = response.context["managed_patients"]
+        unmanaged_patients = response.context["unmanaged_patients"]
+        patient_by_id = {patient.id: patient for patient in managed_patients + unmanaged_patients}
+
+        self.assertEqual(
+            patient_by_id[self.patient_active.id].director_doctor_name,
+            self.assignment_director.name,
+        )
+        self.assertEqual(
+            patient_by_id[self.patient_active.id].affiliated_studio_name,
+            self.assignment_studio.name,
+        )
+        self.assertEqual(
+            patient_by_id[self.patient_expired.id].director_doctor_name,
+            self.fallback_director.name,
+        )
+        self.assertEqual(
+            patient_by_id[self.patient_expired.id].affiliated_studio_name,
+            self.fallback_studio.name,
+        )
+        self.assertEqual(
+            patient_by_id[self.patient_none.id].director_doctor_name,
+            self.fallback_director.name,
+        )
+        self.assertEqual(
+            patient_by_id[self.patient_none.id].affiliated_studio_name,
+            self.fallback_studio.name,
+        )
+        self.assertIn(f"所属主任医生：{self.assignment_director.name}", content)
+        self.assertIn(f"所属工作室：{self.assignment_studio.name}", content)
+        self.assertIn(f"所属主任医生：{self.fallback_director.name}", content)
+        self.assertIn(f"所属工作室：{self.fallback_studio.name}", content)
 
     @patch("web_doctor.views.workspace.TodoListService")
     @patch("web_doctor.views.workspace.ChatService")

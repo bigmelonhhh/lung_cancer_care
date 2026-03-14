@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from django.http import JsonResponse, HttpRequest
 from django.views.decorators.http import require_GET, require_POST
 from django.contrib.auth.decorators import login_required
@@ -23,25 +24,42 @@ def _format_datetime_for_display(dt) -> str:
     return local_dt.strftime("%Y-%m-%d %H:%M")
 
 
+def _extract_family_name_from_snapshot(snapshot: str) -> str:
+    """
+    从历史快照中提取“括号内家属名”。
+    示例：wx昵称(王丽) -> 王丽，wx昵称（王丽） -> 王丽
+    """
+    raw = (snapshot or "").strip()
+    if not raw:
+        return ""
+    matched = re.search(r"[（(]\s*([^()（）]+?)\s*[)）]\s*$", raw)
+    if not matched:
+        return ""
+    return (matched.group(1) or "").strip()
+
+
 def _normalize_family_sender_name(msg) -> str:
+    if msg.sender_role_snapshot != MessageSenderRole.FAMILY:
+        return msg.sender_display_name_snapshot
+
     try:
-        if msg.sender_role_snapshot == MessageSenderRole.FAMILY:
-            relation = PatientRelation.objects.filter(
-                patient=getattr(msg.conversation, "patient", None),
-                user=msg.sender,
-                is_active=True,
-            ).first()
-            name = ""
-            label = "家属"
-            if relation:
-                name = relation.name or ""
-                label = relation.relation_name or relation.get_relation_type_display() or "家属"
-            if not name:
-                name = getattr(msg.sender, "display_name", "") or msg.sender_display_name_snapshot or ""
-            return f"{name}({label})"
+        relation = PatientRelation.objects.filter(
+            patient=getattr(msg.conversation, "patient", None),
+            user=msg.sender,
+            is_active=True,
+        ).first()
+        relation_name = (getattr(relation, "name", "") or "").strip()
+        if relation_name:
+            return relation_name
+
+        snapshot_name = _extract_family_name_from_snapshot(
+            getattr(msg, "sender_display_name_snapshot", "")
+        )
+        if snapshot_name:
+            return snapshot_name
     except Exception:
-        pass
-    return msg.sender_display_name_snapshot
+        return "家属"
+    return "家属"
 
 def _serialize_message(msg) -> dict:
     created_at_iso = msg.created_at.isoformat() if getattr(msg, "created_at", None) else ""

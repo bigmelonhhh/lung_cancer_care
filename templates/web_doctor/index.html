@@ -1,61 +1,68 @@
 {% extends "layouts/base_doctor.html" %}
 
 {% block content %}
-<div class="fixed inset-0 top-16 flex bg-slate-100 overflow-hidden">
+<div class="fixed inset-0 top-16 flex bg-gray-50 overflow-hidden">
     
-    <aside class="w-64 flex flex-col bg-white border-r border-slate-200 z-10">
-        <div class="px-3 py-3 border-b border-slate-200 bg-white">
+    <aside class="w-72 flex flex-col bg-white border-r border-gray-100 z-10 shadow-sm">
+        <div class="px-4 py-4 border-b border-gray-100 bg-white">
             <div class="flex items-center gap-2">
-                <input
-                    id="patient-search-input"
-                    type="text"
-                    class="w-full h-9 px-3 text-sm border border-slate-200 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
-                    placeholder="患者姓名/手机号"
-                    autocomplete="off"
-                />
-               
+                <div class="relative w-full">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="h-4 w-4 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <input
+                        id="patient-search-input"
+                        type="text"
+                        class="block w-full h-10 pl-9 pr-3 text-sm bg-gray-50 border text-gray-900 placeholder-gray-400 rounded-lg focus:outline-none focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                        placeholder="搜索患者姓名/手机号"
+                        autocomplete="off"
+                    />
+                </div>
             </div>
-            <div class="flex items-center justify-end mt-2 ">
+            <div class="flex items-center justify-between mt-3 gap-2">
                  <button
                     id="patient-search-btn"
                     type="button"
-                    class="mr-2 h-9 px-3 text-sm bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
+                    class="flex-1 h-9 px-3 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition shadow-sm"
                 >
                     搜索
                 </button>
                 <button
                     id="patient-search-reset"
                     type="button"
-                    class="h-9 px-3 text-sm bg-white text-slate-600 border border-slate-200 rounded-md hover:bg-slate-50 transition"
+                    class="flex-1 h-9 px-3 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 transition"
                 >
                     重置
                 </button>
             </div>
         </div>
-        <ul id="patient-list-container" class="flex-1 overflow-y-auto divide-y divide-slate-50">
+        <ul id="patient-list-container" class="flex-1 overflow-y-auto divide-y divide-gray-50">
             {% include "web_doctor/partials/patient_list.html" %}
         </ul>
     </aside>
 
-    <main id="main-content" class="flex-1 flex flex-col min-w-0 bg-white relative z-100">
-        <div class="flex-1 flex flex-col items-center justify-center text-center px-6 text-slate-600">
-            <p class="text-2xl font-semibold text-slate-800 mb-3">
+    <main id="main-content" class="flex-1 flex flex-col min-w-0 bg-white relative z-0">
+        <div class="flex-1 flex flex-col items-center justify-center text-center px-8">
+            
+            <h2 class="text-2xl font-bold text-gray-900 mb-3 tracking-tight">
                 感谢奋斗在一线的医护人员 {{ workspace_display_name }}
-            </p>
-            <p class="text-slate-600 leading-relaxed max-w-3xl">
+            </h2>
+            <p class="text-gray-500 leading-relaxed  mb-8 text-base">
                 我们将持续为您提供更高效的工作台与管理工具，让守护生命的每一刻都更从容。
             </p>
-            <p class="mt-6 text-slate-400 text-sm">
+            <p class="text-sm text-gray-400">
                 请先从左侧患者列表中选择一位患者，进入详细管理页面。
             </p>
         </div>
     </main>
 
-    <aside class="w-80 flex flex-col border-l border-slate-200 bg-white shrink-0 z-10">
+    <aside class="w-80 flex flex-col border-l border-gray-100 bg-white shrink-0 z-10 shadow-sm">
         <div class="flex flex-col h-full min-h-0">
             {% include "web_doctor/partials/todo_list_sidebar.html" %}
 
-            <div class="flex-1 min-h-0">
+            <div class="flex-1 min-h-0 border-t border-gray-100">
                 {% include "web_doctor/partials/chat.html" %}
             </div>
         </div>

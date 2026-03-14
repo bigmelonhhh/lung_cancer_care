@@ -36,6 +36,7 @@ from users.services.patient import PatientService
 from web_doctor.views.home import build_home_context
 from patient_alerts.services.todo_list import TodoListService
 from django.template.loader import render_to_string
+from chat.models import PatientStudioAssignment
 from chat.services.chat import ChatService
 from market.models import Order
 
@@ -115,7 +116,7 @@ def _get_workspace_patients(user, query: str | None):
         query = query.strip()
         if query:
             qs = qs.filter(Q(name__icontains=query) | Q(phone__icontains=query))
-    return qs.order_by("name").distinct()
+    return qs.select_related("doctor__studio__owner_doctor").order_by("name").distinct()
 
 
 def enrich_patients_with_counts(user: CustomUser, patients_qs) -> list[PatientProfile]:
@@ -210,6 +211,52 @@ def _split_patients_by_service_status(patients: list[PatientProfile]) -> tuple[l
     return managed, stopped, unpaid
 
 
+def _attach_patients_affiliation_info(patients: list[PatientProfile]) -> None:
+    """
+    为患者附加“所属主任医生/所属工作室”字段。
+    优先级：
+    1. 当前有效工作室归属记录（PatientStudioAssignment）
+    2. 患者主治医生关联的工作室（patient.doctor.studio）
+    3. 兜底为 "--"
+    """
+    if not patients:
+        return
+
+    patient_ids = [patient.id for patient in patients]
+    assignment_qs = (
+        PatientStudioAssignment.objects.filter(
+            patient_id__in=patient_ids,
+            end_at__isnull=True,
+        )
+        .select_related("studio__owner_doctor")
+        .order_by("patient_id", "-start_at", "-id")
+    )
+    latest_assignment_by_patient: dict[int, PatientStudioAssignment] = {}
+    for assignment in assignment_qs:
+        if assignment.patient_id not in latest_assignment_by_patient:
+            latest_assignment_by_patient[assignment.patient_id] = assignment
+
+    for patient in patients:
+        studio_name = "--"
+        director_name = "--"
+
+        assignment = latest_assignment_by_patient.get(patient.id)
+        studio = assignment.studio if assignment else None
+
+        if studio is None:
+            doctor = getattr(patient, "doctor", None)
+            studio = getattr(doctor, "studio", None) if doctor else None
+
+        if studio is not None:
+            studio_name = getattr(studio, "name", "") or "--"
+            owner_doctor = getattr(studio, "owner_doctor", None)
+            if owner_doctor is not None:
+                director_name = getattr(owner_doctor, "name", "") or "--"
+
+        patient.affiliated_studio_name = studio_name
+        patient.director_doctor_name = director_name
+
+
 @login_required
 @check_doctor_or_assistant
 def doctor_workspace(request: HttpRequest) -> HttpResponse:
@@ -222,6 +269,7 @@ def doctor_workspace(request: HttpRequest) -> HttpResponse:
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
     managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
+    _attach_patients_affiliation_info(managed_patients + stopped_patients)
     
     display_name = get_user_display_name(request.user)
     
@@ -259,6 +307,7 @@ def doctor_workspace_patient_list(request: HttpRequest) -> HttpResponse:
     patients_qs = _get_workspace_patients(request.user, request.GET.get("q"))
     patients = enrich_patients_with_counts(request.user, patients_qs)
     managed_patients, stopped_patients, unpaid_patients = _split_patients_by_service_status(patients)
+    _attach_patients_affiliation_info(managed_patients + stopped_patients)
     return render(
         request,
         "web_doctor/partials/patient_list.html",
