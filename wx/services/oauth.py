@@ -1,10 +1,11 @@
 """OAuth 相关逻辑。"""
 import os
+
 from django.conf import settings
 from django.urls import reverse
-from .client import wechat_client, WX_APPID, WX_APPSECRET
 from wechatpy.oauth import WeChatOAuth
-from django.conf import settings
+
+from .client import WX_APPID, WX_APPSECRET
 
 
 # def get_oauth_url(redirect_uri, scope="snsapi_base", state="STATE"):
@@ -23,7 +24,7 @@ def _get_wechat_o_auth_cliet(redirect_uri=None, scope="snsapi_base", state="STAT
 
 def get_oauth_url(redirect_uri, scope="snsapi_base", state="STATE"):
     """生成 OAuth 授权地址（基础方法）。"""
-    oauth_client = _get_wechat_o_auth_cliet(redirect_uri, scope="snsapi_base", state="STATE")
+    oauth_client = _get_wechat_o_auth_cliet(redirect_uri, scope=scope, state=state)
     return oauth_client.authorize_url
 
 def get_user_info(code):
@@ -36,7 +37,11 @@ def get_user_info(code):
 # 👇 新增：封装好的菜单链接生成函数
 # ==========================================
 
-def generate_menu_auth_url(view_name: str, state: str = "menu", **kwargs) -> str:
+def generate_menu_auth_url(
+    view_name: str,
+    state: str = "menu",
+    **kwargs,
+) -> str:
     """
     生成用于微信公众号菜单的 OAuth2.0 自动登录链接。
 
@@ -70,11 +75,6 @@ def generate_menu_auth_url(view_name: str, state: str = "menu", **kwargs) -> str
 
     # 3. 拼接完整回调地址
     full_redirect_uri = f"{base_url}{path}"
-
-    #兼容测试模式，如果是测试模式，不走微信授权，走普通session。
-    test_patient_id = getattr(settings, "TEST_PATIENT_ID", None)
-    if (settings.DEBUG  and test_patient_id):
-        return full_redirect_uri
 
     # 4. 生成最终链接 (菜单点击一般用静默授权 snsapi_base)
     # 注意：wechatpy 会自动处理 urlencode

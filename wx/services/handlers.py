@@ -75,7 +75,11 @@ def _handle_patient_scan(user, object_id):
     # 简单的生成链接逻辑
     # full_redirect_uri = _get_full_url()
     # url = get_oauth_url(redirect_uri=full_redirect_uri, state=str(object_id))
-    url = generate_menu_auth_url("web_patient:bind_landing", patient_id=object_id)
+    url = generate_menu_auth_url(
+        "web_patient:bind_landing",
+        state=f"bind_patient_{object_id}",
+        patient_id=object_id,
+    )
     return TextTemplateService.get_render_content("scan_patient_code", {"url": url})
 
 # ==========================================
