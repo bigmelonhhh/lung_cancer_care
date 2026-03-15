@@ -12,6 +12,7 @@ urlpatterns = [
     path("doctor/mobile/home/", views.mobile_home, name="mobile_home"),
     path("doctor/mobile/patients/", views.mobile_patient_list, name="mobile_patient_list"),
     path("doctor/mobile/assistants/", views.mobile_my_assistant, name="mobile_my_assistant"),
+    path("doctor/mobile/related-doctors/", views.mobile_related_doctors, name="mobile_related_doctors"),
     path(
         "doctor/mobile/patient/todo/",
         views.mobile_patient_todo_list,

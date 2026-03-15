@@ -90,6 +90,7 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
             "show_department": False,
             "show_hospital": False,
             "show_my_assistant": False,
+            "show_related_doctors": is_assistant,
         }
         return render(request, "web_doctor/mobile/index.html", context, status=404)
 
@@ -103,6 +104,7 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
     show_department = is_director
     show_hospital = is_director
     show_my_assistant = is_director
+    show_related_doctors = is_assistant
 
     stats_doctor_ids: list[int] = []
     if is_assistant:
@@ -218,6 +220,7 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
         "show_department": show_department,
         "show_hospital": show_hospital,
         "show_my_assistant": show_my_assistant,
+        "show_related_doctors": show_related_doctors,
     }
 
     return render(request, "web_doctor/mobile/index.html", context)

@@ -19,6 +19,7 @@ class MobileMyAssistantTests(TestCase):
     def setUp(self):
         self.client = Client()
         self.my_assistant_url = reverse("web_doctor:mobile_my_assistant")
+        self.related_doctors_url = reverse("web_doctor:mobile_related_doctors")
 
         self.password = "password123"
         self.doctor = CustomUser.objects.create_user(
@@ -112,6 +113,89 @@ class MobileMyAssistantTests(TestCase):
         response = self.client.get(self.my_assistant_url)
         self.assertEqual(response.status_code, 403)
 
+    def test_assistant_user_sees_related_chief_doctors(self):
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(self.related_doctors_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "web_doctor/mobile/related_doctors.html")
+        self.assertContains(response, "张主任")
+
+    def test_assistant_related_doctors_filters_non_chief_doctors(self):
+        non_chief_user = CustomUser.objects.create_user(
+            username="doctor_related_non_chief",
+            phone="13800001008",
+            password=self.password,
+            user_type=choices.UserType.DOCTOR,
+        )
+        non_chief_profile = DoctorProfile.objects.create(
+            user=non_chief_user,
+            name="普通医生",
+            title="主治医师",
+            hospital="测试医院",
+            department="测试科室",
+            studio=self.studio,
+        )
+        DoctorAssistantMap.objects.create(
+            doctor=non_chief_profile,
+            assistant=self.assistant_profile,
+        )
+
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(self.related_doctors_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "张主任")
+        self.assertNotContains(response, "普通医生")
+
+    def test_assistant_related_doctors_shows_empty_when_no_chief(self):
+        assistant_user = CustomUser.objects.create_user(
+            username="assistant_related_only_non_chief",
+            phone="13800001009",
+            password=self.password,
+            user_type=choices.UserType.ASSISTANT,
+        )
+        assistant_profile = AssistantProfile.objects.create(
+            user=assistant_user,
+            name="平台助理B",
+            status=choices.AssistantStatus.ACTIVE,
+        )
+        non_chief_user = CustomUser.objects.create_user(
+            username="doctor_related_only_non_chief",
+            phone="13800001010",
+            password=self.password,
+            user_type=choices.UserType.DOCTOR,
+        )
+        non_chief_profile = DoctorProfile.objects.create(
+            user=non_chief_user,
+            name="非主任医生",
+            title="主治医师",
+            hospital="测试医院",
+            department="测试科室",
+            studio=self.studio,
+        )
+        DoctorAssistantMap.objects.create(
+            doctor=non_chief_profile,
+            assistant=assistant_profile,
+        )
+
+        self.client.force_login(assistant_user)
+        response = self.client.get(self.related_doctors_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "web_doctor/mobile/related_doctors.html")
+        self.assertEqual(list(response.context["related_doctors"]), [])
+        self.assertContains(response, "暂无关联医生")
+
+    def test_mobile_related_doctors_permissions(self):
+        self.client.force_login(self.doctor)
+        doctor_response = self.client.get(self.related_doctors_url)
+        self.assertEqual(doctor_response.status_code, 403)
+
+        self.client.force_login(self.sales_user)
+        sales_response = self.client.get(self.related_doctors_url)
+        self.assertEqual(sales_response.status_code, 403)
+
     def test_mobile_home_has_my_assistant_entry(self):
         self.client.force_login(self.doctor)
         response = self.client.get(reverse("web_doctor:mobile_home"))
@@ -119,8 +203,10 @@ class MobileMyAssistantTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, reverse("web_doctor:mobile_my_assistant"))
         self.assertTrue(response.context["show_my_assistant"])
+        self.assertFalse(response.context["show_related_doctors"])
         self.assertTrue(response.context["show_department"])
         self.assertTrue(response.context["show_hospital"])
+        self.assertNotContains(response, reverse("web_doctor:mobile_related_doctors"))
         self.assertContains(response, "测试医院")
 
     def test_mobile_home_assistant_identity_and_visibility(self):
@@ -131,9 +217,11 @@ class MobileMyAssistantTests(TestCase):
         self.assertEqual(response.context["doctor"]["name"], "平台助理A")
         self.assertEqual(response.context["doctor"]["title"], "平台助理")
         self.assertFalse(response.context["show_my_assistant"])
+        self.assertTrue(response.context["show_related_doctors"])
         self.assertFalse(response.context["show_department"])
         self.assertFalse(response.context["show_hospital"])
         self.assertNotContains(response, reverse("web_doctor:mobile_my_assistant"))
+        self.assertContains(response, reverse("web_doctor:mobile_related_doctors"))
         self.assertNotContains(response, "测试科室")
         self.assertNotContains(response, "测试医院")
 
@@ -158,9 +246,11 @@ class MobileMyAssistantTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(response.context["show_my_assistant"])
+        self.assertFalse(response.context["show_related_doctors"])
         self.assertFalse(response.context["show_department"])
         self.assertFalse(response.context["show_hospital"])
         self.assertNotContains(response, reverse("web_doctor:mobile_my_assistant"))
+        self.assertNotContains(response, reverse("web_doctor:mobile_related_doctors"))
         self.assertNotContains(response, "非主任科室")
         self.assertNotContains(response, "测试医院")
 
@@ -247,6 +337,8 @@ class MobileMyAssistantTests(TestCase):
         self.assertFalse(response.context["show_department"])
         self.assertFalse(response.context["show_hospital"])
         self.assertFalse(response.context["show_my_assistant"])
+        self.assertTrue(response.context["show_related_doctors"])
+        self.assertContains(response, reverse("web_doctor:mobile_related_doctors"))
 
         studio_names = set(response.context["doctor"]["studio_name"].split("、"))
         self.assertEqual(studio_names, {"张主任工作室", "李主任工作室"})
@@ -273,5 +365,11 @@ class MobileMyAssistantTests(TestCase):
         self.assertContains(
             response,
             "未找到医生档案信息，请联系管理员完善医生资料。",
+            status_code=404,
+        )
+        self.assertTrue(response.context["show_related_doctors"])
+        self.assertContains(
+            response,
+            reverse("web_doctor:mobile_related_doctors"),
             status_code=404,
         )
