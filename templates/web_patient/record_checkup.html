@@ -163,7 +163,7 @@
                         class="w-full font-bold text-base py-3 rounded-xl transition active:scale-95 
                                bg-gray-200 text-gray-500 cursor-not-allowed"
                         disabled>
-                    <span id="btn-text">请先阅读并滑动至底部</span>
+                    <span id="btn-text">请先阅读并滑动内容</span>
                 </button>
             </div>
         </div>
@@ -179,8 +179,8 @@ const uploads = {};
 const compressQueue = [];
 let compressActiveCount = 0;
 
-// ========== 核心：滚动到底部直接启用按钮 ==========
-let isScrolledToBottom = false; // 是否滚动到底部
+// ========== 核心：用户发生滚动后直接启用按钮 ==========
+let hasUserScrolled = false; // 是否已经滚动过
 const modalContent = document.getElementById('modal-content');
 const btnTextEl = document.getElementById('btn-text');
 const confirmBtn = document.getElementById('modal-confirm-btn');
@@ -261,10 +261,9 @@ if (isElementVisible(confirmBtnContainer)) {
 // 监听模态框内容滚动事件
 if (modalContent) {
     modalContent.addEventListener('scroll', function() {
-        // 判断是否滚动到底部（容差10px，避免精度问题）
-        const isBottom = (this.scrollTop + this.clientHeight) >= (this.scrollHeight - 10);
-        if (isBottom && !isScrolledToBottom) {
-            isScrolledToBottom = true;
+        // 只要用户发生过滚动，就启用按钮
+        if (!hasUserScrolled) {
+            hasUserScrolled = true;
             // 直接启用按钮
             confirmBtn.disabled = false;
             // 切换按钮样式（恢复可点击状态）
