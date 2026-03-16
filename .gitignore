@@ -89,5 +89,7 @@ milvus/
 node_modules/
 package-lock.json
 *.map
+!static/vendor/axios/1.13.2/axios.min.js.map
+!static/vendor/browser-image-compression/2.0.2/browser-image-compression.js.map
 .venv
 .editorconfig
