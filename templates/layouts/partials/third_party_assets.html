@@ -1,0 +1,322 @@
+{% load static %}
+<script>
+  (function () {
+    if (window.LCCAssetLoader) return;
+
+    var prefix = "[LCCAssetLoader]";
+    var statuses = {};
+
+    function log(level, message) {
+      if (typeof console === "undefined") return;
+      var fn = console[level] || console.log;
+      if (typeof fn === "function") {
+        fn.call(console, prefix + " " + message);
+      }
+    }
+
+    function isAssetReady(asset) {
+      if (typeof asset.checker === "function") {
+        try {
+          return !!asset.checker();
+        } catch (e) {
+          return false;
+        }
+      }
+      if (asset.globalName) {
+        return typeof window[asset.globalName] !== "undefined";
+      }
+      return false;
+    }
+
+    function requiresReadyCheck(asset) {
+      return typeof asset.checker === "function" || !!asset.globalName;
+    }
+
+    function isAssetLoaded(name, asset) {
+      if (asset.type === "style") {
+        return !!(statuses[name] && statuses[name].loaded);
+      }
+      if (requiresReadyCheck(asset)) {
+        return isAssetReady(asset);
+      }
+      return !!(statuses[name] && statuses[name].loaded);
+    }
+
+    function loadScript(url, timeoutMs) {
+      return new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        var done = false;
+        var timer = null;
+
+        function cleanup() {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          script.onload = null;
+          script.onerror = null;
+        }
+
+        function succeed() {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve();
+        }
+
+        function fail(reason) {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error(reason));
+        }
+
+        script.src = url;
+        script.defer = true;
+        script.async = false;
+        script.onload = succeed;
+        script.onerror = function () {
+          fail("load_error");
+        };
+        timer = setTimeout(function () {
+          fail("timeout");
+        }, timeoutMs || 8000);
+        document.head.appendChild(script);
+      });
+    }
+
+    function loadStyle(url, timeoutMs) {
+      return new Promise(function (resolve, reject) {
+        var link = document.createElement("link");
+        var done = false;
+        var timer = null;
+
+        function cleanup() {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          link.onload = null;
+          link.onerror = null;
+        }
+
+        function succeed() {
+          if (done) return;
+          done = true;
+          cleanup();
+          resolve();
+        }
+
+        function fail(reason) {
+          if (done) return;
+          done = true;
+          cleanup();
+          reject(new Error(reason));
+        }
+
+        link.rel = "stylesheet";
+        link.href = url;
+        link.onload = succeed;
+        link.onerror = function () {
+          fail("load_error");
+        };
+        timer = setTimeout(function () {
+          fail("timeout");
+        }, timeoutMs || 8000);
+        document.head.appendChild(link);
+      });
+    }
+
+    var assets = {
+      htmx: {
+        type: "script",
+        globalName: "htmx",
+        local: "{% static 'vendor/htmx/1.9.12/htmx.min.js' %}",
+        cdn: [
+          "https://unpkg.com/htmx.org@1.9.12",
+          "https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"
+        ],
+        timeoutMs: 8000
+      },
+      alpineCollapse: {
+        type: "script",
+        local: "{% static 'vendor/alpinejs/collapse/3.13.7/cdn.min.js' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.13.7/dist/cdn.min.js",
+          "https://unpkg.com/@alpinejs/collapse@3.13.7/dist/cdn.min.js"
+        ],
+        timeoutMs: 8000
+      },
+      alpine: {
+        type: "script",
+        globalName: "Alpine",
+        local: "{% static 'vendor/alpinejs/core/3.13.7/cdn.min.js' %}",
+        cdn: [
+          "https://unpkg.com/alpinejs@3.13.7/dist/cdn.min.js",
+          "https://cdn.jsdelivr.net/npm/alpinejs@3.13.7/dist/cdn.min.js"
+        ],
+        timeoutMs: 8000
+      },
+      echarts: {
+        type: "script",
+        globalName: "echarts",
+        local: "{% static 'vendor/echarts/5.4.3/echarts.min.js' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js",
+          "https://unpkg.com/echarts@5.4.3/dist/echarts.min.js"
+        ],
+        timeoutMs: 10000
+      },
+      jquery: {
+        type: "script",
+        globalName: "jQuery",
+        local: "{% static 'vendor/jquery/3.7.1/jquery.min.js' %}",
+        cdn: [
+          "https://code.jquery.com/jquery-3.7.1.min.js",
+          "https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"
+        ],
+        timeoutMs: 8000
+      },
+      axios: {
+        type: "script",
+        globalName: "axios",
+        local: "{% static 'vendor/axios/1.13.2/axios.min.js' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/axios@1.13.2/dist/axios.min.js"
+        ],
+        timeoutMs: 8000
+      },
+      flatpickr: {
+        type: "script",
+        globalName: "flatpickr",
+        local: "{% static 'vendor/flatpickr/4.6.13/flatpickr.min.js' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.js"
+        ],
+        timeoutMs: 8000
+      },
+      flatpickrZh: {
+        type: "script",
+        checker: function () {
+          return !!(window.flatpickr && window.flatpickr.l10ns && window.flatpickr.l10ns.zh);
+        },
+        local: "{% static 'vendor/flatpickr/4.6.13/l10n/zh.js' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/zh.js"
+        ],
+        timeoutMs: 8000
+      },
+      flatpickrCss: {
+        type: "style",
+        local: "{% static 'vendor/flatpickr/4.6.13/flatpickr.min.css' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css"
+        ],
+        timeoutMs: 8000
+      },
+      flatpickrThemeAirbnb: {
+        type: "style",
+        local: "{% static 'vendor/flatpickr/4.6.13/themes/airbnb.css' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/themes/airbnb.css"
+        ],
+        timeoutMs: 8000
+      },
+      imageCompression: {
+        type: "script",
+        globalName: "imageCompression",
+        local: "{% static 'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}",
+        cdn: [
+          "https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"
+        ],
+        timeoutMs: 8000
+      }
+    };
+
+    function loadAssetFromUrl(asset, url) {
+      if (asset.type === "style") {
+        return loadStyle(url, asset.timeoutMs);
+      }
+      return loadScript(url, asset.timeoutMs);
+    }
+
+    function ensure(name) {
+      var asset = assets[name];
+      if (!asset) {
+        return Promise.reject(new Error("unknown_asset"));
+      }
+      if (isAssetLoaded(name, asset)) {
+        return Promise.resolve();
+      }
+      var status = statuses[name];
+      if (status && status.promise) {
+        return status.promise;
+      }
+
+      var urls = [asset.local].concat(asset.cdn || []);
+      var index = 0;
+
+      function tryNext() {
+        if (isAssetLoaded(name, asset)) {
+          return Promise.resolve();
+        }
+        if (index >= urls.length) {
+          log("error", name + " failed from all sources");
+          return Promise.reject(new Error("all_sources_failed"));
+        }
+
+        var source = urls[index];
+        index += 1;
+        return loadAssetFromUrl(asset, source)
+          .then(function () {
+            if (asset.type === "style" || !requiresReadyCheck(asset) || isAssetReady(asset)) {
+              return;
+            }
+            return Promise.reject(new Error("loaded_but_not_ready"));
+          })
+          .catch(function (error) {
+            log("warn", name + " load failed from " + source + " (" + (error && error.message ? error.message : "unknown") + ")");
+            return tryNext();
+          });
+      }
+
+      statuses[name] = statuses[name] || {};
+      statuses[name].promise = tryNext()
+        .then(function () {
+          statuses[name].loaded = true;
+        })
+        .finally(function () {
+          statuses[name] = statuses[name] || {};
+          statuses[name].ready = isAssetLoaded(name, asset);
+          statuses[name].promise = null;
+        });
+      return statuses[name].promise;
+    }
+
+    function ensureMany(list) {
+      var chain = Promise.resolve();
+      (list || []).forEach(function (name) {
+        chain = chain.then(function () {
+          return ensure(name);
+        });
+      });
+      return chain;
+    }
+
+    window.LCCAssetLoader = {
+      assets: assets,
+      ensure: ensure,
+      ensureMany: ensureMany,
+      isLoaded: function (name) {
+        var asset = assets[name];
+        if (!asset) return false;
+        return isAssetLoaded(name, asset) || !!(statuses[name] && statuses[name].ready);
+      }
+    };
+
+    window.LCCCharts = window.LCCCharts || {};
+    window.LCCCharts.ensureEcharts = function () {
+      return ensure("echarts");
+    };
+  })();
+</script>

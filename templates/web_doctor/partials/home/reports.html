@@ -43,25 +43,27 @@
     </div>
 
     {# 图片预览弹窗 #}
-    <div 
-        x-show="showPreview" 
-        class="fixed inset-0 z-99999 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-        x-transition:enter="transition ease-out duration-300"
-        x-transition:enter-start="opacity-0"
-        x-transition:enter-end="opacity-100"
-        x-transition:leave="transition ease-in duration-200"
-        x-transition:leave-start="opacity-100"
-        x-transition:leave-end="opacity-0"
-        style="display: none;z-index: 99999;"
-    >
-        <div class="relative max-w-4xl max-h-full" @click.outside="showPreview = false">
-            <button 
-                @click="showPreview = false" 
-                class="absolute -top-10 right-0 text-white hover:text-slate-300 transition-colors"
-            >
-                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-            </button>
-            <img :src="previewImage" class="max-w-full max-h-[90vh] rounded shadow-2xl object-contain">
+    <template x-teleport="body">
+        <div 
+            x-show="showPreview" 
+            class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            x-transition:enter="transition ease-out duration-300"
+            x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"
+            x-transition:leave="transition ease-in duration-200"
+            x-transition:leave-start="opacity-100"
+            x-transition:leave-end="opacity-0"
+            style="display: none;"
+        >
+            <div class="relative max-w-4xl max-h-full" @click.outside="showPreview = false">
+                <button 
+                    @click="showPreview = false" 
+                    class="absolute -top-10 right-0 text-white hover:text-slate-300 transition-colors"
+                >
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+                <img :src="previewImage" class="max-w-full max-h-[90vh] rounded shadow-2xl object-contain">
+            </div>
         </div>
-    </div>
+    </template>
 </div>

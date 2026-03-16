@@ -90,7 +90,16 @@
   </div>
 </div>
 
-<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+<script>
+  window.__lccWxJssdkLoadFailed = false;
+  function lccWxJssdkLoadError() {
+    window.__lccWxJssdkLoadFailed = true;
+    if (typeof console !== 'undefined' && console.warn) {
+      console.warn('[device_list] wechat jssdk load failed');
+    }
+  }
+</script>
+<script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js" onerror="lccWxJssdkLoadError()"></script>
 <script>
   const apiBindUrl = "{% url 'web_patient:api_bind_device' %}";
   const apiUnbindUrl = "{% url 'web_patient:api_unbind_device' %}";
@@ -171,6 +180,10 @@
 
   function scanAndBind() {
     if (deviceState.loading) return;
+    if (window.__lccWxJssdkLoadFailed) {
+      showToast('微信能力加载失败，请检查网络后重试', 'error');
+      return;
+    }
     if (typeof wx === 'undefined') {
       showToast('当前环境不支持扫码', 'error');
       return;

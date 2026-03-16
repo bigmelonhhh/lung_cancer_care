@@ -5,12 +5,53 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{% block title %}肺部康复管理系统{% endblock %}</title>
-    <link rel="stylesheet" href="{% static 'css/app.css' %}?v={% now 'U' %}" />
+    <link rel="stylesheet" href="{% static 'css/app.css' %}" />
     <link
       rel="stylesheet"
-      href="{% static 'web_sales/web_sales_mobile.css' %}?v={% now 'U' %}"
+      href="{% static 'web_sales/web_sales_mobile.css' %}"
       media="(max-width: 768px)"
     />
+    {% include "layouts/partials/third_party_assets.html" %}
+    <script>
+      (function preloadBaseSalesAssets() {
+        function ensureHtmx() {
+          if (!window.LCCAssetLoader || typeof window.LCCAssetLoader.ensure !== 'function') {
+            if (typeof console !== 'undefined' && console.error) {
+              console.error('[LCCAssetLoader] base sales asset loader is unavailable');
+            }
+            return;
+          }
+          window.LCCAssetLoader.ensure('htmx').catch(function () {
+            if (typeof console !== 'undefined' && console.error) {
+              console.error('[LCCAssetLoader] failed to preload base sales htmx');
+            }
+          });
+        }
+
+        function ensureAlpineStack() {
+          if (!window.LCCAssetLoader || typeof window.LCCAssetLoader.ensureMany !== 'function') {
+            if (typeof console !== 'undefined' && console.error) {
+              console.error('[LCCAssetLoader] base sales asset loader is unavailable');
+            }
+            return;
+          }
+          window.LCCAssetLoader.ensureMany(['alpineCollapse', 'alpine']).catch(function () {
+            if (typeof console !== 'undefined' && console.error) {
+              console.error('[LCCAssetLoader] failed to preload base sales alpine assets');
+            }
+          });
+        }
+
+        // htmx should start early so hx-* bindings are ready for first interaction.
+        ensureHtmx();
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', ensureAlpineStack, { once: true });
+          return;
+        }
+        ensureAlpineStack();
+      })();
+    </script>
     <script>
       (function () {
         if (!window.matchMedia) return;
@@ -27,27 +68,15 @@
             '; path=/; max-age=' +
             maxAge +
             '; SameSite=Lax';
-
-          if (window.sessionStorage && window.location && window.location.pathname) {
-            if (window.location.pathname.indexOf('/sales/dashboard') !== -1) {
-              var key = 'ws_is_mobile_reload_' + wants;
-              if (!window.sessionStorage.getItem(key)) {
-                window.sessionStorage.setItem(key, '1');
-                window.location.reload();
-                return;
-              }
-            }
-          }
         }
 
         if (wants !== '1') return;
         var s = document.createElement('script');
         s.defer = true;
-        s.src = "{% static 'web_sales/web_sales_mobile.js' %}?v={% now 'U' %}";
+        s.src = "{% static 'web_sales/web_sales_mobile.js' %}";
         document.head.appendChild(s);
       })();
     </script>
-    <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
   </head>
   <body data-app="web-sales" class="min-h-screen bg-gray-100 text-gray-800">
     <style>
@@ -99,7 +128,5 @@
   </header>
     {% block body %}{% endblock %}
   </div>
-<script defer src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
-<script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
   </body>
 </html>

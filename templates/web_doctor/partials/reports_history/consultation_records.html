@@ -621,25 +621,27 @@
     {# 包含 Modal 组件 #}
     {% include "web_doctor/partials/reports_history/add_record_modal.html" %}
 
-    <div id="consultation-delete-modal" class="fixed inset-0 hidden" style="background: rgba(0,0,0,0.5);z-index: 9999;">
-      <div class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl w-full max-w-[320px] p-6 shadow-2xl flex flex-col items-center">
-          <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mb-4">
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </div>
-          <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">是否删除此条档案？</h3>
-          <p class="text-sm text-slate-500 text-center mb-6 leading-relaxed">删除后数据无法恢复，请谨慎操作。</p>
-          <div class="flex gap-3 w-full">
-            <button id="consultation-delete-cancel-btn" type="button" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold active:bg-slate-50 transition">
-              取消
-            </button>
-            <button id="consultation-delete-confirm-btn" type="button" class="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-200 active:scale-95 transition">
-              确定
-            </button>
+    <template x-teleport="body">
+      <div id="consultation-delete-modal" class="fixed inset-0 hidden z-[10000] bg-black/50">
+        <div class="min-h-screen flex items-center justify-center p-4">
+          <div class="bg-white rounded-2xl w-full max-w-[320px] p-6 shadow-2xl flex flex-col items-center">
+            <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">是否删除此条档案？</h3>
+            <p class="text-sm text-slate-500 text-center mb-6 leading-relaxed">删除后数据无法恢复，请谨慎操作。</p>
+            <div class="flex gap-3 w-full">
+              <button id="consultation-delete-cancel-btn" type="button" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold active:bg-slate-50 transition">
+                取消
+              </button>
+              <button id="consultation-delete-confirm-btn" type="button" class="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-200 active:scale-95 transition">
+                确定
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
 </div>

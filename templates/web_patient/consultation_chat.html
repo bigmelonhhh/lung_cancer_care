@@ -116,7 +116,7 @@
             </div>
 
             <!-- Send Button -->
-            <button @click="sendMessage()" class="w-14 h-9 shrink-0 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md shadow-blue-200 active:scale-95 transition flex items-center justify-center mb-0.5" :disabled="!inputText.trim()">
+            <button @click="sendMessage()" class="w-14 h-9 shrink-0 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md shadow-blue-200 active:scale-95 transition flex items-center justify-center mb-0.5" :disabled="typeof inputText === 'undefined' || !String(inputText || '').trim()">
                 发送
             </button>
         </div>

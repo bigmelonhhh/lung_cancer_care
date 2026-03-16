@@ -1,6 +1,23 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
 
 {% block extra_head %}
+<script src="{% static 'vendor/jquery/3.7.1/jquery.min.js' %}"></script>
+<script>
+  if (!window.jQuery) {
+    document.write('<script src="https://code.jquery.com/jquery-3.7.1.min.js"><\\/script>');
+  }
+</script>
+<script>
+  if (!window.jQuery) {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"><\\/script>');
+  }
+</script>
+<script>
+  if (!window.jQuery && typeof console !== 'undefined' && console.error) {
+    console.error('[LCCAssetLoader] failed to load jquery from all sources');
+  }
+</script>
 {% endblock %}
 
 {% block body %}

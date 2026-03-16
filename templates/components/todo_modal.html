@@ -198,6 +198,15 @@
      * @param {Function} onSave - 保存回调函数 
      */ 
     window.showTodoModal = function(itemData, isEditMode, onSave) {
+        const $ = window.jQuery;
+        if (!$) {
+            if (typeof console !== 'undefined' && console.error) {
+                console.error('showTodoModal called before jQuery is available');
+            }
+            alert('页面资源加载中，请稍后重试');
+            return;
+        }
+
         // 保存当前操作的数据ID和回调
         const currentItemId = itemData.id;
         window.__todoModalContext = {
@@ -386,8 +395,7 @@
         });
     };
 
-    // 初始化事件绑定
-    $(document).ready(function() {
+    function initializeTodoModalBindings($) {
         // 取消按钮
         $('#cancel-btn').click(function() {
             closeModal();
@@ -504,19 +512,60 @@
                 window.goToPatientIndicators({ patientId: patientId, query: query });
             });
         });
-        
+
         // 点击遮罩层关闭
         $('#todo-modal').click(function(e) {
             if (e.target === this) {
                 closeModal();
             }
         });
-        
+
         // ESC键关闭
         $(document).keydown(function(e) {
             if (e.key === "Escape" && !$('#todo-modal').hasClass('hidden')) {
                 closeModal();
             }
         });
-    });
+    }
+
+    function waitForJQueryReady(maxRetries, intervalMs) {
+        return new Promise(function(resolve, reject) {
+            var retries = 0;
+            function check() {
+                if (window.jQuery) {
+                    resolve(window.jQuery);
+                    return;
+                }
+                retries += 1;
+                if (retries >= maxRetries) {
+                    reject(new Error('jquery_not_ready'));
+                    return;
+                }
+                window.setTimeout(check, intervalMs);
+            }
+            check();
+        });
+    }
+
+    (function bootstrapTodoModalBindings() {
+        if (window.__todoModalBindingsInitialized) {
+            return;
+        }
+
+        waitForJQueryReady(60, 100)
+            .then(function($) {
+                $(function() {
+                    if (window.__todoModalBindingsInitialized) {
+                        return;
+                    }
+                    initializeTodoModalBindings($);
+                    window.__todoModalBindingsInitialized = true;
+                });
+            })
+            .catch(function(error) {
+                if (typeof console !== 'undefined' && console.error) {
+                    console.error('todo_modal init failed:', error && error.message ? error.message : error);
+                }
+            });
+    })();
 </script>

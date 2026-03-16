@@ -25,8 +25,8 @@ class AlpineCollapsePluginTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
         html = resp.content.decode("utf-8")
-        collapse_idx = html.find("@alpinejs/collapse")
-        core_idx = html.find("unpkg.com/alpinejs")
+        collapse_idx = html.find("alpineCollapse")
+        core_idx = html.find("'alpine'")
         self.assertNotEqual(collapse_idx, -1)
         self.assertNotEqual(core_idx, -1)
         self.assertLess(collapse_idx, core_idx)

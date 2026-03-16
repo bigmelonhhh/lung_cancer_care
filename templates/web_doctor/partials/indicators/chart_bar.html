@@ -54,19 +54,17 @@
 
         function initChart() {
             if (typeof echarts === 'undefined') {
+                if (window.LCCCharts && typeof window.LCCCharts.ensureEcharts === 'function') {
+                    window.LCCCharts.ensureEcharts().then(initChart).catch(function () {
+                        console.error('ECharts library not loaded.');
+                    });
+                    return;
+                }
                 if (retryCount < maxRetries) {
                     retryCount++;
                     setTimeout(initChart, 100);
                 } else {
                     console.error('ECharts library not loaded.');
-                    // Last resort: try to load it dynamically if missing
-                    var script = document.createElement('script');
-                    script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
-                    script.onload = function() {
-                         retryCount = 0;
-                         initChart();
-                    };
-                    document.head.appendChild(script);
                 }
                 return;
             }

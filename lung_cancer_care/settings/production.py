@@ -30,3 +30,9 @@ if not CSRF_TRUSTED_ORIGINS:
             continue
         inferred_origins.append(f"https://{cleaned}")
     CSRF_TRUSTED_ORIGINS = dedupe_keep_order(inferred_origins)  # noqa: F405
+
+_storages = dict(globals().get("STORAGES", {}))
+_storages["staticfiles"] = {
+    "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+}
+STORAGES = _storages

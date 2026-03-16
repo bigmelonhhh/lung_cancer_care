@@ -1,13 +1,14 @@
-{% extends "layouts/base_portal.html" %} 
+{% extends "layouts/base_portal.html" %}
+{% load static %}
 {% block extra_head %}
 <!-- Flatpickr CSS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/airbnb.css">
+<link rel="stylesheet" href="{% static 'vendor/flatpickr/4.6.13/flatpickr.min.css' %}">
+<link rel="stylesheet" href="{% static 'vendor/flatpickr/4.6.13/themes/airbnb.css' %}">
 <!-- Axios -->
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<script src="{% static 'vendor/axios/1.13.2/axios.min.js' %}" defer></script>
 <!-- Flatpickr JS -->
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+<script src="{% static 'vendor/flatpickr/4.6.13/flatpickr.min.js' %}" defer></script>
+<script src="{% static 'vendor/flatpickr/4.6.13/l10n/zh.js' %}" defer></script>
 
 <style>
   /* Custom Flatpickr Styling to match Blue Theme */

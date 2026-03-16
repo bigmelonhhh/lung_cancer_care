@@ -1,12 +1,14 @@
 import json
 import re
 from datetime import date
+from pathlib import Path
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.paginator import Paginator
 from django.template.loader import render_to_string
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, SimpleTestCase
 from django.urls import reverse
 
 from core.models import CheckupLibrary
@@ -269,3 +271,44 @@ class ConsultationRecordEditTests(TestCase):
         mock_archive.assert_not_called()
         img.refresh_from_db()
         self.assertEqual(img.checkup_item_id, self.checkup_a.id)
+
+
+class ConsultationModalLayeringTemplateTests(SimpleTestCase):
+    def _read(self, relative_path: str) -> str:
+        return (Path(settings.BASE_DIR) / relative_path).read_text(encoding="utf-8")
+
+    def test_add_record_modal_teleports_to_body(self):
+        content = self._read("templates/web_doctor/partials/reports_history/add_record_modal.html")
+        self.assertIn("<template x-teleport=\"body\">", content)
+        self.assertIn("class=\"fixed inset-0 z-[9999] bg-gray-500 bg-opacity-75 transition-opacity\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[10000] w-screen overflow-y-auto\"", content)
+        self.assertIn("x-show=\"showRecordTypePrompt\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[10001]\"", content)
+        self.assertIn("x-cloak", content)
+
+    def test_consultation_delete_modal_teleports_to_body_without_inline_zindex(self):
+        content = self._read("templates/web_doctor/partials/reports_history/consultation_records.html")
+        self.assertIn("<template x-teleport=\"body\">", content)
+        self.assertIn("id=\"consultation-delete-modal\" class=\"fixed inset-0 hidden z-[10000] bg-black/50\"", content)
+        self.assertNotIn("style=\"background: rgba(0,0,0,0.5);z-index: 9999;\"", content)
+
+    def test_reports_preview_modal_teleports_to_body(self):
+        content = self._read("templates/web_doctor/partials/reports_history/list.html")
+        self.assertIn("<template x-teleport=\"body\">", content)
+        self.assertIn("x-show=\"showPreview\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4\"", content)
+
+    def test_home_checkup_modal_teleports_to_body(self):
+        content = self._read("templates/web_doctor/partials/home/checkup_record_modal.html")
+        self.assertIn("<template x-teleport=\"body\">", content)
+        self.assertIn("class=\"fixed inset-0 z-[9999] bg-gray-500 bg-opacity-75 transition-opacity\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[10000] w-screen overflow-y-auto\"", content)
+        self.assertIn("x-show=\"showRecordTypePrompt\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[10001]\"", content)
+        self.assertIn("x-cloak", content)
+
+    def test_home_reports_preview_modal_teleports_to_body(self):
+        content = self._read("templates/web_doctor/partials/home/reports.html")
+        self.assertIn("<template x-teleport=\"body\">", content)
+        self.assertIn("x-show=\"showPreview\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4\"", content)

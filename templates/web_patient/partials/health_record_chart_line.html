@@ -30,7 +30,19 @@
 
         window.renderHealthRecordLineChart = function () {
             const chartDom = document.getElementById('health-record-line-chart');
-            if (!chartDom || typeof echarts === 'undefined') return;
+            if (!chartDom) return;
+            if (typeof echarts === 'undefined') {
+                if (window.LCCCharts && typeof window.LCCCharts.ensureEcharts === 'function') {
+                    window.LCCCharts.ensureEcharts().then(function () {
+                        window.renderHealthRecordLineChart();
+                    }).catch(function () {
+                        if (typeof console !== 'undefined' && console.error) {
+                            console.error('ECharts library not loaded.');
+                        }
+                    });
+                }
+                return;
+            }
 
             // 当前数据源是“月底 -> 月初”，这里倒序成“1号 -> 月底”
             const dates = [...(payload.dates || [])];

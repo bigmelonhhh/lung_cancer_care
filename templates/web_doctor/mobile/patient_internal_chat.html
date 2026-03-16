@@ -4,10 +4,8 @@
 
 {% block body %}
 <!-- Import Fonts -->
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
-    .font-lexend { font-family: 'Lexend', sans-serif; }
-    .font-source { font-family: 'Source Sans 3', sans-serif; }
+<style>    .font-lexend { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
+    .font-source { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
 </style>
 
 <div x-data="mobilePatientInternalChat()" x-init="init()" class="fixed inset-0 bg-slate-50 overflow-hidden font-source text-slate-900">
@@ -117,7 +115,7 @@
 
           <button
             @click="sendMessage()"
-            :disabled="!inputText.trim()"
+            :disabled="typeof inputText === 'undefined' || !String(inputText || '').trim()"
             class="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-blue-200 active:scale-95"
             data-test="mobile-internal-send-btn">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
