@@ -6,10 +6,10 @@ from typing import Optional, Tuple
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login
+from django.db import IntegrityError, transaction
 
 from users import choices
 from users.models import CustomUser
-from django.db import transaction
 
 
 
@@ -80,16 +80,21 @@ class AuthService:
         user = CustomUser.objects.filter(wx_openid=openid).first()
         
         if not user:
-            with transaction.atomic():
-                # 创建新用户
-                user = CustomUser.objects.create(
-                    wx_openid=openid,
-                    username=f"wx_{openid[:8]}", # 临时用户名
-                    user_type=choices.UserType.PATIENT,
-                    is_active=True,
-                    is_subscribe=True
-                )
-                created = True
+            try:
+                with transaction.atomic():
+                    # 完整 openid 长度可放入 username，避免不同账号前缀相同导致冲突。
+                    user = CustomUser.objects.create(
+                        wx_openid=openid,
+                        username=f"wx_{openid}",
+                        user_type=choices.UserType.PATIENT,
+                        is_active=True,
+                        is_subscribe=True
+                    )
+                    created = True
+            except IntegrityError:
+                user = CustomUser.objects.filter(wx_openid=openid).first()
+                if not user:
+                    raise
         
         # 如果有新的用户信息（昵称/头像），更新一下
         if user_info:
