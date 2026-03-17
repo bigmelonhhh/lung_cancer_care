@@ -890,6 +890,10 @@ video {
   z-index: 9999;
 }
 
+.z-\[80\] {
+  z-index: 80;
+}
+
 .col-span-1 {
   grid-column: span 1 / span 1;
 }
@@ -3072,6 +3076,10 @@ video {
   background-color: rgb(255 255 255 / 0.95);
 }
 
+.bg-slate-900\/90 {
+  background-color: rgb(15 23 42 / 0.9);
+}
+
 .bg-opacity-50 {
   --tw-bg-opacity: 0.5;
 }
@@ -3599,6 +3607,10 @@ video {
 
 .pt-8 {
   padding-top: 2rem;
+}
+
+.pt-28 {
+  padding-top: 7rem;
 }
 
 .text-left {

@@ -26,13 +26,12 @@
                         <button
                             type="button"
                             class="w-full text-left px-4 py-4 hover:bg-gray-200 focus:outline-none transition-all duration-200 rounded-md"
-                            hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
-                            hx-target="#main-content"
-                            hx-swap="innerHTML"
                             data-patient-item
                             data-patient-id="{{ patient.id }}"
                             data-patient-name="{{ patient.name|default:'' }}"
                             data-patient-phone="{{ patient.phone|default:'' }}"
+                            data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
+                            data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
                         >
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-2">
@@ -96,13 +95,12 @@
                         <button
                             type="button"
                             class="w-full text-left px-4 py-4 hover:bg-gray-50 focus:outline-none transition-all duration-200 rounded-md opacity-75 hover:opacity-100"
-                            hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
-                            hx-target="#main-content"
-                            hx-swap="innerHTML"
                             data-patient-item
                             data-patient-id="{{ patient.id }}"
                             data-patient-name="{{ patient.name|default:'' }}"
                             data-patient-phone="{{ patient.phone|default:'' }}"
+                            data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
+                            data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
                         >
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-2">
@@ -167,13 +165,12 @@
                         <button
                             type="button"
                             class="w-full text-left px-4 py-4 hover:bg-gray-50 focus:outline-none transition-all duration-200 rounded-md opacity-75 hover:opacity-100"
-                            hx-get="{% url 'web_doctor:patient_workspace' patient.id %}"
-                            hx-target="#main-content"
-                            hx-swap="innerHTML"
                             data-patient-item
                             data-patient-id="{{ patient.id }}"
                             data-patient-name="{{ patient.name|default:'' }}"
                             data-patient-phone="{{ patient.phone|default:'' }}"
+                            data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
+                            data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
                         >
                             <div class="flex items-center justify-between mb-1">
                                 <div class="flex items-center gap-2">
@@ -219,6 +216,21 @@
   {% include "web_doctor/partials/patient_workspace_loading.html" %}
 </template>
 
+<template id="patient-workspace-shell-template">
+  <div class="flex flex-col h-full">
+    <div id="patient-workspace-tabs" class="flex items-center gap-6 px-6 border-b border-slate-200 bg-white h-14">
+      <span class="text-indigo-600 border-b-2 border-indigo-500 font-medium h-full flex items-center px-4">患者主页</span>
+      <span class="text-slate-400 h-full flex items-center px-4">患者指标</span>
+      <span class="text-slate-400 h-full flex items-center px-4">管理统计</span>
+      <span class="text-slate-400 h-full flex items-center px-4">管理设置</span>
+      <span class="text-slate-400 h-full flex items-center px-4">诊疗记录</span>
+    </div>
+    <div id="patient-content" class="flex-1 overflow-y-auto bg-slate-50">
+      {% include "web_doctor/partials/patient_workspace_loading.html" %}
+    </div>
+  </div>
+</template>
+
 <script>
 (function () {
   if (window.__doctorPatientListInitialized) return;
@@ -229,6 +241,10 @@
   const SELECTED_KEY = "doctor_patient_list_selected_patient_id";
   const SECTIONS = ["managed", "stopped", "unpaid"];
   const DEFAULT_SECTION_STATE = { managed: true, stopped: false, unpaid: false };
+  let lastStableMainContent = "";
+  let workspaceLoadSeq = 0;
+  let pendingWorkspacePatient = null;
+  let toastTimer = null;
 
   const readJson = function (key, fallback) {
     try {
@@ -331,11 +347,7 @@
     input.value = getFilterTerm();
   };
 
-  const applySelectedHighlight = function () {
-    const selectedId = sessionStorage.getItem(SELECTED_KEY);
-    if (!selectedId) return;
-    const btn = document.querySelector('button[data-patient-item][data-patient-id="' + selectedId + '"]');
-    if (!btn) return;
+  const clearSelectedHighlightClasses = function () {
     document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
       item.classList.remove(
         "bg-gray-50",
@@ -347,6 +359,27 @@
         "text-indigo-600"
       );
     });
+  };
+
+  const clearSelectedState = function () {
+    try {
+      sessionStorage.removeItem(SELECTED_KEY);
+    } catch (e) {}
+    clearSelectedHighlightClasses();
+  };
+
+  const applySelectedHighlight = function () {
+    const selectedId = sessionStorage.getItem(SELECTED_KEY);
+    if (!selectedId) {
+      clearSelectedHighlightClasses();
+      return;
+    }
+    const btn = document.querySelector('button[data-patient-item][data-patient-id="' + selectedId + '"]');
+    if (!btn) {
+      clearSelectedHighlightClasses();
+      return;
+    }
+    clearSelectedHighlightClasses();
     btn.classList.add("bg-indigo-50", "ring-1", "ring-inset", "ring-indigo-200", "text-indigo-600");
   };
 
@@ -355,6 +388,169 @@
     applyAllSectionStates(animate);
     applyFilter();
     applySelectedHighlight();
+  };
+
+  const getMainContent = function () {
+    return document.getElementById("main-content");
+  };
+
+  const snapshotMainContent = function () {
+    const main = getMainContent();
+    if (!main) return;
+    lastStableMainContent = main.innerHTML;
+  };
+
+  const restoreMainContentFromSnapshot = function () {
+    const main = getMainContent();
+    if (!main) return;
+    if (typeof lastStableMainContent !== "string") return;
+    main.innerHTML = lastStableMainContent;
+  };
+
+  const clearPendingWorkspaceRequest = function () {
+    pendingWorkspacePatient = null;
+  };
+
+  const nextWorkspaceLoadSeq = function () {
+    workspaceLoadSeq += 1;
+    return workspaceLoadSeq;
+  };
+
+  const buildRequestUrlWithSeq = function (rawUrl, seq) {
+    if (!rawUrl) return "";
+    try {
+      const url = new URL(rawUrl, window.location.origin);
+      url.searchParams.set("_wseq", String(seq));
+      return url.pathname + url.search;
+    } catch (e) {
+      const joiner = rawUrl.indexOf("?") === -1 ? "?" : "&";
+      return rawUrl + joiner + "_wseq=" + encodeURIComponent(String(seq));
+    }
+  };
+
+  const extractSeqFromPath = function (path) {
+    if (!path) return null;
+    try {
+      const url = new URL(path, window.location.origin);
+      const raw = url.searchParams.get("_wseq");
+      if (!raw) return null;
+      const seq = parseInt(raw, 10);
+      return Number.isFinite(seq) ? seq : null;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const getRequestPath = function (detail) {
+    if (!detail) return "";
+    if (detail.pathInfo && detail.pathInfo.requestPath) return detail.pathInfo.requestPath;
+    if (detail.requestConfig && detail.requestConfig.path) return detail.requestConfig.path;
+    if (detail.xhr && detail.xhr.responseURL) return detail.xhr.responseURL;
+    return "";
+  };
+
+  const renderWorkspaceShell = function () {
+    const main = getMainContent();
+    const shellTmpl = document.getElementById("patient-workspace-shell-template");
+    if (!main || !shellTmpl || !shellTmpl.content) return false;
+    main.innerHTML = "";
+    main.appendChild(shellTmpl.content.cloneNode(true));
+    return true;
+  };
+
+  const loadPatientHome = function (homeUrl, seq) {
+    if (!homeUrl || !window.htmx || typeof window.htmx.ajax !== "function") return false;
+    const requestUrl = buildRequestUrlWithSeq(homeUrl, seq);
+    window.htmx.ajax("GET", requestUrl, {
+      target: "#patient-content",
+      swap: "innerHTML",
+    });
+    return true;
+  };
+
+  const loadPatientTodoSidebar = function (todoUrl, seq) {
+    if (!todoUrl || !window.htmx || typeof window.htmx.ajax !== "function") return false;
+    const requestUrl = buildRequestUrlWithSeq(todoUrl, seq);
+    window.htmx.ajax("GET", requestUrl, {
+      target: "body",
+      swap: "none",
+    });
+    return true;
+  };
+
+  const startWorkspaceLoad = function (config) {
+    if (!config || !config.id || !config.homeUrl) return false;
+    const hadPendingRequest = !!pendingWorkspacePatient;
+    const seq = nextWorkspaceLoadSeq();
+    pendingWorkspacePatient = {
+      seq: seq,
+      id: config.id,
+      name: config.name || "",
+      todoUrl: config.todoUrl || "",
+    };
+    if (!hadPendingRequest) snapshotMainContent();
+    const rendered = renderWorkspaceShell();
+    if (!rendered) {
+      clearPendingWorkspaceRequest();
+      return false;
+    }
+    const started = loadPatientHome(config.homeUrl, seq);
+    if (!started) {
+      restoreMainContentFromSnapshot();
+      clearPendingWorkspaceRequest();
+      return false;
+    }
+    return true;
+  };
+
+  const handleHomeLoadFailure = function (seq) {
+    const pending = pendingWorkspacePatient;
+    if (!pending) return;
+    if (pending.seq !== seq) return;
+    if (seq !== workspaceLoadSeq) return;
+    restoreMainContentFromSnapshot();
+    showToast("患者主页加载失败，请稍后重试");
+    clearPendingWorkspaceRequest();
+  };
+
+  const handleHomeLoadSuccess = function (seq) {
+    const pending = pendingWorkspacePatient;
+    if (!pending) return;
+    if (pending.seq !== seq) return;
+    if (seq !== workspaceLoadSeq) return;
+
+    const main = getMainContent();
+    if (main) lastStableMainContent = main.innerHTML;
+
+    const chatDetail = { id: pending.id, name: pending.name };
+    const todoUrl = pending.todoUrl;
+    clearPendingWorkspaceRequest();
+    window.dispatchEvent(new CustomEvent("update-chat-patient", { detail: chatDetail }));
+    loadPatientTodoSidebar(todoUrl, seq);
+  };
+
+  const ensureToastElement = function () {
+    let toast = document.getElementById("doctor-workspace-toast");
+    if (toast) return toast;
+    toast = document.createElement("div");
+    toast.id = "doctor-workspace-toast";
+    toast.className = "fixed top-4 left-1/2 -translate-x-1/2 z-[80] hidden";
+    toast.innerHTML =
+      '<div class="rounded-lg bg-slate-900/90 px-4 py-2 text-sm text-white shadow-lg">加载失败</div>';
+    document.body.appendChild(toast);
+    return toast;
+  };
+
+  const showToast = function (message) {
+    const toast = ensureToastElement();
+    const textEl = toast.firstElementChild;
+    if (textEl) textEl.textContent = message || "操作失败";
+    toast.classList.remove("hidden");
+    if (toastTimer) window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(function () {
+      toast.classList.add("hidden");
+      toastTimer = null;
+    }, 2200);
   };
 
   const runSearch = function () {
@@ -390,20 +586,9 @@
     setFilterTerm("");
     applyFilter();
 
-    try {
-      sessionStorage.removeItem(SELECTED_KEY);
-    } catch (e) {}
-    document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
-      item.classList.remove(
-        "bg-gray-50",
-        "ring-1",
-        "ring-inset",
-        "ring-gray-200",
-        "bg-indigo-50",
-        "ring-indigo-200",
-        "text-indigo-600"
-      );
-    });
+    clearSelectedState();
+    nextWorkspaceLoadSeq();
+    clearPendingWorkspaceRequest();
 
     const state = { managed: true, stopped: false, unpaid: false };
     writeJson(SECTION_STATE_KEY, state);
@@ -434,16 +619,19 @@
       return;
     }
 
-    const btn = event.target.closest("button[hx-get][hx-target='#main-content']");
+    const btn = event.target.closest("button[data-patient-item]");
     if (!btn) return;
 
-    const patientId = btn.dataset && btn.dataset.patientId ? parseInt(btn.dataset.patientId) : null;
+    event.preventDefault();
+
+    const patientId = btn.dataset && btn.dataset.patientId ? parseInt(btn.dataset.patientId, 10) : null;
     const patientName = btn.dataset && btn.dataset.patientName ? btn.dataset.patientName : "";
+    const homeUrl = btn.dataset && btn.dataset.homeUrl ? btn.dataset.homeUrl : "";
+    const todoUrl = btn.dataset && btn.dataset.todoUrl ? btn.dataset.todoUrl : "";
     if (patientId) {
       try {
         sessionStorage.setItem(SELECTED_KEY, String(patientId));
       } catch (e) {}
-      window.dispatchEvent(new CustomEvent("update-chat-patient", { detail: { id: patientId, name: patientName } }));
     }
 
     document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
@@ -459,13 +647,19 @@
     });
     btn.classList.add("bg-indigo-50", "ring-1", "ring-inset", "ring-indigo-200", "text-indigo-600");
 
-    const tmpl = document.getElementById("patient-main-loading-template");
-    const main = document.querySelector("#main-content");
-    if (!tmpl || !main) return;
-    const clone = tmpl.content ? tmpl.content.cloneNode(true) : null;
-    if (!clone) return;
-    main.innerHTML = "";
-    main.appendChild(clone);
+    if (!patientId || !homeUrl) {
+      showToast("患者主页加载失败，请稍后重试");
+      return;
+    }
+    const started = startWorkspaceLoad({
+      id: patientId,
+      name: patientName,
+      homeUrl: homeUrl,
+      todoUrl: todoUrl,
+    });
+    if (!started) {
+      showToast("患者主页加载失败，请稍后重试");
+    }
   });
 
   document.addEventListener("keydown", function (event) {
@@ -476,13 +670,70 @@
     runSearch();
   });
 
+  document.body.addEventListener("htmx:beforeOnLoad", function (event) {
+    const seq = extractSeqFromPath(getRequestPath(event.detail || {}));
+    if (seq === null) return;
+    if (seq === workspaceLoadSeq) return;
+    event.preventDefault();
+  });
+
+  document.body.addEventListener("htmx:beforeSwap", function (event) {
+    const detail = event.detail || {};
+    const target = detail.target;
+    if (!target) return;
+    if (!document.body.contains(target)) {
+      detail.shouldSwap = false;
+      return;
+    }
+    if (target.id !== "patient-content" && target.id !== "patient-todo-list" && target.id !== "patient-workspace-tabs") return;
+    const seq = extractSeqFromPath(getRequestPath(detail));
+    if (seq === null) return;
+    if (seq === workspaceLoadSeq) return;
+    detail.shouldSwap = false;
+  });
+
+  document.body.addEventListener("htmx:afterRequest", function (event) {
+    const detail = event.detail || {};
+    const target = detail.target;
+    const requestPath = getRequestPath(detail);
+    const seq = extractSeqFromPath(requestPath);
+    if (seq === null || seq !== workspaceLoadSeq) return;
+    const isTodoRequest = requestPath.indexOf("/todo-sidebar/") !== -1;
+    if (isTodoRequest) {
+      if (!detail.successful) showToast("待办列表加载失败，请稍后重试");
+      return;
+    }
+
+    if (!target) return;
+
+    if (target.id === "patient-content") {
+      if (detail.successful) return;
+      handleHomeLoadFailure(seq);
+      return;
+    }
+  });
+
   document.body.addEventListener("htmx:afterSwap", function (event) {
     const target = event.target;
-    if (!target || target.id !== "patient-list-container") return;
-    applyAllUIState(false);
+    if (!target) return;
+    if (target.id === "patient-list-container") {
+      applyAllUIState(false);
+      return;
+    }
+    if (target.id !== "patient-content") return;
+    const seq = extractSeqFromPath(getRequestPath(event.detail || {}));
+    if (seq === null || seq !== workspaceLoadSeq) return;
+    handleHomeLoadSuccess(seq);
   });
 
   writeJson(SECTION_STATE_KEY, DEFAULT_SECTION_STATE);
+  try {
+    const nav = performance && performance.getEntriesByType ? performance.getEntriesByType("navigation") : [];
+    const navType = nav && nav[0] ? nav[0].type : "";
+    const legacyReload = performance && performance.navigation && performance.navigation.type === 1;
+    if (navType === "reload" || legacyReload) clearSelectedState();
+  } catch (e) {}
+  snapshotMainContent();
   applyAllUIState(false);
 })();
 </script>
