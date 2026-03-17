@@ -1,4 +1,5 @@
 from decimal import Decimal
+from urllib.parse import unquote
 
 from django.test import TestCase, Client, override_settings
 from django.urls import reverse
@@ -41,6 +42,12 @@ class DashboardMembershipGatingTests(TestCase):
             paid_at=timezone.now(),
         )
 
+    def _assert_redirect_contains_buy_path(self, response, buy_path):
+        self.assertEqual(response.status_code, 302)
+        location = response["Location"]
+        decoded_location = unquote(location)
+        self.assertIn(buy_path, decoded_location)
+
     def test_dashboard_non_member_hides_member_urls(self):
         resp = self.client.get(reverse("web_patient:patient_dashboard"))
         self.assertEqual(resp.status_code, 200)
@@ -72,36 +79,28 @@ class DashboardMembershipGatingTests(TestCase):
         buy_path = reverse("market:product_buy")
 
         resp = self.client.get(reverse("web_patient:my_followup"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:my_examination"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:orders"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:device_list"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:my_studio"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:report_list"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:family_management"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
         resp = self.client.get(reverse("web_patient:feedback"))
-        self.assertEqual(resp.status_code, 302)
-        self.assertTrue(resp["Location"].endswith(buy_path))
+        self._assert_redirect_contains_buy_path(resp, buy_path)
 
     def test_member_can_access_member_only_views(self):
         self._create_paid_order()
@@ -111,4 +110,3 @@ class DashboardMembershipGatingTests(TestCase):
 
         resp = self.client.get(reverse("web_patient:my_examination"))
         self.assertEqual(resp.status_code, 200)
-

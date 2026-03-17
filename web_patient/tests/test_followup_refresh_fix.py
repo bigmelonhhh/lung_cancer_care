@@ -110,16 +110,19 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
     def test_patient_home_uses_single_pageshow_refresh_entry(self):
         template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / "patient_home.html"
         content = template_path.read_text(encoding="utf-8")
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        script_content = script_path.read_text(encoding="utf-8")
 
+        self.assertIn("patient_home.js", content)
         self.assertEqual(
-            content.count("window.addEventListener('pageshow', handleHomePageShow);"),
+            script_content.count("window.addEventListener('pageshow', handleHomePageShow);"),
             1,
         )
-        self.assertNotIn("window.addEventListener('popstate', consumeHomeRefreshFlag);", content)
-        self.assertNotIn("document.addEventListener('visibilitychange'", content)
-        self.assertIn("async function consumeRefreshMarkersAndSync()", content)
-        self.assertIn("if (options.followupSubmitted && !hasFollowupPlan)", content)
-        self.assertIn("markFollowupCompletedFallback();", content)
+        self.assertNotIn("window.addEventListener('popstate', consumeHomeRefreshFlag);", script_content)
+        self.assertNotIn("document.addEventListener('visibilitychange'", script_content)
+        self.assertIn("async function consumeRefreshMarkersAndSync()", script_content)
+        self.assertIn("if (options && options.followupSubmitted && !hasFollowupPlan)", script_content)
+        self.assertIn("markFollowupCompletedFallback();", script_content)
 
     def test_daily_survey_preserves_history_back_and_followup_refresh_flag(self):
         template_path = (

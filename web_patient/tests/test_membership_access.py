@@ -1,4 +1,5 @@
 from decimal import Decimal
+from urllib.parse import unquote
 
 from django.conf import settings
 from django.test import TestCase, override_settings
@@ -41,6 +42,12 @@ class MembershipAccessTests(TestCase):
             paid_at=paid_at or timezone.now(),
         )
 
+    def _assert_redirect_contains_buy_path(self, response):
+        self.assertEqual(response.status_code, 302)
+        buy_path = reverse("market:product_buy")
+        decoded_location = unquote(response["Location"])
+        self.assertIn(buy_path, decoded_location)
+
     def test_patient_home_non_member_short_circuit(self):
         response = self.client.get(reverse("web_patient:patient_home"))
         self.assertEqual(response.status_code, 200)
@@ -56,13 +63,11 @@ class MembershipAccessTests(TestCase):
 
     def test_non_member_cannot_access_management_plan(self):
         response = self.client.get(reverse("web_patient:management_plan"))
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response["Location"].endswith(reverse("market:product_buy")))
+        self._assert_redirect_contains_buy_path(response)
 
     def test_non_member_cannot_access_my_medication(self):
         response = self.client.get(reverse("web_patient:my_medication"))
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response["Location"].endswith(reverse("market:product_buy")))
+        self._assert_redirect_contains_buy_path(response)
 
     def test_query_last_metric_non_member_returns_empty(self):
         response = self.client.get(reverse("web_patient:query_last_metric"))
@@ -70,4 +75,3 @@ class MembershipAccessTests(TestCase):
         data = response.json()
         self.assertTrue(data["success"])
         self.assertEqual(data["plans"], {})
-

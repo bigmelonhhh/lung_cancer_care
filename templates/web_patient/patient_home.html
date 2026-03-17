@@ -1,4 +1,28 @@
-{% extends "layouts/base_portal.html" %} {% block body %}
+{% extends "layouts/base_portal.html" %}
+{% load static %}
+
+{% block extra_head %}
+<style>
+  @supports (content-visibility: auto) {
+    .home-below-fold {
+      content-visibility: auto;
+      contain-intrinsic-size: 900px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce), (update: slow) {
+    .home-heavy-blur {
+      backdrop-filter: none !important;
+    }
+
+    .home-heavy-shadow {
+      box-shadow: none !important;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
 <div class="min-h-screen bg-white pb-24 relative font-sans">
   <div
     class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-20 px-5 relative rounded-b-[2rem] shadow-md"
@@ -9,7 +33,7 @@
         <div class="flex items-center gap-3">
           <div class="relative">
             <div
-              class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center border-2 border-white/40 text-white overflow-hidden shadow-inner"
+              class="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm home-heavy-blur flex items-center justify-center border-2 border-white/40 text-white overflow-hidden shadow-inner"
             >
               <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
                 <path
@@ -27,9 +51,9 @@
             </h1>
               <div class="flex items-center ">
                 <span
-                  class="bg-black/20 backdrop-blur-md text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
+                  class="bg-black/20 backdrop-blur-md home-heavy-blur text-white text-[11px] px-2.5 py-0.5 rounded-full border border-white/20 flex items-center gap-1 shadow-sm"
                 >
-                 <svg t="1773668154758" class="icon w-5 h-5" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3212" width="32" height="32"><path d="M837.8 148.61L534.03 66.89a84.759 84.759 0 0 0-43.87 0l-303.95 81.73c-32.75 8.8-55.21 36.09-55.21 67.06v374.66s4.84 185.31 342.5 360.4c23.82 12.35 53.37 12.35 77.19-0.01C888.16 775.64 893 590.34 893 590.34V215.67c0-30.96-22.46-58.25-55.2-67.06zM708.44 421.33l-78.87 76.88a15.037 15.037 0 0 0-4.33 13.31l18.62 108.55c2.61 15.19-13.33 26.77-26.97 19.6l-97.49-51.25a14.987 14.987 0 0 0-13.99 0l-97.49 51.25c-13.64 7.17-29.58-4.41-26.97-19.6l18.61-108.55c0.84-4.88-0.78-9.86-4.32-13.31l-78.87-76.88c-11.03-10.76-4.95-29.49 10.3-31.71l109-15.84c4.9-0.71 9.13-3.79 11.32-8.22l48.74-98.77c6.82-13.82 26.53-13.82 33.34 0l48.75 98.77c2.19 4.43 6.42 7.51 11.32 8.22l109 15.84c15.24 2.22 21.33 20.95 10.3 31.71z" fill="#d7cd11" p-id="3213"></path></svg>
+                  <img src="{% static 'web_patient/icons/home/guardian-shield.svg' %}" class="w-5 h-5" alt="" decoding="async" />
                   已守护 {{ service_days }} 天
                 </span>
               </div>
@@ -45,7 +69,7 @@
     <a
       href="{% if is_member %}{% url 'web_patient:consultation_chat' %}{% else %}{{ buy_url }}{% endif %}"
       onclick="return handleConsultationEntry(event);"
-      class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
+      class="bg-white rounded-2xl p-5 shadow-xl shadow-slate-200/60 home-heavy-shadow border border-slate-200 flex items-center justify-between relative overflow-hidden group transition active:scale-[0.98] block"
     >
       <div class="flex items-center gap-4 relative z-10">
         <div class="relative">
@@ -186,7 +210,7 @@
     </div>
 
     <!-- 3. Service Package (Darker Gradient Background) -->
-    <div>
+    <div class="home-below-fold">
       <div class="flex items-center gap-2 mb-3">
         <span class="w-1 h-4 bg-orange-500 rounded-full"></span>
         <h3 class="text-lg font-bold text-slate-800">服务包</h3>
@@ -261,9 +285,9 @@
             </div>
             <!-- Icon/Illustration -->
             <div
-              class="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-orange-400 backdrop-blur-sm border border-white/5"
+              class="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-orange-400 backdrop-blur-sm home-heavy-blur border border-white/5"
             >
-            <svg t="1769178589403" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="6930" width="32" height="32"><path d="M896 96a162.72 162.72 0 0 0-229.92 0L640 121.76 613.92 96A162.72 162.72 0 0 0 384 96a162.72 162.72 0 0 0 0 230.24l241.6 241.6a20.96 20.96 0 0 0 29.6 0L896 325.92A162.72 162.72 0 0 0 896 96z" fill="#ED7899" p-id="6931"></path><path d="M549.92 212L497.12 160a57.28 57.28 0 0 1 59.04-96A208 208 0 0 1 640 121.76z" fill="#F283A5" p-id="6932"></path><path d="M720 728.16l-62.08 15.2-263.52-147.2 7.68 3.36 150.56 71.04a96 96 0 0 0 48 8.96l35.04-2.56a64 64 0 0 1 58.4 29.6 26.08 26.08 0 0 1 1.6 2.88A34.56 34.56 0 0 0 720 728.16z" fill="#CDA1A7" p-id="6933"></path><path d="M432 768l80 32a160 160 0 0 0 124.96-2.56l47.2-21.28a32 32 0 0 0 19.84-28.8v-6.56a64 64 0 0 0-68.64-64l-35.04 2.56a96 96 0 0 1-48-8.96l-150.56-71.04a192 192 0 0 0-104.16-16.96L108.32 604.64a32 32 0 0 0-28.32 32v202.4a32 32 0 0 0 39.68 31.04L224 843.84a128 128 0 0 1 90.72 10.88l202.08 106.08a128 128 0 0 0 118.56 0L976 784a58.88 58.88 0 0 0 32-52.32 58.88 58.88 0 0 0-73.6-56.96L704 734.88" fill="#FAEFDE" p-id="6934"></path><path d="M679.84 874.24l-44.48 23.04a128 128 0 0 1-118.56 0l-201.44-106.56a128 128 0 0 0-91.36-10.88L80 816v23.04a32 32 0 0 0 39.68 31.04L224 843.84a128 128 0 0 1 90.72 10.88l202.08 106.08a128 128 0 0 0 118.56 0l113.6-58.88-5.44-9.6a48 48 0 0 0-63.68-18.08z" fill="#EFD8BE" p-id="6935"></path><path d="M401.92 663.52l150.56 71.04a96 96 0 0 0 48 8.96l35.04-2.56a64 64 0 0 1 58.4 29.76l1.6 2.88a32 32 0 0 0 37.44 17.92L1006.56 720a58.72 58.72 0 0 0-72.32-45.28L704 734.88a64 64 0 0 0-68-57.92l-35.04 2.56a96 96 0 0 1-48-8.96l-150.56-71.04a192 192 0 0 0-104.8-17.12L108.32 604.64a32 32 0 0 0-28.32 32V672l217.6-25.6a192 192 0 0 1 104.32 17.12z" fill="#FFF7F0" p-id="6936"></path><path d="M720 728.16l188.16-46.24-176 45.44a35.68 35.68 0 0 1-12.16 0.8z" fill="#FFF7F0" p-id="6937"></path><path d="M176 640H144a16 16 0 0 0 0 32h32a16 16 0 0 0 0-32zM176 720H144a16 16 0 0 0 0 32h32a16 16 0 0 0 0-32zM176 800H144a16 16 0 0 0 0 32h32a16 16 0 0 0 0-32z" fill="#8D6C9F" p-id="6938"></path><path d="M994.88 672.8a74.4 74.4 0 0 0-64-13.28L715.84 715.2a80 80 0 0 0-81.6-54.24l-35.04 2.56A80 80 0 0 1 560 656l-150.56-71.04a208 208 0 0 0-113.12-18.4L106.4 588.8a48 48 0 0 0-42.4 48v202.24a48 48 0 0 0 59.68 46.56l104.96-26.24a112 112 0 0 1 80 9.6l201.44 106.08a144 144 0 0 0 133.44 0l340.8-176a75.04 75.04 0 0 0 11.36-125.76z m-26.08 97.44l-340.8 176a112 112 0 0 1-103.68 0l-201.44-105.6a144 144 0 0 0-101.92-12.32l-105.12 26.24a16 16 0 0 1-19.84-16V636.48a16 16 0 0 1 14.08-16l189.28-22.24a176 176 0 0 1 96 16l150.56 71.04a112 112 0 0 0 55.84 10.4l35.04-2.56a48 48 0 0 1 51.52 48v6.56a16 16 0 0 1-9.44 14.56l-48 21.28a144 144 0 0 1-112 2.4l-80-32a16 16 0 1 0-11.84 29.76l80 32a176.8 176.8 0 0 0 137.6-2.88l48-21.28A48 48 0 0 0 720 747.36l218.4-56.64a42.88 42.88 0 0 1 30.56 80z" fill="#8D6C9F" p-id="6939"></path><path d="M840 382.24L654.88 567.52a20.96 20.96 0 0 1-29.6 0l-16-17.76a96 96 0 0 1 3.52-132l131.36-131.36a67.84 67.84 0 0 1 96 0 67.84 67.84 0 0 1-0.16 95.84z" fill="#E0678F" p-id="6940"></path><path d="M907.68 84.32a178.88 178.88 0 0 0-252.8 0l-14.4 14.4-14.88-14.88a178.72 178.72 0 1 0-252.8 252.8l241.6 241.6a36.64 36.64 0 0 0 26.08 10.88 36.64 36.64 0 0 0 26.08-10.88l241.44-241.6a178.88 178.88 0 0 0-0.32-252.32z m-22.72 230.24l-241.44 241.6a4.32 4.32 0 0 1-7.04 0l-241.6-241.6a146.72 146.72 0 0 1 208-208l14.88 14.88-3.52 3.52a16 16 0 1 0 22.56 22.56L640 144l37.44-37.44a146.72 146.72 0 1 1 208 208z" fill="#8D6C9F" p-id="6941"></path><path d="M576 162.88l-26.56 26.56a16 16 0 1 0 22.56 22.56l26.56-26.56A16 16 0 0 0 576 162.88z" fill="#8D6C9F" p-id="6942"></path></svg>
+              <img src="{% static 'web_patient/icons/home/package-heart.svg' %}" class="w-8 h-8" alt="" loading="lazy" decoding="async" />
             </div>
           </div>
         </div>
@@ -273,7 +297,7 @@
 
     {% if is_member %}
     <!-- 4. Daily Plan List (Light Background Items on White Page) -->
-    <div class="flex flex-col">
+    <div class="flex flex-col home-below-fold">
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
           <span class="w-1 h-4 bg-blue-600 rounded-full"></span>
@@ -310,7 +334,7 @@
             <div
               class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-white shadow-sm text-slate-600"
             >
-             <svg t="1772456731280" class="icon w-5 h-5" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3624" width="32" height="32"><path d="M247.466667 224.64c-154.24 38.186667-176.64 172.8-170.666667 248.746667 3.626667 56.746667 32.426667 152.96 48.213333 228.053333L362.666667 685.866667c-3.2-74.666667 30.293333-147.413333 57.813333-207.786667 32.64-71.68-21.76-290.773333-173.013333-253.44zM130.56 756.266667c1.92 11.306667 3.2 21.333333 4.053333 31.36 5.76 74.24 48.213333 165.12 142.506667 148.266666s114.56-93.013333 92.586667-182.4c0-4.266667-1.92-8.32-2.56-12.586666zM810.666667 102.826667c-136.32-75.52-245.973333 121.813333-233.173334 199.466666 10.666667 65.493333 24.106667 144.426667 1.493334 215.893334l226.773333 77.226666c34.773333-68.48 87.68-154.026667 106.666667-207.573333 23.466667-71.893333 37.12-207.786667-101.76-285.013333zM546.56 588.373333c-44.586667 80.64-45.013333 159.786667 41.6 200.533334s151.466667-35.84 176.426667-106.666667c3.2-8.96 7.253333-18.56 11.946666-29.013333l-224.213333-76.8a112.64 112.64 0 0 1-5.76 11.946666z" fill="#00D293" p-id="3625"></path></svg>
+              <img src="{% static 'web_patient/icons/home/step-foot.svg' %}" class="w-5 h-5" alt="" loading="lazy" decoding="async" />
             </div>
             <div>
               <h4 class="font-bold text-slate-800 text-sm">今日步数</h4>
@@ -332,44 +356,9 @@
               class="w-10 h-10 rounded-full flex items-center justify-center shrink-0 bg-white shadow-sm text-slate-600"
             >
               {% if plan.type == 'medication' %}
-              <svg
-                t="1765679457106"
-                class="icon w-5 h-5"
-                viewBox="0 0 1024 1024"
-                version="1.1"
-                xmlns="http://www.w3.org/2000/svg"
-                p-id="22091"
-                width="32"
-                height="32"
-              >
-                <path
-                  d="M902.4 121.6c-51.2-51.2-121.6-76.8-192-76.8s-140.8 25.6-192 76.8L121.6 512c-108.8 108.8-108.8 281.6 0 384 51.2 51.2 121.6 76.8 192 76.8s140.8-25.6 192-76.8l396.8-384c51.2-51.2 76.8-121.6 76.8-192 0-76.8-25.6-147.2-76.8-198.4zM480 870.4c-44.8 44.8-102.4 70.4-166.4 70.4s-121.6-25.6-166.4-70.4C57.6 780.8 57.6 633.6 147.2 537.6l179.2-179.2 332.8 332.8-179.2 179.2z m364.8-665.6c-6.4 6.4-19.2 6.4-25.6 0-32-32-70.4-44.8-108.8-44.8-44.8 0-83.2 19.2-108.8 44.8l-121.6 128c-12.8 0-19.2 6.4-19.2 6.4-6.4 0-12.8 0-12.8-6.4-6.4-6.4-6.4-19.2 0-25.6l128-128c38.4-38.4 83.2-57.6 140.8-57.6 51.2 0 102.4 19.2 140.8 57.6-6.4 6.4-6.4 19.2-12.8 25.6z"
-                  fill="#1684FC"
-                  p-id="22092"
-                ></path>
-              </svg>
+              <img src="{% static 'web_patient/icons/home/medication-pill.svg' %}" class="w-5 h-5" alt="" loading="lazy" decoding="async" />
               {% elif plan.type == 'temperature' %}
-              <svg
-                t="1765679517010"
-                class="icon w-6 h-6"
-                viewBox="0 0 1024 1024"
-                version="1.1"
-                xmlns="http://www.w3.org/2000/svg"
-                p-id="24205"
-                width="32"
-                height="32"
-              >
-                <path
-                  d="M846.611917 85.510536c-59.643402-39.140439-139.895167-22.38994-178.919972 37.309744L341.052606 622.593817c-7.867178 12.038174-11.592013 31.724539-8.668427 45.816488l20.085454 96.674806L266.953981 895.961882c-12.363585 18.891256-7.082302 44.254923 11.799744 56.646138 18.885116 12.390191 44.193525 7.113001 56.561204-11.778254l84.470857-129.270179 99.121532-20.745487c14.048971-2.960425 30.577413-14.245446 38.444591-26.282596l326.637292-499.773538C923.014005 205.057259 906.247132 124.651998 846.611917 85.510536zM866.518293 253.290797 539.881001 753.064334c-4.828982 7.399527-16.636912 15.46932-25.25929 17.267269L390.907061 796.223297c-2.734274 0.569982-5.499248 0.047072-7.839549-1.474584-2.320858-1.542122-3.921309-3.879354-4.489244-6.603395l-25.749454-123.968429c-1.805112-8.654101 0.867764-22.718421 5.689582-30.116925l326.643432-499.774561c32.712029-50.059116 100.024088-64.095807 150.015665-31.28247C885.185444 135.813199 899.246695 203.243961 866.518293 253.290797zM774.693957 194.285938c-38.542828-25.302269-90.436732-14.480806-115.656113 24.118304l-14.263865 21.825075 37.60241 24.663726c7.603165 4.997827 9.743922 15.259542 4.780887 22.892383-4.999874 7.610328-15.249309 9.748015-22.858614 4.76656l-37.59013-24.681122-51.584865 78.9317 37.601386 24.662703c7.615445 5.01113 9.751085 15.258519 4.770653 22.87908-4.980431 7.621585-15.216563 9.756201-22.817682 4.774747l-37.615713-24.692379-51.577702 78.929654 37.589107 24.681122c3.704368 2.425236 6.230911 6.134721 7.123234 10.45205 0.902556 4.330632 0.069585 8.741082-2.351558 12.42703-4.981455 7.621585-15.232936 9.759271-22.838148 4.761444l-37.59627-24.679076-51.577702 78.929654 37.594223 24.664749c3.697205 2.426259 6.235005 6.149047 7.126304 10.467399 0.900509 4.316306 0.069585 8.741082-2.344395 12.426007-4.983501 7.606235-15.226796 9.741875-22.839171 4.747117L417.768849 587.568093l-10.570753 16.173354c-3.721765 5.705955-5.783727 16.544815-4.384867 23.214724l19.85214 95.576799c0.440022 2.113127 1.674129 3.919263 3.461845 5.105275 1.799996 1.167592 3.935636 1.572822 6.043646 1.1328l95.385441-19.953448c6.650467-1.38658 15.748682-7.614421 19.470447-13.319353l251.835655-385.320832C824.095088 271.575232 813.253158 219.583091 774.693957 194.285938z"
-                  fill="#01B695"
-                  p-id="24206"
-                ></path>
-                <path
-                  d="M176.23277 179.806155c18.10024-1.804089 28.052916-11.755742 29.877471-29.877471-1.824555-17.188474-11.777231-26.694989-29.877471-28.519544-17.20894 1.824555-26.715455 11.33107-28.519544 28.519544C149.517315 168.050414 159.02383 178.002067 176.23277 179.806155L176.23277 179.806155zM176.23277 94.247524c34.397415 3.628644 53.410444 22.195511 57.039087 55.68116-3.628644 34.418904-22.641673 53.431933-57.039087 57.039087-33.506115-3.607154-52.072983-22.620184-55.68116-57.039087C124.159788 116.444059 142.727679 97.876168 176.23277 94.247524L176.23277 94.247524zM345.991082 110.544699c47.977711 2.715855 72.868611 15.405875 74.694189 38.026058-0.912789 14.493086-8.148587 22.195511-21.728884 23.086811-3.628644 0-9.060353-1.357927-16.297175-4.074805-12.688997-4.519943-24.912389-6.79066-36.668131-6.79066-41.654702 1.824555-63.383586 28.073382-65.186651 78.767971 2.715855 47.999201 24.444738 73.335239 65.186651 76.052117 11.755742 0 24.445762-3.162016 38.026058-9.506515 7.235798-3.607154 13.113669-5.432733 17.655102-5.432733 12.668531 0.912789 20.370956 9.061376 23.086811 24.444738-0.912789 24.445762-27.161616 37.113269-78.767971 38.026058-74.248028-4.519943-114.077152-46.174646-119.509884-124.942617C231.91393 158.543899 271.743054 115.976408 345.991082 110.544699L345.991082 110.544699z"
-                  fill="#01B695"
-                  p-id="24207"
-                ></path>
-              </svg>
+              <img src="{% static 'web_patient/icons/home/temperature-thermometer.svg' %}" class="w-6 h-6" alt="" loading="lazy" decoding="async" />
               {% elif plan.type == 'bp_hr' %}
               <svg
                 class="w-5 h-5 text-purple-500"
@@ -742,348 +731,22 @@
 </div>
 
 <script>
-  const IS_MEMBER = {{ is_member|yesno:"true,false" }};
-  const BUY_URL = "{{ buy_url|escapejs }}";
-  let UNREAD_CHAT_COUNT = parseInt('{{ unread_chat_count|default:0 }}', 10) || 0;
-  let MEMBER_ONLY_REDIRECT_URL = BUY_URL;
-
-  function showMemberOnlyModal(message, redirectUrl) {
-    const modal = document.getElementById('member-only-modal');
-    const messageEl = document.getElementById('member-only-message');
-    if (!modal || !messageEl) {
-      alert(message || '该功能为会员专属，请先开通会员');
-      if (redirectUrl) {
-        window.location.href = redirectUrl;
-      }
-      return;
+  window.__PATIENT_HOME_CONFIG__ = {
+    isMember: {{ is_member|yesno:"true,false" }},
+    buyUrl: "{{ buy_url|escapejs }}",
+    unreadChatCount: {{ unread_chat_count|default:0 }},
+    patientId: "{{ patient_id|default:''|escapejs }}",
+    menuUrl: {{ menuUrl|safe }},
+    csrfToken: "{{ csrf_token|escapejs }}",
+    unreadRefreshIntervalMs: 15000,
+    urls: {
+      submitMedication: "{% url 'web_patient:submit_medication' %}",
+      patientHome: "{% url 'web_patient:patient_home' %}",
+      queryLastMetric: "{% url 'web_patient:query_last_metric' %}",
+      chatUnreadCount: "{% url 'web_patient:chat_api_unread_count' %}",
+      chatResetUnread: "{% url 'web_patient:chat_api_reset_unread' %}"
     }
-    MEMBER_ONLY_REDIRECT_URL = redirectUrl || BUY_URL;
-    messageEl.textContent = message || '该功能为会员专属，请先开通会员';
-    modal.classList.remove('hidden');
-    modal.style.display = 'block';
-    modal.setAttribute('aria-hidden', 'false');
-  }
-
-  function closeMemberOnlyModal() {
-    const modal = document.getElementById('member-only-modal');
-    if (!modal) {
-      return;
-    }
-    modal.classList.add('hidden');
-    modal.style.display = 'none';
-    modal.setAttribute('aria-hidden', 'true');
-  }
-
-  function confirmMemberOnlyModal() {
-    const targetUrl = MEMBER_ONLY_REDIRECT_URL || BUY_URL;
-    closeMemberOnlyModal();
-    window.location.href = targetUrl;
-  }
-
-  function handleMemberOnlyNavigation(event) {
-    if (IS_MEMBER) {
-      return true;
-    }
-    if (event) {
-      event.preventDefault();
-    }
-    showMemberOnlyModal('该功能为会员专属，请先开通会员', BUY_URL);
-    return false;
-  }
-
-  function openMedicationModal() {
-      const modal = document.getElementById('medication-modal');
-      modal.classList.remove('hidden');
-      modal.style.display = 'block'; // Ensure it's visible if hidden class toggle isn't enough
-  }
-
-  function closeMedicationModal() {
-      const modal = document.getElementById('medication-modal');
-      modal.classList.add('hidden');
-      modal.style.display = 'none';
-  }
-
-  function submitMedication() {
-      const patientId = "{{ patient_id|default:'' }}";
-      if (!patientId) {
-          alert('未找到患者信息');
-          return;
-      }
-
-      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-
-      fetch("{% url 'web_patient:submit_medication' %}", {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-CSRFToken': '{{ csrf_token }}'
-          },
-          body: new URLSearchParams({
-              'patient_id': patientId
-          })
-      })
-      .then(response => response.json())
-      .then(data => {
-          if (data.success) {
-              // 成功后刷新页面并带上成功参数
-               window.location.replace("{% url 'web_patient:patient_home' %}?medication_taken=true");
-          } else {
-              alert(data.message || '提交失败');
-          }
-      })
-      .catch(error => {
-          console.error('Error:', error);
-          alert('提交出错，请稍后重试');
-      });
-  }
-
-  function handleTaskClick(title, type, specificUrl) {
-      if (!IS_MEMBER) {
-          showMemberOnlyModal('该功能为会员专属，请先开通会员', BUY_URL);
-          return;
-      }
-      // 获取当前用户openid
-      const patientId = "{{ patient_id|default:'' }}";
-
-      // 获取后端传递的菜单URL映射
-      const menuUrls = {{ menuUrl|safe }};
-
-      if(title.includes('用药提醒')){
-          openMedicationModal();
-      } else  {
-         // 优先使用特定URL，否则查表
-         let urlA = specificUrl || menuUrls[type];
-         console.log("跳转地址:", urlA);
-
-         if (urlA) {
-              // 判断URL是否已经包含参数
-              const separator = urlA.includes('?') ? '&' : '?';
-              // 如果specificUrl已经包含了ids参数，我们仍然追加patient_id，不影响
-              let finalUrl = urlA + separator + "patient_id=" + patientId;
-              if (type === 'checkup') {
-                  const sep2 = finalUrl.includes('?') ? '&' : '?';
-                  finalUrl = finalUrl + sep2 + "source=home";
-              }
-              window.location.href = finalUrl;
-         } else {
-              console.error("未找到对应类型的跳转链接:", type);
-              // 可以在这里添加默认跳转或提示
-         }
-      }
-  }
-
-  // --- Data Refresh Logic ---
-  const PLAN_ACTION_BUTTON_CLASS = 'bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap';
-
-  function setPlanActionState(type, status, plan = {}) {
-    const actionEl = document.getElementById(`plan-action-${type}`);
-    if (!actionEl) {
-      return;
-    }
-
-    if (typeof plan.title === 'string' && plan.title.length > 0) {
-      actionEl.dataset.planTitle = plan.title;
-    }
-    if (typeof plan.action_text === 'string' && plan.action_text.length > 0) {
-      actionEl.dataset.actionText = plan.action_text;
-    }
-    if (typeof plan.url === 'string') {
-      actionEl.dataset.planUrl = plan.url;
-    }
-
-    if (status === 'completed') {
-      actionEl.innerHTML = '';
-      return;
-    }
-
-    const actionText = actionEl.dataset.actionText || '去完成';
-    const planTitle = actionEl.dataset.planTitle || '';
-    const specificUrl = actionEl.dataset.planUrl || '';
-
-    actionEl.innerHTML = '';
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = PLAN_ACTION_BUTTON_CLASS;
-    button.textContent = actionText;
-    button.addEventListener('click', function() {
-      handleTaskClick(planTitle, type, specificUrl);
-    });
-    actionEl.appendChild(button);
-  }
-
-  function setPlanCardState(type, status, subtitle, plan = {}) {
-    const subtitleEl = document.getElementById(`plan-subtitle-${type}`);
-    if (subtitleEl && typeof subtitle === 'string' && subtitle.length > 0) {
-      subtitleEl.textContent = subtitle;
-    }
-    setPlanActionState(type, status, plan);
-  }
-
-  function markFollowupCompletedFallback() {
-    setPlanCardState('followup', 'completed', '已完成随访任务');
-  }
-
-  function refreshMetricData(options = {}) {
-    if (!IS_MEMBER) {
-      return Promise.resolve();
-    }
-
-    return fetch("{% url 'web_patient:query_last_metric' %}")
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          updateMetricDisplay(data.plans || {}, options);
-        }
-      })
-      .catch(error => {
-        console.error('Error refreshing metrics:', error);
-      });
-  }
-
-  function updateMetricDisplay(plans, options = {}) {
-    let hasFollowupPlan = false;
-    for (const [type, plan] of Object.entries(plans)) {
-      if (type === 'followup') {
-        hasFollowupPlan = true;
-      }
-      setPlanCardState(type, plan.status, plan.subtitle, plan);
-    }
-
-    // 问卷提交后兜底：若接口未返回 followup 项，仍将当前卡片置为已完成
-    if (options.followupSubmitted && !hasFollowupPlan) {
-      markFollowupCompletedFallback();
-    }
-  }
-
-  async function consumeRefreshMarkersAndSync() {
-    let shouldRefresh = false;
-    let followupSubmitted = false;
-
-    try {
-      const checkupFlag = localStorage.getItem('checkup_all_completed');
-      if (checkupFlag === 'true') {
-        setPlanCardState('checkup', 'completed', '已完成复查任务');
-        shouldRefresh = true;
-      } else if (checkupFlag === 'false') {
-        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
-        shouldRefresh = true;
-      }
-      if (checkupFlag !== null) {
-        localStorage.removeItem('checkup_all_completed');
-      }
-
-      const refreshFlag = localStorage.getItem('refresh_flag');
-      if (refreshFlag === 'true') {
-        shouldRefresh = true;
-      }
-
-      const metricRaw = localStorage.getItem('metric_data');
-      if (metricRaw) {
-        try {
-          const metric = JSON.parse(metricRaw);
-          followupSubmitted = Boolean(
-            metric && (
-              metric.followup_completed === true ||
-              metric.followup === 'completed'
-            )
-          );
-        } catch (error) {
-          followupSubmitted = false;
-        }
-      }
-
-      if (followupSubmitted) {
-        markFollowupCompletedFallback();
-        shouldRefresh = true;
-      }
-
-      if (!shouldRefresh) {
-        return;
-      }
-
-      await refreshMetricData({ followupSubmitted: followupSubmitted });
-    } finally {
-      localStorage.removeItem('metric_data');
-      localStorage.removeItem('refresh_flag');
-    }
-  }
-
-  async function handleHomePageShow() {
-    await consumeRefreshMarkersAndSync();
-    fetchUnreadCount();
-  }
-
-  window.addEventListener('pageshow', handleHomePageShow);
-
-  function setUnreadBadge(count) {
-    UNREAD_CHAT_COUNT = count;
-    const badge = document.getElementById('unread-badge');
-    if (!badge) return;
-    if (count > 0) {
-      badge.style.display = 'inline-block';
-      badge.textContent = count > 99 ? '99+' : String(count);
-    } else {
-      badge.style.display = 'none';
-    }
-  }
-
-  function fetchUnreadCount() {
-    if (!IS_MEMBER) return;
-    const badge = document.getElementById('unread-badge');
-    if (badge) badge.classList.add('animate-pulse');
-    fetch("{% url 'web_patient:chat_api_unread_count' %}")
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.status === 'success' && typeof data.count === 'number') {
-          setUnreadBadge(data.count);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (badge) badge.classList.remove('animate-pulse');
-      });
-  }
-
-  function handleConsultationEntry(event) {
-    const href = event.currentTarget.getAttribute('href');
-    if (!IS_MEMBER) {
-      return handleMemberOnlyNavigation(event);
-    }
-    event.preventDefault();
-    if (UNREAD_CHAT_COUNT > 0) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 1500);
-      fetch("{% url 'web_patient:chat_api_reset_unread' %}", {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRFToken': '{{ csrf_token }}'
-        },
-        signal: controller.signal
-      })
-      .then(() => setUnreadBadge(0))
-      .catch(() => {})
-      .finally(() => {
-        clearTimeout(timeout);
-        window.location.href = href;
-      });
-      return false;
-    } else {
-      window.location.href = href;
-      return false;
-    }
-  }
-  
-  window.addEventListener('message', function(e) {
-    const data = e.data || {};
-    if (data.type === 'CHECKUP_COMPLETION_UPDATED') {
-      if (data.allCompleted) {
-        setPlanCardState('checkup', 'completed', '已完成复查任务');
-      } else {
-        setPlanCardState('checkup', 'pending', '请及时完成您的复查任务');
-      }
-      refreshMetricData();
-    }
-  });
+  };
 </script>
+<script src="{% static 'web_patient/patient_home.js' %}" defer></script>
 {% endblock %}
