@@ -103,6 +103,24 @@ class ProductionGuardTests(unittest.TestCase):
             ["https://zencare.imht.site", "https://api.zencare.imht.site"],
         )
 
+    def test_production_configures_default_and_static_storages(self):
+        with _temp_env(
+            DJANGO_SECRET_KEY="very-strong-random-secret-key-1234567890",
+            ALLOWED_HOSTS="zencare.imht.site",
+            WEB_BASE_URL="https://zencare.imht.site",
+            CSRF_TRUSTED_ORIGINS=None,
+        ):
+            settings = _import_settings("lung_cancer_care.settings.production")
+
+        self.assertEqual(
+            settings.STORAGES["default"]["BACKEND"],
+            "django.core.files.storage.FileSystemStorage",
+        )
+        self.assertEqual(
+            settings.STORAGES["staticfiles"]["BACKEND"],
+            "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
+        )
+
 
 class SettingsHelperTests(unittest.TestCase):
     def test_base_helper_functions(self):

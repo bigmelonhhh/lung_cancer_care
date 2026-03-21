@@ -32,6 +32,12 @@ if not CSRF_TRUSTED_ORIGINS:
     CSRF_TRUSTED_ORIGINS = dedupe_keep_order(inferred_origins)  # noqa: F405
 
 _storages = dict(globals().get("STORAGES", {}))
+_storages.setdefault(
+    "default",
+    {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+)
 _storages["staticfiles"] = {
     "BACKEND": "django.contrib.staticfiles.storage.ManifestStaticFilesStorage",
 }
