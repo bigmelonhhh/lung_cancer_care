@@ -52,35 +52,28 @@ class PlatformAdminCreationForm(forms.ModelForm):
         return username
 
     def save(self, commit=True):
-        # 此时不直接 save，因为需要手动处理密码和 PlatformAdminUser 的实例化
-        username = self.cleaned_data["username"]
-        phone = self.cleaned_data["phone"]
-        password = self.cleaned_data["password"]
-        name = self.cleaned_data["name"]
-        
-        with transaction.atomic():
-            user = PlatformAdminUser(
-                username=username,
-                phone=phone,
-                wx_nickname=name,
-                wx_openid=None,
-                wx_unionid=None,
-                user_type=choices.UserType.ADMIN,
-                # 【修改】从表单获取状态，不再硬编码
-                is_active=self.cleaned_data.get("is_active", True),
-                is_staff=self.cleaned_data.get("is_staff", True),
-                is_superuser=self.cleaned_data.get("is_superuser", False),
-            )
-            user.set_password(password)
-            user.save()
-            
-            # 显式保存 M2M (权限组)
-            if self.cleaned_data.get("groups"):
-                user.groups.set(self.cleaned_data["groups"])
-            if self.cleaned_data.get("user_permissions"):
-                user.user_permissions.set(self.cleaned_data["user_permissions"])
-                
+        user = super().save(commit=False)
+        user.username = self.cleaned_data["username"]
+        user.phone = self.cleaned_data["phone"]
+        user.wx_nickname = self.cleaned_data["name"]
+        user.wx_openid = None
+        user.wx_unionid = None
+        user.user_type = choices.UserType.ADMIN
+        user.is_active = self.cleaned_data.get("is_active", True)
+        user.is_staff = self.cleaned_data.get("is_staff", True)
+        user.is_superuser = self.cleaned_data.get("is_superuser", False)
+        user.set_password(self.cleaned_data["password"])
+
+        if commit:
+            with transaction.atomic():
+                user.save()
+                self._save_m2m()
+
         return user
+
+    def save_m2m(self):
+        """Admin 在 save_related 阶段会调用，创建表单需显式提供该协议。"""
+        self._save_m2m()
 
 
 class PlatformAdminChangeForm(forms.ModelForm):
