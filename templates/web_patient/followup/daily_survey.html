@@ -226,6 +226,9 @@
             
             const totalSubmissions = surveyIds.length;
             let successCount = 0;
+            const urlParams = new URLSearchParams(window.location.search);
+            const selectedDate = urlParams.get('selected_date') || '';
+            const source = (urlParams.get('source') || '').trim();
 
             for (let i = 0; i < totalSubmissions; i++) {
                 const sId = surveyIds[i];
@@ -235,8 +238,6 @@
                 submitStatusText.textContent = `正在提交第 ${i + 1} / ${totalSubmissions} 个问卷...`;
                 
                 // Construct Payload for Single Submission
-                const urlParams = new URLSearchParams(window.location.search);
-                const selectedDate = urlParams.get('selected_date') || '';
                 const payload = {
                     patient_id: patientId,
                     questionnaire_id: parseInt(sId),
@@ -286,6 +287,11 @@
             }));
 
             setTimeout(() => {
+                if (source === 'home') {
+                    window.location.replace("{% url 'web_patient:patient_home' %}?followup=true");
+                    return;
+                }
+
                 // 返回上一页
                 if (document.referrer && document.referrer.indexOf(window.location.host) !== -1) {
                     history.back();

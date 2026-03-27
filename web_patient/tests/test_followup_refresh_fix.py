@@ -81,6 +81,79 @@ class FollowupPlanCompletionTests(TestCase):
         self.assertEqual(followup_plan.get("subtitle"), "已完成随访任务")
         self.assertEqual(followup_plan.get("url"), "")
 
+    def test_patient_home_followup_success_param_keeps_backlog_pending(self):
+        yesterday = self.today - timedelta(days=1)
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=self.plan_item,
+            task_date=yesterday,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=self.plan_item,
+            task_date=self.today,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.COMPLETED,
+        )
+
+        response = self.client.get(reverse("web_patient:patient_home"), {"followup": "true"})
+        self.assertEqual(response.status_code, 200)
+
+        daily_plans = response.context.get("daily_plans") or []
+        followup_plan = next((p for p in daily_plans if p.get("type") == "followup"), None)
+        self.assertIsNotNone(followup_plan)
+        self.assertEqual(followup_plan.get("status"), "pending")
+        self.assertEqual(followup_plan.get("subtitle"), "请及时完成您的随访任务")
+        self.assertIn("source=home", followup_plan.get("url") or "")
+
+    def test_query_last_metric_without_date_matches_home_followup_window(self):
+        yesterday = self.today - timedelta(days=1)
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=self.plan_item,
+            task_date=yesterday,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=self.plan_item,
+            task_date=self.today,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="问卷提醒",
+            status=core_choices.TaskStatus.COMPLETED,
+        )
+
+        home_response = self.client.get(reverse("web_patient:patient_home"))
+        self.assertEqual(home_response.status_code, 200)
+        daily_plans = home_response.context.get("daily_plans") or []
+        followup_plan = next((p for p in daily_plans if p.get("type") == "followup"), None)
+        self.assertIsNotNone(followup_plan)
+
+        response = self.client.get(reverse("web_patient:query_last_metric"))
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["plans"]["followup"]["status"], followup_plan.get("status"))
+        self.assertEqual(
+            data["plans"]["followup"]["subtitle"], followup_plan.get("subtitle")
+        )
+
+        explicit_today_response = self.client.get(
+            reverse("web_patient:query_last_metric"),
+            {"date": self.today.strftime("%Y-%m-%d")},
+        )
+        self.assertEqual(explicit_today_response.status_code, 200)
+        explicit_today_data = explicit_today_response.json()
+        self.assertEqual(explicit_today_data["plans"]["followup"]["status"], "completed")
+        self.assertEqual(
+            explicit_today_data["plans"]["followup"]["subtitle"], "已完成随访任务"
+        )
+
     @patch("web_patient.views.record.HealthMetricService.query_last_metric_for_date")
     @patch("web_patient.views.record.get_daily_plan_summary")
     def test_query_last_metric_followup_no_pending_ids_forced_completed(
@@ -123,8 +196,10 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
         self.assertIn("async function consumeRefreshMarkersAndSync()", script_content)
         self.assertIn("if (options && options.followupSubmitted && !hasFollowupPlan)", script_content)
         self.assertIn("markFollowupCompletedFallback();", script_content)
+        self.assertIn("refreshUrl.searchParams.set('_ts', String(Date.now()));", script_content)
+        self.assertIn("cache: 'no-store'", script_content)
 
-    def test_daily_survey_preserves_history_back_and_followup_refresh_flag(self):
+    def test_daily_survey_redirects_home_only_for_home_source(self):
         template_path = (
             Path(settings.BASE_DIR)
             / "templates"
@@ -136,4 +211,10 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
 
         self.assertIn("localStorage.setItem('refresh_flag', 'true');", content)
         self.assertIn('"followup_completed": true', content)
+        self.assertIn("const source = (urlParams.get('source') || '').trim();", content)
+        self.assertIn("if (source === 'home') {", content)
+        self.assertIn(
+            'window.location.replace("{% url \'web_patient:patient_home\' %}?followup=true");',
+            content,
+        )
         self.assertIn("history.back();", content)

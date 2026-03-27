@@ -210,7 +210,10 @@
       return Promise.resolve();
     }
 
-    return fetch(URLS.queryLastMetric)
+    const refreshUrl = new URL(URLS.queryLastMetric, window.location.origin);
+    refreshUrl.searchParams.set('_ts', String(Date.now()));
+
+    return fetch(refreshUrl.toString(), { cache: 'no-store' })
       .then(function (response) {
         return response.json();
       })

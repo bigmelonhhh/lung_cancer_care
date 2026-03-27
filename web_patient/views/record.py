@@ -62,7 +62,9 @@ QUESTIONNAIRE_RECORD_TYPES = set(QUESTIONNAIRE_RECORD_TYPE_MAP.keys())
 @check_patient
 def query_last_metric(request: HttpRequest) -> JsonResponse:
     """
-    API: 查询指定日期最新健康指标状态
+    API: 查询健康指标状态。
+    - 有 date 参数：按单日视图返回。
+    - 无 date 参数：按首页口径返回，复查/问卷使用近 7 日聚合。
     """
     patient = request.patient
     if not patient:
@@ -72,15 +74,20 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"success": True, "plans": {}})
 
     date_str = request.GET.get("date")
+    has_explicit_date = date_str is not None
     target_date = timezone.localdate()
     if date_str:
         try:
             target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
             target_date = timezone.localdate()
-    
-    summary_list = get_daily_plan_summary(patient, task_date=target_date)
-    
+
+    summary_list = (
+        get_daily_plan_summary(patient, task_date=target_date)
+        if has_explicit_date
+        else get_daily_plan_summary(patient)
+    )
+
     last_metrics = HealthMetricService.query_last_metric_for_date(patient.id, target_date)
     
     # 3. 组装返回数据

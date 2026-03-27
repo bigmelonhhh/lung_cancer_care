@@ -102,6 +102,7 @@ PLAN_SORT_ORDER = {
 }
 
 MEASURE_PLAN_TYPES = {"temperature", "bp_hr", "spo2", "weight"}
+OPTIMISTIC_COMPLETED_TASK_TYPES = MEASURE_PLAN_TYPES | {"medication"}
 
 
 def _cache_key(namespace: str, patient_id: int, date_key: str, user_id: int = None) -> str:
@@ -204,7 +205,7 @@ def _build_daily_plans(summary_list):
             if q_ids:
                 action_url = reverse("web_patient:daily_survey")
                 ids_str = ",".join(map(str, q_ids))
-                action_url = f"{action_url}?ids={ids_str}"
+                action_url = f"{action_url}?ids={ids_str}&source=home"
 
             plan_data.update(
                 {
@@ -289,6 +290,9 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     if request.GET.get("followup") == "true":
         completed_task_types.add("followup")
 
+    optimistic_completed_task_types = (
+        completed_task_types & OPTIMISTIC_COMPLETED_TASK_TYPES
+    )
     cache_bypass = bool(completed_task_types)
     perf_log = {"cache_bypass": cache_bypass}
 
@@ -386,7 +390,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                     plan["subtitle"] = "今日已记录"
 
         if not has_today_data:
-            if plan_type in completed_task_types:
+            if plan_type in optimistic_completed_task_types:
                 plan["status"] = "completed"
                 plan["subtitle"] = "今日已记录：提交成功"
             elif plan_type in MEASURE_PLAN_TYPES:

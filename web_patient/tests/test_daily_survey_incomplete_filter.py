@@ -160,4 +160,5 @@ class DailySurveyIncompleteFilterTests(TestCase):
         self.assertIsNotNone(followup_plan)
         url = followup_plan.get("url") or ""
         self.assertIn(f"ids={self.q6.id}", url)
+        self.assertIn("source=home", url)
         self.assertNotIn(str(self.q7.id), url)
