@@ -1243,7 +1243,11 @@
     </section>
 
     <footer style="background:  #1B4332;color: #fff;">
-        <p>© 2026 上海智医康科技有限公司 | 沪ICP备2024092528号-2</p>
+        <p>
+            © 2026 上海智医康科技有限公司 |
+            <span id="miit-record-link" style="cursor:pointer;text-decoration:underline;">沪ICP备2024092528号-4</span> |
+            <span id="mps-record-link" style="cursor:pointer;text-decoration:underline;">沪公网安备31010402336532号</span>
+        </p>
         <p>地址：上海市徐汇区龙漕路200弄28号302   |   邮箱：kefu@izencare.com   |   电话：4006898982</p>
     </footer>
 
@@ -1274,6 +1278,20 @@
                     hamburger.classList.remove('active');
                     navLinks.classList.remove('active');
                 });
+            });
+        }
+
+        const miitRecordLink = document.getElementById('miit-record-link');
+        if (miitRecordLink) {
+            miitRecordLink.addEventListener('click', () => {
+                window.open('https://beian.miit.gov.cn/#/Integrated/index', '_blank');
+            });
+        }
+
+        const mpsRecordLink = document.getElementById('mps-record-link');
+        if (mpsRecordLink) {
+            mpsRecordLink.addEventListener('click', () => {
+                window.open('https://beian.mps.gov.cn/#/query/webSearch', '_blank');
             });
         }
     </script>

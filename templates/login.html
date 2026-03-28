@@ -1,7 +1,7 @@
 {% extends "layouts/base_portal.html" %}
 {% load static %}
 {% block body %}
-<div class="min-h-screen flex items-center justify-center bg-cover bg-center relative" style="background-image: url('{% static 'login.webp' %}');">
+<div class="min-h-screen flex items-center justify-center bg-cover bg-center relative pb-24" style="background-image: url('{% static 'login.webp' %}');">
   <div class="absolute inset-0 "></div>
   <div class="bg-white/90 backdrop-blur rounded-xl shadow-xl w-full max-w-md p-6 md:p-8 mx-4 relative z-10">
     <div class="text-center mb-6">
@@ -28,5 +28,28 @@
       <button type="submit" class="w-full bg-slate-900 text-white py-2 rounded hover:bg-slate-800">使用手机号登录</button>
     </form>
   </div>
+  <footer class="absolute bottom-0 left-0 right-0 z-10 px-4 py-3 text-center text-white text-sm" style="background: #1B4332;">
+    <p>
+      © 2026 上海智医康科技有限公司 |
+      <span id="miit-record-link" style="cursor:pointer;text-decoration:underline;">沪ICP备2024092528号-4</span> |
+      <span id="mps-record-link" style="cursor:pointer;text-decoration:underline;">沪公网安备31010402336532号</span>
+    </p>
+    <p>地址：上海市徐汇区龙漕路200弄28号302   |   邮箱：kefu@izencare.com   |   电话：4006898982</p>
+  </footer>
 </div>
+<script>
+  const miitRecordLink = document.getElementById('miit-record-link');
+  if (miitRecordLink) {
+    miitRecordLink.addEventListener('click', () => {
+      window.open('https://beian.miit.gov.cn/#/Integrated/index', '_blank');
+    });
+  }
+
+  const mpsRecordLink = document.getElementById('mps-record-link');
+  if (mpsRecordLink) {
+    mpsRecordLink.addEventListener('click', () => {
+      window.open('https://beian.mps.gov.cn/#/query/webSearch', '_blank');
+    });
+  }
+</script>
 {% endblock %}
