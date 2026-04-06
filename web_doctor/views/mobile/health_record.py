@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.core.paginator import Paginator
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
@@ -15,7 +14,6 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import HealthMetric, MetricType
-from health_data.services.health_metric import HealthMetricService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from market.service.order import get_paid_orders_for_patient
 from patient_alerts.services.todo_list import TodoListService
@@ -56,6 +54,16 @@ RECORD_TYPE_METRIC_MAP = {
 }
 
 QUESTIONNAIRE_RECORD_TYPES = set(QUESTIONNAIRE_RECORD_TYPE_MAP.keys())
+RECORD_BATCH_SIZE = 6
+WEEKDAY_MAP = {
+    0: "星期一",
+    1: "星期二",
+    2: "星期三",
+    3: "星期四",
+    4: "星期五",
+    5: "星期六",
+    6: "星期日",
+}
 
 
 def _get_patient_from_query(request: HttpRequest):
@@ -321,6 +329,297 @@ def _resolve_month_window(current_month: str) -> tuple[str, datetime, datetime, 
     return current_month, month_start, month_end_exclusive, days_in_month
 
 
+def _shift_month(current_month: str, step: int = -1) -> str:
+    normalized_month, month_start, _, _ = _resolve_month_window(current_month)
+    month_index = month_start.year * 12 + month_start.month - 1 + step
+    year = month_index // 12
+    month = month_index % 12 + 1
+    if month < 1:
+        month += 12
+        year -= 1
+    return f"{year:04d}-{month:02d}"
+
+
+def _month_gte(left: str, right: str) -> bool:
+    left_month, _, _, _ = _resolve_month_window(left)
+    right_month, _, _, _ = _resolve_month_window(right)
+    return left_month >= right_month
+
+
+def _build_metric_record(
+    *,
+    metric,
+    record_type: str,
+    title: str,
+    is_questionnaire_type: bool,
+    can_operate: bool,
+) -> dict:
+    dt = metric.measured_at.astimezone(timezone.get_current_timezone())
+    data_fields = []
+    if record_type == "temperature":
+        data_fields.append(
+            {
+                "label": "体温",
+                "value": metric.display_value,
+                "is_large": True,
+                "key": "temperature",
+            }
+        )
+    elif record_type == "weight":
+        data_fields.append(
+            {
+                "label": "体重",
+                "value": metric.display_value,
+                "is_large": True,
+                "key": "weight",
+            }
+        )
+    elif record_type == "spo2":
+        data_fields.append(
+            {
+                "label": "血氧",
+                "value": metric.display_value,
+                "is_large": True,
+                "key": "spo2",
+            }
+        )
+    elif record_type == "bp":
+        data_fields = [
+            {
+                "label": "收缩压",
+                "value": str(int(metric.value_main)),
+                "is_large": True,
+                "key": "ssy",
+            },
+            {
+                "label": "舒张压",
+                "value": str(int(metric.value_sub or 0)),
+                "is_large": True,
+                "key": "szy",
+            },
+        ]
+    elif record_type == "medical":
+        data_fields = [
+            {
+                "label": "用药",
+                "value": "",
+                "is_large": True,
+                "key": "medicated",
+            }
+        ]
+    else:
+        data_fields.append(
+            {
+                "label": f"{title}（评分）",
+                "value": metric.display_value,
+                "is_large": True,
+                "key": "common",
+            }
+        )
+
+    return {
+        "id": metric.id,
+        "date": dt.strftime("%Y-%m-%d"),
+        "weekday": WEEKDAY_MAP[dt.weekday()],
+        "time": dt.strftime("%H:%M"),
+        "source": metric.source,
+        "source_display": "手动填写" if metric.source == "manual" else "设备上传",
+        "is_manual": metric.source == "manual",
+        "can_edit": metric.source == "manual" and dt.date() == timezone.localdate(),
+        "can_operate": can_operate,
+        "questionnaire_submission_id": (
+            metric.questionnaire_submission_id if is_questionnaire_type else None
+        ),
+        "data": data_fields,
+    }
+
+
+def _build_review_record(*, task, title: str, can_operate: bool) -> dict:
+    if task.status == TaskStatus.COMPLETED:
+        status_label = "已完成"
+    elif task.status == TaskStatus.TERMINATED:
+        status_label = "已中止"
+    elif task.status == TaskStatus.NOT_STARTED or task.task_date > timezone.localdate():
+        status_label = "未开始"
+    else:
+        status_label = "未完成"
+
+    time_str = "--:--"
+    if task.completed_at:
+        time_str = timezone.localtime(task.completed_at).strftime("%H:%M")
+
+    return {
+        "id": task.id,
+        "date": task.task_date.strftime("%Y-%m-%d"),
+        "weekday": WEEKDAY_MAP[task.task_date.weekday()],
+        "time": time_str,
+        "source": "checkup_task",
+        "source_display": status_label,
+        "is_manual": False,
+        "can_edit": False,
+        "can_operate": can_operate,
+        "data": [
+            {
+                "label": "复查",
+                "value": title,
+                "is_large": True,
+                "key": "checkup_name",
+            },
+            {
+                "label": "状态",
+                "value": status_label,
+                "is_large": True,
+                "key": "checkup_status",
+            },
+        ],
+    }
+
+
+def _load_metric_records_batch(
+    *,
+    patient_id: int,
+    metric_type,
+    record_type: str,
+    title: str,
+    cursor_month: str,
+    cursor_offset: int,
+    limit: int,
+    is_questionnaire_type: bool,
+    can_operate: bool,
+) -> tuple[list[dict], bool, str | None, int | None]:
+    earliest_metric = (
+        HealthMetric.objects.filter(patient_id=patient_id, metric_type=metric_type)
+        .order_by("measured_at", "id")
+        .only("measured_at")
+        .first()
+    )
+    if earliest_metric is None:
+        return [], False, None, None
+
+    earliest_month = timezone.localtime(earliest_metric.measured_at).strftime("%Y-%m")
+    active_month = _resolve_month_window(cursor_month)[0]
+    active_offset = max(0, cursor_offset)
+    records = []
+    tz = timezone.get_current_timezone()
+
+    while len(records) < limit and _month_gte(active_month, earliest_month):
+        month_label, month_start, month_end_exclusive, _ = _resolve_month_window(active_month)
+        start_date = (
+            timezone.make_aware(month_start, tz) if timezone.is_naive(month_start) else month_start
+        )
+        end_date_exclusive = (
+            timezone.make_aware(month_end_exclusive, tz)
+            if timezone.is_naive(month_end_exclusive)
+            else month_end_exclusive
+        )
+        end_date_inclusive = end_date_exclusive - timedelta(microseconds=1)
+        month_qs = (
+            HealthMetric.objects.filter(
+                patient_id=patient_id,
+                metric_type=metric_type,
+                measured_at__gte=start_date,
+                measured_at__lte=end_date_inclusive,
+            )
+            .order_by("-measured_at", "-id")
+        )
+        month_total = month_qs.count()
+        if active_offset >= month_total:
+            active_month = _shift_month(month_label)
+            active_offset = 0
+            continue
+
+        remaining = limit - len(records)
+        month_items = list(month_qs[active_offset : active_offset + remaining])
+        for metric in month_items:
+            records.append(
+                _build_metric_record(
+                    metric=metric,
+                    record_type=record_type,
+                    title=title,
+                    is_questionnaire_type=is_questionnaire_type,
+                    can_operate=can_operate,
+                )
+            )
+
+        next_offset = active_offset + len(month_items)
+        if next_offset < month_total:
+            return records, True, month_label, next_offset
+
+        active_month = _shift_month(month_label)
+        active_offset = 0
+
+    has_more = bool(records) and _month_gte(active_month, earliest_month)
+    return records, has_more, active_month if has_more else None, 0 if has_more else None
+
+
+def _load_review_records_batch(
+    *,
+    patient,
+    checkup_id: int,
+    title: str,
+    cursor_month: str,
+    cursor_offset: int,
+    limit: int,
+    can_operate: bool,
+) -> tuple[list[dict], bool, str | None, int | None]:
+    earliest_task = (
+        DailyTask.objects.filter(
+            patient=patient,
+            task_type=PlanItemCategory.CHECKUP,
+            interaction_payload__checkup_id=checkup_id,
+        )
+        .order_by("task_date", "id")
+        .only("task_date")
+        .first()
+    )
+    if earliest_task is None:
+        return [], False, None, None
+
+    earliest_month = earliest_task.task_date.strftime("%Y-%m")
+    active_month = _resolve_month_window(cursor_month)[0]
+    active_offset = max(0, cursor_offset)
+    records = []
+
+    while len(records) < limit and _month_gte(active_month, earliest_month):
+        month_label, month_start, month_end_exclusive, _ = _resolve_month_window(active_month)
+        month_qs = (
+            DailyTask.objects.filter(
+                patient=patient,
+                task_type=PlanItemCategory.CHECKUP,
+                task_date__gte=month_start.date(),
+                task_date__lt=month_end_exclusive.date(),
+                interaction_payload__checkup_id=checkup_id,
+            )
+            .order_by("-task_date", "-id")
+        )
+        month_total = month_qs.count()
+        if active_offset >= month_total:
+            active_month = _shift_month(month_label)
+            active_offset = 0
+            continue
+
+        remaining = limit - len(records)
+        month_items = list(month_qs[active_offset : active_offset + remaining])
+        for task in month_items:
+            records.append(
+                _build_review_record(
+                    task=task,
+                    title=title,
+                    can_operate=can_operate,
+                )
+            )
+
+        next_offset = active_offset + len(month_items)
+        if next_offset < month_total:
+            return records, True, month_label, next_offset
+
+        active_month = _shift_month(month_label)
+        active_offset = 0
+
+    has_more = bool(records) and _month_gte(active_month, earliest_month)
+    return records, has_more, active_month if has_more else None, 0 if has_more else None
+
+
 def _build_medication_chart_payload(
     *,
     patient,
@@ -518,7 +817,16 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     patient, patient_id_int = _get_patient_from_query(request)
     if patient is None:
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
-            return JsonResponse({"records": [], "has_more": False, "next_page": None}, status=400)
+            return JsonResponse(
+                {
+                    "records": [],
+                    "has_more": False,
+                    "next_cursor_month": None,
+                    "next_cursor_offset": None,
+                    "batch_size": RECORD_BATCH_SIZE,
+                },
+                status=400,
+            )
         return HttpResponseBadRequest("参数错误")
 
     patient_id = patient.id or None
@@ -584,6 +892,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     current_month, month_start, month_end_exclusive, days_in_month = _resolve_month_window(
         current_month
     )
+    cursor_month = request.GET.get("cursor_month") or current_month
 
     tz = timezone.get_current_timezone()
     start_date = (
@@ -601,19 +910,19 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
     month_days = [month_start_date + timedelta(days=i) for i in range(days_in_month)]
 
     try:
-        page = max(1, int(request.GET.get("page", 1)))
+        cursor_offset = max(0, int(request.GET.get("cursor_offset", 0)))
     except (TypeError, ValueError):
-        page = 1
+        cursor_offset = 0
 
     limit_raw = request.GET.get("limit")
     if limit_raw is None:
-        limit = days_in_month
+        limit = RECORD_BATCH_SIZE
     else:
         try:
             limit = int(limit_raw)
         except (TypeError, ValueError):
-            limit = days_in_month
-    limit = max(1, min(limit, days_in_month))
+            limit = RECORD_BATCH_SIZE
+    limit = max(1, min(limit, 50))
 
     chart_available = bool(record_type in chart_record_types)
     chart_mode = "medication_table" if record_type == "medical" else "line"
@@ -622,6 +931,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
 
     records = []
     has_more = False
+    next_cursor_month = None
+    next_cursor_offset = None
+    checkup_id_int = None
 
     if patient_id and record_type:
         try:
@@ -631,245 +943,77 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
                 except (TypeError, ValueError):
                     checkup_id_int = None
 
-                if not checkup_id_int:
-                    records = []
-                else:
-                    today = timezone.localdate()
-                    weekday_map = {
-                        0: "星期一",
-                        1: "星期二",
-                        2: "星期三",
-                        3: "星期四",
-                        4: "星期五",
-                        5: "星期六",
-                        6: "星期日",
-                    }
-
-                    qs = (
-                        DailyTask.objects.filter(
-                            patient=patient,
-                            task_type=PlanItemCategory.CHECKUP,
-                            task_date__gte=month_start_date,
-                            task_date__lt=month_end_exclusive_date,
-                            interaction_payload__checkup_id=checkup_id_int,
-                        )
-                        .order_by("-task_date", "-id")
+                if checkup_id_int:
+                    (
+                        records,
+                        has_more,
+                        next_cursor_month,
+                        next_cursor_offset,
+                    ) = _load_review_records_batch(
+                        patient=patient,
+                        checkup_id=checkup_id_int,
+                        title=title,
+                        cursor_month=cursor_month,
+                        cursor_offset=cursor_offset,
+                        limit=limit,
+                        can_operate=not is_medication_detail_view,
                     )
-                    paginator = Paginator(qs, limit)
-                    page_obj = paginator.get_page(page)
-                    has_more = page_obj.has_next()
+            else:
+                db_metric_type = RECORD_TYPE_METRIC_MAP.get(record_type)
 
-                    for task in page_obj.object_list:
-                        if task.status == TaskStatus.COMPLETED:
-                            status_label = "已完成"
-                        elif task.status == TaskStatus.TERMINATED:
-                            status_label = "已中止"
-                        elif task.status == TaskStatus.NOT_STARTED or task.task_date > today:
-                            status_label = "未开始"
+                if db_metric_type:
+                    (
+                        records,
+                        has_more,
+                        next_cursor_month,
+                        next_cursor_offset,
+                    ) = _load_metric_records_batch(
+                        patient_id=int(patient_id),
+                        metric_type=db_metric_type,
+                        record_type=record_type,
+                        title=title,
+                        cursor_month=cursor_month,
+                        cursor_offset=cursor_offset,
+                        limit=limit,
+                        is_questionnaire_type=is_questionnaire_type,
+                        can_operate=not is_medication_detail_view,
+                    )
+
+                    if chart_available:
+                        if record_type == "medical":
+                            chart_payload = _build_medication_chart_payload(
+                                patient=patient,
+                                month_start_date=month_start_date,
+                                month_end_exclusive_date=month_end_exclusive_date,
+                                month_days=month_days,
+                            )
                         else:
-                            status_label = "未完成"
-
-                        time_str = "--:--"
-                        if task.completed_at:
-                            time_str = timezone.localtime(task.completed_at).strftime("%H:%M")
-
-                        records.append(
-                            {
-                                "id": task.id,
-                                "date": task.task_date.strftime("%Y-%m-%d"),
-                                "weekday": weekday_map[task.task_date.weekday()],
-                                "time": time_str,
-                                "source": "checkup_task",
-                                "source_display": status_label,
-                                "is_manual": False,
-                                "can_edit": False,
-                                "can_operate": not is_medication_detail_view,
-                                "data": [
-                                    {
-                                        "label": "复查",
-                                        "value": title,
-                                        "is_large": True,
-                                        "key": "checkup_name",
-                                    },
-                                    {
-                                        "label": "状态",
-                                        "value": status_label,
-                                        "is_large": True,
-                                        "key": "checkup_status",
-                                    },
-                                ],
-                            }
-                        )
-                if request.headers.get("x-requested-with") == "XMLHttpRequest":
-                    return JsonResponse(
-                        {
-                            "records": records,
-                            "has_more": has_more,
-                            "next_page": page + 1 if has_more else None,
-                        }
-                    )
-                context = {
-                    "record_type": record_type,
-                    "is_questionnaire_type": is_questionnaire_type,
-                    "title": title,
-                    "records": records,
-                    "has_records": bool(records),
-                    "current_month": current_month,
-                    "patient_id": patient_id,
-                    "has_more": has_more,
-                    "next_page": page + 1 if has_more else None,
-                    "checkup_id": checkup_id_int if checkup_id else None,
-                    "source": source,
-                    "show_operation_controls": show_operation_controls,
-                    "show_add_button": show_add_button,
-                    "days_in_month": days_in_month,
-                    "chart_mode": chart_mode,
-                    "chart_available": chart_available,
-                    "chart_payload": chart_payload,
-                    "chart_payload_json": json.dumps(chart_payload, ensure_ascii=False),
-                    "chart_canvas_width": chart_canvas_width,
-                }
-                return render(request, "web_doctor/mobile/health_record_detail.html", context)
-
-            db_metric_type = RECORD_TYPE_METRIC_MAP.get(record_type)
-
-            if db_metric_type:
-                page_obj = HealthMetricService.query_metrics_by_type(
-                    patient_id=int(patient_id),
-                    metric_type=db_metric_type,
-                    page=page,
-                    page_size=limit,
-                    start_date=start_date,
-                    end_date=end_date_inclusive,
-                )
-
-                raw_list = page_obj.object_list
-                has_more = page < page_obj.paginator.num_pages
-                weekday_map = {
-                    0: "星期一",
-                    1: "星期二",
-                    2: "星期三",
-                    3: "星期四",
-                    4: "星期五",
-                    5: "星期六",
-                    6: "星期日",
-                }
-                for metric in raw_list:
-                    dt = metric.measured_at.astimezone(timezone.get_current_timezone())
-                    date_str = dt.strftime("%Y-%m-%d")
-                    time_str = dt.strftime("%H:%M")
-
-                    data_fields = []
-                    if record_type == "temperature":
-                        data_fields.append(
-                            {
-                                "label": "体温",
-                                "value": metric.display_value,
-                                "is_large": True,
-                                "key": "temperature",
-                            }
-                        )
-                    elif record_type == "weight":
-                        data_fields.append(
-                            {
-                                "label": "体重",
-                                "value": metric.display_value,
-                                "is_large": True,
-                                "key": "weight",
-                            }
-                        )
-                    elif record_type == "spo2":
-                        data_fields.append(
-                            {
-                                "label": "血氧",
-                                "value": metric.display_value,
-                                "is_large": True,
-                                "key": "spo2",
-                            }
-                        )
-                    elif record_type == "bp":
-                        data_fields = [
-                            {
-                                "label": "收缩压",
-                                "value": str(int(metric.value_main)),
-                                "is_large": True,
-                                "key": "ssy",
-                            },
-                            {
-                                "label": "舒张压",
-                                "value": str(int(metric.value_sub or 0)),
-                                "is_large": True,
-                                "key": "szy",
-                            },
-                        ]
-                    elif record_type == "medical":
-                        data_fields = [
-                            {
-                                "label": "用药",
-                                "value": "",
-                                "is_large": True,
-                                "key": "medicated",
-                            }
-                        ]
-                    else:
-                        data_fields.append(
-                            {
-                                "label": title + "（评分）",
-                                "value": metric.display_value,
-                                "is_large": True,
-                                "key": "common",
-                            }
-                        )
-
-                    records.append(
-                        {
-                            "id": metric.id,
-                            "date": date_str,
-                            "weekday": weekday_map[dt.weekday()],
-                            "time": time_str,
-                            "source": metric.source,
-                            "source_display": (
-                                "手动填写" if metric.source == "manual" else "设备上传"
-                            ),
-                            "is_manual": metric.source == "manual",
-                            "can_edit": metric.source == "manual"
-                            and dt.date() == timezone.localdate(),
-                            "can_operate": not is_medication_detail_view,
-                            "questionnaire_submission_id": (
-                                metric.questionnaire_submission_id
-                                if is_questionnaire_type
-                                else None
-                            ),
-                            "data": data_fields,
-                        }
-                    )
-
-                if chart_available:
-                    if record_type == "medical":
-                        chart_payload = _build_medication_chart_payload(
-                            patient=patient,
-                            month_start_date=month_start_date,
-                            month_end_exclusive_date=month_end_exclusive_date,
-                            month_days=month_days,
-                        )
-                    else:
-                        chart_payload = _build_line_chart_payload(
-                            patient_id=int(patient_id),
-                            metric_type=db_metric_type,
-                            record_type=record_type,
-                            title=title,
-                            start_date=start_date,
-                            end_date_exclusive=end_date_exclusive,
-                            month_days=month_days,
-                        )
+                            chart_payload = _build_line_chart_payload(
+                                patient_id=int(patient_id),
+                                metric_type=db_metric_type,
+                                record_type=record_type,
+                                title=title,
+                                start_date=start_date,
+                                end_date_exclusive=end_date_exclusive,
+                                month_days=month_days,
+                            )
 
         except Exception:
             logging.exception("查询详情失败")
             records = []
             has_more = False
+            next_cursor_month = None
+            next_cursor_offset = None
             if request.headers.get("x-requested-with") == "XMLHttpRequest":
                 return JsonResponse(
-                    {"records": [], "has_more": False, "next_page": None}, status=500
+                    {
+                        "records": [],
+                        "has_more": False,
+                        "next_cursor_month": None,
+                        "next_cursor_offset": None,
+                        "batch_size": limit,
+                    },
+                    status=500,
                 )
 
     if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -877,7 +1021,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
             {
                 "records": records,
                 "has_more": has_more,
-                "next_page": page + 1 if has_more else None,
+                "next_cursor_month": next_cursor_month,
+                "next_cursor_offset": next_cursor_offset,
+                "batch_size": limit,
             }
         )
 
@@ -890,8 +1036,10 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "current_month": current_month,
         "patient_id": patient_id,
         "has_more": has_more,
-        "next_page": page + 1 if has_more else None,
-        "checkup_id": checkup_id,
+        "next_cursor_month": next_cursor_month,
+        "next_cursor_offset": next_cursor_offset,
+        "batch_size": limit,
+        "checkup_id": checkup_id_int if checkup_id_int else checkup_id,
         "source": source,
         "show_operation_controls": show_operation_controls,
         "show_add_button": show_add_button,

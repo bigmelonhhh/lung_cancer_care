@@ -138,3 +138,123 @@ class RecordViewTests(TestCase):
         records = response.context["records"]
         dates = sorted(item["date"] for item in records)
         self.assertEqual(dates, ["2025-01-31"])
+
+    def test_health_record_detail_initial_batch_uses_six_records_for_current_month(self):
+        tz = timezone.get_current_timezone()
+        for day in range(28, 20, -1):
+            HealthMetric.objects.create(
+                patient=self.patient,
+                metric_type=MetricType.BODY_TEMPERATURE,
+                measured_at=timezone.make_aware(
+                    datetime.datetime(2025, 3, day, 8, 0),
+                    tz,
+                ),
+                value_main=Decimal("36.5"),
+            )
+
+        response = self.client.get(
+            reverse("web_patient:health_record_detail"),
+            {"type": "temperature", "title": "体温", "month": "2025-03"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["records"]), 6)
+        self.assertEqual(response.context["next_cursor_month"], "2025-03")
+        self.assertEqual(response.context["next_cursor_offset"], 6)
+        self.assertEqual(
+            [item["date"] for item in response.context["records"]],
+            [
+                "2025-03-28",
+                "2025-03-27",
+                "2025-03-26",
+                "2025-03-25",
+                "2025-03-24",
+                "2025-03-23",
+            ],
+        )
+
+    def test_health_record_detail_initial_batch_fills_previous_month_when_current_month_not_enough(self):
+        tz = timezone.get_current_timezone()
+        for day in (28, 18):
+            HealthMetric.objects.create(
+                patient=self.patient,
+                metric_type=MetricType.BODY_TEMPERATURE,
+                measured_at=timezone.make_aware(
+                    datetime.datetime(2025, 3, day, 8, 0),
+                    tz,
+                ),
+                value_main=Decimal("36.5"),
+            )
+        for day in (26, 22, 18, 12, 8):
+            HealthMetric.objects.create(
+                patient=self.patient,
+                metric_type=MetricType.BODY_TEMPERATURE,
+                measured_at=timezone.make_aware(
+                    datetime.datetime(2025, 2, day, 8, 0),
+                    tz,
+                ),
+                value_main=Decimal("36.5"),
+            )
+
+        response = self.client.get(
+            reverse("web_patient:health_record_detail"),
+            {"type": "temperature", "title": "体温", "month": "2025-03"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["records"]), 6)
+        self.assertEqual(response.context["next_cursor_month"], "2025-02")
+        self.assertEqual(response.context["next_cursor_offset"], 4)
+        self.assertEqual(
+            [item["date"] for item in response.context["records"]],
+            [
+                "2025-03-28",
+                "2025-03-18",
+                "2025-02-26",
+                "2025-02-22",
+                "2025-02-18",
+                "2025-02-12",
+            ],
+        )
+
+        ajax_response = self.client.get(
+            reverse("web_patient:health_record_detail"),
+            {
+                "type": "temperature",
+                "title": "体温",
+                "month": "2025-03",
+                "cursor_month": "2025-02",
+                "cursor_offset": 4,
+                "limit": 6,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(ajax_response.status_code, 200)
+        payload = ajax_response.json()
+        self.assertEqual([item["date"] for item in payload["records"]], ["2025-02-08"])
+        self.assertFalse(payload["has_more"])
+        self.assertIsNone(payload["next_cursor_month"])
+        self.assertIsNone(payload["next_cursor_offset"])
+
+    def test_health_record_detail_bp_renders_single_line_value(self):
+        tz = timezone.get_current_timezone()
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(
+                datetime.datetime(2025, 3, 28, 8, 0),
+                tz,
+            ),
+            value_main=Decimal("120"),
+            value_sub=Decimal("80"),
+        )
+
+        response = self.client.get(
+            reverse("web_patient:health_record_detail"),
+            {"type": "bp", "title": "血压", "month": "2025-03"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "血压:")
+        self.assertContains(response, "120 / 80")

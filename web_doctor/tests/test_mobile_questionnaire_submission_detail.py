@@ -89,8 +89,9 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
                 },
             )
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "查看详情")
         self.assertContains(resp, f'data-submission-id="{submission.id}"')
+        self.assertContains(resp, 'role="button"')
+        self.assertNotContains(resp, "查看详情")
 
         with patch("web_doctor.views.mobile.health_record._is_member", return_value=True):
             ajax_resp = self.client.get(
@@ -131,7 +132,7 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'data-submission-id=""')
         self.assertContains(resp, 'aria-disabled="true"')
-        self.assertContains(resp, "viewQuestionnaireDetail('')")
+        self.assertNotContains(resp, "查看详情")
 
     def test_questionnaire_submission_detail_page_renders_single_and_multiple_answers(self):
         questionnaire = self._get_or_create_questionnaire()
