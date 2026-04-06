@@ -62,7 +62,8 @@ def build_indicators_context(
     cycle_id: str | None = None,
     start_date_str: str | None = None,
     end_date_str: str | None = None,
-    filter_type: str | None = None
+    filter_type: str | None = None,
+    review_subtypes: list[str] | None = None,
 ) -> dict:
     """
     构建“患者指标”Tab 所需的上下文数据：
@@ -604,6 +605,190 @@ def build_indicators_context(
     # 4.8 焦虑评估 (Q_ANXIETY)
     charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 0,21, "焦虑评分")
 
+    review_category_specs = [
+        {
+            "code": "blood_routine",
+            "name": "血常规",
+            "subtypes": [
+                ("wbc", "白细胞计数"),
+                ("rbc", "红细胞计数"),
+                ("hgb", "血红蛋白"),
+                ("hct", "红细胞压积"),
+                ("plt", "血小板计数"),
+                ("neu_pct", "中性粒细胞%"),
+                ("lym_pct", "淋巴细胞%"),
+                ("mon_pct", "单核细胞%"),
+                ("eos_pct", "嗜酸性粒细胞%"),
+                ("bas_pct", "嗜碱性粒细胞%"),
+                ("mcv", "平均红细胞体积"),
+                ("mch", "平均红细胞血红蛋白量"),
+            ],
+        },
+        {
+            "code": "biochemistry",
+            "name": "血生化",
+            "subtypes": [
+                ("alt", "谷丙转氨酶 ALT"),
+                ("ast", "谷草转氨酶 AST"),
+                ("alp", "碱性磷酸酶 ALP"),
+                ("tbil", "总胆红素 TBil"),
+                ("alb", "白蛋白 ALB"),
+                ("bun", "尿素氮 BUN"),
+                ("cre", "肌酐 Cr"),
+                ("ua", "尿酸 UA"),
+                ("glu", "葡萄糖 GLU"),
+                ("k", "钾 K"),
+                ("na", "钠 Na"),
+                ("cl", "氯 Cl"),
+            ],
+        },
+        {
+            "code": "tumor_marker",
+            "name": "肿瘤标志物",
+            "subtypes": [
+                ("cea", "癌胚抗原 CEA"),
+                ("cyfra21", "细胞角蛋白19片段 CYFRA21-1"),
+                ("nse", "神经元特异性烯醇化酶 NSE"),
+                ("progrp", "胃泌素释放肽前体 ProGRP"),
+                ("scc", "鳞癌抗原 SCC"),
+                ("ca125", "糖类抗原 CA125"),
+                ("ca199", "糖类抗原 CA19-9"),
+                ("ca153", "糖类抗原 CA15-3"),
+                ("afp", "甲胎蛋白 AFP"),
+                ("ferritin", "铁蛋白 Ferritin"),
+            ],
+        },
+    ]
+    subtype_meta = {}
+    all_subtype_codes = []
+    review_categories = []
+    for category in review_category_specs:
+        category_subtypes = []
+        for subtype_code, subtype_name in category["subtypes"]:
+            subtype_item = {"code": subtype_code, "name": subtype_name}
+            category_subtypes.append(subtype_item)
+            subtype_meta[subtype_code] = {
+                "name": subtype_name,
+                "category_code": category["code"],
+                "category_name": category["name"],
+            }
+            all_subtype_codes.append(subtype_code)
+        review_categories.append(
+            {
+                "code": category["code"],
+                "name": category["name"],
+                "subtypes": category_subtypes,
+                "total_subtypes": len(category_subtypes),
+            }
+        )
+
+    raw_selected_subtypes = review_subtypes or []
+    normalized_selected_subtypes = []
+    seen_codes = set()
+    for subtype_code in raw_selected_subtypes:
+        if subtype_code in subtype_meta and subtype_code not in seen_codes:
+            normalized_selected_subtypes.append(subtype_code)
+            seen_codes.add(subtype_code)
+
+    review_palette = [
+        "#2563eb",
+        "#059669",
+        "#ea580c",
+        "#9333ea",
+        "#db2777",
+        "#0f766e",
+        "#b45309",
+        "#4f46e5",
+    ]
+
+    def _build_mock_followup_series(subtype_code: str) -> list[float]:
+        code_seed = sum(ord(ch) for ch in subtype_code)
+        base_value = 20 + (code_seed % 30)
+        values = []
+        for index, _ in enumerate(date_list):
+            weekly_wave = ((index + (code_seed % 5)) % 7) - 3
+            trend_value = (index * ((code_seed % 4) + 1)) / max(len(date_list), 1)
+            current_value = round(base_value + weekly_wave * 0.8 + trend_value, 1)
+            values.append(max(current_value, 0))
+        return values
+
+    review_series = []
+    review_values = []
+    for idx, subtype_code in enumerate(normalized_selected_subtypes):
+        data_points = _build_mock_followup_series(subtype_code)
+        review_values.extend(data_points)
+        review_series.append(
+            {
+                "name": subtype_meta[subtype_code]["name"],
+                "data": data_points,
+                "color": review_palette[idx % len(review_palette)],
+            }
+        )
+
+    review_y_max = _calc_dynamic_y_max(review_values, default_max=120, y_min=0, baselines=None, decimals=0)
+    review_charts = []
+    for idx, series_item in enumerate(review_series):
+        single_chart_y_max = _calc_dynamic_y_max(
+            series_item["data"],
+            default_max=120,
+            y_min=0,
+            baselines=None,
+            decimals=0,
+        )
+        review_charts.append(
+            {
+                "id": f"chart-followup-review-{idx}",
+                "title": series_item["name"],
+                "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+                "dates": date_strs,
+                "series": [series_item],
+                "y_min": 0,
+                "y_max": single_chart_y_max,
+                "compliance": 0,
+            }
+        )
+
+    focus_subtype_code = (
+        normalized_selected_subtypes[0]
+        if normalized_selected_subtypes
+        else review_category_specs[0]["subtypes"][0][0]
+    )
+    focus_data = _build_mock_followup_series(focus_subtype_code)
+    focus_latest_value = focus_data[-1] if focus_data else 0
+    focus_prev_value = focus_data[-2] if len(focus_data) > 1 else focus_latest_value
+    focus_delta = round(focus_latest_value - focus_prev_value, 1)
+    review_indicator = {
+        "module_title": "复查指标",
+        "title": "核心关注指标",
+        "focus_metric": {
+            "code": focus_subtype_code,
+            "name": subtype_meta[focus_subtype_code]["name"],
+            "category_name": subtype_meta[focus_subtype_code]["category_name"],
+            "current_value": focus_latest_value,
+            "delta": focus_delta,
+            "is_up": focus_delta >= 0,
+        },
+        "categories": review_categories,
+        "selected_subtypes": normalized_selected_subtypes,
+        "selected_count": len(normalized_selected_subtypes),
+        "all_subtypes_count": len(all_subtype_codes),
+        "selected_labels": [
+            subtype_meta[subtype_code]["name"] for subtype_code in normalized_selected_subtypes[:6]
+        ],
+        "overflow_selected_count": max(len(normalized_selected_subtypes) - 6, 0),
+        "chart": {
+            "id": "chart-followup-review",
+            "title": "复查子类型趋势",
+            "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+            "dates": date_strs,
+            "series": review_series,
+            "y_min": 0,
+            "y_max": review_y_max,
+            "compliance": 0,
+        },
+        "charts": review_charts,
+    }
+
     return {
         "current_date": today, # 当前日期，用于模板比较
         "medication_data": medication_data,
@@ -623,4 +808,5 @@ def build_indicators_context(
         "current_end_date": end_date.isoformat(),
         "is_default_view": is_default_view,
         "current_filter_type": normalized_filter_type or "date",
+        "review_indicator": review_indicator,
     }

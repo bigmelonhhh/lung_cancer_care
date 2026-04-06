@@ -1,0 +1,96 @@
+<div id="followup-review-container" class="bg-white shadow-sm border border-slate-200 overflow-hidden p-4 mt-4">
+  <div class="flex items-center justify-between mb-6 relative">
+    <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">{{ review_indicator.module_title }}</h3>
+  </div>
+
+  <div class="border border-slate-200" x-data="{ configOpen: false }">
+    <div class="flex items-center justify-between bg-slate-100 px-4 py-2">
+      <div class="text-sm font-semibold text-slate-900">{{ review_indicator.title }}</div>
+      <button
+        type="button"
+        class="inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:text-blue-700"
+        @click="configOpen = !configOpen"
+      >
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l.7 2.154a1 1 0 00.95.69h2.265c.969 0 1.371 1.24.588 1.81l-1.833 1.332a1 1 0 00-.364 1.118l.7 2.154c.3.921-.755 1.688-1.538 1.118l-1.833-1.332a1 1 0 00-1.176 0l-1.833 1.332c-.783.57-1.838-.197-1.539-1.118l.701-2.154a1 1 0 00-.364-1.118L6.546 7.58c-.783-.57-.38-1.81.588-1.81H9.4a1 1 0 00.95-.69l.699-2.154z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 14a2 2 0 100 4 2 2 0 000-4zM6 16a2 2 0 100 4 2 2 0 000-4z"></path>
+        </svg>
+        配置
+      </button>
+    </div>
+
+    <form
+      id="followup-review-config-form"
+      x-ref="reviewConfigForm"
+      class="border-t border-dashed border-slate-300 px-4 py-3"
+      style="display: none;"
+      x-show="configOpen"
+      x-cloak
+    >
+      <div class="space-y-3">
+        {% for category in review_indicator.categories %}
+          <div x-data="{ expanded: false }">
+            <div class="flex items-center justify-between text-sm text-slate-900">
+              <span class="font-semibold">{{ category.name }}：</span>
+              <button
+                type="button"
+                class="text-xs text-indigo-600 hover:text-indigo-700"
+                @click="expanded = !expanded"
+              >
+                <span x-show="!expanded">展开全部（{{ category.total_subtypes }}）</span>
+                <span x-show="expanded">收起</span>
+              </button>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-x-5 gap-y-2">
+              {% for subtype in category.subtypes %}
+                <label
+                  class="inline-flex items-center gap-2 text-sm text-slate-900"
+                  x-show="expanded || {{ forloop.counter }} <= 6"
+                  x-cloak
+                >
+                  <input
+                    type="checkbox"
+                    name="review_subtypes"
+                    value="{{ subtype.code }}"
+                    class="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                    {% if subtype.code in review_indicator.selected_subtypes %}checked{% endif %}
+                  >
+                  <span>{{ subtype.name }}</span>
+                </label>
+              {% endfor %}
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 flex items-center justify-end gap-2">
+        <button
+          type="button"
+          class="rounded-md border border-slate-300 bg-white px-4 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100"
+          @click="$refs.reviewConfigForm.reset(); configOpen = false"
+        >
+          取消
+        </button>
+        <button
+          type="button"
+          hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
+          hx-target="#indicators-wrapper"
+          hx-swap="outerHTML"
+          hx-include="#routine-filter-form,#followup-review-config-form"
+          hx-on:htmx:before-request="configOpen = false"
+          hx-on:htmx:after-request="configOpen = false"
+          @click="configOpen = false"
+          class="rounded-full bg-blue-600 px-5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          保存配置
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="mt-4 space-y-4">
+    {% for followup_chart in review_indicator.charts %}
+      {% include "web_doctor/partials/indicators/followup_chart.html" with chart=followup_chart %}
+    {% endfor %}
+  </div>
+</div>

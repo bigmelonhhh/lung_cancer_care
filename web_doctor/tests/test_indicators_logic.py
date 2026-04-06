@@ -311,6 +311,41 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(series["data"][1], 0.0)
         self.assertEqual(series["data"][2], 0.0)
 
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_followup_review_default_selection(self, *_mocks):
+        context = build_indicators_context(self.patient)
+
+        review_indicator = context["review_indicator"]
+        self.assertEqual(review_indicator["selected_count"], 0)
+        self.assertEqual(review_indicator["focus_metric"]["code"], "wbc")
+        self.assertEqual(len(review_indicator["chart"]["series"]), 0)
+        self.assertEqual(review_indicator["module_title"], "复查指标")
+        self.assertEqual(len(review_indicator["charts"]), 0)
+        self.assertEqual(review_indicator["chart"]["dates"], context["dates"])
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_followup_review_filters_invalid_selection(self, *_mocks):
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=(self.today - timedelta(days=2)).isoformat(),
+            end_date_str=self.today.isoformat(),
+            filter_type="date",
+            review_subtypes=["wbc", "invalid_item", "cea", "wbc"],
+        )
+
+        review_indicator = context["review_indicator"]
+        self.assertEqual(review_indicator["selected_subtypes"], ["wbc", "cea"])
+        self.assertEqual(review_indicator["selected_count"], 2)
+        self.assertEqual(len(review_indicator["chart"]["series"]), 2)
+        self.assertEqual(len(review_indicator["charts"]), 2)
+        self.assertEqual(len(review_indicator["chart"]["series"][0]["data"]), len(context["dates"]))
+
 
 @patch("web_doctor.views.indicators.get_treatment_cycles", return_value=SimpleNamespace(object_list=[]))
 @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
