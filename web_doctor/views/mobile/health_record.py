@@ -915,14 +915,16 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         cursor_offset = 0
 
     limit_raw = request.GET.get("limit")
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    default_limit = days_in_month if is_ajax else RECORD_BATCH_SIZE
     if limit_raw is None:
-        limit = RECORD_BATCH_SIZE
+        limit = default_limit
     else:
         try:
             limit = int(limit_raw)
         except (TypeError, ValueError):
-            limit = RECORD_BATCH_SIZE
-    limit = max(1, min(limit, 50))
+            limit = default_limit
+    limit = max(1, min(limit, days_in_month))
 
     chart_available = bool(record_type in chart_record_types)
     chart_mode = "medication_table" if record_type == "medical" else "line"

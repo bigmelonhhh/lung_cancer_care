@@ -157,7 +157,8 @@
   let cursorMonth = "{{ next_cursor_month|default:'' }}";
   let cursorOffset = {{ next_cursor_offset|default_if_none:"0" }};
   let isChartMode = false;
-  let hasAnyRecords = {{ has_records|yesno:"true,false" }};
+  const hasRecords = {{ has_records|yesno:"true,false" }};
+  let hasAnyRecords = hasRecords;
   const currentType = "{{ record_type }}";
   const currentTitle = "{{ title }}";
   const patientId = "{{ patient_id }}";
