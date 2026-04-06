@@ -1,3 +1,5 @@
+{% load plan_dates %}
+
 {# 单条用药计划行（与当前疗程绑定） #}
 <tr class="hover:bg-slate-50 transition-colors" {% if not is_cycle_editable %}data-readonly-row="1"{% endif %}>
   <td class="px-4 py-3">
@@ -71,7 +73,8 @@
       >
     </form>
   </td>
-  {% for i in "x"|rjust:"21" %}
+  {% with cycle_days=cycle.cycle_days|default:21 %}
+  {% for day_offset in cycle_days|day_offsets %}
   {% with day=forloop.counter %}
   <td class="px-0.5 py-3 text-center {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}">
     <form method="post">
@@ -96,4 +99,5 @@
   </td>
   {% endwith %}
   {% endfor %}
+  {% endwith %}
 </tr>

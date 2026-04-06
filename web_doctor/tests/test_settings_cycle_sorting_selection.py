@@ -193,3 +193,21 @@ class SettingsCycleSortingSelectionTests(TestCase):
 
         html = response.content.decode("utf-8")
         self.assertLess(html.find("进行中疗程"), html.find("未来疗程"))
+
+    def test_settings_page_renders_day_28_for_28_day_cycle(self):
+        self._patch_settings_dependencies()
+        today = date.today()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="28天疗程",
+            start_date=today,
+            end_date=today + timedelta(days=27),
+            cycle_days=28,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        url = reverse("web_doctor:patient_workspace_section", args=[self.patient.id, "settings"])
+        response = self.client.get(f"{url}?cycle_id={cycle.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'data-plan-day="28"')
+        self.assertContains(response, "D28")

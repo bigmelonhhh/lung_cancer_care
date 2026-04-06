@@ -48,6 +48,7 @@ class PlanItemService:
             cls._build_med_payload(
                 med,
                 plan_map.get((choices.PlanItemCategory.MEDICATION, med.id)),
+                cycle.cycle_days,
             )
             for med in Medication.objects.filter(is_active=True).order_by("name")
         ]
@@ -55,6 +56,7 @@ class PlanItemService:
             cls._build_checkup_payload(
                 chk,
                 plan_map.get((choices.PlanItemCategory.CHECKUP, chk.id)),
+                cycle.cycle_days,
             )
             for chk in CheckupLibrary.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
@@ -62,6 +64,7 @@ class PlanItemService:
             cls._build_questionnaire_payload(
                 q,
                 plan_map.get((choices.PlanItemCategory.QUESTIONNAIRE, q.id)),
+                cycle.cycle_days,
             )
             for q in Questionnaire.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
@@ -69,6 +72,7 @@ class PlanItemService:
             cls._build_monitoring_payload(
                 tpl,
                 plan_map.get((choices.PlanItemCategory.MONITORING, tpl.id)),
+                cycle.cycle_days,
             )
             for tpl in MonitoringTemplate.objects.filter(is_active=True).order_by("sort_order", "name")
         ]
@@ -122,7 +126,10 @@ class PlanItemService:
 
         if enable:
             library_obj = cls._get_library_instance(library_model, library_id)
-            schedule_template = list(getattr(library_obj, "schedule_days_template", []) or [])
+            schedule_template = cls._normalize_schedule_days(
+                getattr(library_obj, "schedule_days_template", []),
+                cycle.cycle_days,
+            )
             # 仅保留“今天及之后”的执行日，历史执行日不会出现在新建计划中
             current_day = cls._get_current_day_index_for_cycle(cycle)
             schedule_template = [d for d in schedule_template if d >= current_day]
@@ -295,10 +302,19 @@ class PlanItemService:
         return {"drug_dosage": "", "drug_usage": ""}
 
     @staticmethod
-    def _build_med_payload(med: Medication, plan: Optional[PlanItem]) -> Dict[str, Any]:
-        schedule_template = list(med.schedule_days_template or [])
+    def _build_med_payload(
+        med: Medication,
+        plan: Optional[PlanItem],
+        cycle_days: Optional[int],
+    ) -> Dict[str, Any]:
+        schedule_template = PlanItemService._normalize_schedule_days(
+            med.schedule_days_template,
+            cycle_days,
+        )
         schedule_days = (
-            list(plan.schedule_days) if plan and plan.schedule_days else schedule_template
+            PlanItemService._normalize_schedule_days(plan.schedule_days, cycle_days)
+            if plan and plan.schedule_days
+            else schedule_template
         )
         return {
             "library_id": med.id,
@@ -317,10 +333,19 @@ class PlanItemService:
         }
 
     @staticmethod
-    def _build_checkup_payload(chk: CheckupLibrary, plan: Optional[PlanItem]) -> Dict[str, Any]:
-        schedule_template = list(chk.schedule_days_template or [])
+    def _build_checkup_payload(
+        chk: CheckupLibrary,
+        plan: Optional[PlanItem],
+        cycle_days: Optional[int],
+    ) -> Dict[str, Any]:
+        schedule_template = PlanItemService._normalize_schedule_days(
+            chk.schedule_days_template,
+            cycle_days,
+        )
         schedule_days = (
-            list(plan.schedule_days) if plan and plan.schedule_days else schedule_template
+            PlanItemService._normalize_schedule_days(plan.schedule_days, cycle_days)
+            if plan and plan.schedule_days
+            else schedule_template
         )
         return {
             "library_id": chk.id,
@@ -334,10 +359,19 @@ class PlanItemService:
         }
 
     @staticmethod
-    def _build_questionnaire_payload(q: Questionnaire, plan: Optional[PlanItem]) -> Dict[str, Any]:
-        schedule_template = list(q.schedule_days_template or [])
+    def _build_questionnaire_payload(
+        q: Questionnaire,
+        plan: Optional[PlanItem],
+        cycle_days: Optional[int],
+    ) -> Dict[str, Any]:
+        schedule_template = PlanItemService._normalize_schedule_days(
+            q.schedule_days_template,
+            cycle_days,
+        )
         schedule_days = (
-            list(plan.schedule_days) if plan and plan.schedule_days else schedule_template
+            PlanItemService._normalize_schedule_days(plan.schedule_days, cycle_days)
+            if plan and plan.schedule_days
+            else schedule_template
         )
         return {
             "library_id": q.id,
@@ -350,12 +384,23 @@ class PlanItemService:
         }
 
     @staticmethod
-    def _build_monitoring_payload(tpl: MonitoringTemplate, plan: Optional[PlanItem]) -> Dict[str, Any]:
+    def _build_monitoring_payload(
+        tpl: MonitoringTemplate,
+        plan: Optional[PlanItem],
+        cycle_days: Optional[int],
+    ) -> Dict[str, Any]:
         """
         将 MonitoringTemplate + 可选 PlanItem 映射为前端监测计划视图结构。
         """
-        schedule_template = list(getattr(tpl, "schedule_days_template", []) or [])
-        schedule_days = list(plan.schedule_days) if plan and plan.schedule_days else schedule_template
+        schedule_template = PlanItemService._normalize_schedule_days(
+            getattr(tpl, "schedule_days_template", []),
+            cycle_days,
+        )
+        schedule_days = (
+            PlanItemService._normalize_schedule_days(plan.schedule_days, cycle_days)
+            if plan and plan.schedule_days
+            else schedule_template
+        )
         return {
             "library_id": tpl.id,
             "name": tpl.name,
@@ -371,6 +416,23 @@ class PlanItemService:
         cycle_days = plan.cycle.cycle_days
         if day < 1 or day > cycle_days:
             raise ValidationError(f"执行日需在 1~{cycle_days} 范围内。")
+
+    @staticmethod
+    def _normalize_schedule_days(schedule_days: Any, cycle_days: Optional[int]) -> List[int]:
+        normalized: List[int] = []
+        max_day = cycle_days if cycle_days and cycle_days > 0 else None
+        for day in list(schedule_days or []):
+            try:
+                day_int = int(day)
+            except (TypeError, ValueError):
+                continue
+            if day_int < 1:
+                continue
+            if max_day is not None and day_int > max_day:
+                continue
+            normalized.append(day_int)
+        normalized.sort()
+        return normalized
 
     @staticmethod
     def _get_current_day_index_for_cycle(cycle: TreatmentCycle) -> int:

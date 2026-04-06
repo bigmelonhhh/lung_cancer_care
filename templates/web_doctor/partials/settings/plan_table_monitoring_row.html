@@ -1,3 +1,5 @@
+{% load plan_dates %}
+
 {# 单条一般监测计划行（基于 MONITORING 类 PlanItem） #}
 <tr
   class="hover:bg-slate-50 transition-colors {% if not monitoring.is_active %}opacity-60{% endif %}"
@@ -35,7 +37,8 @@
   <td class="px-2 py-3 text-sm text-slate-400">-</td>
   <td class="px-2 py-3 text-sm text-slate-400">-</td>
 
-  {% for i in "x"|rjust:"21" %}
+  {% with cycle_days=cycle.cycle_days|default:21 %}
+  {% for day_offset in cycle_days|day_offsets %}
   {% with day=forloop.counter %}
   <td class="px-0.5 py-3 text-center {% if forloop.counter|divisibleby:7 %}border-r border-gray-200{% endif %}">
     <form method="post">
@@ -64,4 +67,5 @@
   </td>
   {% endwith %}
   {% endfor %}
+  {% endwith %}
 </tr>

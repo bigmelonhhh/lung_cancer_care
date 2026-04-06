@@ -110,3 +110,91 @@ class PlanTableHeaderStylesTests(TestCase):
         )
 
         self.assertEqual(html.count("border-r border-gray-200"), 15)
+
+    def test_28_day_cycle_renders_all_headers_dates_and_dynamic_width(self):
+        self.cycle.cycle_days = 28
+        self.cycle.save(update_fields=["cycle_days"])
+
+        html = render_to_string(
+            "web_doctor/partials/settings/plan_table.html",
+            {
+                "patient": self.patient,
+                "cycle": self.cycle,
+                "is_cycle_editable": True,
+                "plan_view": {
+                    "current_day_index": 1,
+                    "monitorings": [],
+                    "medications": [],
+                    "checkups": [],
+                    "questionnaires": [],
+                    "med_library": [],
+                },
+            },
+        )
+
+        self.assertIn('data-plan-day="28"', html)
+        self.assertIn('data-plan-date="01/22"', html)
+        self.assertIn('data-plan-date="01/28"', html)
+        self.assertIn("D28", html)
+        self.assertIn('colspan="31"', html)
+        self.assertIn("min-width: 1280px;", html)
+        self.assertEqual(html.count("border-r border-gray-200"), 4)
+        self.assertIn('data-plan-label="D22"', html)
+
+    def test_28_day_cycle_adds_week_dividers_for_each_row(self):
+        self.cycle.cycle_days = 28
+        self.cycle.save(update_fields=["cycle_days"])
+        plan_view = {
+            "current_day_index": 1,
+            "monitorings": [
+                {
+                    "lib_id": 1,
+                    "name": "监测A",
+                    "is_active": True,
+                    "schedule": [1, 7, 14, 21, 28],
+                    "plan_item_id": 1,
+                }
+            ],
+            "medications": [
+                {
+                    "lib_id": 1,
+                    "name": "药品A",
+                    "type": "口服",
+                    "default_dosage": "1片",
+                    "default_frequency": "每日一次",
+                    "schedule": [1, 7, 14, 21, 28],
+                    "plan_item_id": 1,
+                }
+            ],
+            "checkups": [
+                {
+                    "lib_id": 1,
+                    "name": "复查A",
+                    "is_active": True,
+                    "schedule": [7, 14, 21, 28],
+                    "plan_item_id": 1,
+                }
+            ],
+            "questionnaires": [
+                {
+                    "lib_id": 1,
+                    "name": "问卷A",
+                    "is_active": True,
+                    "schedule": [7, 14, 21, 28],
+                    "plan_item_id": 1,
+                }
+            ],
+            "med_library": [],
+        }
+
+        html = render_to_string(
+            "web_doctor/partials/settings/plan_table.html",
+            {
+                "patient": self.patient,
+                "cycle": self.cycle,
+                "is_cycle_editable": True,
+                "plan_view": plan_view,
+            },
+        )
+
+        self.assertEqual(html.count("border-r border-gray-200"), 20)
