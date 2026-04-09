@@ -14,6 +14,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import HealthMetric, MetricType
+from health_data.services.health_metric import HealthMetricService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from market.service.order import get_paid_orders_for_patient
 from patient_alerts.services.todo_list import TodoListService
@@ -235,10 +236,34 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 "abnormal": 0,
                 "icon": "appetite",
             },
-            {"type": "pain", "title": "疼痛评估", "count": 0, "abnormal": 0, "icon": "pain"},
-            {"type": "sleep", "title": "睡眠评估", "count": 0, "abnormal": 0, "icon": "sleep"},
-            {"type": "psych", "title": "心理评估", "count": 0, "abnormal": 0, "icon": "psych"},
-            {"type": "anxiety", "title": "焦虑评估", "count": 0, "abnormal": 0, "icon": "anxiety"},
+            {
+                "type": "pain",
+                "title": "身体疼痛评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "pain",
+            },
+            {
+                "type": "sleep",
+                "title": "睡眠质量评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "sleep",
+            },
+            {
+                "type": "psych",
+                "title": "抑郁评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "psych",
+            },
+            {
+                "type": "anxiety",
+                "title": "焦虑评估",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "anxiety",
+            },
         ]
 
         metric_type_map = {
@@ -270,7 +295,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
                         patient=patient,
                         start_date=start_date,
                         end_date=end_date,
-                        type=m_type,
+                        type_code=m_type,
                     )
                 except Exception as e:
                     logging.error(f"查询随访问卷统计失败 type={item['type']}: {e}")
@@ -286,9 +311,11 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 payload = ReportUploadService.list_report_images(
                     patient_id=int(patient_id),
                     category_code=code,
-                    report_month=today.strftime("%Y-%m"),
+                    report_month="",
                     page_num=1,
                     page_size=1,
+                    start_date=start_date,
+                    end_date=end_date,
                 )
                 count_ = int(payload.get("total") or 0)
             except Exception as e:
