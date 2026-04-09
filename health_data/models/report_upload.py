@@ -18,6 +18,14 @@ class UploaderRole(models.IntegerChoices):
     ADMIN = 4, "平台管理员"
 
 
+class AIParseStatus(models.TextChoices):
+    """AI structured parsing status for report images."""
+
+    PENDING = "PENDING", "待解析"
+    SUCCESS = "SUCCESS", "解析成功"
+    FAILED = "FAILED", "解析失败"
+
+
 class ReportUpload(models.Model):
     """报告上传批次：一次上传动作，对应多张图片，供图片档案分组展示。"""
 
@@ -163,6 +171,36 @@ class ReportImage(models.Model):
         "OCR文本",
         blank=True,
         help_text="用于结构化识别/搜索的文本内容。",
+    )
+    ai_parse_status = models.CharField(
+        "AI解析状态",
+        max_length=16,
+        choices=AIParseStatus.choices,
+        default=AIParseStatus.PENDING,
+        help_text="当前图片结构化识别结果状态。",
+    )
+    ai_structured_json = models.JSONField(
+        "AI结构化结果",
+        null=True,
+        blank=True,
+        help_text="保留 AI 返回的结构化 JSON 原文。",
+    )
+    ai_model_name = models.CharField(
+        "AI模型名",
+        max_length=100,
+        blank=True,
+        help_text="记录本次解析使用的模型名称。",
+    )
+    ai_parsed_at = models.DateTimeField(
+        "AI解析时间",
+        null=True,
+        blank=True,
+        help_text="本次 AI 结构化识别完成的时间。",
+    )
+    ai_error_message = models.TextField(
+        "AI错误信息",
+        blank=True,
+        help_text="结构化识别失败时记录错误原因。",
     )
 
     class Meta:

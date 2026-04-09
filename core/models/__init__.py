@@ -1,6 +1,7 @@
 from .medication import Medication
 from .monitoring import MonitoringTemplate
 from .checkup import CheckupLibrary
+from .standard_field import CheckupFieldMapping, StandardField, StandardFieldAlias, StandardFieldValueType
 from .questionnaire import Questionnaire, QuestionnaireCode
 from .questionnaire_question import QuestionnaireQuestion
 from .questionnaire_option import QuestionnaireOption
@@ -13,6 +14,10 @@ __all__ = [
     "Medication",
     "MonitoringTemplate",
     "CheckupLibrary",
+    "StandardField",
+    "StandardFieldAlias",
+    "StandardFieldValueType",
+    "CheckupFieldMapping",
     "Questionnaire",
     "QuestionnaireCode",
     "QuestionnaireQuestion",

@@ -2,7 +2,15 @@
 
 from django.contrib import admin, messages
 
-from core.models import CheckupLibrary
+from core.models import CheckupFieldMapping, CheckupLibrary
+
+
+class CheckupFieldMappingInline(admin.TabularInline):
+    model = CheckupFieldMapping
+    extra = 0
+    fields = ("standard_field", "sort_order", "is_active")
+    autocomplete_fields = ("standard_field",)
+    ordering = ("sort_order", "id")
 
 
 @admin.register(CheckupLibrary)
@@ -21,6 +29,7 @@ class CheckupLibraryAdmin(admin.ModelAdmin):
     list_filter = ("category", "is_active")
     ordering = ("sort_order", "name")
     actions = ("mark_active", "mark_inactive")
+    inlines = [CheckupFieldMappingInline]
 
     def get_actions(self, request):
         actions = super().get_actions(request)
