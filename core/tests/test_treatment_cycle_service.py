@@ -8,6 +8,8 @@ from django.utils import timezone
 
 from core.models import PlanItem, TreatmentCycle, choices
 from core.service.treatment_cycle import (
+    MAX_TREATMENT_CYCLE_DAYS,
+    MIN_TREATMENT_CYCLE_DAYS,
     create_treatment_cycle,
     get_cycle_confirmer,
     get_treatment_cycles,
@@ -101,6 +103,53 @@ class TreatmentCycleServiceTest(TestCase):
         )
 
         self.assertIsNotNone(created.id)
+
+    def test_create_treatment_cycle_accepts_min_and_max_days(self):
+        min_start = date(2025, 4, 1)
+        min_cycle = create_treatment_cycle(
+            patient=self.patient,
+            name="最短疗程",
+            start_date=min_start,
+            cycle_days=MIN_TREATMENT_CYCLE_DAYS,
+        )
+        self.assertEqual(
+            min_cycle.end_date,
+            min_start + timedelta(days=MIN_TREATMENT_CYCLE_DAYS - 1),
+        )
+
+        max_start = date(2025, 7, 1)
+        max_cycle = create_treatment_cycle(
+            patient=self.patient,
+            name="最长疗程",
+            start_date=max_start,
+            cycle_days=MAX_TREATMENT_CYCLE_DAYS,
+        )
+        self.assertEqual(
+            max_cycle.end_date,
+            max_start + timedelta(days=MAX_TREATMENT_CYCLE_DAYS - 1),
+        )
+
+    def test_create_treatment_cycle_rejects_days_below_min(self):
+        with self.assertRaises(ValidationError) as exc_info:
+            create_treatment_cycle(
+                patient=self.patient,
+                name="过短疗程",
+                start_date=date(2025, 8, 1),
+                cycle_days=MIN_TREATMENT_CYCLE_DAYS - 1,
+            )
+
+        self.assertIn("周期天数必须在 2-60 天之间。", exc_info.exception.messages)
+
+    def test_create_treatment_cycle_rejects_days_above_max(self):
+        with self.assertRaises(ValidationError) as exc_info:
+            create_treatment_cycle(
+                patient=self.patient,
+                name="过长疗程",
+                start_date=date(2025, 9, 1),
+                cycle_days=MAX_TREATMENT_CYCLE_DAYS + 1,
+            )
+
+        self.assertIn("周期天数必须在 2-60 天之间。", exc_info.exception.messages)
 
 
 class TreatmentCycleConfirmerTest(TestCase):

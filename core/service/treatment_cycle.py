@@ -13,6 +13,9 @@ from core.models import PlanItem, TreatmentCycle
 from core.models import choices
 from users.models import CustomUser, PatientProfile
 
+MIN_TREATMENT_CYCLE_DAYS = 2
+MAX_TREATMENT_CYCLE_DAYS = 60
+
 # 根据 patient 来查询当前所有疗程。 按照开始时间倒序排列，并在此处直接做分页。
 
 
@@ -72,8 +75,10 @@ def create_treatment_cycle(
     - 返回创建成功的 TreatmentCycle 实例；若时间区间与已有疗程冲突，会抛出 ValidationError。
     """
 
-    if cycle_days <= 0:
-        raise ValidationError("周期天数必须大于 0。")
+    if not MIN_TREATMENT_CYCLE_DAYS <= cycle_days <= MAX_TREATMENT_CYCLE_DAYS:
+        raise ValidationError(
+            f"周期天数必须在 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天之间。"
+        )
 
     planned_end_date = start_date + timedelta(days=cycle_days - 1)
 

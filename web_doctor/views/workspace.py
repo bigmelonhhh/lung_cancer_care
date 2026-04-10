@@ -22,7 +22,13 @@ from django.utils import timezone
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile, CustomUser
 
-from core.service.treatment_cycle import get_active_treatment_cycle, create_treatment_cycle, terminate_treatment_cycle
+from core.service.treatment_cycle import (
+    MAX_TREATMENT_CYCLE_DAYS,
+    MIN_TREATMENT_CYCLE_DAYS,
+    create_treatment_cycle,
+    get_active_treatment_cycle,
+    terminate_treatment_cycle,
+)
 from core.models import TreatmentCycle, PlanItem, choices as core_choices
 from core.service.monitoring import MonitoringService
 from core.service.medication import get_active_medication_library, search_medications
@@ -80,6 +86,44 @@ def _sort_cycles_for_settings(cycles: list[TreatmentCycle], today: date | None =
         )
     )
     return [cycle for _, cycle in indexed]
+
+
+def _empty_cycle_form_initial() -> dict[str, str]:
+    return {
+        "name": "",
+        "start_date": "",
+        "cycle_days_mode": "21",
+        "cycle_days_custom": "",
+        "cycle_days": "",
+    }
+
+
+def _build_cycle_form_initial(
+    *,
+    name: str = "",
+    start_date: str = "",
+    cycle_days_mode: str = "",
+    cycle_days_custom: str = "",
+    cycle_days: str = "",
+) -> dict[str, str]:
+    initial = _empty_cycle_form_initial()
+    initial["name"] = name or ""
+    initial["start_date"] = start_date or ""
+    initial["cycle_days"] = cycle_days or ""
+
+    if cycle_days_mode in {"21", "28", "custom"}:
+        initial["cycle_days_mode"] = cycle_days_mode
+    elif initial["cycle_days"] in {"21", "28"}:
+        initial["cycle_days_mode"] = initial["cycle_days"]
+    elif initial["cycle_days"]:
+        initial["cycle_days_mode"] = "custom"
+
+    if cycle_days_custom:
+        initial["cycle_days_custom"] = cycle_days_custom
+    elif initial["cycle_days_mode"] == "custom" and initial["cycle_days"]:
+        initial["cycle_days_custom"] = initial["cycle_days"]
+
+    return initial
 
 
 def _get_workspace_identities(user):
@@ -734,7 +778,9 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
 
     name = (request.POST.get("name") or "").strip()
     start_date_raw = request.POST.get("start_date") or ""
-    cycle_days_raw = request.POST.get("cycle_days") or ""
+    cycle_days_mode_raw = (request.POST.get("cycle_days_mode") or "").strip()
+    cycle_days_custom_raw = (request.POST.get("cycle_days_custom") or "").strip()
+    cycle_days_raw = (request.POST.get("cycle_days") or "").strip()
 
     errors: list[str] = []
 
@@ -742,25 +788,47 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
     if not name:
         errors.append("请填写疗程名称。")
 
-    from datetime import date
-
     try:
         start_date = date.fromisoformat(start_date_raw) if start_date_raw else date.today()
     except ValueError:
         errors.append("开始日期格式不正确，应为 YYYY-MM-DD。")
         start_date = None  # type: ignore[assignment]
 
-    try:
-        cycle_days = int(cycle_days_raw) if cycle_days_raw else 21
-    except ValueError:
-        errors.append("周期天数必须为整数。")
+    cycle_days: int | None = None
+    if cycle_days_mode_raw in {"21", "28"}:
+        cycle_days = int(cycle_days_mode_raw)
+    elif cycle_days_mode_raw == "custom":
+        if not cycle_days_custom_raw:
+            errors.append(
+                f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
+            )
+        else:
+            try:
+                cycle_days = int(cycle_days_custom_raw)
+            except ValueError:
+                errors.append(
+                    f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
+                )
+    elif cycle_days_raw:
+        try:
+            cycle_days = int(cycle_days_raw)
+        except ValueError:
+            errors.append(
+                f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
+            )
+    else:
         cycle_days = 21
+        cycle_days_mode_raw = "21"
 
-    if cycle_days <= 0:
-        errors.append("周期天数必须大于 0。")
+    if cycle_days is not None and not (
+        MIN_TREATMENT_CYCLE_DAYS <= cycle_days <= MAX_TREATMENT_CYCLE_DAYS
+    ):
+        errors.append(
+            f"周期天数必须在 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天之间。"
+        )
 
     new_cycle: TreatmentCycle | None = None
-    if not errors and start_date:
+    if not errors and start_date and cycle_days is not None:
         try:
             new_cycle = create_treatment_cycle(
                 patient=patient,
@@ -769,21 +837,27 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
                 cycle_days=cycle_days,
             )
         except ValidationError as exc:
-            errors.append(str(exc))
+            errors.extend(exc.messages)
 
     # 重新构建设置页面上下文，包含疗程列表与可能的错误提示
     context: dict = {
         "patient": patient,
         "active_tab": "settings",
         "cycle_form_errors": errors,
-        "cycle_form_initial": {
-            "name": name or "",
-            "start_date": start_date_raw or "",
-            "cycle_days": cycle_days_raw or "",
-        },
+        "cycle_form_initial": _build_cycle_form_initial(
+            name=name,
+            start_date=start_date_raw,
+            cycle_days_mode=cycle_days_mode_raw,
+            cycle_days_custom=cycle_days_custom_raw,
+            cycle_days=cycle_days_raw,
+        ),
     }
     context.update(
-        _build_settings_context(patient, tc_page=request.GET.get("tc_page"), selected_cycle_id=None)
+        _build_settings_context(
+            patient,
+            tc_page=request.GET.get("tc_page"),
+            selected_cycle_id=new_cycle.id if new_cycle else None,
+        )
     )
 
     return render(
@@ -825,11 +899,7 @@ def patient_treatment_cycle_terminate(request: HttpRequest, patient_id: int, cyc
         "patient": patient,
         "active_tab": "settings",
         "cycle_form_errors": errors,
-        "cycle_form_initial": {
-            "name": "",
-            "start_date": "",
-            "cycle_days": "",
-        },
+        "cycle_form_initial": _empty_cycle_form_initial(),
     }
     # 终止后，通常不再有选中的 active cycle，或者 selected_cycle 变为已终止状态
     # 这里我们让 _build_settings_context 自动决定 active_cycle（此时应该为 None 或下一个 active）
@@ -1134,11 +1204,7 @@ def patient_cycle_plan_toggle(request: HttpRequest, patient_id: int, cycle_id: i
             "patient": patient,
             "active_tab": "settings",
             "cycle_form_errors": errors,
-            "cycle_form_initial": {
-                "name": "",
-                "start_date": "",
-                "cycle_days": "",
-            },
+            "cycle_form_initial": _empty_cycle_form_initial(),
         }
         context.update(
             _build_settings_context(
@@ -1210,11 +1276,7 @@ def patient_plan_item_update_field(request: HttpRequest, patient_id: int, plan_i
         "patient": patient,
         "active_tab": "settings",
         "cycle_form_errors": errors,
-        "cycle_form_initial": {
-            "name": "",
-            "start_date": "",
-            "cycle_days": "",
-        },
+        "cycle_form_initial": _empty_cycle_form_initial(),
     }
     context.update(
         _build_settings_context(
@@ -1444,11 +1506,7 @@ def patient_plan_item_toggle_day(
         "patient": patient,
         "active_tab": "settings",
         "cycle_form_errors": errors,
-        "cycle_form_initial": {
-            "name": "",
-            "start_date": "",
-            "cycle_days": "",
-        },
+        "cycle_form_initial": _empty_cycle_form_initial(),
     }
     context.update(
         _build_settings_context(
