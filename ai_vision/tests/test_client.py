@@ -3,11 +3,40 @@ from unittest.mock import Mock, patch
 import requests
 from django.test import SimpleTestCase, override_settings
 
-from ai_vision.exceptions import AiVisionResponseError
-from ai_vision.services.client import parse_json_text, request_doubao_report_json
+from ai_vision.exceptions import AiVisionConfigurationError, AiVisionResponseError
+from ai_vision.services.client import (
+    build_doubao_image_url_value,
+    parse_json_text,
+    request_doubao_report_json,
+)
 
 
 class AiVisionClientTests(SimpleTestCase):
+    @override_settings(AI_VISION_IMAGE_BASE_URL="https://www.izencare.com")
+    def test_build_doubao_image_url_value_prefixes_media_path(self):
+        self.assertEqual(
+            build_doubao_image_url_value("/media/reports/a.png"),
+            "https://www.izencare.com/media/reports/a.png",
+        )
+
+    @override_settings(AI_VISION_IMAGE_BASE_URL="", WEB_BASE_URL="http://eric.dagimed.com")
+    def test_build_doubao_image_url_value_falls_back_to_web_base_url(self):
+        self.assertEqual(
+            build_doubao_image_url_value("/media/reports/a.png"),
+            "http://eric.dagimed.com/media/reports/a.png",
+        )
+
+    @override_settings(AI_VISION_IMAGE_BASE_URL="", WEB_BASE_URL="")
+    def test_build_doubao_image_url_value_requires_base_url_for_media_path(self):
+        with self.assertRaises(AiVisionConfigurationError):
+            build_doubao_image_url_value("/media/reports/a.png")
+
+    def test_build_doubao_image_url_value_keeps_absolute_url(self):
+        self.assertEqual(
+            build_doubao_image_url_value("https://img.test/a.png"),
+            "https://img.test/a.png",
+        )
+
     def test_parse_json_text_rejects_non_object(self):
         with self.assertRaises(AiVisionResponseError):
             parse_json_text("[]", source="测试模型")
@@ -80,4 +109,3 @@ class AiVisionClientTests(SimpleTestCase):
 
         with self.assertRaises(AiVisionResponseError):
             request_doubao_report_json(image_url="/media/x.png", prompt="hello")
-

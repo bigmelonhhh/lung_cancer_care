@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.db import connection
@@ -8,6 +9,7 @@ from django.utils import timezone
 from core.models import CheckupLibrary, DailyTask
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import (
+    AIParseStatus,
     ClinicalEvent,
     HealthMetric,
     MetricType,
@@ -766,6 +768,102 @@ class ReportServiceTest(TestCase):
         self.assertEqual(images[0].checkup_item, self.checkup_item)
         event = ClinicalEvent.objects.get(id=images[0].clinical_event_id)
         self.assertEqual(event.archiver_name, self.doctor_profile.name)
+
+    @patch("ai_vision.tasks.extract_report_image_task.delay")
+    def test_archive_images_enqueues_ai_parse_and_sets_pending(self, mock_delay):
+        upload = self._create_upload(images=["https://example.com/a.png"])
+        image = upload.images.first()
+        updates = [
+            {
+                "image_id": image.id,
+                "record_type": ReportImage.RecordType.OUTPATIENT,
+                "report_date": date(2025, 2, 1),
+            }
+        ]
+
+        with self.captureOnCommitCallbacks(execute=True):
+            updated = ReportArchiveService.archive_images(self.doctor_profile, updates)
+
+        self.assertEqual(updated, 1)
+        mock_delay.assert_called_once_with(image.id)
+        image.refresh_from_db()
+        self.assertEqual(image.ai_parse_status, AIParseStatus.PENDING)
+        self.assertEqual(image.ai_error_message, "")
+        self.assertIsNone(image.ai_parsed_at)
+
+    @patch("ai_vision.tasks.extract_report_image_task.delay")
+    def test_archive_images_does_not_reenqueue_successful_ai_parse(self, mock_delay):
+        upload = self._create_upload(images=["https://example.com/a.png"])
+        image = upload.images.first()
+        image.ai_parse_status = AIParseStatus.SUCCESS
+        image.ai_structured_json = {"is_medical_report": True, "items": []}
+        image.ai_error_message = ""
+        image.save(update_fields=["ai_parse_status", "ai_structured_json", "ai_error_message"])
+        updates = [
+            {
+                "image_id": image.id,
+                "record_type": ReportImage.RecordType.OUTPATIENT,
+                "report_date": date(2025, 2, 1),
+            }
+        ]
+
+        with self.captureOnCommitCallbacks(execute=True):
+            updated = ReportArchiveService.archive_images(self.doctor_profile, updates)
+
+        self.assertEqual(updated, 1)
+        mock_delay.assert_not_called()
+        image.refresh_from_db()
+        self.assertEqual(image.ai_parse_status, AIParseStatus.SUCCESS)
+        self.assertEqual(image.ai_structured_json, {"is_medical_report": True, "items": []})
+
+    @patch("ai_vision.tasks.extract_report_image_task.delay")
+    def test_archive_images_reenqueues_failed_ai_parse(self, mock_delay):
+        upload = self._create_upload(images=["https://example.com/a.png"])
+        image = upload.images.first()
+        image.ai_parse_status = AIParseStatus.FAILED
+        image.ai_error_message = "old error"
+        image.ai_parsed_at = timezone.now()
+        image.save(update_fields=["ai_parse_status", "ai_error_message", "ai_parsed_at"])
+        updates = [
+            {
+                "image_id": image.id,
+                "record_type": ReportImage.RecordType.OUTPATIENT,
+                "report_date": date(2025, 2, 1),
+            }
+        ]
+
+        with self.captureOnCommitCallbacks(execute=True):
+            updated = ReportArchiveService.archive_images(self.doctor_profile, updates)
+
+        self.assertEqual(updated, 1)
+        mock_delay.assert_called_once_with(image.id)
+        image.refresh_from_db()
+        self.assertEqual(image.ai_parse_status, AIParseStatus.PENDING)
+        self.assertEqual(image.ai_error_message, "")
+        self.assertIsNone(image.ai_parsed_at)
+
+    @patch("ai_vision.tasks.extract_report_image_task.delay", side_effect=RuntimeError("redis down"))
+    def test_archive_images_marks_failed_when_task_submit_fails(self, mock_delay):
+        upload = self._create_upload(images=["https://example.com/a.png"])
+        image = upload.images.first()
+        updates = [
+            {
+                "image_id": image.id,
+                "record_type": ReportImage.RecordType.OUTPATIENT,
+                "report_date": date(2025, 2, 1),
+            }
+        ]
+
+        with self.captureOnCommitCallbacks(execute=True):
+            updated = ReportArchiveService.archive_images(self.doctor_profile, updates)
+
+        self.assertEqual(updated, 1)
+        mock_delay.assert_called_once_with(image.id)
+        image.refresh_from_db()
+        self.assertEqual(image.ai_parse_status, AIParseStatus.FAILED)
+        self.assertIn("AI任务提交失败", image.ai_error_message)
+        self.assertIn("redis down", image.ai_error_message)
+        self.assertIsNotNone(image.ai_parsed_at)
 
     def test_archive_images_creates_checkup_metric_and_matches_task(self):
         upload = self._create_upload(images=["https://example.com/a.png"])

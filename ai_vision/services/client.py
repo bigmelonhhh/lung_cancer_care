@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import base64
 import json
-import mimetypes
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 import requests
 from django.conf import settings
-from django.core.files.storage import default_storage
 
 from ai_vision.exceptions import AiVisionConfigurationError, AiVisionResponseError
 
@@ -24,47 +20,23 @@ def _resolve_required_setting(name: str) -> str:
     return value
 
 
-def _guess_mime_type(path_name: str) -> str:
-    mime_type, _ = mimetypes.guess_type(path_name)
-    return mime_type or "application/octet-stream"
-
-
-def _storage_path_from_image_url(image_url: str) -> str | None:
-    parsed = urlparse(image_url)
-    path = parsed.path or image_url
-    media_url = str(getattr(settings, "MEDIA_URL", "/media/") or "/media/")
-    if path.startswith(media_url):
-        return path[len(media_url):].lstrip("/")
-    return None
-
-
-def _storage_data_url(storage_path: str) -> str:
-    with default_storage.open(storage_path, "rb") as storage_file:
-        content = storage_file.read()
-    encoded = base64.b64encode(content).decode("utf-8")
-    filename = Path(storage_path).name
-    return f"data:{_guess_mime_type(filename)};base64,{encoded}"
-
-
 def build_doubao_image_url_value(image_url: str) -> str:
     text = str(image_url or "").strip()
     if not text:
         raise AiVisionResponseError("ReportImage.image_url 为空，无法发起 AI 解析。")
 
-    if text.startswith("data:"):
-        return text
-
-    storage_path = _storage_path_from_image_url(text)
-    if storage_path and default_storage.exists(storage_path):
-        return _storage_data_url(storage_path)
-
     if text.startswith(("http://", "https://")):
         return text
 
     if text.startswith("/"):
-        base_url = str(getattr(settings, "WEB_BASE_URL", "") or "").rstrip("/")
+        base_url = str(getattr(settings, "AI_VISION_IMAGE_BASE_URL", "") or "").rstrip("/")
+        if not base_url:
+            base_url = str(getattr(settings, "WEB_BASE_URL", "") or "").rstrip("/")
         if base_url:
             return f"{base_url}{text}"
+        raise AiVisionConfigurationError(
+            "未配置 AI_VISION_IMAGE_BASE_URL 或 WEB_BASE_URL，无法拼接图片访问地址。"
+        )
 
     raise AiVisionResponseError(f"无法解析图片地址: {text}")
 
@@ -136,4 +108,3 @@ def request_doubao_report_json(
         raise AiVisionResponseError("豆包接口返回结构异常。") from exc
 
     return parse_json_text(content if isinstance(content, str) else str(content), source="豆包视觉模型")
-

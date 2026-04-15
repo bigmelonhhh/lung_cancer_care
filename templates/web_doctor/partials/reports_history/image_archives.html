@@ -224,6 +224,32 @@
                             <div class="text-slate-400">
                                 报告日期: {{ img.report_date }}
                             </div>
+                            {% if img.ai_parse_status == "PENDING" %}
+                            <div>
+                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium border border-amber-200 bg-amber-50 text-amber-700">
+                                    解析中
+                                </span>
+                            </div>
+                            {% elif img.ai_parse_status == "SUCCESS" %}
+                            <div>
+                                <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium border border-emerald-200 bg-emerald-50 text-emerald-700">
+                                    解析成功
+                                </span>
+                            </div>
+                            {% elif img.ai_parse_status == "FAILED" %}
+                            <div class="space-y-1">
+                                <div>
+                                    <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium border border-rose-200 bg-rose-50 text-rose-700">
+                                        解析失败
+                                    </span>
+                                </div>
+                                {% if img.ai_error_message_short %}
+                                <div class="text-[10px] leading-4 text-rose-600 break-words">
+                                    {{ img.ai_error_message_short }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
                         </div>
 
                         {# 编辑态控件 #}

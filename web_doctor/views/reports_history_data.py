@@ -99,6 +99,9 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
             "url": img.image_url,
             "category": category_str,
             "report_date": img.report_date,
+            "ai_parse_status": img.ai_parse_status,
+            "ai_error_message": img.ai_error_message,
+            "ai_error_message_short": (img.ai_error_message or "")[:80],
         })
         
     # 2. 处理归档人
@@ -356,7 +359,10 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
                 "record_type": record_type_display,
                 "sub_category": sub_category,
                 "report_date": img.report_date.strftime("%Y-%m-%d") if img.report_date else "",
-                "is_archived": bool(img.clinical_event)
+                "is_archived": bool(img.clinical_event),
+                "ai_parse_status": img.ai_parse_status,
+                "ai_error_message": img.ai_error_message,
+                "ai_error_message_short": (img.ai_error_message or "")[:80],
             })
             
     for group in grouped_archives.values():

@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from core.models import CheckupLibrary
 from health_data.models import (
+    AIParseStatus,
     ClinicalEvent,
     HealthMetric,
     MetricSource,
@@ -75,6 +76,27 @@ def _normalize_images(images: Iterable) -> List[Dict[str, object]]:
             continue
         raise ValidationError("图片列表必须包含 image_url 字段。")
     return normalized
+
+
+def _should_enqueue_ai_parse(image: ReportImage) -> bool:
+    return image.ai_parse_status != AIParseStatus.SUCCESS
+
+
+def _submit_ai_parse_tasks(image_ids: list[int]) -> None:
+    if not image_ids:
+        return
+
+    from ai_vision.tasks import extract_report_image_task
+
+    for image_id in image_ids:
+        try:
+            extract_report_image_task.delay(image_id)
+        except Exception as exc:
+            ReportImage.objects.filter(id=image_id).update(
+                ai_parse_status=AIParseStatus.FAILED,
+                ai_parsed_at=timezone.now(),
+                ai_error_message=f"AI任务提交失败: {str(exc).strip()}"[:1000],
+            )
 
 
 class ReportUploadService:
@@ -558,136 +580,153 @@ class ReportArchiveService:
         if not image_ids:
             raise ValidationError("归档更新缺少 image_id。")
 
-        images = (
-            ReportImage.objects.select_related("upload__patient")
-            .filter(id__in=image_ids)
-        )
-        image_map = {img.id: img for img in images}
-        if len(image_map) != len(image_ids):
-            raise ValidationError("存在无效的图片 ID。")
+        with transaction.atomic():
+            images = (
+                ReportImage.objects.select_related("upload__patient")
+                .filter(id__in=image_ids)
+            )
+            image_map = {img.id: img for img in images}
+            if len(image_map) != len(image_ids):
+                raise ValidationError("存在无效的图片 ID。")
 
-        checkup_item_ids = {
-            item.get("checkup_item_id")
-            for item in updates
-            if item.get("checkup_item_id")
-        }
-        checkup_items = CheckupLibrary.objects.in_bulk(checkup_item_ids)
+            checkup_item_ids = {
+                item.get("checkup_item_id")
+                for item in updates
+                if item.get("checkup_item_id")
+            }
+            checkup_items = CheckupLibrary.objects.in_bulk(checkup_item_ids)
 
-        now = timezone.now()
-        images_to_update: List[ReportImage] = []
-        event_cache: Dict[tuple, ClinicalEvent] = {}
-        checkup_groups: Dict[tuple[int, date, int], List[ReportImage]] = {}
+            now = timezone.now()
+            images_to_update: List[ReportImage] = []
+            event_cache: Dict[tuple, ClinicalEvent] = {}
+            checkup_groups: Dict[tuple[int, date, int], List[ReportImage]] = {}
+            ai_image_ids_to_enqueue: list[int] = []
 
-        for payload in updates:
-            raw_image_id = payload.get("image_id")
-            if not raw_image_id:
-                continue
+            for payload in updates:
+                raw_image_id = payload.get("image_id")
+                if not raw_image_id:
+                    continue
 
-            try:
-                image_id = int(raw_image_id)
-            except (ValueError, TypeError):
-                raise ValidationError(f"无效的图片ID: {raw_image_id}")
+                try:
+                    image_id = int(raw_image_id)
+                except (ValueError, TypeError):
+                    raise ValidationError(f"无效的图片ID: {raw_image_id}")
 
-            if image_id not in image_map:
-                # 理论上前面的校验已覆盖，但为了健壮性
-                continue
+                if image_id not in image_map:
+                    continue
 
-            record_type = _coerce_record_type(payload.get("record_type"))
-            report_date = _ensure_report_date(payload.get("report_date"))
-            checkup_item_id = payload.get("checkup_item_id")
+                record_type = _coerce_record_type(payload.get("record_type"))
+                report_date = _ensure_report_date(payload.get("report_date"))
+                checkup_item_id = payload.get("checkup_item_id")
 
-            if record_type is None or report_date is None:
-                raise ValidationError("归档必须包含记录类型与报告日期。")
-            if record_type == ReportImage.RecordType.CHECKUP and not checkup_item_id:
-                raise ValidationError("复查类型必须选择复查项目。")
-            if record_type != ReportImage.RecordType.CHECKUP and checkup_item_id:
-                raise ValidationError("非复查类型不允许选择复查项目。")
+                if record_type is None or report_date is None:
+                    raise ValidationError("归档必须包含记录类型与报告日期。")
+                if record_type == ReportImage.RecordType.CHECKUP and not checkup_item_id:
+                    raise ValidationError("复查类型必须选择复查项目。")
+                if record_type != ReportImage.RecordType.CHECKUP and checkup_item_id:
+                    raise ValidationError("非复查类型不允许选择复查项目。")
 
-            checkup_item = None
-            if checkup_item_id:
-                checkup_item = checkup_items.get(checkup_item_id)
-                if checkup_item is None:
-                    raise ValidationError("复查项目不存在。")
+                checkup_item = None
+                if checkup_item_id:
+                    checkup_item = checkup_items.get(checkup_item_id)
+                    if checkup_item is None:
+                        raise ValidationError("复查项目不存在。")
 
-            image = image_map[image_id]
-            patient = image.upload.patient
-            event_key = (patient.id, record_type, report_date)
-            if event_key not in event_cache:
-                event_cache[event_key] = ReportArchiveService.create_clinical_event(
-                    patient=patient,
-                    event_type=record_type,
-                    event_date=report_date,
-                    created_by_doctor=archiver,
-                    archiver_name=normalized_archiver_name,
-                )
-
-            image.record_type = record_type
-            image.checkup_item = checkup_item
-            image.report_date = report_date
-            image.clinical_event = event_cache[event_key]
-            image.archived_by = archiver
-            image.archived_at = now
-            images_to_update.append(image)
-
-            if record_type == ReportImage.RecordType.CHECKUP and checkup_item:
-                group_key = (patient.id, report_date, checkup_item.id)
-                checkup_groups.setdefault(group_key, []).append(image)
-
-        if checkup_groups:
-            from core.models import DailyTask
-            from core.models.choices import PlanItemCategory, TaskStatus
-
-            for (patient_id, report_date, checkup_item_id), images in checkup_groups.items():
-                measured_at = datetime.combine(report_date, time.min)
-                if timezone.is_aware(now) and timezone.is_naive(measured_at):
-                    measured_at = timezone.make_aware(
-                        measured_at, timezone.get_current_timezone()
+                image = image_map[image_id]
+                patient = image.upload.patient
+                event_key = (patient.id, record_type, report_date)
+                if event_key not in event_cache:
+                    event_cache[event_key] = ReportArchiveService.create_clinical_event(
+                        patient=patient,
+                        event_type=record_type,
+                        event_date=report_date,
+                        created_by_doctor=archiver,
+                        archiver_name=normalized_archiver_name,
                     )
 
-                metric = HealthMetric.objects.create(
-                    patient_id=patient_id,
-                    metric_type=MetricType.CHECKUP,
-                    source=MetricSource.MANUAL,
-                    measured_at=measured_at,
+                image.record_type = record_type
+                image.checkup_item = checkup_item
+                image.report_date = report_date
+                image.clinical_event = event_cache[event_key]
+                image.archived_by = archiver
+                image.archived_at = now
+
+                if _should_enqueue_ai_parse(image):
+                    image.ai_parse_status = AIParseStatus.PENDING
+                    image.ai_error_message = ""
+                    image.ai_parsed_at = None
+                    ai_image_ids_to_enqueue.append(image.id)
+
+                images_to_update.append(image)
+
+                if record_type == ReportImage.RecordType.CHECKUP and checkup_item:
+                    group_key = (patient.id, report_date, checkup_item.id)
+                    checkup_groups.setdefault(group_key, []).append(image)
+
+            if checkup_groups:
+                from core.models import DailyTask
+                from core.models.choices import PlanItemCategory, TaskStatus
+
+                for (patient_id, report_date, checkup_item_id), images in checkup_groups.items():
+                    measured_at = datetime.combine(report_date, time.min)
+                    if timezone.is_aware(now) and timezone.is_naive(measured_at):
+                        measured_at = timezone.make_aware(
+                            measured_at, timezone.get_current_timezone()
+                        )
+
+                    metric = HealthMetric.objects.create(
+                        patient_id=patient_id,
+                        metric_type=MetricType.CHECKUP,
+                        source=MetricSource.MANUAL,
+                        measured_at=measured_at,
+                    )
+
+                    for image in images:
+                        image.health_metric = metric
+
+                    window_start = report_date - timedelta(days=6)
+                    task_qs = DailyTask.objects.filter(
+                        patient_id=patient_id,
+                        task_type=PlanItemCategory.CHECKUP,
+                        task_date__range=(window_start, report_date),
+                        status__in=[TaskStatus.PENDING, TaskStatus.NOT_STARTED],
+                    ).filter(
+                        Q(plan_item__template_id=checkup_item_id)
+                        | Q(interaction_payload__checkup_id=checkup_item_id)
+                    )
+                    task = task_qs.order_by("-task_date", "-id").first()
+                    if task:
+                        payload = task.interaction_payload or {}
+                        payload["health_metric_id"] = metric.id
+                        task.status = TaskStatus.COMPLETED
+                        task.completed_at = now
+                        task.interaction_payload = payload
+                        task.save(update_fields=["status", "completed_at", "interaction_payload"])
+                        metric.task_id = task.id
+                        metric.save(update_fields=["task_id"])
+
+            ReportImage.objects.bulk_update(
+                images_to_update,
+                [
+                    "record_type",
+                    "checkup_item",
+                    "report_date",
+                    "clinical_event",
+                    "health_metric",
+                    "archived_by",
+                    "archived_at",
+                    "ai_parse_status",
+                    "ai_parsed_at",
+                    "ai_error_message",
+                ],
+            )
+
+            if ai_image_ids_to_enqueue:
+                transaction.on_commit(
+                    lambda image_ids=sorted(set(ai_image_ids_to_enqueue)): _submit_ai_parse_tasks(image_ids)
                 )
 
-                for image in images:
-                    image.health_metric = metric
-
-                window_start = report_date - timedelta(days=6)
-                task_qs = DailyTask.objects.filter(
-                    patient_id=patient_id,
-                    task_type=PlanItemCategory.CHECKUP,
-                    task_date__range=(window_start, report_date),
-                    status__in=[TaskStatus.PENDING, TaskStatus.NOT_STARTED],
-                ).filter(
-                    Q(plan_item__template_id=checkup_item_id)
-                    | Q(interaction_payload__checkup_id=checkup_item_id)
-                )
-                task = task_qs.order_by("-task_date", "-id").first()
-                if task:
-                    payload = task.interaction_payload or {}
-                    payload["health_metric_id"] = metric.id
-                    task.status = TaskStatus.COMPLETED
-                    task.completed_at = now
-                    task.interaction_payload = payload
-                    task.save(update_fields=["status", "completed_at", "interaction_payload"])
-                    metric.task_id = task.id
-                    metric.save(update_fields=["task_id"])
-
-        ReportImage.objects.bulk_update(
-            images_to_update,
-            [
-                "record_type",
-                "checkup_item",
-                "report_date",
-                "clinical_event",
-                "health_metric",
-                "archived_by",
-                "archived_at",
-            ],
-        )
-        return len(images_to_update)
+            return len(images_to_update)
 
     @staticmethod
     def create_record_with_images(
