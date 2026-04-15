@@ -17,7 +17,9 @@ const uiSuites = (process.env.UI_TEST_SUITES || "web_patient.tests web_doctor.te
   .split(/\s+/)
   .filter(Boolean);
 const extraArgs = process.argv.slice(2);
-const args = ["manage.py", "test", ...uiSuites, ...extraArgs];
+const hasDbFlags = extraArgs.some((arg) => arg === "--keepdb" || arg === "--noinput");
+const defaultArgs = hasDbFlags ? [] : ["--keepdb", "--noinput"];
+const args = ["manage.py", "test", ...defaultArgs, ...uiSuites, ...extraArgs];
 
 console.log(`[test:ui] Running: ${pythonCmd} ${args.join(" ")}`);
 
