@@ -112,6 +112,7 @@ class CheckupOrphanFieldAdmin(admin.ModelAdmin):
 
 @admin.register(ReportImage)
 class ReportImageAdmin(admin.ModelAdmin):
+    actions = ("enqueue_ai_extraction",)
     list_display = (
         "id",
         "upload",
@@ -141,3 +142,13 @@ class ReportImageAdmin(admin.ModelAdmin):
         "ai_parsed_at",
         "ai_error_message",
     )
+
+    @admin.action(description="提交 AI 解析任务")
+    def enqueue_ai_extraction(self, request, queryset):
+        from ai_vision.tasks import extract_report_image_task
+
+        count = 0
+        for image_id in queryset.values_list("id", flat=True):
+            extract_report_image_task.delay(image_id)
+            count += 1
+        self.message_user(request, f"已提交 {count} 张图片的 AI 解析任务。", messages.SUCCESS)

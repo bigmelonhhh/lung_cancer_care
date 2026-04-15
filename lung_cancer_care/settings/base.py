@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "health_data",
     "regions",
     "business_support",
+    "ai_vision",
     "core",
     "patient_alerts",
     "chat",
@@ -165,6 +166,12 @@ CELERY_RESULT_SERIALIZER = "json"
 
 EMBED_URL = os.getenv("EMBED_URL", "")
 EMBED_TOKEN = os.getenv("EMBED_TOKEN", "")
+VOLCENGINE_KEY = os.getenv("VOLCENGINE_KEY", "")
+VOLCENGINE_VISION_MODEL_ID = os.getenv("VOLCENGINE_VISION_MODEL_ID", "")
+VOLCENGINE_BASE_URL = os.getenv(
+    "VOLCENGINE_BASE_URL",
+    "https://ark.cn-beijing.volces.com/api/v3",
+).rstrip("/")
 
 CACHES = {
     "default": {
