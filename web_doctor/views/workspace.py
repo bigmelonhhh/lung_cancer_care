@@ -762,6 +762,19 @@ def _build_settings_context(
     }
 
 
+def _build_settings_plan_table_context(
+    patient: PatientProfile,
+    settings_ctx: dict,
+) -> dict:
+    selected_cycle = settings_ctx.get("selected_cycle")
+    return {
+        "patient": patient,
+        "cycle": selected_cycle,
+        "plan_view": settings_ctx.get("plan_view"),
+        "is_cycle_editable": bool(settings_ctx.get("is_cycle_editable")),
+    }
+
+
 @login_required
 @check_doctor_or_assistant
 @require_POST
@@ -978,14 +991,7 @@ def patient_cycle_medication_add(request: HttpRequest, patient_id: int, cycle_id
         tc_page=request.GET.get("tc_page"),
         selected_cycle_id=cycle.id,
     )
-    selected_cycle = settings_ctx.get("selected_cycle")
-
-    table_context: dict = {
-        "patient": patient,
-        "cycle": selected_cycle,
-        "plan_view": settings_ctx.get("plan_view"),
-        "is_cycle_editable": selected_cycle.status == core_choices.TreatmentCycleStatus.IN_PROGRESS if selected_cycle else False,
-    }
+    table_context = _build_settings_plan_table_context(patient, settings_ctx)
 
     return render(
         request,
@@ -1467,6 +1473,36 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
     )
     response["HX-Trigger"] = '{"plan-success": {"message": "生命体征基线保存成功"}}'
     return response
+
+
+@login_required
+@check_doctor_or_assistant
+def patient_settings_plan_table(request: HttpRequest, patient_id: int) -> HttpResponse:
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    cycle_id_raw = request.GET.get("cycle_id")
+    try:
+        selected_cycle_id = int(cycle_id_raw) if cycle_id_raw else None
+    except (TypeError, ValueError):
+        selected_cycle_id = None
+
+    settings_ctx = _build_settings_context(
+        patient,
+        tc_page=request.GET.get("tc_page"),
+        selected_cycle_id=selected_cycle_id,
+    )
+    table_context = _build_settings_plan_table_context(patient, settings_ctx)
+    if table_context.get("cycle") is None:
+        return HttpResponse("", status=204)
+
+    return render(
+        request,
+        "web_doctor/partials/settings/plan_table.html",
+        table_context,
+    )
 
 
 @login_required

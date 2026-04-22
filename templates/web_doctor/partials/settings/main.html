@@ -107,7 +107,19 @@
 
         {% if selected_cycle %}
         <div class="px-5 py-4 border-t border-dashed border-slate-200">
-            {% include "web_doctor/partials/settings/plan_table.html" with cycle=selected_cycle patient=patient %}
+            <div
+                id="plan-table-slot"
+                hx-get="{% url 'web_doctor:patient_settings_plan_table' patient.id %}?cycle_id={{ selected_cycle.id }}"
+                hx-trigger="load"
+                hx-target="this"
+                hx-swap="innerHTML"
+            >
+                <div class="space-y-3 animate-pulse" aria-hidden="true">
+                    <div class="h-10 rounded-lg bg-slate-100"></div>
+                    <div class="h-24 rounded-lg bg-slate-100"></div>
+                    <div class="h-24 rounded-lg bg-slate-100"></div>
+                </div>
+            </div>
         </div>
         {% endif %}
 
@@ -300,146 +312,79 @@
   updateEndDate();
 })();
 
-// 复查计划：左侧开关控制后续日期选择是否可编辑（仅前端视觉与交互）
+// 计划表行：统一处理复查 / 问卷 / 监测的启停联动，只安装一次全局监听
 (function () {
-  function initCheckupRows(root) {
+  function initPlanRows(root) {
     const scope = root || document;
-    const rows = scope.querySelectorAll("[data-checkup-row]");
-    rows.forEach((row) => {
-      if (row.dataset.checkupInitialized === "1") return;
-      const toggle = row.querySelector("[data-checkup-toggle]");
-      const slots = row.querySelectorAll("[data-checkup-slot]");
-      if (!toggle || !slots.length) return;
+    const rowConfigs = [
+      {
+        rowSelector: "[data-checkup-row]",
+        toggleSelector: "[data-checkup-toggle]",
+        slotSelector: "[data-checkup-slot]",
+        initializedKey: "checkupInitialized",
+      },
+      {
+        rowSelector: "[data-questionnaire-row]",
+        toggleSelector: "[data-questionnaire-toggle]",
+        slotSelector: "[data-questionnaire-slot]",
+        initializedKey: "questionnaireInitialized",
+      },
+      {
+        rowSelector: "[data-monitoring-row]",
+        toggleSelector: "[data-monitoring-toggle]",
+        slotSelector: "[data-monitoring-slot]",
+        initializedKey: "monitoringInitialized",
+      },
+    ];
 
-      function sync() {
-        const enabled = toggle.checked;
-        const isRowReadonly = row.hasAttribute("data-readonly-row");
+    rowConfigs.forEach((config) => {
+      const rows = scope.querySelectorAll(config.rowSelector);
+      rows.forEach((row) => {
+        if (row.dataset[config.initializedKey] === "1") return;
+        const toggle = row.querySelector(config.toggleSelector);
+        const slots = row.querySelectorAll(config.slotSelector);
+        if (!toggle || !slots.length) return;
 
-        slots.forEach((input) => {
-          const isReadonly = input.hasAttribute("data-readonly");
-          if (isReadonly || isRowReadonly) {
-            input.disabled = true;
-            input.classList.add("opacity-50", "cursor-not-allowed");
-            return;
-          }
-          input.disabled = !enabled;
-          input.classList.toggle("opacity-50", !enabled);
-          input.classList.toggle("cursor-not-allowed", !enabled);
-        });
-        row.classList.toggle("opacity-60", !enabled && !isRowReadonly);
-      }
+        function sync() {
+          const enabled = toggle.checked;
+          const isRowReadonly = row.hasAttribute("data-readonly-row");
 
-      toggle.addEventListener("change", sync);
-      sync();
-      row.dataset.checkupInitialized = "1";
+          slots.forEach((input) => {
+            const isReadonly = input.hasAttribute("data-readonly");
+            if (isReadonly || isRowReadonly) {
+              input.disabled = true;
+              input.classList.add("opacity-50", "cursor-not-allowed");
+              return;
+            }
+            input.disabled = !enabled;
+            input.classList.toggle("opacity-50", !enabled);
+            input.classList.toggle("cursor-not-allowed", !enabled);
+          });
+          row.classList.toggle("opacity-60", !enabled && !isRowReadonly);
+        }
+
+        toggle.addEventListener("change", sync);
+        sync();
+        row.dataset[config.initializedKey] = "1";
+      });
     });
   }
 
-  // 初次渲染时处理一次
-  initCheckupRows(document);
+  window.__initSettingsPlanRows = initPlanRows;
+  initPlanRows(document);
 
-  // 每次 plan 表格通过 HTMX 局部刷新后，重新初始化新插入的行
+  if (window.__settingsPlanRowHooksInstalled) return;
+  window.__settingsPlanRowHooksInstalled = true;
+
   document.body.addEventListener("htmx:afterSwap", function (event) {
     const target = event.target;
     if (!target) return;
-    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
-      initCheckupRows(target);
-    }
-  });
-})();
-
-// 问卷计划：左侧开关控制后续日期选择是否可编辑（与复查计划交互一致）
-(function () {
-  function initQuestionnaireRows(root) {
-    const scope = root || document;
-    const rows = scope.querySelectorAll("[data-questionnaire-row]");
-    rows.forEach((row) => {
-      if (row.dataset.questionnaireInitialized === "1") return;
-      const toggle = row.querySelector("[data-questionnaire-toggle]");
-      const slots = row.querySelectorAll("[data-questionnaire-slot]");
-      if (!toggle || !slots.length) return;
-
-      function sync() {
-        const enabled = toggle.checked;
-        const isRowReadonly = row.hasAttribute("data-readonly-row");
-
-        slots.forEach((input) => {
-          const isReadonly = input.hasAttribute("data-readonly");
-          if (isReadonly || isRowReadonly) {
-            input.disabled = true;
-            input.classList.add("opacity-50", "cursor-not-allowed");
-            return;
-          }
-          input.disabled = !enabled;
-          input.classList.toggle("opacity-50", !enabled);
-          input.classList.toggle("cursor-not-allowed", !enabled);
-        });
-        row.classList.toggle("opacity-60", !enabled && !isRowReadonly);
-      }
-
-      toggle.addEventListener("change", sync);
-      sync();
-      row.dataset.questionnaireInitialized = "1";
-    });
-  }
-
-  // 初次渲染时处理一次
-  initQuestionnaireRows(document);
-
-  // 每次 plan 表格通过 HTMX 局部刷新后，重新初始化新插入的问卷行
-  document.body.addEventListener("htmx:afterSwap", function (event) {
-    const target = event.target;
-    if (!target) return;
-    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
-      initQuestionnaireRows(target);
-    }
-  });
-})();
-
-// 一般监测计划：与复查/问卷交互一致
-(function () {
-  function initMonitoringRows(root) {
-    const scope = root || document;
-    const rows = scope.querySelectorAll("[data-monitoring-row]");
-    rows.forEach((row) => {
-      if (row.dataset.monitoringInitialized === "1") return;
-      const toggle = row.querySelector("[data-monitoring-toggle]");
-      const slots = row.querySelectorAll("[data-monitoring-slot]");
-      if (!toggle || !slots.length) return;
-
-      function sync() {
-        const enabled = toggle.checked;
-        const isRowReadonly = row.hasAttribute("data-readonly-row");
-
-        slots.forEach((input) => {
-          const isReadonly = input.hasAttribute("data-readonly");
-          if (isReadonly || isRowReadonly) {
-            input.disabled = true;
-            input.classList.add("opacity-50", "cursor-not-allowed");
-            return;
-          }
-          input.disabled = !enabled;
-          input.classList.toggle("opacity-50", !enabled);
-          input.classList.toggle("cursor-not-allowed", !enabled);
-        });
-        row.classList.toggle("opacity-60", !enabled && !isRowReadonly);
-      }
-
-      toggle.addEventListener("change", sync);
-      sync();
-      row.dataset.monitoringInitialized = "1";
-    });
-  }
-
-  // 初次渲染时处理一次
-  initMonitoringRows(document);
-
-  // 每次 plan 表格通过 HTMX 局部刷新后，重新初始化新插入的监测行
-  document.body.addEventListener("htmx:afterSwap", function (event) {
-    const target = event.target;
-    if (!target) return;
-    if (target.id === "plan-table-container" || (target.closest && target.closest("#plan-table-container"))) {
-      initMonitoringRows(target);
+    if (
+      target.id === "plan-table-slot" ||
+      target.id === "plan-table-container" ||
+      (target.closest && target.closest("#plan-table-container"))
+    ) {
+      window.__initSettingsPlanRows(target);
     }
   });
 })();

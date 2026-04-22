@@ -114,6 +114,11 @@ urlpatterns = [
         name="patient_cycle_medication_add",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/settings/plan-table/",
+        views.patient_settings_plan_table,
+        name="patient_settings_plan_table",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/plan-toggle/",
         views.patient_cycle_plan_toggle,
         name="patient_cycle_plan_toggle",
