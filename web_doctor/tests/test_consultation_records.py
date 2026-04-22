@@ -483,14 +483,14 @@ class ConsultationRecordsTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_consultation_records_template_uses_real_metrics_endpoint_and_hides_mock_controls(self):
+    def test_consultation_records_detail_fragment_uses_real_metrics_endpoint_and_hides_mock_controls(self):
         request = self.factory.get('/doctor/workspace/reports?tab=records')
         request.user = self.doctor_user
         context = {"patient": self.patient}
         template_name = handle_reports_history_section(request, context)
         rendered = render_to_string(template_name, context, request=request)
 
-        self.assertIn(
+        self.assertNotIn(
             reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image2.id]),
             rendered,
         )
@@ -498,8 +498,22 @@ class ConsultationRecordsTests(TestCase):
             reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image1.id]),
             rendered,
         )
-        self.assertIn("指标数据加载中...", rendered)
-        self.assertIn("指标数据加载失败，请重试", rendered)
         self.assertNotIn("getMockMetricData", rendered)
         self.assertNotIn("新增检测指标", rendered)
         self.assertNotIn("编辑指标配置", rendered)
+
+        detail_response = self.client.get(
+            reverse("web_doctor:patient_report_detail", args=[self.patient.id, self.event2.id])
+        )
+        self.assertEqual(detail_response.status_code, 200)
+        detail_html = detail_response.content.decode("utf-8")
+        self.assertIn(
+            reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image2.id]),
+            detail_html,
+        )
+        self.assertNotIn(
+            reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image1.id]),
+            detail_html,
+        )
+        self.assertIn("指标数据加载中...", detail_html)
+        self.assertIn('x-text="metricError"', detail_html)

@@ -1,0 +1,27 @@
+<div id="report-row-{{ report.id }}"
+     data-event-id="{{ report.id }}"
+     class="group transition-colors hover:bg-slate-50/50"
+     x-data="{
+        expanded: false,
+        detailLoaded: false,
+        loadingDetail: false,
+        detailUrl: '{% url 'web_doctor:patient_report_detail' patient.id report.id %}',
+        async toggle() {
+            if (this.expanded) {
+                this.expanded = false;
+                return;
+            }
+            this.expanded = true;
+            if (this.detailLoaded || this.loadingDetail) return;
+            this.loadingDetail = true;
+            const loaded = await window.loadReportsDetail(this.detailUrl, 'report-detail-body-{{ report.id }}');
+            this.detailLoaded = loaded;
+            this.loadingDetail = false;
+        }
+     }">
+    {% include "web_doctor/partials/reports_history/_record_row_summary.html" %}
+    <div x-show="expanded" x-collapse class="px-6 pb-6 border-t border-slate-50 bg-slate-50/30" style="display: none;">
+        <div x-show="loadingDetail" class="py-6 text-sm text-slate-500">详情加载中...</div>
+        <div id="report-detail-body-{{ report.id }}" class="mt-4"></div>
+    </div>
+</div>

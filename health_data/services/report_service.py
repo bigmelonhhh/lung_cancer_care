@@ -275,7 +275,6 @@ class ReportUploadService:
             queryset = queryset.filter(created_at__date__gte=start_date)
         if end_date is not None:
             queryset = queryset.filter(created_at__date__lte=end_date)
-        logger.info("ReportUploadService.list_uploads queryset_count=%s", queryset.count())
         paginator = Paginator(queryset.order_by("-created_at"), page_size)
         return paginator.get_page(page)
 

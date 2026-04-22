@@ -1,11 +1,7 @@
-<div class="bg-white min-h-screen p-3 relative" 
-     x-data="{ 
-         activeTab: '{{ active_tab|default:'records' }}',
-         showPreview: false, 
-         previewImage: '' 
-     }"
-     @show-preview.window="showPreview = true; previewImage = $event.detail"
->
+{% load static %}
+<div class="bg-white min-h-screen p-3 relative"
+     x-data="{ activeTab: '{{ active_tab|default:'records' }}', showPreview: false, previewImage: '' }"
+     @show-preview.window="showPreview = true; previewImage = $event.detail">
     <style>
         #reports-section-loading {
             opacity: 0;
@@ -32,8 +28,9 @@
     {# 顶部 Tab 切换 #}
     <div class="flex items-center justify-center gap-12 border-b border-slate-100 mb-6">
         <button 
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records"
-            hx-target="#patient-content"
+            @click="activeTab = 'records'"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records&fragment=content"
+            hx-target="#reports-history-content"
             hx-swap="innerHTML"
             hx-indicator="#reports-section-loading"
             hx-disabled-elt="this"
@@ -44,8 +41,9 @@
             <div x-show="activeTab === 'records'" class="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-full"></div>
         </button>
         <button 
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images"
-            hx-target="#patient-content"
+            @click="activeTab = 'images'"
+            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content"
+            hx-target="#reports-history-content"
             hx-swap="innerHTML"
             hx-indicator="#reports-section-loading"
             hx-disabled-elt="this"
@@ -58,29 +56,11 @@
     </div>
 
     {# 内容区域 #}
-    <div class="px-2 min-h-[400px]">
-        {# 诊疗记录页面 #}
-        {% if active_tab == 'records' %}
-        <div x-show="activeTab === 'records'" 
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 translate-y-2"
-             x-transition:enter-end="opacity-100 translate-y-0"
-        >
-            {% include "web_doctor/partials/reports_history/consultation_records.html" %}
-        </div>
-        {% endif %}
-
-        {# 图片档案页面 #}
-        {% if active_tab == 'images' %}
-        <div x-show="activeTab === 'images'" 
-             x-transition:enter="transition ease-out duration-200"
-             x-transition:enter-start="opacity-0 translate-y-2"
-             x-transition:enter-end="opacity-100 translate-y-0"
-        >
-            {% include "web_doctor/partials/reports_history/image_archives.html" %}
-        </div>
-        {% endif %}
+    <div id="reports-history-content" class="px-2 min-h-[400px]">
+        {% include reports_content_template %}
     </div>
+
+    <div id="reports-modal-host"></div>
 
     {# 图片预览弹窗 #}
     <template x-teleport="body">
@@ -106,7 +86,34 @@
             </div>
         </div>
     </template>
+
+    <template x-teleport="body">
+      <div id="consultation-delete-modal" class="fixed inset-0 hidden z-[10000] bg-black/50">
+        <div class="min-h-screen flex items-center justify-center p-4">
+          <div class="bg-white rounded-2xl w-full max-w-[320px] p-6 shadow-2xl flex flex-col items-center">
+            <div class="w-12 h-12 rounded-full bg-red-100 text-red-500 flex items-center justify-center mb-4">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 mb-2 text-center">是否删除此条档案？</h3>
+            <p class="text-sm text-slate-500 text-center mb-6 leading-relaxed">删除后数据无法恢复，请谨慎操作。</p>
+            <div class="flex gap-3 w-full">
+              <button id="consultation-delete-cancel-btn" type="button" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold active:bg-slate-50 transition">
+                取消
+              </button>
+              <button id="consultation-delete-confirm-btn" type="button" class="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold shadow-lg shadow-red-200 active:scale-95 transition">
+                确定
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
 </div>
 
 {# OOB Update Tab Status #}
+{% if include_workspace_tabs_oob %}
 {% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True active_tab="reports" %}
+{% endif %}
+<script src="{% static 'web_doctor/reports_history.js' %}"></script>

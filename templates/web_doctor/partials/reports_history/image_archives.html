@@ -8,45 +8,19 @@
     // Helper Data
     categories: ['门诊', '住院', '复查'],
     subcategories: {{ checkup_subcategories|safe|default:"[]" }},
-    allowedUploadSources: ['个人中心', '复查计划'],
-    shouldShowArchive(uploadSource) {
-        return this.allowedUploadSources.includes(uploadSource);
-    },
-    async ignoreAiWarnings(url) {
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': '{{ csrf_token }}'
-                },
-                body: JSON.stringify({})
-            });
-            if (response.ok) {
-                const html = await response.text();
-                const container = document.querySelector('#patient-content');
-                if (container) {
-                    container.innerHTML = html;
-                    htmx.process(container);
-                }
-                document.body.dispatchEvent(new CustomEvent('show-toast', {
-                    detail: { message: '已忽略告警并重新同步', type: 'success' }
-                }));
-            } else {
-                const errorMsg = await response.text();
-                alert(errorMsg || '处理失败');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('网络错误');
+        allowedUploadSources: ['个人中心', '复查计划'],
+        shouldShowArchive(uploadSource) {
+            return this.allowedUploadSources.includes(uploadSource);
+        },
+        async ignoreAiWarnings(url) {
+            await window.ignoreArchiveAiWarnings(url);
         }
-    }
 }">
 
     {# 1. 顶部筛选 #}
     <form class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap items-center gap-4"
-          hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images"
-          hx-target="#patient-content"
+          hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content"
+          hx-target="#reports-history-content"
           hx-indicator="#search-loading"
           hx-trigger="submit delay:300ms"
           @submit.prevent="if(archiveFilters.dateStart && archiveFilters.dateEnd && archiveFilters.dateStart > archiveFilters.dateEnd) { alert('开始日期不能晚于结束日期'); return; } $el.requestSubmit()">
@@ -81,99 +55,7 @@
                  isSaving: false,
                  
                  async saveGroup() {
-                     if (this.isSaving) return;
-                     this.isSaving = true;
-                     
-                     // Collect data from all images in this group
-                     const updates = [];
-                     const items = $el.querySelectorAll('.image-item-data');
-                     
-                     let hasError = false;
-                     let errorMessage = '';
-                     items.forEach(item => {
-                         const isArchived = item.dataset.isArchived === '1';
-                         if (isArchived) {
-                             return;
-                         }
-
-                         const imgId = item.dataset.id;
-                         // Alpine context for each item is tricky to access directly from parent
-                         // So we rely on input values bound by Alpine inside the loop
-                         const catSelect = item.querySelector('.cat-select');
-                         const subInput = item.querySelector('.sub-input');
-                         const dateInput = item.querySelector('.date-input');
-                         
-                         const catVal = catSelect ? catSelect.value : '';
-                         const subVal = subInput ? subInput.value : '';
-                         const dateVal = dateInput ? dateInput.value : '';
-                         
-                         if (!catVal || !dateVal) {
-                             hasError = true;
-                             errorMessage = '请完善未归档图片的类目和报告日期';
-                             return;
-                         }
-                         
-                         let fullCat = catVal;
-                         if (catVal === '复查') {
-                             if (!subVal) {
-                                 hasError = true;
-                                 errorMessage = '请为复查类型的图片选择二级分类';
-                                 return; 
-                             }
-                             fullCat = `${catVal}-${subVal}`;
-                         }
-                         
-                         updates.push({
-                             image_id: imgId,
-                             category: fullCat,
-                             report_date: dateVal
-                         });
-                     });
-                     
-                     if (hasError) {
-                         alert(errorMessage || '请完善未归档图片信息');
-                         this.isSaving = false;
-                         return;
-                     }
-                     
-                     if (updates.length === 0) {
-                         this.isGroupEditing = false;
-                         this.isSaving = false;
-                         alert('当前无未归档图片可提交');
-                         return;
-                     }
-
-                     try {
-                         const response = await fetch('{% url 'web_doctor:batch_archive_images' patient.id %}', {
-                             method: 'POST',
-                             headers: {
-                                 'Content-Type': 'application/json',
-                                 'X-CSRFToken': '{{ csrf_token }}'
-                             },
-                             body: JSON.stringify({ updates: updates })
-                         });
-                         
-                         if (response.ok) {
-                             const html = await response.text();
-                             const container = document.querySelector('#patient-content');
-                             if (container) {
-                                 container.innerHTML = html;
-                                 htmx.process(container);
-                             }
-                             // Manually trigger toast since fetch doesn't handle HTMX headers automatically
-                             document.body.dispatchEvent(new CustomEvent('show-toast', {
-                                 detail: { message: '归档保存成功', type: 'success' }
-                             }));
-                         } else {
-                             const errorMsg = await response.text();
-                             alert(errorMsg || '保存失败');
-                             this.isSaving = false;
-                         }
-                     } catch(e) {
-                         console.error(e);
-                         alert('网络错误');
-                         this.isSaving = false;
-                     }
+                     await window.saveImageArchiveGroup($el, this, '{% url 'web_doctor:batch_archive_images' patient.id %}');
                  }
              }"
         >
@@ -230,7 +112,7 @@
                         {# 图片本体 #}
                         <div class="w-full h-[160px] bg-slate-100 rounded-lg border border-slate-200 overflow-hidden relative cursor-pointer group/img"
                              @click="$dispatch('show-preview', '{{ img.url }}')">
-                            <img src="{{ img.url }}" class="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105">
+                            <img src="{{ img.thumbnail_url|default:img.url }}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105">
                             
                             {# 归档状态标签 (仅未归档且非编辑态显示) #}
                             {% if not img.is_archived %}
@@ -387,8 +269,8 @@
         {# 首页 #}
         {% if archives_page_obj.number > 1 %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page=1&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
-                hx-target="#patient-content">
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content&images_page=1&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
+                hx-target="#reports-history-content">
             首页
         </button>
         {% endif %}
@@ -396,8 +278,8 @@
         {# 上一页 #}
         {% if archives_page_obj.has_previous %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.previous_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
-                hx-target="#patient-content">
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content&images_page={{ archives_page_obj.previous_page_number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
+                hx-target="#reports-history-content">
             上一页
         </button>
         {% endif %}
@@ -410,8 +292,8 @@
         {# 下一页 #}
         {% if archives_page_obj.has_next %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.next_page_number }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
-                hx-target="#patient-content">
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content&images_page={{ archives_page_obj.next_page_number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
+                hx-target="#reports-history-content">
             下一页
         </button>
         {% endif %}
@@ -419,8 +301,8 @@
         {# 末页 #}
         {% if archives_page_obj.number < archives_page_obj.paginator.num_pages %}
         <button class="px-3 py-1 text-sm border border-slate-200 rounded hover:bg-slate-50" 
-                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&images_page={{ archives_page_obj.paginator.num_pages }}&records_page={{ reports_page.number }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
-                hx-target="#patient-content">
+                hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content&images_page={{ archives_page_obj.paginator.num_pages }}&startDate={{ filters.startDate }}&endDate={{ filters.endDate }}" 
+                hx-target="#reports-history-content">
             末页
         </button>
         {% endif %}

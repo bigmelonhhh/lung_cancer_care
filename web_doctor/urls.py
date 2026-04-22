@@ -154,6 +154,16 @@ urlpatterns = [
         name="patient_report_image_metrics",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/report/<int:report_id>/detail/",
+        views.patient_report_detail,
+        name="patient_report_detail",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/report/create-modal/",
+        views.patient_report_create_modal,
+        name="patient_report_create_modal",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/reports/batch-archive/",
         views.batch_archive_images,
         name="batch_archive_images",
