@@ -20,7 +20,11 @@ from django.utils import timezone
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
 from health_data.services.report_service import ReportUploadService, ReportArchiveService
-from health_data.services.checkup_results import ignore_ai_sync_warnings, sync_lab_results_from_ai_json
+from health_data.services.checkup_results import (
+    build_report_image_metrics_payload,
+    ignore_ai_sync_warnings,
+    sync_lab_results_from_ai_json,
+)
 from health_data.models import ReportImage, ClinicalEvent, ReportUpload
 from health_data.models.report_upload import UploadSource
 from core.service.checkup import get_active_checkup_library 
@@ -541,6 +545,18 @@ def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
         }
     })
     return template_name
+
+
+@login_required
+@check_doctor_or_assistant
+def patient_report_image_metrics(request: HttpRequest, patient_id: int, image_id: int) -> JsonResponse:
+    report_image = get_object_or_404(
+        ReportImage.objects.select_related("upload", "checkup_item"),
+        pk=image_id,
+        upload__patient_id=patient_id,
+    )
+    payload = build_report_image_metrics_payload(report_image)
+    return JsonResponse(payload)
 
 @login_required
 @check_doctor_or_assistant

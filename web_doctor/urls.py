@@ -149,6 +149,11 @@ urlpatterns = [
         name="patient_report_update",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/report-image/<int:image_id>/metrics/",
+        views.patient_report_image_metrics,
+        name="patient_report_image_metrics",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/reports/batch-archive/",
         views.batch_archive_images,
         name="batch_archive_images",

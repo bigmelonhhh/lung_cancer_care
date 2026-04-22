@@ -24,6 +24,7 @@ from .workspace import (
 )
 from .reports_history_data import (
     patient_report_update,
+    patient_report_image_metrics,
     batch_archive_images,
     ignore_ai_sync_warning,
     create_consultation_record,
@@ -85,6 +86,7 @@ __all__ = [
     "patient_medical_history_update",
     "patient_health_metrics_update",
     "patient_report_update",
+    "patient_report_image_metrics",
     "batch_archive_images",
     "ignore_ai_sync_warning",
     "create_consultation_record",

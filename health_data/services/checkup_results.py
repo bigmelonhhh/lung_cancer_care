@@ -59,6 +59,140 @@ class StructuredRowPayload:
     raw_line_text: str = ""
 
 
+def _format_decimal_display(value: Decimal | None) -> str:
+    if value is None:
+        return "-"
+    normalized = value.normalize()
+    display = format(normalized, "f")
+    if "." in display:
+        display = display.rstrip("0").rstrip(".")
+    return display or "0"
+
+
+def _format_result_value(result_value: CheckupResultValue | None) -> str:
+    if result_value is None:
+        return "-"
+    raw_value = (result_value.raw_value or "").strip()
+    if raw_value:
+        return raw_value
+    if result_value.value_text:
+        return result_value.value_text
+    if result_value.value_numeric is not None:
+        return _format_decimal_display(result_value.value_numeric)
+    return "-"
+
+
+def _format_reference_range(result_value: CheckupResultValue) -> str:
+    if result_value.range_text:
+        return result_value.range_text
+    lower = _format_decimal_display(result_value.lower_bound) if result_value.lower_bound is not None else ""
+    upper = _format_decimal_display(result_value.upper_bound) if result_value.upper_bound is not None else ""
+    if lower and upper:
+        return f"{lower}-{upper}"
+    if lower:
+        return f">={lower}"
+    if upper:
+        return f"<={upper}"
+    return "-"
+
+
+def build_report_image_metrics_payload(report_image: ReportImage) -> dict[str, Any]:
+    """Build doctor-side metrics panel payload for one report image."""
+
+    title = "复查指标"
+    if report_image.checkup_item_id and getattr(report_image.checkup_item, "name", ""):
+        title = f"复查-{report_image.checkup_item.name}"
+
+    result_values = list(
+        CheckupResultValue.objects.filter(report_image=report_image)
+        .select_related("standard_field")
+        .order_by("id")
+    )
+    if not result_values:
+        return {
+            "status": "success",
+            "title": title,
+            "report_date": report_image.report_date.isoformat() if report_image.report_date else "",
+            "image_id": report_image.id,
+            "rows": [],
+            "empty_message": "该图片暂无已匹配指标数据",
+        }
+
+    mapping_order_map: dict[int, int] = {}
+    if report_image.checkup_item_id:
+        mapping_order_map = dict(
+            CheckupFieldMapping.objects.filter(
+                checkup_item_id=report_image.checkup_item_id,
+                is_active=True,
+            ).values_list("standard_field_id", "sort_order")
+        )
+
+    current_date = _resolve_report_date(report_image)
+    previous_map: dict[int, CheckupResultValue] = {}
+    previous_values = (
+        CheckupResultValue.objects.filter(
+            patient_id=report_image.upload.patient_id,
+            standard_field_id__in={item.standard_field_id for item in result_values},
+            report_date__lt=current_date,
+        )
+        .select_related("standard_field")
+        .order_by("standard_field_id", "-report_date", "-id")
+    )
+    for previous in previous_values:
+        previous_map.setdefault(previous.standard_field_id, previous)
+
+    sorted_results = sorted(
+        result_values,
+        key=lambda item: (
+            mapping_order_map.get(item.standard_field_id, 10**9),
+            item.standard_field.local_code or "",
+            item.standard_field_id,
+            item.id,
+        ),
+    )
+
+    rows: list[dict[str, Any]] = []
+    for current in sorted_results:
+        previous = previous_map.get(current.standard_field_id)
+        value_type = current.standard_field.value_type
+        delta_display = "-"
+        delta_direction = "none"
+        if (
+            value_type == StandardFieldValueType.DECIMAL
+            and current.value_numeric is not None
+            and previous is not None
+            and previous.value_numeric is not None
+        ):
+            delta = current.value_numeric - previous.value_numeric
+            delta_direction = "up" if delta > 0 else "down" if delta < 0 else "none"
+            delta_display = _format_decimal_display(delta)
+            if delta > 0:
+                delta_display = f"+{delta_display}"
+
+        rows.append(
+            {
+                "field_code": current.standard_field.local_code or "-",
+                "field_name": current.standard_field.chinese_name or current.standard_field.english_abbr or "-",
+                "current_value_display": _format_result_value(current),
+                "unit": current.unit or current.standard_field.default_unit or "-",
+                "reference_range": _format_reference_range(current),
+                "previous_value_display": _format_result_value(previous),
+                "delta_display": delta_display,
+                "delta_direction": delta_direction,
+                "abnormal_flag": current.abnormal_flag,
+            }
+        )
+
+    return {
+        "status": "success",
+        "title": title,
+        "report_date": current_date.isoformat(),
+        "image_id": report_image.id,
+        "rows": rows,
+        "empty_message": "",
+    }
+
+
 def _coerce_decimal(value) -> Decimal | None:
     if value in (None, ""):
         return None

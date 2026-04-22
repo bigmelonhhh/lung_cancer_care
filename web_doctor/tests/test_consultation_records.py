@@ -1,10 +1,17 @@
 from django.test import TestCase, RequestFactory
+from django.template.loader import render_to_string
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django.utils import timezone
 from datetime import date
-from web_doctor.views.reports_history_data import handle_reports_history_section, patient_report_update, create_consultation_record
-from health_data.models import ClinicalEvent, ReportImage, ReportUpload, UploadSource
-from core.models import CheckupLibrary
+from decimal import Decimal
+from web_doctor.views.reports_history_data import (
+    create_consultation_record,
+    handle_reports_history_section,
+    patient_report_update,
+)
+from health_data.models import CheckupResultValue, ClinicalEvent, ReportImage, ReportUpload, UploadSource
+from core.models import CheckupFieldMapping, CheckupLibrary, StandardField, StandardFieldValueType
 from users.models import DoctorProfile, PatientProfile
 from users import choices
 import json
@@ -23,6 +30,7 @@ class ConsultationRecordsTests(TestCase):
             phone="13800000000"
         )
         self.doctor = DoctorProfile.objects.create(user=self.doctor_user, name='Test Doctor')
+        self.client.force_login(self.doctor_user)
         
         # Patient
         self.patient_user = User.objects.create_user(
@@ -34,6 +42,17 @@ class ConsultationRecordsTests(TestCase):
         
         # Checkup Library
         self.checkup_item = CheckupLibrary.objects.create(name="血常规")
+        self.standard_field = StandardField.objects.create(
+            local_code="WBC_CONSULTATION",
+            chinese_name="白细胞",
+            value_type=StandardFieldValueType.DECIMAL,
+            default_unit="10^9/L",
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.checkup_item,
+            standard_field=self.standard_field,
+            sort_order=100,
+        )
         
         # Create Clinical Event (Normal)
         self.event1 = ClinicalEvent.objects.create(
@@ -368,3 +387,119 @@ class ConsultationRecordsTests(TestCase):
             if r["id"] in created_ids:
                 self.assertIn(r["archiver"], ("归档人A", "归档人B"))
                 self.assertEqual(r["uploader_info"]["name"], "Test Patient")
+
+    def test_report_image_metrics_api_returns_structured_rows_with_previous_value(self):
+        previous_upload = ReportUpload.objects.create(patient=self.patient, upload_source=UploadSource.DOCTOR_BACKEND)
+        previous_image = ReportImage.objects.create(
+            upload=previous_upload,
+            image_url="http://test.com/prev.jpg",
+            record_type=3,
+            checkup_item=self.checkup_item,
+            clinical_event=self.event2,
+            report_date=date(2025, 1, 1),
+        )
+        same_day_image = ReportImage.objects.create(
+            upload=previous_upload,
+            image_url="http://test.com/same-day.jpg",
+            record_type=3,
+            checkup_item=self.checkup_item,
+            clinical_event=self.event2,
+            report_date=self.image2.report_date,
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=previous_image,
+            checkup_item=self.checkup_item,
+            standard_field=self.standard_field,
+            report_date=previous_image.report_date,
+            raw_name="白细胞",
+            normalized_name="白细胞",
+            raw_value="4.8",
+            value_numeric=Decimal("4.8"),
+            unit="10^9/L",
+            lower_bound=Decimal("3.5"),
+            upper_bound=Decimal("9.5"),
+            range_text="3.5-9.5",
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=same_day_image,
+            checkup_item=self.checkup_item,
+            standard_field=self.standard_field,
+            report_date=same_day_image.report_date,
+            raw_name="白细胞",
+            normalized_name="白细胞",
+            raw_value="5.1",
+            value_numeric=Decimal("5.1"),
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=self.image2,
+            checkup_item=self.checkup_item,
+            standard_field=self.standard_field,
+            report_date=self.image2.report_date,
+            raw_name="白细胞",
+            normalized_name="白细胞",
+            raw_value="6.3",
+            value_numeric=Decimal("6.3"),
+            unit="10^9/L",
+            lower_bound=Decimal("3.5"),
+            upper_bound=Decimal("9.5"),
+            range_text="3.5-9.5",
+        )
+
+        response = self.client.get(
+            reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image2.id])
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["title"], "复查-血常规")
+        self.assertEqual(payload["report_date"], "2025-01-02")
+        self.assertEqual(len(payload["rows"]), 1)
+        row = payload["rows"][0]
+        self.assertEqual(row["field_code"], "WBC_CONSULTATION")
+        self.assertEqual(row["current_value_display"], "6.3")
+        self.assertEqual(row["previous_value_display"], "4.8")
+        self.assertEqual(row["delta_display"], "+1.5")
+
+    def test_report_image_metrics_api_returns_404_for_other_patient_image(self):
+        other_patient = PatientProfile.objects.create(name="Other", phone="13800009999")
+        other_upload = ReportUpload.objects.create(patient=other_patient, upload_source=UploadSource.DOCTOR_BACKEND)
+        other_event = ClinicalEvent.objects.create(patient=other_patient, event_type=3, event_date=date(2025, 1, 5))
+        other_image = ReportImage.objects.create(
+            upload=other_upload,
+            image_url="http://test.com/other.jpg",
+            record_type=3,
+            checkup_item=self.checkup_item,
+            clinical_event=other_event,
+            report_date=date(2025, 1, 5),
+        )
+
+        response = self.client.get(
+            reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, other_image.id])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_consultation_records_template_uses_real_metrics_endpoint_and_hides_mock_controls(self):
+        request = self.factory.get('/doctor/workspace/reports?tab=records')
+        request.user = self.doctor_user
+        context = {"patient": self.patient}
+        template_name = handle_reports_history_section(request, context)
+        rendered = render_to_string(template_name, context, request=request)
+
+        self.assertIn(
+            reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image2.id]),
+            rendered,
+        )
+        self.assertNotIn(
+            reverse("web_doctor:patient_report_image_metrics", args=[self.patient.id, self.image1.id]),
+            rendered,
+        )
+        self.assertIn("指标数据加载中...", rendered)
+        self.assertIn("指标数据加载失败，请重试", rendered)
+        self.assertNotIn("getMockMetricData", rendered)
+        self.assertNotIn("新增检测指标", rendered)
+        self.assertNotIn("编辑指标配置", rendered)

@@ -22,6 +22,7 @@ from health_data.models import (
 )
 from health_data.services.checkup_results import (
     analyze_report_image_structured_items,
+    build_report_image_metrics_payload,
     ingest_structured_checkup_rows,
     ignore_ai_sync_warnings,
     rebuild_report_image_structured_results,
@@ -481,6 +482,131 @@ class CheckupResultServiceTests(TestCase):
 
         self.assertEqual(result[0]["status"], "orphan")
         self.assertEqual(result[0]["reason"], "数值解析失败")
+
+    def test_build_report_image_metrics_payload_includes_previous_numeric_result(self):
+        previous_image = ReportImage.objects.create(
+            upload=self.upload,
+            image_url="https://example.com/blood-prev.png",
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item=self.blood_routine,
+            report_date=date(2026, 3, 30),
+        )
+        same_day_image = ReportImage.objects.create(
+            upload=self.upload,
+            image_url="https://example.com/blood-same-day.png",
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item=self.blood_routine,
+            report_date=self.blood_image.report_date,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=previous_image,
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            report_date=previous_image.report_date,
+            raw_name=self.numeric_raw_name,
+            normalized_name=self.numeric_normalized_name,
+            raw_value="4.2",
+            value_numeric=Decimal("4.2"),
+            unit="10^9/L",
+            lower_bound=Decimal("3.5"),
+            upper_bound=Decimal("9.5"),
+            range_text="3.5-9.5",
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=same_day_image,
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            report_date=same_day_image.report_date,
+            raw_name=self.numeric_raw_name,
+            normalized_name=self.numeric_normalized_name,
+            raw_value="4.9",
+            value_numeric=Decimal("4.9"),
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=self.blood_image,
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            report_date=self.blood_image.report_date,
+            raw_name=self.numeric_raw_name,
+            normalized_name=self.numeric_normalized_name,
+            raw_value="5.6",
+            value_numeric=Decimal("5.6"),
+            unit="10^9/L",
+            lower_bound=Decimal("3.5"),
+            upper_bound=Decimal("9.5"),
+            range_text="3.5-9.5",
+        )
+
+        payload = build_report_image_metrics_payload(self.blood_image)
+
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["title"], "复查-血常规")
+        self.assertEqual(payload["report_date"], "2026-04-01")
+        self.assertEqual(len(payload["rows"]), 1)
+        row = payload["rows"][0]
+        self.assertEqual(row["field_code"], "WBC_SERVICE_TEST")
+        self.assertEqual(row["field_name"], "白细胞计数服务测试")
+        self.assertEqual(row["current_value_display"], "5.6")
+        self.assertEqual(row["unit"], "10^9/L")
+        self.assertEqual(row["reference_range"], "3.5-9.5")
+        self.assertEqual(row["previous_value_display"], "4.2")
+        self.assertEqual(row["delta_display"], "+1.4")
+        self.assertEqual(row["delta_direction"], "up")
+
+    def test_build_report_image_metrics_payload_uses_text_fallback_for_text_field(self):
+        previous_image = ReportImage.objects.create(
+            upload=self.upload,
+            image_url="https://example.com/ct-prev.png",
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item=self.chest_ct,
+            report_date=date(2026, 3, 28),
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=previous_image,
+            checkup_item=self.chest_ct,
+            standard_field=self.findings_field,
+            report_date=previous_image.report_date,
+            raw_name=self.text_raw_name,
+            normalized_name=self.text_normalized_name,
+            raw_value="右肺结节稳定。",
+            value_text="右肺结节稳定。",
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=self.ct_image,
+            checkup_item=self.chest_ct,
+            standard_field=self.findings_field,
+            report_date=self.ct_image.report_date,
+            raw_name=self.text_raw_name,
+            normalized_name=self.text_normalized_name,
+            raw_value="右肺上叶结节较前缩小。",
+            value_text="右肺上叶结节较前缩小。",
+        )
+
+        payload = build_report_image_metrics_payload(self.ct_image)
+
+        self.assertEqual(len(payload["rows"]), 1)
+        row = payload["rows"][0]
+        self.assertEqual(row["current_value_display"], "右肺上叶结节较前缩小。")
+        self.assertEqual(row["previous_value_display"], "右肺结节稳定。")
+        self.assertEqual(row["delta_display"], "-")
+        self.assertEqual(row["delta_direction"], "none")
+
+    def test_build_report_image_metrics_payload_returns_empty_message_when_no_results(self):
+        payload = build_report_image_metrics_payload(self.blood_image)
+
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(payload["rows"], [])
+        self.assertEqual(payload["empty_message"], "该图片暂无已匹配指标数据")
 
     def test_reprocess_orphan_fields_resolves_pending_rows_idempotently(self):
         ingest_structured_checkup_rows(
