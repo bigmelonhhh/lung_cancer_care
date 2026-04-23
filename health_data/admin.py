@@ -17,7 +17,6 @@ from health_data.models import CheckupOrphanField, CheckupResultValue, OrphanFie
 from health_data.services import (
     analyze_report_image_structured_items,
     rebuild_report_image_structured_results,
-    reprocess_orphan_fields,
 )
 
 ABNORMAL_FLAG_CHOICES = (
@@ -244,16 +243,12 @@ class CheckupOrphanFieldAdmin(admin.ModelAdmin):
 
     @admin.action(description="重试匹配")
     def retry_matching(self, request, queryset):
-        stats = reprocess_orphan_fields()
-        self.message_user(
-            request,
-            "已重试全部待处理孤儿字段："
-            f"解决 {stats.get('resolved', 0)} 条，"
-            f"仍缺别名 {stats.get('missing_alias', 0)} 条，"
-            f"仍缺映射 {stats.get('missing_mapping', 0)} 条，"
-            f"仍有数值异常 {stats.get('invalid_decimal', 0)} 条。",
-            messages.SUCCESS,
-        )
+        from health_data.tasks import reprocess_orphan_fields_task
+
+        orphan_ids = list(queryset.values_list("id", flat=True))
+        if orphan_ids:
+            reprocess_orphan_fields_task.delay(orphan_ids=orphan_ids)
+        self.message_user(request, f"已提交 {len(orphan_ids)} 条孤儿字段的异步重跑任务。", messages.SUCCESS)
         return HttpResponseRedirect(request.get_full_path())
 
     @admin.action(description="标记为忽略")

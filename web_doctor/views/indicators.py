@@ -496,7 +496,16 @@ def build_indicators_context(
     # 4. 随访问卷指标处理 (Questionnaire Indicators - Real Data)
     # ==========================================
     
-    def fetch_chart_data(code, title, y_min, y_max,series_name, color="#3b82f6"):
+    def fetch_chart_data(
+        code,
+        title,
+        y_min,
+        y_max,
+        series_name,
+        color="#3b82f6",
+        dynamic_y_max=False,
+        dynamic_y_fallback=None,
+    ):
         submission_dates = None
         try:
             submission_times = QuestionnaireSubmission.objects.filter(
@@ -536,6 +545,21 @@ def build_indicators_context(
             data = [0] * len(date_strs)
             missing_flags = [0] * len(date_strs)
 
+        y_max_value = y_max
+        if dynamic_y_max:
+            non_zero_scores = [val for val in data if val is not None and float(val) > 0]
+            if non_zero_scores:
+                y_max_value = _calc_dynamic_y_max(
+                    non_zero_scores,
+                    default_max=dynamic_y_fallback or y_max,
+                    y_min=y_min,
+                    baselines=None,
+                    decimals=0,
+                )
+            else:
+                fallback_y_max = dynamic_y_fallback or y_max
+                y_max_value = max(fallback_y_max, y_min + 1)
+
         # Generate a unique ID based on code, handle special cases if needed (e.g. psych/depressive)
         chart_id_suffix = code.lower().replace("q_", "")
         if code == QuestionnaireCode.Q_DEPRESSIVE:
@@ -547,7 +571,7 @@ def build_indicators_context(
             "dates": date_strs,
             "series": [{"name": series_name, "data": data, "missing": missing_flags, "color": color}],
             "y_min": y_min,
-            "y_max": y_max
+            "y_max": y_max_value,
         }
 
     # 4.1 体能 (Q_PHYSICAL)
@@ -604,6 +628,17 @@ def build_indicators_context(
 
     # 4.8 焦虑评估 (Q_ANXIETY)
     charts['anxiety'] = fetch_chart_data(QuestionnaireCode.Q_ANXIETY, "焦虑评估", 0,21, "焦虑评分")
+
+    # 4.9 口腔黏膜损伤自评量表 (Q_KQNMLB)
+    charts['oral_mucosa'] = fetch_chart_data(
+        QuestionnaireCode.Q_KQNMLB,
+        "口腔黏膜损伤自评量表",
+        0,
+        4,
+        "口腔黏膜损伤评分",
+        dynamic_y_max=True,
+        dynamic_y_fallback=4,
+    )
 
     review_category_specs = [
         {

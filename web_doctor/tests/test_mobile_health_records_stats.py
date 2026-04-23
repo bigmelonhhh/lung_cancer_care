@@ -148,6 +148,33 @@ class MobileHealthRecordsStatsTests(TestCase):
         self.assertEqual(cough_stat["count"], 1)
         self.assertEqual(cough_stat["abnormal"], 1)
 
+    def test_mobile_health_records_shows_oral_mucosa_questionnaire_count_and_abnormal(self):
+        measured_at = self._make_aware(self.order.start_date, hour=16)
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=QuestionnaireCode.Q_KQNMLB,
+            source=MetricSource.MANUAL,
+            value_main=Decimal("4.00"),
+            measured_at=measured_at,
+        )
+        self._create_questionnaire_alert(
+            QuestionnaireCode.Q_KQNMLB,
+            self._make_aware(self.order.start_date, hour=17),
+        )
+
+        self.client.force_login(self.doctor_user)
+        response = self.client.get(f"{self.doctor_url}?patient_id={self.patient.id}")
+
+        self.assertEqual(response.status_code, 200)
+        oral_stat = next(
+            item
+            for item in response.context["health_survey_stats"]
+            if item["type"] == "oral_mucosa"
+        )
+        self.assertEqual(oral_stat["count"], 1)
+        self.assertEqual(oral_stat["abnormal"], 1)
+        self.assertContains(response, "口腔黏膜损伤自评量表")
+
     def test_mobile_health_records_counts_checkup_only_within_service_package_range(self):
         in_range_date = min(self.order.end_date, self.order.start_date + timedelta(days=1))
         out_of_range_date = self.order.start_date - timedelta(days=1)

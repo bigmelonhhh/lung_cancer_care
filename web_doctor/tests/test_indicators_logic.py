@@ -279,6 +279,7 @@ class IndicatorsLogicTests(TestCase):
             (QuestionnaireCode.Q_SLEEP, "睡眠质量评估"),
             (QuestionnaireCode.Q_DEPRESSIVE, "抑郁评估"),
             (QuestionnaireCode.Q_ANXIETY, "焦虑评估"),
+            (QuestionnaireCode.Q_KQNMLB, "口腔黏膜损伤自评量表"),
         ]
         for code, name in questionnaire_specs:
             Questionnaire.objects.get_or_create(code=code, defaults={"name": name})
@@ -310,6 +311,44 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(series["data"][0], 0.0)
         self.assertEqual(series["data"][1], 0.0)
         self.assertEqual(series["data"][2], 0.0)
+        oral_series = context["charts"]["oral_mucosa"]["series"][0]
+        self.assertEqual(len(oral_series["missing"]), 3)
+        self.assertEqual(context["charts"]["oral_mucosa"]["y_max"], 4)
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_oral_mucosa_chart_dynamic_ymax(self, mock_query, *_mocks):
+        mock_query.return_value = SimpleNamespace(object_list=[])
+
+        questionnaire, _ = Questionnaire.objects.get_or_create(
+            code=QuestionnaireCode.Q_KQNMLB,
+            defaults={"name": "口腔黏膜损伤自评量表"},
+        )
+        start_date = self.today - timedelta(days=2)
+        end_date = self.today
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("6"),
+        )
+        QuestionnaireSubmission.objects.filter(id=submission.id).update(
+            created_at=timezone.make_aware(
+                datetime.combine(start_date, datetime.min.time())
+            )
+        )
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=start_date.isoformat(),
+            end_date_str=end_date.isoformat(),
+            filter_type="date",
+        )
+
+        oral_chart = context["charts"]["oral_mucosa"]
+        self.assertEqual(oral_chart["title"], "口腔黏膜损伤自评量表")
+        self.assertEqual(oral_chart["y_min"], 0)
+        self.assertEqual(oral_chart["y_max"], 8)
 
     @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
     @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])

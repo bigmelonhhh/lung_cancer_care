@@ -345,6 +345,13 @@
 
 <script>
   (function() {
+    function shouldInitFromTarget(target) {
+      if (!target) return false;
+      if (target.id === 'plan-table-slot' || target.id === 'plan-table-container') return true;
+      if (target.closest && target.closest('#plan-table-container')) return true;
+      return false;
+    }
+
     function initPlanTableStickyHead(root) {
       var container = null;
       if (root && root.id === 'plan-table-container') {
@@ -371,14 +378,16 @@
       container.dataset.planStickyBound = '1';
     }
 
+    window.__initPlanTableStickyHead = initPlanTableStickyHead;
     initPlanTableStickyHead();
+
+    if (window.__planStickyHeadHooksInstalled) return;
+    window.__planStickyHeadHooksInstalled = true;
 
     document.body.addEventListener('htmx:afterSwap', function(event) {
       var target = event.target;
-      if (!target) return;
-      if (target.id === 'plan-table-container' || (target.closest && target.closest('#plan-table-container'))) {
-        initPlanTableStickyHead(target);
-      }
+      if (!shouldInitFromTarget(target)) return;
+      window.__initPlanTableStickyHead(target);
     });
   })();
 </script>

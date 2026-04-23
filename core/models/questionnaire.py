@@ -12,6 +12,7 @@ class QuestionnaireCode(models.TextChoices):
     Q_SLEEP = "Q_SLEEP", "睡眠质量评估"
     Q_DEPRESSIVE = "Q_DEPRESSIVE", "抑郁评估"
     Q_ANXIETY = "Q_ANXIETY", "焦虑评估"
+    Q_KQNMLB = "Q_KQNMLB", "口腔黏膜损伤自评量表"
     Q_PSYCH = "Q_PSYCH", "心理痛苦分级评估"
 
 

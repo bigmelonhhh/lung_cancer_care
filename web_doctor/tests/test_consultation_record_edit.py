@@ -43,14 +43,12 @@ class ConsultationRecordEditTests(TestCase):
         self.checkup_a = CheckupLibrary.objects.create(name="血常规", code="BLOOD_ROUTINE")
         self.checkup_b = CheckupLibrary.objects.create(name="胸部CT", code="CT_CHEST")
 
-    def _render_records_template(self, reports_list):
-        reports_page = Paginator(reports_list, 10).get_page(1)
+    def _render_record_detail_template(self, report):
         html = render_to_string(
-            "web_doctor/partials/reports_history/consultation_records.html",
+            "web_doctor/partials/reports_history/_record_detail.html",
             {
                 "patient": self.patient,
-                "reports_page": reports_page,
-                "archives_page": type("Obj", (), {"number": 1})(),
+                "report": report,
                 "checkup_subcategories": ["血常规", "胸部CT", "其他"],
                 "request": self.factory.get("/"),
                 "csrf_token": "testtoken",
@@ -59,63 +57,57 @@ class ConsultationRecordEditTests(TestCase):
         return html
 
     def test_button_state_bindings_exist(self):
-        html = self._render_records_template(
-            [
-                {
-                    "id": 1,
-                    "date": date(2025, 1, 1),
-                    "images": [{"id": 11, "url": "http://test/1.jpg", "category": "门诊"}],
-                    "image_count": 1,
-                    "interpretation": "",
-                    "record_type": "门诊",
-                    "sub_category": "",
-                    "archiver": "A",
-                    "archived_date": "2025-01-01",
-                    "uploader_info": {"name": "U"},
-                }
-            ]
+        html = self._render_record_detail_template(
+            {
+                "id": 1,
+                "date": date(2025, 1, 1),
+                "images": [{"id": 11, "url": "http://test/1.jpg", "thumbnail_url": "http://test/1.jpg", "category": "门诊"}],
+                "image_count": 1,
+                "interpretation": "",
+                "record_type": "门诊",
+                "sub_category": "",
+                "archiver": "A",
+                "archived_date": "2025-01-01",
+                "uploader_info": {"name": "U"},
+            }
         )
         self.assertIn("x-text=\"editing ? '保存' : '编辑'\"", html)
-        self.assertIn("@click=\"cancelEdit()\"", html)
+        self.assertIn("@click=\"cancelEdit($root)\"", html)
         self.assertIn("x-show=\"editing\"", html)
         self.assertNotIn("\\\"", html)
 
     def test_category_ui_non_checkup_has_no_subcategory_select(self):
-        html = self._render_records_template(
-            [
-                {
-                    "id": 2,
-                    "date": date(2025, 1, 2),
-                    "images": [{"id": 21, "url": "http://test/2.jpg", "category": "住院"}],
-                    "image_count": 1,
-                    "interpretation": "",
-                    "record_type": "住院",
-                    "sub_category": "",
-                    "archiver": "A",
-                    "archived_date": "2025-01-02",
-                    "uploader_info": {"name": "U"},
-                }
-            ]
+        html = self._render_record_detail_template(
+            {
+                "id": 2,
+                "date": date(2025, 1, 2),
+                "images": [{"id": 21, "url": "http://test/2.jpg", "thumbnail_url": "http://test/2.jpg", "category": "住院"}],
+                "image_count": 1,
+                "interpretation": "",
+                "record_type": "住院",
+                "sub_category": "",
+                "archiver": "A",
+                "archived_date": "2025-01-02",
+                "uploader_info": {"name": "U"},
+            }
         )
         self.assertIsNone(re.search(r"<select[^>]*data-subcategory-select", html))
         self.assertIn("value=\"住院\"", html)
 
     def test_category_ui_checkup_renders_subcategory_select(self):
-        html = self._render_records_template(
-            [
-                {
-                    "id": 3,
-                    "date": date(2025, 1, 3),
-                    "images": [{"id": 31, "url": "http://test/3.jpg", "category": "复查-血常规"}],
-                    "image_count": 1,
-                    "interpretation": "",
-                    "record_type": "复查",
-                    "sub_category": "血常规",
-                    "archiver": "A",
-                    "archived_date": "2025-01-03",
-                    "uploader_info": {"name": "U"},
-                }
-            ]
+        html = self._render_record_detail_template(
+            {
+                "id": 3,
+                "date": date(2025, 1, 3),
+                "images": [{"id": 31, "url": "http://test/3.jpg", "thumbnail_url": "http://test/3.jpg", "category": "复查-血常规"}],
+                "image_count": 1,
+                "interpretation": "",
+                "record_type": "复查",
+                "sub_category": "血常规",
+                "archiver": "A",
+                "archived_date": "2025-01-03",
+                "uploader_info": {"name": "U"},
+            }
         )
         self.assertIsNotNone(re.search(r"<select[^>]*data-subcategory-select", html))
         self.assertIn("value=\"复查-血常规\"", html)
@@ -287,7 +279,7 @@ class ConsultationModalLayeringTemplateTests(SimpleTestCase):
         self.assertIn("x-cloak", content)
 
     def test_consultation_delete_modal_teleports_to_body_without_inline_zindex(self):
-        content = self._read("templates/web_doctor/partials/reports_history/consultation_records.html")
+        content = self._read("templates/web_doctor/partials/reports_history/list.html")
         self.assertIn("<template x-teleport=\"body\">", content)
         self.assertIn("id=\"consultation-delete-modal\" class=\"fixed inset-0 hidden z-[10000] bg-black/50\"", content)
         self.assertNotIn("style=\"background: rgba(0,0,0,0.5);z-index: 9999;\"", content)

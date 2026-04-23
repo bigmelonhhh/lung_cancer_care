@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Q
+from django.db.models import Max, Q
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -13,7 +13,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
-from health_data.models import HealthMetric, MetricType
+from health_data.models import HealthMetric, MetricType, ReportImage
 from health_data.services.health_metric import HealthMetricService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from market.service.order import get_paid_orders_for_patient
@@ -41,6 +41,7 @@ QUESTIONNAIRE_RECORD_TYPE_MAP = {
     "sleep": QuestionnaireCode.Q_SLEEP,
     "psych": QuestionnaireCode.Q_PSYCH,
     "anxiety": QuestionnaireCode.Q_ANXIETY,
+    "oral_mucosa": QuestionnaireCode.Q_KQNMLB,
 }
 
 RECORD_TYPE_METRIC_MAP = {
@@ -264,6 +265,13 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 "abnormal": 0,
                 "icon": "anxiety",
             },
+            {
+                "type": "oral_mucosa",
+                "title": "口腔黏膜损伤自评量表",
+                "count": 0,
+                "abnormal": 0,
+                "icon": "oral_mucosa",
+            },
         ]
 
         metric_type_map = {
@@ -275,6 +283,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
             "sleep": QuestionnaireCode.Q_SLEEP,
             "psych": QuestionnaireCode.Q_PSYCH,
             "anxiety": QuestionnaireCode.Q_ANXIETY,
+            "oral_mucosa": QuestionnaireCode.Q_KQNMLB,
         }
 
         for item in health_survey_stats:
@@ -647,6 +656,87 @@ def _load_review_records_batch(
     return records, has_more, active_month if has_more else None, 0 if has_more else None
 
 
+def _load_review_image_groups_batch(
+    *,
+    patient_id: int,
+    category_code: str,
+    cursor_month: str,
+    cursor_offset: int,
+    limit: int,
+) -> tuple[list[dict], bool, str | None, int | None]:
+    if not patient_id or not category_code:
+        return [], False, None, None
+
+    base_qs = (
+        ReportImage.objects.filter(
+            upload__patient_id=patient_id,
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item__code=str(category_code),
+            upload__deleted_at__isnull=True,
+        )
+        .exclude(report_date__isnull=True)
+    )
+
+    earliest_report_date = (
+        base_qs.order_by("report_date", "id").values_list("report_date", flat=True).first()
+    )
+    if earliest_report_date is None:
+        return [], False, None, None
+
+    earliest_month = earliest_report_date.strftime("%Y-%m")
+    active_month = _resolve_month_window(cursor_month)[0]
+    active_offset = max(0, cursor_offset)
+    groups = []
+
+    while len(groups) < limit and _month_gte(active_month, earliest_month):
+        month_label, month_start, month_end_exclusive, _ = _resolve_month_window(active_month)
+        month_date_qs = (
+            base_qs.filter(
+                report_date__gte=month_start.date(),
+                report_date__lt=month_end_exclusive.date(),
+            )
+            .values("report_date")
+            .annotate(max_id=Max("id"))
+            .order_by("-report_date", "-max_id")
+        )
+        month_total = month_date_qs.count()
+        if active_offset >= month_total:
+            active_month = _shift_month(month_label)
+            active_offset = 0
+            continue
+
+        remaining = limit - len(groups)
+        month_rows = list(month_date_qs[active_offset : active_offset + remaining])
+        date_list = [row["report_date"] for row in month_rows]
+        if date_list:
+            images_qs = (
+                base_qs.filter(report_date__in=date_list)
+                .values("report_date", "image_url")
+                .order_by("-report_date", "-id")
+            )
+            images_by_date = {report_date: [] for report_date in date_list}
+            for row in images_qs:
+                images_by_date.setdefault(row["report_date"], []).append(row["image_url"])
+
+            for report_date in date_list:
+                groups.append(
+                    {
+                        "report_date": report_date.strftime("%Y-%m-%d"),
+                        "image_urls": images_by_date.get(report_date, []),
+                    }
+                )
+
+        next_offset = active_offset + len(date_list)
+        if next_offset < month_total:
+            return groups, True, month_label, next_offset
+
+        active_month = _shift_month(month_label)
+        active_offset = 0
+
+    has_more = bool(groups) and _month_gte(active_month, earliest_month)
+    return groups, has_more, active_month if has_more else None, 0 if has_more else None
+
+
 def _build_medication_chart_payload(
     *,
     patient,
@@ -703,6 +793,7 @@ def _build_line_chart_payload(
         "heart": "#f97316",
         "step": "#22c55e",
         "bp": "#2563eb",
+        "oral_mucosa": "#ef4444",
     }
     day_set = set(month_days)
     latest_map = {}
@@ -886,6 +977,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "sleep",
         "psych",
         "anxiety",
+        "oral_mucosa",
     }
     if record_type in member_only_types and not is_member:
         buy_url = generate_menu_auth_url("market:product_buy")
@@ -913,6 +1005,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "sleep",
         "psych",
         "anxiety",
+        "oral_mucosa",
     }
 
     current_month = request.GET.get("month", datetime.now().strftime("%Y-%m"))
@@ -1137,12 +1230,36 @@ def review_record_detail(request: HttpRequest) -> HttpResponse:
     title = request.GET.get("title", "复查档案")
     patient_id = patient.id or None
     current_month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+    current_month, _, _, _ = _resolve_month_window(current_month)
+    initial_groups = []
+    has_more = False
+    next_cursor_month = None
+    next_cursor_offset = None
+
+    if patient_id and category_code:
+        (
+            initial_groups,
+            has_more,
+            next_cursor_month,
+            next_cursor_offset,
+        ) = _load_review_image_groups_batch(
+            patient_id=int(patient_id),
+            category_code=category_code,
+            cursor_month=current_month,
+            cursor_offset=0,
+            limit=RECORD_BATCH_SIZE,
+        )
 
     context = {
         "patient_id": patient_id,
         "title": title,
         "category_code": category_code,
         "current_month": current_month,
+        "initial_groups": initial_groups,
+        "has_more": has_more,
+        "next_cursor_month": next_cursor_month,
+        "next_cursor_offset": next_cursor_offset,
+        "batch_size": RECORD_BATCH_SIZE,
     }
     return render(request, "web_doctor/mobile/review_record_detail.html", context)
 
@@ -1158,6 +1275,56 @@ def review_record_detail_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"success": False, "message": "参数错误"}, status=400)
 
     category_code = request.GET.get("category_code") or ""
+    use_cursor_pagination = any(
+        key in request.GET for key in ("month", "cursor_month", "cursor_offset", "limit")
+    )
+
+    if use_cursor_pagination:
+        if not category_code:
+            return JsonResponse({"success": False, "message": "category_code 不能为空。"}, status=400)
+
+        current_month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+        current_month, _, _, _ = _resolve_month_window(current_month)
+        cursor_month = request.GET.get("cursor_month") or current_month
+        try:
+            cursor_offset = max(0, int(request.GET.get("cursor_offset", 0)))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "message": "cursor_offset 必须为整数。"}, status=400)
+
+        try:
+            limit = int(request.GET.get("limit", RECORD_BATCH_SIZE))
+        except (TypeError, ValueError):
+            return JsonResponse({"success": False, "message": "limit 必须为整数。"}, status=400)
+        limit = max(1, limit)
+
+        try:
+            (
+                groups,
+                has_more,
+                next_cursor_month,
+                next_cursor_offset,
+            ) = _load_review_image_groups_batch(
+                patient_id=int(patient.id) if patient.id else 0,
+                category_code=category_code,
+                cursor_month=cursor_month,
+                cursor_offset=cursor_offset,
+                limit=limit,
+            )
+        except Exception:
+            logging.exception("查询复查详情失败")
+            return JsonResponse({"success": False, "message": "数据加载失败，请重试"}, status=500)
+
+        return JsonResponse(
+            {
+                "success": True,
+                "list": groups,
+                "has_more": has_more,
+                "next_cursor_month": next_cursor_month,
+                "next_cursor_offset": next_cursor_offset,
+                "batch_size": limit,
+            }
+        )
+
     report_month = request.GET.get("report_month") or timezone.localdate().strftime("%Y-%m")
     page_num = request.GET.get("page_num", 1)
     page_size = request.GET.get("page_size", 10)

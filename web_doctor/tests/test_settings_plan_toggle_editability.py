@@ -146,6 +146,15 @@ class SettingsPlanToggleEditabilityTests(TestCase):
         self.assertIsNotNone(re.search(r"data-questionnaire-toggle[^>]*disabled", html))
         self.assertIn('data-readonly-row="1"', html)
 
+    def _get_plan_table_html(self, cycle_id):
+        url = reverse(
+            "web_doctor:patient_settings_plan_table",
+            args=[self.patient.id],
+        ) + f"?cycle_id={cycle_id}"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        return response.content.decode("utf-8")
+
     def test_not_started_cycle_allows_plan_toggles(self):
         today = date.today()
         cycle = TreatmentCycle.objects.create(
@@ -166,7 +175,7 @@ class SettingsPlanToggleEditabilityTests(TestCase):
         ) + f"?cycle_id={cycle.id}"
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        html = response.content.decode("utf-8")
+        html = self._get_plan_table_html(cycle.id)
         self._assert_toggle_enabled_for_types(html)
 
     def test_in_progress_cycle_allows_plan_toggles(self):
@@ -189,7 +198,7 @@ class SettingsPlanToggleEditabilityTests(TestCase):
         ) + f"?cycle_id={cycle.id}"
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        html = response.content.decode("utf-8")
+        html = self._get_plan_table_html(cycle.id)
         self._assert_toggle_enabled_for_types(html)
 
     def test_completed_cycle_disables_plan_toggles(self):
@@ -212,7 +221,7 @@ class SettingsPlanToggleEditabilityTests(TestCase):
         ) + f"?cycle_id={cycle.id}"
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        html = response.content.decode("utf-8")
+        html = self._get_plan_table_html(cycle.id)
         self._assert_toggle_disabled_for_types(html)
 
     def test_terminated_cycle_disables_plan_toggles(self):
@@ -235,5 +244,5 @@ class SettingsPlanToggleEditabilityTests(TestCase):
         ) + f"?cycle_id={cycle.id}"
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        html = response.content.decode("utf-8")
+        html = self._get_plan_table_html(cycle.id)
         self._assert_toggle_disabled_for_types(html)

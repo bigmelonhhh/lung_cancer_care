@@ -3,7 +3,7 @@ from django.contrib.auth.models import AnonymousUser
 from users.models import CustomUser, PatientProfile
 from users.choices import UserType
 from patient_alerts.models import PatientAlert, AlertEventType, AlertLevel
-from health_data.models import MetricType
+from health_data.models import HealthMetric, MetricType
 from core.models import QuestionnaireCode
 from django.utils import timezone
 from datetime import timedelta
@@ -95,6 +95,39 @@ class HealthRecordsAbnormalCountTest(TestCase):
         # 检查咳嗽问卷异常数
         cough_stat = next(item for item in context['health_survey_stats'] if item['type'] == 'cough')
         self.assertEqual(cough_stat['abnormal'], 1)
+
+    def test_oral_mucosa_questionnaire_count_and_abnormal(self):
+        measured_at = timezone.now()
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=QuestionnaireCode.Q_KQNMLB,
+            source="manual",
+            value_main=Decimal("4.00"),
+            measured_at=measured_at,
+        )
+        PatientAlert.objects.create(
+            patient=self.patient,
+            event_type=AlertEventType.QUESTIONNAIRE,
+            event_level=AlertLevel.MODERATE,
+            is_active=True,
+            event_time=measured_at,
+            source_type="questionnaire",
+            source_payload={
+                "questionnaire_code": QuestionnaireCode.Q_KQNMLB,
+                "score": 4,
+            }
+        )
+
+        response = self.client.get('/p/health/records/')
+
+        self.assertEqual(response.status_code, 200)
+        oral_stat = next(
+            item for item in response.context['health_survey_stats']
+            if item['type'] == 'oral_mucosa'
+        )
+        self.assertEqual(oral_stat['count'], 1)
+        self.assertEqual(oral_stat['abnormal'], 1)
+        self.assertContains(response, "口腔黏膜损伤自评量表")
 
     def test_abnormal_count_inactive(self):
         """测试已处理（非激活）的报警不计入统计"""

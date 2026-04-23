@@ -114,6 +114,11 @@ urlpatterns = [
         name="patient_cycle_medication_add",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/settings/plan-table/",
+        views.patient_settings_plan_table,
+        name="patient_settings_plan_table",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/cycle/<int:cycle_id>/plan-toggle/",
         views.patient_cycle_plan_toggle,
         name="patient_cycle_plan_toggle",
@@ -152,6 +157,16 @@ urlpatterns = [
         "doctor/workspace/patient/<int:patient_id>/report-image/<int:image_id>/metrics/",
         views.patient_report_image_metrics,
         name="patient_report_image_metrics",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/report/<int:report_id>/detail/",
+        views.patient_report_detail,
+        name="patient_report_detail",
+    ),
+    path(
+        "doctor/workspace/patient/<int:patient_id>/report/create-modal/",
+        views.patient_report_create_modal,
+        name="patient_report_create_modal",
     ),
     path(
         "doctor/workspace/patient/<int:patient_id>/reports/batch-archive/",

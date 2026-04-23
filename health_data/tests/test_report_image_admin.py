@@ -1,6 +1,7 @@
 import json
 from datetime import date
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -219,7 +220,8 @@ class ReportImageAdminIntegrationTests(TestCase):
         )
         self.assertContains(response, f"报告图片 #{orphan.report_image_id}")
 
-    def test_orphan_retry_matching_reprocesses_all_pending_and_removes_resolved_rows(self):
+    @patch("health_data.tasks.reprocess_orphan_fields_task.delay")
+    def test_orphan_retry_matching_enqueues_async_task_for_selected_rows(self, delay_mock):
         resolvable_orphan = CheckupOrphanField.objects.create(
             patient=self.patient,
             report_image=self.report_image,
@@ -249,16 +251,18 @@ class ReportImageAdminIntegrationTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertFalse(CheckupOrphanField.objects.filter(pk=resolvable_orphan.pk).exists())
+        delay_mock.assert_called_once_with(orphan_ids=[resolvable_orphan.pk])
+        self.assertTrue(CheckupOrphanField.objects.filter(pk=resolvable_orphan.pk).exists())
         self.assertTrue(CheckupOrphanField.objects.filter(pk=unresolved_orphan.pk).exists())
-        result = CheckupResultValue.objects.get(
-            report_image=self.report_image,
-            standard_field=self.standard_field,
+        self.assertFalse(
+            CheckupResultValue.objects.filter(
+                report_image=self.report_image,
+                standard_field=self.standard_field,
+            ).exists()
         )
-        self.assertEqual(result.value_numeric, Decimal("6.1"))
         self.assertContains(
             response,
-            "已重试全部待处理孤儿字段：解决 1 条，仍缺别名 1 条，仍缺映射 0 条，仍有数值异常 0 条。",
+            "已提交 1 条孤儿字段的异步重跑任务。",
         )
-        self.assertNotContains(response, "AI白细胞")
+        self.assertContains(response, "AI白细胞")
         self.assertContains(response, "未知项目")

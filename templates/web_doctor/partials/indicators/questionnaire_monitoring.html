@@ -179,5 +179,11 @@
         {% if charts.anxiety %}
         {% include "web_doctor/partials/indicators/chart_bar.html" with chart=charts.anxiety %}
         {% endif %}
+
+        
+         <!-- 7. 口腔黏膜损伤自评量表 -->
+        {% if charts.oral_mucosa %}
+        {% include "web_doctor/partials/indicators/chart_bar.html" with chart=charts.oral_mucosa %}
+        {% endif %}
     </div>
 </div>

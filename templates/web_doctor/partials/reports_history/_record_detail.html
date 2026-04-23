@@ -1,0 +1,146 @@
+<div data-report-detail-root
+     x-data="window.buildConsultationReportDetailState({
+        reportId: {{ report.id }},
+        deleteUrl: '{% url 'web_doctor:delete_consultation_record' patient.id report.id %}',
+        saveUrl: '{% url 'web_doctor:patient_report_update' patient.id report.id %}',
+        recordType: '{{ report.record_type }}',
+        subCategory: '{{ report.sub_category|default:''|escapejs }}',
+        interpretation: '{{ report.interpretation|escapejs }}'
+     })">
+    <div class="flex flex-wrap gap-6 mt-4 mb-4">
+        {% for img in report.images %}
+        <div class="flex flex-col gap-2 w-[180px] relative" data-image-card="{{ img.id }}">
+            {% if report.record_type == '复查' %}
+                {% with img.category|cut:'复查-' as checkup_name %}
+                    <input type="hidden" data-image-id="{{ img.id }}" value="复查-{% if checkup_name and checkup_name != '复查' %}{{ checkup_name }}{% else %}其他{% endif %}">
+                {% endwith %}
+            {% else %}
+                <input type="hidden" data-image-id="{{ img.id }}" value="{{ report.record_type }}">
+            {% endif %}
+
+            <div class="w-full h-[120px] relative bg-white rounded border border-slate-200 overflow-hidden cursor-pointer hover:shadow-md transition-shadow group/img"
+                 @click="$dispatch('show-preview', '{{ img.url }}')">
+                <img src="{{ img.thumbnail_url|default:img.url }}" loading="lazy" decoding="async" class="w-full h-full object-cover">
+                <div class="absolute inset-0 bg-black/0 group-hover/img:bg-black/10 transition-colors flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white opacity-0 group-hover/img:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
+                </div>
+            </div>
+
+            <div class="flex text-xs gap-1 items-center">
+                <span class="text-slate-500 font-medium shrink-0 mr-1">类目:</span>
+                {% if report.record_type == '复查' %}
+                    {% with img.category|cut:'复查-' as checkup_name %}
+                    <div class="flex-1 min-w-0">
+                        <div class="text-slate-700">复查</div>
+                        <div x-show="!editing" class="text-slate-700 break-words">{% if checkup_name and checkup_name != '复查' %}{{ checkup_name }}{% else %}其他{% endif %}</div>
+                        <select x-show="editing"
+                                data-subcategory-select
+                                style="display:none;"
+                                class="mt-1 w-full border text-xs border-slate-300 rounded py-1 bg-white"
+                                @change="$el.closest('[data-image-card]').querySelector('input[type=hidden][data-image-id]').value = '复查-' + $event.target.value">
+                            {% for sub in checkup_subcategories %}
+                                <option value="{{ sub }}" {% if checkup_name and checkup_name != '复查' and sub == checkup_name %}selected{% endif %}>{{ sub }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endwith %}
+                {% else %}
+                    <div class="flex-1 min-w-0 text-slate-700">{{ report.record_type }}</div>
+                {% endif %}
+            </div>
+
+            <div class="text-slate-500 font-medium text-xs">
+                上传人: {{ report.uploader_info.name }}
+            </div>
+
+            {% if report.record_type == '复查' %}
+            <button type="button"
+                    class="w-fit px-2 py-1 text-[12px] border border-sky-500 text-sky-600 rounded bg-sky-50 hover:bg-sky-100 transition-colors inline-flex items-center gap-1"
+                    @click.stop="toggleMetricPanel('img-{{ img.id }}', '{% url 'web_doctor:patient_report_image_metrics' patient.id img.id %}')">
+                <span>查看指标数据</span>
+                <svg class="w-3 h-3 transition-transform duration-200" :class="metricPanelOpenKey === 'img-{{ img.id }}' ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                </svg>
+            </button>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div x-show="metricPanelOpenKey" x-collapse class="mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-sm p-3" style="display:none;">
+        <div class="text-sm font-semibold text-slate-800 mb-2" x-text="activeMetricData?.title || '复查指标'"></div>
+        <div x-show="metricLoadingKey === metricPanelOpenKey" class="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+            指标数据加载中...
+        </div>
+        <div x-show="metricError" class="rounded border border-rose-200 bg-rose-50 px-4 py-8 text-center text-sm text-rose-600" x-text="metricError"></div>
+        <div x-show="activeMetricData && !metricError && (!activeMetricData.rows || activeMetricData.rows.length === 0)" class="rounded border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500" x-text="activeMetricData?.empty_message || '该图片暂无已匹配指标数据'"></div>
+        <div class="border border-slate-200 rounded overflow-auto max-h-[260px]">
+            <table class="w-full text-xs" x-show="activeMetricData && activeMetricData.rows && activeMetricData.rows.length > 0 && !metricError">
+                <thead class="bg-slate-50 text-slate-700 sticky top-0">
+                    <tr>
+                        <th class="px-2 py-2 text-left font-semibold">编码</th>
+                        <th class="px-2 py-2 text-left font-semibold">中文名</th>
+                        <th class="px-2 py-2 text-left font-semibold">结果</th>
+                        <th class="px-2 py-2 text-left font-semibold">单位</th>
+                        <th class="px-2 py-2 text-left font-semibold">参考区间</th>
+                        <th class="px-2 py-2 text-left font-semibold">上次结果</th>
+                        <th class="px-2 py-2 text-left font-semibold">与上次变化</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    <template x-for="row in activeMetricData?.rows || []" :key="row.field_code">
+                        <tr>
+                            <td class="px-2 py-1.5 text-slate-700" x-text="row.field_code"></td>
+                            <td class="px-2 py-1.5 text-slate-700" x-text="row.field_name"></td>
+                            <td class="px-2 py-1.5 font-medium"
+                                :class="{'text-rose-600': row.abnormal_flag === 'HIGH', 'text-amber-600': row.abnormal_flag === 'LOW', 'text-slate-700': !['HIGH', 'LOW'].includes(row.abnormal_flag)}"
+                                x-text="row.current_value_display"></td>
+                            <td class="px-2 py-1.5 text-slate-600" x-text="row.unit"></td>
+                            <td class="px-2 py-1.5 text-slate-600" x-text="row.reference_range"></td>
+                            <td class="px-2 py-1.5 text-slate-600" x-text="row.previous_value_display"></td>
+                            <td class="px-2 py-1.5"
+                                :class="{'text-emerald-600': row.delta_direction === 'up', 'text-rose-600': row.delta_direction === 'down', 'text-slate-600': row.delta_direction === 'none'}"
+                                x-text="row.delta_display"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+            <button type="button"
+                    @click="metricPanelOpenKey = ''; activeMetricData = null; metricError = ''; metricLoadingKey = ''"
+                    class="px-4 py-1.5 rounded-full text-xs font-medium border border-slate-300 text-slate-600 bg-white hover:bg-slate-50 transition-colors">
+                收起指标面板
+            </button>
+        </div>
+    </div>
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-2">报告备注与解读</label>
+        <textarea x-model="interpretation"
+                  :disabled="!editing"
+                  class="w-full text-sm p-3 border border-slate-200 rounded-lg bg-white focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-slate-50 disabled:text-slate-500 resize-none"
+                  rows="3"
+                  placeholder="暂无解读内容..."></textarea>
+    </div>
+
+    <div class="flex justify-between items-center pt-2">
+        <button @click="confirmDelete" class="px-4 py-1.5 bg-gray-400 text-white rounded-full text-sm hover:bg-gray-500 transition-colors">
+            删除此条档案
+        </button>
+        <div class="flex items-center gap-2">
+            <button x-show="editing"
+                    style="display:none;"
+                    @click="cancelEdit($root)"
+                    class="px-6 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"
+                    :disabled="saving">
+                取消
+            </button>
+            <button @click="editing ? saveChanges($root) : startEdit($root)"
+                    class="px-6 py-1.5 rounded-full text-sm font-medium transition-colors shadow-sm bg-blue-600 text-white hover:bg-blue-700"
+                    :disabled="saving">
+                <span x-text="editing ? '保存' : '编辑'"></span>
+            </button>
+        </div>
+    </div>
+</div>

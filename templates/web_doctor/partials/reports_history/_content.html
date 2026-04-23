@@ -1,0 +1,5 @@
+{% if active_tab == 'images' %}
+    {% include "web_doctor/partials/reports_history/image_archives.html" %}
+{% else %}
+    {% include "web_doctor/partials/reports_history/consultation_records.html" %}
+{% endif %}

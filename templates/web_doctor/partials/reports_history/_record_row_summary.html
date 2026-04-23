@@ -1,0 +1,22 @@
+<div id="report-row-summary-{{ report.id }}" class="grid grid-cols-12 gap-4 px-6 py-4 cursor-pointer items-center">
+    <div class="col-span-2 flex items-center gap-2">
+        <div class="flex items-center gap-2">
+            <span class="text-sm font-medium {% if report.record_type == '复查' %}text-green-600{% elif report.record_type == '门诊' %}text-amber-500{% elif report.record_type == '住院' %}text-purple-600{% else %}text-slate-700{% endif %}">
+                <i class="fas fa-file-medical mr-1"></i>
+                {{ report.record_type }}
+            </span>
+        </div>
+    </div>
+    <div class="col-span-3 text-sm text-slate-600">{{ report.date }}</div>
+    <div class="col-span-2 text-center text-sm text-slate-600">{{ report.image_count }}</div>
+    <div class="col-span-2 text-center text-sm text-slate-600">{{ report.archiver }}</div>
+    <div class="col-span-3 flex items-center justify-end gap-2 pr-2">
+        <span class="text-sm text-slate-600">{{ report.archived_date }}</span>
+        <button class="text-slate-400 hover:text-slate-600 ml-2 flex items-center group/btn" @click.stop="toggle()">
+            <span class="text-xs mr-1" x-text="expanded ? '收起详情' : '展开详情'"></span>
+            <svg class="w-4 h-4 transition-transform duration-300 ease-in-out" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+        </button>
+    </div>
+</div>

@@ -1,12 +1,15 @@
 (() => {
+  const LOAD_MORE_THRESHOLD = 600;
+
   const state = {
     categoryCode: '',
     title: '',
     patientId: '',
     reportMonth: '',
-    pageNum: 1,
-    pageSize: 10,
-    total: 0,
+    hasMore: false,
+    cursorMonth: '',
+    cursorOffset: 0,
+    batchSize: 6,
     groups: [],
     heights: [],
     offsets: [],
@@ -31,6 +34,18 @@
     return document.getElementById(id);
   }
 
+  function parseJsonScript(id) {
+    const node = $(id);
+    if (!node) return [];
+    try {
+      const parsed = JSON.parse(node.textContent || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      console.error('review_record_detail parse initial groups failed:', error);
+      return [];
+    }
+  }
+
   function initDom() {
     els.scroll = $('rrd-scroll');
     els.monthPicker = $('rrd-month-picker');
@@ -38,8 +53,8 @@
     els.virtualContainer = $('rrd-virtual-container');
     els.virtualInner = $('rrd-virtual-inner');
     els.empty = $('rrd-empty');
-    els.spinner = $('rrd-loading-spinner');
-    els.noMore = $('rrd-no-more');
+    els.spinner = $('loading-spinner');
+    els.noMore = $('no-more-data');
     els.toast = $('rrd-toast');
     els.viewer = $('rrd-viewer');
     els.viewerImage = $('rrd-viewer-image');
@@ -49,10 +64,17 @@
     els.viewerNext = $('rrd-viewer-next');
     els.viewerIndex = $('rrd-viewer-index');
 
+    if (!els.scroll) return;
+
     state.patientId = els.scroll.getAttribute('data-patient-id') || '';
     state.categoryCode = els.scroll.getAttribute('data-category-code') || '';
     state.title = els.scroll.getAttribute('data-title') || '';
     state.reportMonth = els.monthPicker ? els.monthPicker.value : '';
+    state.hasMore = (els.scroll.getAttribute('data-has-more') || '') === 'true';
+    state.cursorMonth = els.scroll.getAttribute('data-next-cursor-month') || '';
+    state.cursorOffset = parseInt(els.scroll.getAttribute('data-next-cursor-offset') || '0', 10) || 0;
+    state.batchSize = parseInt(els.scroll.getAttribute('data-batch-size') || '6', 10) || 6;
+    state.groups = parseJsonScript('rrd-initial-groups');
   }
 
   function showToast(message, type = 'info') {
@@ -100,8 +122,20 @@
     els.noMore.classList.toggle('hidden', !visible);
   }
 
-  function isAllLoaded() {
-    return state.total > 0 && state.groups.length >= state.total;
+  function syncListStates() {
+    const hasGroups = state.groups.length > 0;
+    setEmptyVisible(!hasGroups && !state.isLoading);
+    setNoMoreVisible(hasGroups && !state.hasMore && !state.isLoading);
+  }
+
+  function isNearBottom(threshold = LOAD_MORE_THRESHOLD) {
+    if (!els.scroll) return false;
+    return els.scroll.scrollHeight - els.scroll.scrollTop - els.scroll.clientHeight < threshold;
+  }
+
+  function scrollToFooter() {
+    if (!els.scroll) return;
+    els.scroll.scrollTop = els.scroll.scrollHeight;
   }
 
   function computeItemHeight(group) {
@@ -117,9 +151,9 @@
 
   function recomputeLayout(fromIndex = 0) {
     const start = Math.max(0, fromIndex);
-    for (let i = start; i < state.groups.length; i++) {
+    for (let i = start; i < state.groups.length; i += 1) {
       state.heights[i] = computeItemHeight(state.groups[i]);
-      state.offsets[i] = (i === 0 ? 0 : state.offsets[i - 1] + state.heights[i - 1]);
+      state.offsets[i] = i === 0 ? 0 : state.offsets[i - 1] + state.heights[i - 1];
     }
     const lastIndex = state.groups.length - 1;
     state.totalHeight = lastIndex >= 0 ? state.offsets[lastIndex] + state.heights[lastIndex] : 0;
@@ -193,9 +227,8 @@
     const offsetY = state.offsets[from] || 0;
 
     const parts = [];
-    for (let i = from; i <= to; i++) {
-      const group = state.groups[i];
-      parts.push(`<div data-group-index="${i}">${buildCardHtml(group)}</div>`);
+    for (let i = from; i <= to; i += 1) {
+      parts.push(`<div data-group-index="${i}">${buildCardHtml(state.groups[i])}</div>`);
     }
     els.virtualInner.style.transform = `translateY(${offsetY}px)`;
     els.virtualInner.innerHTML = parts.join('');
@@ -295,9 +328,9 @@
     if (els.viewerPrev) els.viewerPrev.addEventListener('click', prevImage);
     if (els.viewerNext) els.viewerNext.addEventListener('click', nextImage);
 
-    els.viewer.addEventListener('click', (e) => {
+    els.viewer.addEventListener('click', e => {
       const target = e.target;
-      if (target && target === els.viewer) closeViewer();
+      if (target === els.viewer) closeViewer();
       if (target && target.classList && target.classList.contains('bg-black/90')) closeViewer();
     });
 
@@ -307,13 +340,13 @@
       });
     }
 
-    els.viewer.addEventListener('touchstart', (e) => {
+    els.viewer.addEventListener('touchstart', e => {
       if (!e.touches || e.touches.length !== 1) return;
       state.viewer.touchStartX = e.touches[0].clientX;
       state.viewer.touchStartY = e.touches[0].clientY;
     }, { passive: true });
 
-    els.viewer.addEventListener('touchend', (e) => {
+    els.viewer.addEventListener('touchend', e => {
       if (!e.changedTouches || e.changedTouches.length !== 1) return;
       const dx = e.changedTouches[0].clientX - state.viewer.touchStartX;
       const dy = e.changedTouches[0].clientY - state.viewer.touchStartY;
@@ -324,14 +357,15 @@
   }
 
   function buildApiUrl() {
-    const base = '/doctor/mobile/api/health/review/record/images/';
-    const params = new URLSearchParams();
-    if (state.patientId) params.set('patient_id', state.patientId);
-    params.set('category_code', state.categoryCode);
-    params.set('report_month', state.reportMonth);
-    params.set('page_num', String(state.pageNum));
-    params.set('page_size', String(state.pageSize));
-    return `${base}?${params.toString()}`;
+    const apiUrl = els.scroll ? (els.scroll.getAttribute('data-api-url') || '') : '';
+    const url = new URL(apiUrl || window.location.pathname, window.location.origin);
+    if (state.patientId) url.searchParams.set('patient_id', state.patientId);
+    url.searchParams.set('category_code', state.categoryCode);
+    url.searchParams.set('month', state.reportMonth);
+    url.searchParams.set('cursor_month', state.cursorMonth || state.reportMonth);
+    url.searchParams.set('cursor_offset', String(state.cursorOffset));
+    url.searchParams.set('limit', String(state.batchSize));
+    return url.toString();
   }
 
   function cancelInFlight() {
@@ -342,19 +376,19 @@
   }
 
   function initPerformanceObserver() {
-    state.startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+    state.startedAt = typeof performance !== 'undefined' && performance.now ? performance.now() : 0;
     if (!window.PerformanceObserver || !PerformanceObserver.supportedEntryTypes) return;
     if (!PerformanceObserver.supportedEntryTypes.includes('largest-contentful-paint')) return;
     try {
       state.performanceObserver = new PerformanceObserver(() => {});
       state.performanceObserver.observe({ type: 'largest-contentful-paint', buffered: true });
-    } catch (e) {}
+    } catch (error) {}
   }
 
   function reportFirstRender() {
     if (state.firstRenderReported) return;
     state.firstRenderReported = true;
-    const elapsed = (typeof performance !== 'undefined' && performance.now) ? Math.round(performance.now() - state.startedAt) : -1;
+    const elapsed = typeof performance !== 'undefined' && performance.now ? Math.round(performance.now() - state.startedAt) : -1;
 
     let lcp = null;
     if (state.performanceObserver) {
@@ -362,8 +396,10 @@
         const entries = state.performanceObserver.takeRecords();
         const last = entries && entries.length ? entries[entries.length - 1] : null;
         if (last && typeof last.startTime === 'number') lcp = Math.round(last.startTime);
-      } catch (e) {}
-      try { state.performanceObserver.disconnect(); } catch (e) {}
+      } catch (error) {}
+      try {
+        state.performanceObserver.disconnect();
+      } catch (error) {}
       state.performanceObserver = null;
     }
 
@@ -374,104 +410,95 @@
     console.log('review_record_detail first_render_ms', elapsed);
   }
 
-  function loadPage({ reset = false } = {}) {
-    if (state.isLoading) return;
+  function loadMore() {
+    if (state.isLoading || !state.hasMore) return;
     if (!state.categoryCode) {
       showToast('缺少复查分类参数', 'error');
       return;
     }
 
-    if (reset) {
-      state.pageNum = 1;
-    }
-
+    const prevHasMore = state.hasMore;
+    const shouldStickFooter = isNearBottom();
     cancelInFlight();
     state.abortController = new AbortController();
-
-    const url = buildApiUrl();
     state.isLoading = true;
     setLoading(true);
     setNoMoreVisible(false);
     setEmptyVisible(false);
+    if (shouldStickFooter) {
+      window.requestAnimationFrame(scrollToFooter);
+    }
 
-    const preserveGroups = state.groups.slice();
-    const preserveHeights = state.heights.slice();
-    const preserveOffsets = state.offsets.slice();
-    const preserveTotalHeight = state.totalHeight;
-    const preserveTotal = state.total;
+    const preserveCursorMonth = state.cursorMonth;
+    const preserveCursorOffset = state.cursorOffset;
+    const url = buildApiUrl();
 
     fetch(url, {
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       signal: state.abortController.signal,
     })
-      .then(res => res.json().then(data => ({ ok: res.ok, status: res.status, data })))
+      .then(res => res.json().then(data => ({ ok: res.ok, data })))
       .then(({ ok, data }) => {
         if (!ok || !data || data.success === false) {
           throw new Error((data && data.message) || '数据加载失败，请重试');
         }
 
-        const total = parseInt(data.total || 0, 10);
         const list = Array.isArray(data.list) ? data.list : [];
-
-        state.total = total;
-        if (reset) {
-          state.groups = list;
-          state.heights = [];
-          state.offsets = [];
-          state.totalHeight = 0;
-          if (els.scroll) els.scroll.scrollTop = 0;
-          recomputeLayout(0);
-          renderVirtual();
-        } else {
-          const startIndex = state.groups.length;
-          state.groups = state.groups.concat(list);
-          recomputeLayout(startIndex);
-          renderVirtual();
+        const startIndex = state.groups.length;
+        state.groups = state.groups.concat(list);
+        state.hasMore = Boolean(data.has_more);
+        state.cursorMonth = data.next_cursor_month || '';
+        state.cursorOffset = parseInt(data.next_cursor_offset ?? 0, 10) || 0;
+        if (typeof data.batch_size !== 'undefined') {
+          state.batchSize = parseInt(data.batch_size, 10) || state.batchSize;
         }
 
-        if (state.total === 0) {
-          setEmptyVisible(true);
-        }
-
-        if (isAllLoaded()) {
-          setNoMoreVisible(true);
-        } else {
-          state.pageNum += 1;
-        }
-
-        if (reset) {
-          window.requestAnimationFrame(() => {
-            reportFirstRender();
-          });
+        recomputeLayout(startIndex);
+        renderVirtual();
+        syncListStates();
+        if (prevHasMore && !state.hasMore) {
+          window.requestAnimationFrame(scrollToFooter);
         }
       })
       .catch(err => {
         if (err && err.name === 'AbortError') return;
-        state.groups = preserveGroups;
-        state.heights = preserveHeights;
-        state.offsets = preserveOffsets;
-        state.totalHeight = preserveTotalHeight;
-        state.total = preserveTotal;
-        recomputeLayout(0);
-        renderVirtual();
+        state.cursorMonth = preserveCursorMonth;
+        state.cursorOffset = preserveCursorOffset;
         showToast(err && err.message ? err.message : '数据加载失败，请重试', 'error');
       })
       .finally(() => {
         setLoading(false);
         state.isLoading = false;
         state.abortController = null;
+        syncListStates();
+        if (shouldStickFooter && state.hasMore) {
+          window.requestAnimationFrame(scrollToFooter);
+        }
+        window.requestAnimationFrame(ensureScrollableContent);
       });
   }
 
   function handleScroll() {
     renderVirtual();
-    if (state.isLoading) return;
-    if (isAllLoaded()) return;
-    const threshold = 600;
+    if (state.isLoading || !state.hasMore) return;
     const bottom = els.scroll.scrollTop + els.scroll.clientHeight;
-    if (state.totalHeight - bottom < threshold) {
-      loadPage({ reset: false });
+    if (state.totalHeight - bottom < LOAD_MORE_THRESHOLD) {
+      loadMore();
     }
+  }
+
+  function ensureScrollableContent() {
+    if (!els.scroll || state.isLoading || !state.hasMore) return;
+    if (state.totalHeight <= els.scroll.clientHeight + 20) {
+      loadMore();
+    }
+  }
+
+  function handleMonthChange(value) {
+    if (!value) return;
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.set('month', value);
+    window.location.replace(nextUrl.toString());
   }
 
   function bindEvents() {
@@ -482,37 +509,37 @@
     }
 
     if (els.monthPicker) {
-      els.monthPicker.addEventListener('change', (e) => {
-        const val = e.target.value;
-        if (!val) return;
-        state.reportMonth = val;
-        if (els.monthDisplay) els.monthDisplay.textContent = val;
-        state.groups = [];
-        state.heights = [];
-        state.offsets = [];
-        state.totalHeight = 0;
-        state.total = 0;
-        if (els.virtualContainer) els.virtualContainer.style.height = '0px';
-        if (els.virtualInner) els.virtualInner.innerHTML = '';
-        setNoMoreVisible(false);
-        setEmptyVisible(false);
-        loadPage({ reset: true });
+      els.monthPicker.addEventListener('change', e => {
+        const value = e.target.value;
+        if (els.monthDisplay && value) {
+          els.monthDisplay.textContent = value;
+        }
+        handleMonthChange(value);
       });
     }
 
     window.addEventListener('resize', () => {
       window.requestAnimationFrame(() => {
+        recomputeLayout(0);
         renderVirtual();
+        ensureScrollableContent();
       });
     });
   }
 
   function init() {
     initDom();
+    if (!els.scroll) return;
     bindEvents();
     bindViewerEvents();
     initPerformanceObserver();
-    loadPage({ reset: true });
+    recomputeLayout(0);
+    renderVirtual();
+    syncListStates();
+    window.requestAnimationFrame(() => {
+      reportFirstRender();
+      ensureScrollableContent();
+    });
   }
 
   if (document.readyState === 'loading') {

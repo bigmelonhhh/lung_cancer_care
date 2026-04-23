@@ -1,12 +1,12 @@
-import random
 import json
 import os
 import uuid
 import logging
-from typing import List, Dict, Any
+import time
+from typing import Dict, Any
 from datetime import datetime
 
-from django.http import HttpRequest, HttpResponse, Http404, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
@@ -14,12 +14,13 @@ from django.core.paginator import Paginator
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch, prefetch_related_objects
+from django.db.models import Prefetch
+from django.template.loader import render_to_string
 from django.utils import timezone
 
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
-from health_data.services.report_service import ReportUploadService, ReportArchiveService
+from health_data.services.report_service import ReportArchiveService
 from health_data.services.checkup_results import (
     build_report_image_metrics_payload,
     ignore_ai_sync_warnings,
@@ -31,6 +32,13 @@ from core.service.checkup import get_active_checkup_library
 from core.models import CheckupLibrary
 
 logger = logging.getLogger(__name__)
+
+REPORTS_SECTION_TEMPLATE = "web_doctor/partials/reports_history/list.html"
+REPORTS_CONTENT_TEMPLATE = "web_doctor/partials/reports_history/_content.html"
+REPORTS_DETAIL_TEMPLATE = "web_doctor/partials/reports_history/_record_detail.html"
+REPORTS_ROW_SUMMARY_TEMPLATE = "web_doctor/partials/reports_history/_record_row_summary.html"
+REPORTS_CREATE_MODAL_TEMPLATE = "web_doctor/partials/reports_history/create_modal.html"
+CHECKUP_SUBCATEGORIES_CACHE_TTL_SECONDS = 300
 
 # 预设图片分类
 REPORT_IMAGE_CATEGORIES = [
@@ -49,22 +57,89 @@ RECHECK_SUB_CATEGORIES = [
     "心电图", "凝血功能", "甲状腺功能", "肿瘤评估", "肿瘤标志物", "其他"
 ]
 
-# 全局变量存储模拟数据 (仅保留图片档案部分的 Mock 逻辑，直到完全替换)
-MOCK_ARCHIVE_DATA: List[Dict[str, Any]] = []
-
-def _init_mock_archive_data():
-    """初始化图片档案模拟数据 (仅用于图片档案 Tab，若已替换可移除)"""
-    global MOCK_ARCHIVE_DATA
-    if MOCK_ARCHIVE_DATA:
-        return
-    # ... (保持原有的 archive mock 数据生成逻辑，如果还需要的话)
-    # 但根据代码，handle_reports_history_section 已经切换为真实数据 _get_archives_data
-    # 所以这里其实不需要了。
-    pass
+_checkup_subcategories_cache: dict[str, Any] = {
+    "expires_at": 0.0,
+    "value": RECHECK_SUB_CATEGORIES,
+}
 
 def get_report_image_categories():
     """获取所有可用的图片分类"""
     return REPORT_IMAGE_CATEGORIES
+
+
+def _get_checkup_subcategories() -> list[str]:
+    now = time.time()
+    if _checkup_subcategories_cache["expires_at"] > now:
+        return list(_checkup_subcategories_cache["value"])
+
+    try:
+        checkup_lib = get_active_checkup_library()
+        categories = [item["name"] for item in checkup_lib]
+    except Exception:
+        categories = RECHECK_SUB_CATEGORIES
+
+    _checkup_subcategories_cache["value"] = categories
+    _checkup_subcategories_cache["expires_at"] = now + CHECKUP_SUBCATEGORIES_CACHE_TTL_SECONDS
+    return list(categories)
+
+
+def _build_reports_filters(request: HttpRequest) -> dict[str, str]:
+    return {
+        "recordType": request.GET.get("recordType") or request.GET.get("record_type") or "",
+        "reportDateStart": request.GET.get("reportDateStart") or request.GET.get("report_start_date") or "",
+        "reportDateEnd": request.GET.get("reportDateEnd") or request.GET.get("report_end_date") or "",
+        "archivedDateStart": request.GET.get("archivedDateStart") or request.GET.get("archive_start_date") or "",
+        "archivedDateEnd": request.GET.get("archivedDateEnd") or request.GET.get("archive_end_date") or "",
+        "archiver": request.GET.get("archiver") or request.GET.get("archiver_name") or "",
+        "startDate": request.GET.get("startDate") or "",
+        "endDate": request.GET.get("endDate") or "",
+    }
+
+
+def _build_report_image_dict(
+    img: ReportImage,
+    *,
+    checkup_fallback_name: str = "",
+) -> dict[str, Any]:
+    category_str = ""
+    record_type_display = ""
+    sub_category = ""
+    if img.record_type:
+        type_map = {
+            ReportImage.RecordType.OUTPATIENT: "门诊",
+            ReportImage.RecordType.INPATIENT: "住院",
+            ReportImage.RecordType.CHECKUP: "复查",
+        }
+        cat_name = type_map.get(img.record_type, "")
+        record_type_display = cat_name
+        category_str = cat_name
+
+        if img.record_type == ReportImage.RecordType.CHECKUP:
+            if img.checkup_item and (img.checkup_item.name or "").strip():
+                sub_category = img.checkup_item.name.strip()
+            elif checkup_fallback_name:
+                sub_category = checkup_fallback_name
+
+            if sub_category:
+                category_str = f"{cat_name}-{sub_category}"
+
+    pending_ai_warnings, pending_warning_keys = _build_ai_warning_payload(img)
+    return {
+        "id": img.id,
+        "name": f"图片-{img.id}",
+        "url": img.image_url,
+        "thumbnail_url": img.image_url,
+        "category": category_str,
+        "record_type": record_type_display,
+        "sub_category": sub_category,
+        "report_date": img.report_date.strftime("%Y-%m-%d") if img.report_date else "",
+        "is_archived": bool(img.clinical_event),
+        "ai_parse_status": img.ai_parse_status,
+        "ai_error_message": img.ai_error_message,
+        "ai_error_message_short": (img.ai_error_message or "")[:80],
+        "pending_ai_warnings": pending_ai_warnings,
+        "pending_ai_warning_keys": pending_warning_keys,
+    }
 
 
 def _build_ai_warning_payload(img: ReportImage) -> tuple[list[dict[str, Any]], list[str]]:
@@ -93,6 +168,7 @@ def _render_images_tab_response(request: HttpRequest, patient_id: int, message: 
 
     request.GET._mutable = True
     request.GET["tab"] = "images"
+    request.GET["fragment"] = "content"
     request.GET._mutable = False
 
     template_name = handle_reports_history_section(request, context)
@@ -104,61 +180,25 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
     """
     将 ClinicalEvent 映射为前端模板所需的数据结构
     """
-    # 1. 处理图片
-    # 注意：event.report_images 应该被 prefetch 以避免 N+1
     images = []
-    
-    # 尝试查找复查项目名称 (sub_category)
     sub_category = ""
-    
-    # 确保 event.report_images.all() 使用了 prefetch 的结果
-    report_images = list(event.report_images.all())
-    
-    for img in report_images:
-        # 构建分类显示
-        category_str = ""
-        type_map = {
-            ReportImage.RecordType.OUTPATIENT: "门诊",
-            ReportImage.RecordType.INPATIENT: "住院",
-            ReportImage.RecordType.CHECKUP: "复查",
-        }
-        cat_name = type_map.get(img.record_type, "")
-        
-        if img.record_type == ReportImage.RecordType.CHECKUP and img.checkup_item:
-            category_str = f"{cat_name}-{img.checkup_item.name}"
-            # 顺便设置 sub_category (如果是复查类型)
-            if not sub_category and event.event_type == ReportImage.RecordType.CHECKUP:
-                sub_category = img.checkup_item.name
-        else:
-            category_str = cat_name
-            
-        pending_ai_warnings, pending_warning_keys = _build_ai_warning_payload(img)
-        images.append({
-            "id": img.id,
-            "name": f"图片-{img.id}",
-            "url": img.image_url,
-            "category": category_str,
-            "report_date": img.report_date,
-            "ai_parse_status": img.ai_parse_status,
-            "ai_error_message": img.ai_error_message,
-            "ai_error_message_short": (img.ai_error_message or "")[:80],
-            "pending_ai_warnings": pending_ai_warnings,
-            "pending_ai_warning_keys": pending_warning_keys,
-        })
-        
-    # 2. 处理归档人
+
+    for img in event.report_images.all():
+        image_dict = _build_report_image_dict(img)
+        if not sub_category and image_dict["sub_category"] and event.event_type == ReportImage.RecordType.CHECKUP:
+            sub_category = image_dict["sub_category"]
+        images.append(image_dict)
+
     archiver_name = "-后台接口未定义"
     if getattr(event, "archiver_name", None) and event.archiver_name not in ("未知", ""):
         archiver_name = event.archiver_name
     elif event.created_by_doctor:
         archiver_name = event.created_by_doctor.name or event.created_by_doctor.user.username
-        
-    # 3. 处理归档日期
+
     archived_date_str = "-后台接口未定义"
     if event.created_at:
         archived_date_str = timezone.localtime(event.created_at).strftime("%Y-%m-%d")
-        
-    # 4. 记录类型映射
+
     record_type_map = {
         1: "门诊",
         2: "住院",
@@ -166,7 +206,6 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
     }
     record_type_display = record_type_map.get(event.event_type, "-后台接口未定义")
 
-    # 5. 处理上传人信息
     uploader_name = event.patient.name
 
     return {
@@ -182,7 +221,7 @@ def _map_clinical_event_to_dict(event: ClinicalEvent) -> Dict[str, Any]:
         "archiver": archiver_name,
         "archiver_name": archiver_name,
         "archived_date": archived_date_str,
-        "status": "已完成", # 默认状态
+        "status": "已完成",
     }
 
 def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 10, start_date=None, end_date=None, category=None):
@@ -219,40 +258,33 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
         end_date,
     )
 
-    # 1. 调用 Service 获取分页后的上传记录
-    uploads_page = ReportUploadService.list_uploads(
-        patient=patient,
-        include_deleted=False,
-        upload_sources=[UploadSource.PERSONAL_CENTER, UploadSource.CHECKUP_PLAN],
-        start_date=start_date_obj,
-        end_date=end_date_obj,
-        page=page,
-        page_size=page_size
-    )
-    logger.info(
-        "image_archives list_uploads patient_id=%s parsed_start=%s parsed_end=%s page=%s page_size=%s count=%s",
-        patient.id,
-        start_date_obj,
-        end_date_obj,
-        page,
-        page_size,
-        getattr(uploads_page.paginator, "count", None),
-    )
-    
-    # 优化：预加载当前页关联的图片和诊疗记录
-    upload_ids = [u.id for u in uploads_page.object_list]
-    
-    uploads_with_data = (
-        ReportUpload.objects.filter(id__in=upload_ids)
+    uploads_qs = (
+        ReportUpload.objects.filter(
+            patient=patient,
+            deleted_at__isnull=True,
+            upload_source__in=[UploadSource.PERSONAL_CENTER, UploadSource.CHECKUP_PLAN],
+        )
         .select_related("related_task", "related_task__plan_item")
         .prefetch_related(
-        Prefetch(
-            'images',
-            queryset=ReportImage.objects.select_related('clinical_event', 'checkup_item', 'archived_by', 'archived_by__user').order_by('id')
-        )
+            Prefetch(
+                "images",
+                queryset=ReportImage.objects.select_related(
+                    "clinical_event",
+                    "checkup_item",
+                    "archived_by",
+                    "archived_by__user",
+                ).order_by("id"),
+            )
         )
         .order_by("-created_at")
     )
+    if start_date_obj is not None:
+        uploads_qs = uploads_qs.filter(created_at__date__gte=start_date_obj)
+    if end_date_obj is not None:
+        uploads_qs = uploads_qs.filter(created_at__date__lte=end_date_obj)
+
+    uploads_page = Paginator(uploads_qs, page_size).get_page(page)
+    uploads_with_data = uploads_page.object_list
 
     candidate_checkup_ids: set[int] = set()
     candidate_checkup_names: set[str] = set()
@@ -358,29 +390,10 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
         current_group = grouped_archives[group_key]
         
         for img in upload_images:
-            pending_ai_warnings, pending_warning_keys = _build_ai_warning_payload(img)
-            category_str = ""
-            record_type_display = ""
-            sub_category = ""
-            if img.record_type:
-                type_map = {
-                    ReportImage.RecordType.OUTPATIENT: "门诊",
-                    ReportImage.RecordType.INPATIENT: "住院",
-                    ReportImage.RecordType.CHECKUP: "复查",
-                }
-                cat_name = type_map.get(img.record_type, "")
-                record_type_display = cat_name
-                category_str = cat_name
-
-                if img.record_type == ReportImage.RecordType.CHECKUP:
-                    if img.checkup_item and (img.checkup_item.name or "").strip():
-                        sub_category = img.checkup_item.name.strip()
-                    elif upload.upload_source == UploadSource.CHECKUP_PLAN:
-                        sub_category = upload_checkup_sub_name.get(upload.id, "")
-
-                    if sub_category:
-                        category_str = f"{cat_name}-{sub_category}"
-            
+            image_dict = _build_report_image_dict(
+                img,
+                checkup_fallback_name=upload_checkup_sub_name.get(upload.id, ""),
+            )
             if not img.clinical_event:
                 current_group["is_archived"] = False
             else:
@@ -389,26 +402,12 @@ def _get_archives_data(patient: PatientProfile, page: int = 1, page_size: int = 
                 if not current_group["archived_date"] and img.archived_at:
                     current_group["archived_date"] = img.archived_at.strftime("%Y-%m-%d")
 
-            if not current_group["record_type"] and record_type_display:
-                current_group["record_type"] = record_type_display
-            if not current_group["sub_category"] and sub_category:
-                current_group["sub_category"] = sub_category
+            if not current_group["record_type"] and image_dict["record_type"]:
+                current_group["record_type"] = image_dict["record_type"]
+            if not current_group["sub_category"] and image_dict["sub_category"]:
+                current_group["sub_category"] = image_dict["sub_category"]
 
-            current_group["images"].append({
-                "id": img.id,
-                "name": f"图片-{img.id}", 
-                "url": img.image_url,
-                "category": category_str,
-                "record_type": record_type_display,
-                "sub_category": sub_category,
-                "report_date": img.report_date.strftime("%Y-%m-%d") if img.report_date else "",
-                "is_archived": bool(img.clinical_event),
-                "ai_parse_status": img.ai_parse_status,
-                "ai_error_message": img.ai_error_message,
-                "ai_error_message_short": (img.ai_error_message or "")[:80],
-                "pending_ai_warnings": pending_ai_warnings,
-                "pending_ai_warning_keys": pending_warning_keys,
-            })
+            current_group["images"].append(image_dict)
             
     for group in grouped_archives.values():
         group["image_count"] = len(group["images"])
@@ -453,97 +452,117 @@ def get_reports_page_for_patient(request: HttpRequest, patient: PatientProfile, 
         page=records_page_num,
         page_size=page_size,
     )
-    if events_page.object_list:
-        prefetch_related_objects(
-            events_page.object_list,
-            "report_images",
-            "report_images__checkup_item",
-            "created_by_doctor",
-            "created_by_doctor__user",
-            "patient",
-        )
-    reports_list = [_map_clinical_event_to_dict(event) for event in events_page.object_list]
+    event_ids = [event.id for event in events_page.object_list]
+    hydrated_events: list[ClinicalEvent] = []
+    if event_ids:
+        hydrated_map = {
+            event.id: event
+            for event in ClinicalEvent.objects.filter(id__in=event_ids)
+            .select_related("patient", "created_by_doctor", "created_by_doctor__user")
+            .prefetch_related(
+                Prefetch(
+                    "report_images",
+                    queryset=ReportImage.objects.select_related("checkup_item").order_by("id"),
+                )
+            )
+        }
+        hydrated_events = [hydrated_map[event_id] for event_id in event_ids if event_id in hydrated_map]
+    reports_list = [_map_clinical_event_to_dict(event) for event in hydrated_events]
     events_page.object_list = reports_list
     return events_page
+
+
+def get_report_detail_for_patient(patient_id: int, report_id: int) -> dict[str, Any]:
+    event = get_object_or_404(
+        ClinicalEvent.objects.filter(patient_id=patient_id)
+        .select_related("patient", "created_by_doctor", "created_by_doctor__user")
+        .prefetch_related(
+            Prefetch(
+                "report_images",
+                queryset=ReportImage.objects.select_related("checkup_item").order_by("id"),
+            )
+        ),
+        pk=report_id,
+    )
+    return _map_clinical_event_to_dict(event)
+
+
+def _build_report_fragment_payload(request: HttpRequest, patient: PatientProfile, report_id: int) -> dict[str, str]:
+    report = get_report_detail_for_patient(patient.id, report_id)
+    detail_context = {
+        "patient": patient,
+        "report": report,
+        "checkup_subcategories": _get_checkup_subcategories(),
+        "request": request,
+    }
+    row_context = {
+        "patient": patient,
+        "report": report,
+        "request": request,
+    }
+    return {
+        "report_id": str(report_id),
+        "summary_html": render_to_string(REPORTS_ROW_SUMMARY_TEMPLATE, row_context, request=request),
+        "detail_html": render_to_string(REPORTS_DETAIL_TEMPLATE, detail_context, request=request),
+    }
+
+
+def _build_reports_section_context(
+    request: HttpRequest,
+    patient: PatientProfile,
+    *,
+    active_tab: str,
+) -> dict[str, Any]:
+    context: dict[str, Any] = {
+        "patient": patient,
+        "active_tab": active_tab,
+        "filters": _build_reports_filters(request),
+        "checkup_subcategories": _get_checkup_subcategories(),
+        "image_categories": get_report_image_categories(),
+        "record_types": RECORD_TYPES,
+        "reports_content_template": REPORTS_CONTENT_TEMPLATE,
+        "include_workspace_tabs_oob": request.GET.get("fragment") != "content",
+    }
+
+    if active_tab == "images":
+        try:
+            images_page_num = int(request.GET.get("images_page", 1))
+        except (TypeError, ValueError):
+            images_page_num = 1
+        archives_list, archives_page_obj = _get_archives_data(
+            patient,
+            page=images_page_num,
+            page_size=10,
+            start_date=context["filters"]["startDate"],
+            end_date=context["filters"]["endDate"],
+        )
+        context.update(
+            {
+                "archives_list": archives_list,
+                "archives_page_obj": archives_page_obj,
+            }
+        )
+    else:
+        context["reports_page"] = get_reports_page_for_patient(request, patient, page_size=10)
+
+    return context
 
 
 def handle_reports_history_section(request: HttpRequest, context: dict) -> str:
     """
     处理检查报告历史记录板块
     """
-    import logging
-    logger = logging.getLogger(__name__)
-    
-    template_name = "web_doctor/partials/reports_history/list.html"
-    
+    template_name = REPORTS_SECTION_TEMPLATE
     patient = context.get("patient")
     if not patient:
         logger.warning("handle_reports_history_section called without patient in context")
-        return template_name 
+        return template_name
 
     active_tab = request.GET.get("tab", "records")
     logger.info(f"Refreshing reports history section for patient {patient.id}, tab={active_tab}")
-    
-    try:
-        images_page_num = int(request.GET.get("images_page", 1))
-    except (TypeError, ValueError):
-        images_page_num = 1
-        
-    record_type = request.GET.get("recordType") or request.GET.get("record_type")
-    report_date_start = request.GET.get("reportDateStart") or request.GET.get("report_start_date")
-    report_date_end = request.GET.get("reportDateEnd") or request.GET.get("report_end_date")
-    archived_date_start = request.GET.get("archivedDateStart") or request.GET.get("archive_start_date")
-    archived_date_end = request.GET.get("archivedDateEnd") or request.GET.get("archive_end_date")
-    archiver = request.GET.get("archiver") or request.GET.get("archiver_name")
-    images_start_date = request.GET.get("startDate") or ""
-    images_end_date = request.GET.get("endDate") or ""
-    logger.info(
-        "image_archives request patient_id=%s startDate=%s endDate=%s images_page=%s",
-        patient.id,
-        images_start_date,
-        images_end_date,
-        images_page_num,
-    )
-
-    reports_page = get_reports_page_for_patient(request, patient, page_size=10)
-    
-    # -----------------------------------------------------------
-    # 处理图片档案数据 (Archives)
-    # -----------------------------------------------------------
-    archives_list, archives_page_obj = _get_archives_data(
-        patient, 
-        page=images_page_num,
-        page_size=10,
-        start_date=images_start_date, 
-        end_date=images_end_date
-    )
-
-    # 动态获取复查二级分类
-    try:
-        checkup_lib = get_active_checkup_library()
-        recheck_sub_categories = [item['name'] for item in checkup_lib]
-    except Exception:
-        recheck_sub_categories = RECHECK_SUB_CATEGORIES
-
-    context.update({
-        "reports_page": reports_page,
-        "archives_list": archives_list,
-        "archives_page_obj": archives_page_obj,
-        "image_categories": get_report_image_categories(),  
-        "record_types": RECORD_TYPES,
-        "checkup_subcategories": recheck_sub_categories, 
-        "active_tab": active_tab, 
-        "filters": {
-            "recordType": record_type or "",
-            "reportDateStart": report_date_start or "",
-            "reportDateEnd": report_date_end or "",
-            "archivedDateStart": archived_date_start or "",
-            "archivedDateEnd": archived_date_end or "",
-            "archiver": archiver or "",
-            "startDate": images_start_date,
-            "endDate": images_end_date,
-        }
-    })
+    context.update(_build_reports_section_context(request, patient, active_tab=active_tab))
+    if request.GET.get("fragment") == "content":
+        return REPORTS_CONTENT_TEMPLATE
     return template_name
 
 
@@ -557,6 +576,37 @@ def patient_report_image_metrics(request: HttpRequest, patient_id: int, image_id
     )
     payload = build_report_image_metrics_payload(report_image)
     return JsonResponse(payload)
+
+
+@login_required
+@check_doctor_or_assistant
+def patient_report_detail(request: HttpRequest, patient_id: int, report_id: int) -> HttpResponse:
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    report = get_report_detail_for_patient(patient.id, report_id)
+    return render(
+        request,
+        REPORTS_DETAIL_TEMPLATE,
+        {
+            "patient": patient,
+            "report": report,
+            "checkup_subcategories": _get_checkup_subcategories(),
+            "csrf_token": request.META.get("CSRF_COOKIE", ""),
+        },
+    )
+
+
+@login_required
+@check_doctor_or_assistant
+def patient_report_create_modal(request: HttpRequest, patient_id: int) -> HttpResponse:
+    patient = get_object_or_404(PatientProfile, pk=patient_id)
+    return render(
+        request,
+        REPORTS_CREATE_MODAL_TEMPLATE,
+        {
+            "patient": patient,
+            "checkup_subcategories": _get_checkup_subcategories(),
+        },
+    )
 
 @login_required
 @check_doctor_or_assistant
@@ -742,10 +792,8 @@ def patient_report_update(request: HttpRequest, patient_id: int, report_id: int)
 
     image_updates = data.get("image_updates", [])
     record_type_str = data.get("record_type")
-    sub_category_str = data.get("sub_category")
-    interpretation = data.get("interpretation") # 前端也可能传这个
-    
-    # 获取 ClinicalEvent
+    interpretation = data.get("interpretation")
+
     event = get_object_or_404(ClinicalEvent, pk=report_id, patient_id=patient_id)
 
     doctor_profile = getattr(request.user, "doctor_profile", None)
@@ -827,19 +875,12 @@ def patient_report_update(request: HttpRequest, patient_id: int, report_id: int)
             logger.exception("保存失败")
             return HttpResponse("保存失败，请稍后重试", status=500)
     
-    # 返回更新后的报告列表片段
     patient = get_object_or_404(PatientProfile, pk=patient_id)
-    context = {"patient": patient}
-    context["active_tab"] = "records" # 保持在记录 Tab
-    
-    template_name = handle_reports_history_section(request, context)
-    
-    response = render(request, template_name, context)
-    
+    payload = _build_report_fragment_payload(request, patient, report_id)
     if updated_any:
-        response["HX-Trigger"] = '{"show-toast": {"message": "保存成功", "type": "success"}}'
-        
-    return response
+        payload["message"] = "保存成功"
+        payload["type"] = "success"
+    return JsonResponse(payload)
 
 @login_required
 @check_doctor_or_assistant

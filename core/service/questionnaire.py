@@ -25,6 +25,7 @@ class QuestionnaireService:
     Q_SLEEP = QuestionnaireCode.Q_SLEEP
     Q_DEPRESSIVE = QuestionnaireCode.Q_DEPRESSIVE
     Q_ANXIETY = QuestionnaireCode.Q_ANXIETY
+    Q_KQNMLB = QuestionnaireCode.Q_KQNMLB
     Q_PSYCH = QuestionnaireCode.Q_PSYCH
 
     QUESTIONNAIRE_CODES = tuple(QuestionnaireCode.values)
