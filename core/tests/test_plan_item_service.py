@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from core.models import Medication, PlanItem, TreatmentCycle, choices
+from core.models import CheckupLibrary, Medication, MonitoringTemplate, PlanItem, Questionnaire, TreatmentCycle, choices
 from core.service.plan_item import PlanItemService
 from users import choices as user_choices
 from users.models import PatientProfile
@@ -187,3 +187,135 @@ class PlanItemServiceCycleDayNormalizationTest(TestCase):
 
         with self.assertRaisesMessage(ValidationError, "执行日需在 1~28 范围内。"):
             PlanItemService.toggle_schedule_day(plan_item.id, 29, True, self.actor)
+
+
+class PlanItemServiceCloneCyclePlanTest(TestCase):
+    def setUp(self) -> None:
+        self.actor = User.objects.create_user(
+            username="doctor_user_clone_plan",
+            password="password",
+            user_type=user_choices.UserType.DOCTOR,
+            phone="13900000023",
+        )
+        self.patient = PatientProfile.objects.create(
+            phone="13900000021",
+            name="测试患者-复制计划",
+        )
+
+    def test_clone_cycle_plan_copies_all_categories_and_clips_days(self):
+        source_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="参考疗程",
+            start_date=date.today(),
+            cycle_days=28,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        target_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="目标疗程",
+            start_date=date.today() + timedelta(days=30),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        medication = Medication.objects.create(
+            name="复制药物",
+            name_abbr="FZYW",
+            default_dosage="10mg",
+            default_frequency="qd",
+            is_active=True,
+        )
+        checkup = CheckupLibrary.objects.create(
+            name="复制复查",
+            code="COPY_CHECKUP",
+            is_active=True,
+        )
+        questionnaire = Questionnaire.objects.create(
+            name="复制问卷",
+            code="COPY_QUESTIONNAIRE",
+            is_active=True,
+        )
+        monitoring = MonitoringTemplate.objects.create(
+            name="复制监测",
+            code="COPY_MONITORING",
+            is_active=True,
+        )
+
+        PlanItem.objects.create(
+            cycle=source_cycle,
+            category=choices.PlanItemCategory.MEDICATION,
+            template_id=medication.id,
+            item_name=medication.name,
+            drug_dosage="20mg",
+            drug_usage="bid",
+            schedule_days=[1, 8, 15, 28],
+            status=choices.PlanItemStatus.ACTIVE,
+            priority_level=choices.PriorityLevel.FIRST_LINE,
+            created_by=self.actor,
+            updated_by=self.actor,
+        )
+        PlanItem.objects.create(
+            cycle=source_cycle,
+            category=choices.PlanItemCategory.CHECKUP,
+            template_id=checkup.id,
+            item_name=checkup.name,
+            schedule_days=[3, 21, 28],
+            status=choices.PlanItemStatus.ACTIVE,
+            created_by=self.actor,
+            updated_by=self.actor,
+        )
+        PlanItem.objects.create(
+            cycle=source_cycle,
+            category=choices.PlanItemCategory.QUESTIONNAIRE,
+            template_id=questionnaire.id,
+            item_name=questionnaire.name,
+            schedule_days=[7, 14, 28],
+            status=choices.PlanItemStatus.DISABLED,
+            created_by=self.actor,
+            updated_by=self.actor,
+        )
+        PlanItem.objects.create(
+            cycle=source_cycle,
+            category=choices.PlanItemCategory.MONITORING,
+            template_id=monitoring.id,
+            item_name=monitoring.name,
+            schedule_days=[1, 10, 22],
+            status=choices.PlanItemStatus.ACTIVE,
+            created_by=self.actor,
+            updated_by=self.actor,
+        )
+
+        copied_count = PlanItemService.clone_cycle_plan(source_cycle, target_cycle, self.actor)
+
+        self.assertEqual(copied_count, 4)
+        cloned_items = list(PlanItem.objects.filter(cycle=target_cycle).order_by("category"))
+        self.assertEqual(len(cloned_items), 4)
+        self.assertEqual(cloned_items[0].schedule_days, [1, 8, 15])
+        self.assertEqual(cloned_items[0].drug_dosage, "20mg")
+        self.assertEqual(cloned_items[0].drug_usage, "bid")
+        self.assertEqual(cloned_items[0].priority_level, choices.PriorityLevel.FIRST_LINE)
+        self.assertEqual(cloned_items[1].schedule_days, [3, 21])
+        self.assertEqual(cloned_items[2].schedule_days, [7, 14])
+        self.assertEqual(cloned_items[2].status, choices.PlanItemStatus.DISABLED)
+        self.assertEqual(cloned_items[3].schedule_days, [1, 10])
+
+    def test_clone_cycle_plan_returns_zero_when_source_has_no_plan_items(self):
+        source_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="空参考疗程",
+            start_date=date.today(),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        target_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="空目标疗程",
+            start_date=date.today() + timedelta(days=30),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        copied_count = PlanItemService.clone_cycle_plan(source_cycle, target_cycle, self.actor)
+
+        self.assertEqual(copied_count, 0)
+        self.assertFalse(PlanItem.objects.filter(cycle=target_cycle).exists())

@@ -239,6 +239,46 @@ class PlanItemService:
         plan.save(update_fields=[field_name, "updated_by", "updated_at"])
         return plan
 
+    @classmethod
+    @transaction.atomic
+    def clone_cycle_plan(
+        cls,
+        source_cycle: TreatmentCycle,
+        target_cycle: TreatmentCycle,
+        user: Any,
+    ) -> int:
+        """
+        克隆源疗程下已有计划条目到目标疗程，并按目标周期自动裁剪执行日。
+        """
+
+        source_plan_items = list(PlanItem.objects.filter(cycle=source_cycle).order_by("id"))
+        if not source_plan_items:
+            return 0
+
+        cloned_items: list[PlanItem] = []
+        for source_plan in source_plan_items:
+            cloned_items.append(
+                PlanItem(
+                    cycle=target_cycle,
+                    category=source_plan.category,
+                    template_id=source_plan.template_id,
+                    item_name=source_plan.item_name,
+                    drug_dosage=source_plan.drug_dosage,
+                    drug_usage=source_plan.drug_usage,
+                    schedule_days=cls._normalize_schedule_days(
+                        source_plan.schedule_days,
+                        target_cycle.cycle_days,
+                    ),
+                    status=source_plan.status,
+                    priority_level=source_plan.priority_level,
+                    created_by=user,
+                    updated_by=user,
+                )
+            )
+
+        PlanItem.objects.bulk_create(cloned_items)
+        return len(cloned_items)
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

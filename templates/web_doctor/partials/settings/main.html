@@ -124,13 +124,25 @@
         {% endif %}
 
         <div class="px-5 py-4 border-t border-dashed border-slate-200 mt-2">
-            <h4 class="text-sm font-semibold text-slate-700 mb-3">创建新疗程</h4>
+            <div class="mb-3 flex items-center  gap-5">
+                <h4 class="text-sm font-semibold text-slate-700">创建新疗程</h4>
+                {% if quick_cycle_candidates %}
+                <button
+                    type="button"
+                    onclick="document.getElementById('quick-cycle-modal').showModal()"
+                    class="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100"
+                >
+                    快捷新增
+                </button>
+                {% endif %}
+            </div>
             <form
                 id="treatment-cycle-form"
                 method="post"
                 hx-post="{% url 'web_doctor:patient_treatment_cycle_create' patient.id %}"
                 hx-target="#patient-content"
                 hx-swap="innerHTML"
+                data-cycle-form-root
                 class="flex flex-wrap items-end gap-4 text-sm"
             >
                 {% csrf_token %}
@@ -238,6 +250,166 @@
 </dialog>
 {% endif %}
 
+{% if quick_cycle_candidates or quick_cycle_form_errors %}
+<dialog
+    id="quick-cycle-modal"
+    data-quick-cycle-modal
+    data-auto-open="{% if quick_cycle_modal_open %}1{% else %}0{% endif %}"
+    class="rounded-2xl shadow-xl backdrop:bg-slate-900/30 w-full max-w-3xl p-0 open:animate-fade-in"
+>
+    <div class="flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-6 py-4">
+            <div>
+                <h3 class="text-lg font-bold text-slate-800">快捷新增疗程</h3>
+                <p class="mt-1 text-sm text-slate-500">选择一个已创建疗程作为参考，创建并复制整套计划。</p>
+            </div>
+            <button type="button" onclick="this.closest('dialog').close()" class="text-slate-400 hover:text-slate-600">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <form
+            id="quick-treatment-cycle-form"
+            method="post"
+            hx-post="{% url 'web_doctor:patient_treatment_cycle_quick_create' patient.id %}"
+            hx-target="#patient-content"
+            hx-swap="innerHTML"
+            data-cycle-form-root
+            data-quick-cycle-form
+            class="space-y-5 px-6 py-5"
+        >
+            {% csrf_token %}
+            <input
+                type="hidden"
+                name="source_cycle_id"
+                value="{{ quick_cycle_form_initial.source_cycle_id|default:'' }}"
+                data-quick-cycle-source
+            >
+
+            {% if quick_cycle_form_errors %}
+            <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                {{ quick_cycle_form_errors.0 }}
+            </div>
+            {% endif %}
+
+            <div class="space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <h4 class="text-sm font-semibold text-slate-700">选择参考疗程</h4>
+                    <span class="text-xs text-slate-400">按当前疗程列表顺序展示</span>
+                </div>
+                <div class="grid gap-3 md:grid-cols-2">
+                    {% for cycle in quick_cycle_candidates %}
+                    {% with cycle_id_str=cycle.id|stringformat:"s" %}
+                    <button
+                        type="button"
+                        data-quick-cycle-option
+                        data-cycle-id="{{ cycle.id }}"
+                        data-cycle-name="{{ cycle.name }}"
+                        data-cycle-days="{{ cycle.cycle_days }}"
+                        class="rounded-xl border px-4 py-3 text-left transition-colors {% if quick_cycle_form_initial.source_cycle_id == cycle_id_str %}border-indigo-400 bg-indigo-50 shadow-sm{% else %}border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50{% endif %}"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="truncate text-sm font-semibold text-slate-800">{{ cycle.name }}</div>
+                                <div class="mt-1 text-xs text-slate-500">{{ cycle.start_date }} ~ {{ cycle.end_date }}</div>
+                            </div>
+                            <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">{{ cycle.get_status_display }}</span>
+                        </div>
+                        <div class="mt-2 text-xs text-slate-400">周期 {{ cycle.cycle_days }} 天</div>
+                    </button>
+                    {% endwith %}
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="grid gap-4 border-t border-dashed border-slate-200 pt-5 md:grid-cols-2">
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm text-slate-500">新疗程名称</label>
+                    <input
+                        type="text"
+                        name="name"
+                        value="{{ quick_cycle_form_initial.name|default:'' }}"
+                        placeholder="例如：术后辅助治疗第2阶段"
+                        data-quick-cycle-name
+                        class="border border-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        required
+                    >
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm text-slate-500">开始日期</label>
+                    <input
+                        type="date"
+                        name="start_date"
+                        value="{{ quick_cycle_form_initial.start_date|default:'' }}"
+                        data-cycle-start
+                        class="border border-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        required
+                    >
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm text-slate-500">周期天数</label>
+                    {% with selected_mode=quick_cycle_form_initial.cycle_days_mode|default:'21' selected_custom=quick_cycle_form_initial.cycle_days_custom|default:'' %}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <select
+                            name="cycle_days_mode"
+                            data-cycle-days-mode
+                            data-quick-cycle-days-mode
+                            class="w-32 border border-slate-200 rounded px-3 py-2 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                        >
+                            <option value="21" {% if selected_mode == '21' %}selected{% endif %}>21 天</option>
+                            <option value="28" {% if selected_mode == '28' %}selected{% endif %}>28 天</option>
+                            <option value="custom" {% if selected_mode == 'custom' %}selected{% endif %}>自定义</option>
+                        </select>
+                        <div
+                            data-cycle-custom-wrapper
+                            class="flex items-center gap-2 {% if selected_mode != 'custom' %}hidden{% endif %}"
+                        >
+                            <input
+                                type="number"
+                                name="cycle_days_custom"
+                                value="{{ selected_custom }}"
+                                min="2"
+                                max="60"
+                                step="1"
+                                inputmode="numeric"
+                                placeholder="2-60"
+                                data-cycle-days-custom
+                                {% if selected_mode == 'custom' %}required{% endif %}
+                                class="w-24 border border-slate-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                            >
+                            <span class="text-sm text-slate-500">天</span>
+                        </div>
+                    </div>
+                    {% endwith %}
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm text-slate-500">预计结束日期（自动计算）</label>
+                    <div class="flex h-10 items-center rounded border border-dashed border-slate-200 bg-slate-50 px-3 text-sm text-slate-500">
+                        <span data-cycle-end-display class="tabular-nums"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                <button
+                    type="button"
+                    onclick="this.closest('dialog').close()"
+                    class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100"
+                >
+                    取消
+                </button>
+                <button
+                    type="submit"
+                    class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700"
+                >
+                    创建并复制疗程计划
+                </button>
+            </div>
+        </form>
+    </div>
+</dialog>
+{% endif %}
+
 </div>
 
 {% include "web_doctor/partials/patient_workspace_tabs.html" with oob=True %}
@@ -253,19 +425,8 @@
 </style>
 
 <script>
-// 在创建疗程表单中，根据开始日期与周期天数自动计算结束日期，仅展示不可编辑
+// 疗程创建相关表单：根据开始日期与周期天数自动计算结束日期，仅展示不可编辑
 (function () {
-  const form = document.getElementById("treatment-cycle-form");
-  if (!form) return;
-
-  const startInput = form.querySelector("[data-cycle-start]");
-  const modeSelect = form.querySelector("[data-cycle-days-mode]");
-  const customWrapper = form.querySelector("[data-cycle-custom-wrapper]");
-  const customInput = form.querySelector("[data-cycle-days-custom]");
-  const endDisplay = form.querySelector("[data-cycle-end-display]");
-
-  if (!startInput || !modeSelect || !customWrapper || !customInput || !endDisplay) return;
-
   function formatDate(d) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -273,43 +434,117 @@
     return y + "-" + m + "-" + day;
   }
 
-  function getEffectiveCycleDays() {
-    if (modeSelect.value === "custom") {
-      return parseInt(customInput.value || "", 10);
+  function initCycleForm(form) {
+    if (!form || form.dataset.cycleFormInitialized === "1") return;
+
+    const startInput = form.querySelector("[data-cycle-start]");
+    const modeSelect = form.querySelector("[data-cycle-days-mode]");
+    const customWrapper = form.querySelector("[data-cycle-custom-wrapper]");
+    const customInput = form.querySelector("[data-cycle-days-custom]");
+    const endDisplay = form.querySelector("[data-cycle-end-display]");
+
+    if (!startInput || !modeSelect || !customWrapper || !customInput || !endDisplay) return;
+
+    function getEffectiveCycleDays() {
+      if (modeSelect.value === "custom") {
+        return parseInt(customInput.value || "", 10);
+      }
+      return parseInt(modeSelect.value || "21", 10);
     }
-    return parseInt(modeSelect.value || "21", 10);
+
+    function updateCycleDaysMode() {
+      const isCustom = modeSelect.value === "custom";
+      customWrapper.classList.toggle("hidden", !isCustom);
+      customInput.required = isCustom;
+    }
+
+    function updateEndDate() {
+      updateCycleDaysMode();
+
+      const startValue = startInput.value;
+      const days = getEffectiveCycleDays();
+      if (!startValue || Number.isNaN(days) || days <= 0) {
+        endDisplay.textContent = "";
+        return;
+      }
+      const start = new Date(startValue + "T00:00:00");
+      if (Number.isNaN(start.getTime())) {
+        endDisplay.textContent = "";
+        return;
+      }
+      const end = new Date(start);
+      end.setDate(end.getDate() + days - 1);
+      endDisplay.textContent = formatDate(end);
+    }
+
+    startInput.addEventListener("change", updateEndDate);
+    modeSelect.addEventListener("change", updateEndDate);
+    customInput.addEventListener("input", updateEndDate);
+    updateEndDate();
+    form.dataset.cycleFormInitialized = "1";
   }
 
-  function updateCycleDaysMode() {
-    const isCustom = modeSelect.value === "custom";
-    customWrapper.classList.toggle("hidden", !isCustom);
-    customInput.required = isCustom;
+  window.__initCycleForm = initCycleForm;
+  document.querySelectorAll("[data-cycle-form-root]").forEach(initCycleForm);
+})();
+
+// 快捷新增弹层：参考疗程选择、字段覆盖与失败后自动重新打开
+(function () {
+  const modal = document.querySelector("[data-quick-cycle-modal]");
+  const form = document.querySelector("[data-quick-cycle-form]");
+  if (!modal || !form) return;
+
+  const hiddenSourceInput = form.querySelector("[data-quick-cycle-source]");
+  const nameInput = form.querySelector("[data-quick-cycle-name]");
+  const daysModeSelect = form.querySelector("[data-quick-cycle-days-mode]");
+  const customInput = form.querySelector("[data-cycle-days-custom]");
+  const startInput = form.querySelector("[data-cycle-start]");
+
+  function applyCycleDays(daysValue) {
+    const days = parseInt(daysValue || "", 10);
+    if (Number.isNaN(days) || !daysModeSelect || !customInput) return;
+    if (days === 21 || days === 28) {
+      daysModeSelect.value = String(days);
+      customInput.value = "";
+    } else {
+      daysModeSelect.value = "custom";
+      customInput.value = String(days);
+    }
+    if (window.__initCycleForm) {
+      window.__initCycleForm(form);
+    }
+    daysModeSelect.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
-  function updateEndDate() {
-    updateCycleDaysMode();
-
-    const startValue = startInput.value;
-    const days = getEffectiveCycleDays();
-    if (!startValue || Number.isNaN(days) || days <= 0) {
-      endDisplay.textContent = "";
-      return;
-    }
-    const start = new Date(startValue + "T00:00:00");
-    if (Number.isNaN(start.getTime())) {
-      endDisplay.textContent = "";
-      return;
-    }
-    const end = new Date(start);
-    end.setDate(end.getDate() + days - 1);
-    endDisplay.textContent = formatDate(end);
+  function syncSelectedOption(selectedId) {
+    form.querySelectorAll("[data-quick-cycle-option]").forEach(function (btn) {
+      const isSelected = (btn.getAttribute("data-cycle-id") || "") === selectedId;
+      btn.classList.toggle("border-indigo-400", isSelected);
+      btn.classList.toggle("bg-indigo-50", isSelected);
+      btn.classList.toggle("shadow-sm", isSelected);
+      btn.classList.toggle("border-slate-200", !isSelected);
+      btn.classList.toggle("bg-white", !isSelected);
+    });
   }
 
-  startInput.addEventListener("change", updateEndDate);
-  modeSelect.addEventListener("change", updateEndDate);
-  customInput.addEventListener("input", updateEndDate);
-  // 初次渲染时计算一次
-  updateEndDate();
+  form.querySelectorAll("[data-quick-cycle-option]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      const selectedId = btn.getAttribute("data-cycle-id") || "";
+      if (hiddenSourceInput) hiddenSourceInput.value = selectedId;
+      if (nameInput) nameInput.value = btn.getAttribute("data-cycle-name") || "";
+      if (startInput) startInput.value = "";
+      applyCycleDays(btn.getAttribute("data-cycle-days") || "");
+      syncSelectedOption(selectedId);
+    });
+  });
+
+  if (hiddenSourceInput) {
+    syncSelectedOption(hiddenSourceInput.value || "");
+  }
+
+  if (modal.dataset.autoOpen === "1" && !modal.open) {
+    modal.showModal();
+  }
 })();
 
 // 计划表行：统一处理复查 / 问卷 / 监测的启停联动，只安装一次全局监听
@@ -372,6 +607,10 @@
 
   window.__initSettingsPlanRows = initPlanRows;
   initPlanRows(document);
+
+  if (window.__initCycleForm) {
+    document.querySelectorAll("[data-cycle-form-root]").forEach(window.__initCycleForm);
+  }
 
   if (window.__settingsPlanRowHooksInstalled) return;
   window.__settingsPlanRowHooksInstalled = true;

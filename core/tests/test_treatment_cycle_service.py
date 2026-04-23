@@ -1,16 +1,18 @@
 """treatment_cycle service 测试：分页/排序与确认人查询。"""
 
 from datetime import date, timedelta
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.utils import timezone
 
-from core.models import PlanItem, TreatmentCycle, choices
+from core.models import Medication, PlanItem, TreatmentCycle, choices
 from core.service.treatment_cycle import (
     MAX_TREATMENT_CYCLE_DAYS,
     MIN_TREATMENT_CYCLE_DAYS,
     create_treatment_cycle,
+    create_treatment_cycle_from_source,
     get_cycle_confirmer,
     get_treatment_cycles,
     refresh_expired_treatment_cycles,
@@ -268,3 +270,124 @@ class TreatmentCycleStatusJobTest(TestCase):
         expired_cycle.refresh_from_db()
         self.assertEqual(updated_count, 1)
         self.assertEqual(expired_cycle.status, choices.TreatmentCycleStatus.COMPLETED)
+
+
+class TreatmentCycleCreateFromSourceTest(TestCase):
+    def setUp(self) -> None:
+        self.patient = PatientProfile.objects.create(
+            phone="13900000031",
+            name="复制疗程患者",
+        )
+        self.other_patient = PatientProfile.objects.create(
+            phone="13900000032",
+            name="其他患者",
+        )
+        self.actor = CustomUser.objects.create_user(
+            username="doctor_copy_cycle",
+            password="password",
+            user_type=user_choices.UserType.DOCTOR,
+            phone="13900000033",
+        )
+
+    def test_create_treatment_cycle_from_source_clones_plan_items(self):
+        source_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="源疗程",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 28),
+            cycle_days=28,
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+        medication = Medication.objects.create(
+            name="复制服务药物",
+            name_abbr="FZFWYW",
+            default_dosage="10mg",
+            default_frequency="qd",
+            is_active=True,
+        )
+        PlanItem.objects.create(
+            cycle=source_cycle,
+            category=choices.PlanItemCategory.MEDICATION,
+            template_id=medication.id,
+            item_name=medication.name,
+            drug_dosage="15mg",
+            drug_usage="bid",
+            schedule_days=[1, 8, 15, 28],
+            status=choices.PlanItemStatus.ACTIVE,
+            updated_by=self.actor,
+        )
+
+        new_cycle, copied_count = create_treatment_cycle_from_source(
+            patient=self.patient,
+            source_cycle_id=source_cycle.id,
+            name="新疗程",
+            start_date=date(2025, 2, 10),
+            cycle_days=21,
+            user=self.actor,
+        )
+
+        self.assertIsNotNone(new_cycle.id)
+        self.assertEqual(copied_count, 1)
+        self.assertEqual(new_cycle.end_date, date(2025, 3, 2))
+        cloned_item = PlanItem.objects.get(cycle=new_cycle)
+        self.assertEqual(cloned_item.schedule_days, [1, 8, 15])
+        self.assertEqual(cloned_item.drug_dosage, "15mg")
+        self.assertEqual(cloned_item.drug_usage, "bid")
+        self.assertEqual(cloned_item.created_by, self.actor)
+
+    def test_create_treatment_cycle_from_source_rolls_back_when_clone_fails(self):
+        source_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="会失败的源疗程",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 21),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+
+        with patch(
+            "core.service.plan_item.PlanItemService.clone_cycle_plan",
+            side_effect=ValidationError("复制失败"),
+        ):
+            with self.assertRaisesMessage(ValidationError, "复制失败"):
+                create_treatment_cycle_from_source(
+                    patient=self.patient,
+                    source_cycle_id=source_cycle.id,
+                    name="不应落库的疗程",
+                    start_date=date(2025, 2, 1),
+                    cycle_days=21,
+                    user=self.actor,
+                )
+
+        self.assertFalse(TreatmentCycle.objects.filter(name="不应落库的疗程").exists())
+
+    def test_create_treatment_cycle_from_source_rejects_missing_source_cycle(self):
+        with self.assertRaisesMessage(ValidationError, "参考疗程不存在。"):
+            create_treatment_cycle_from_source(
+                patient=self.patient,
+                source_cycle_id=999999,
+                name="不存在源疗程",
+                start_date=date(2025, 2, 1),
+                cycle_days=21,
+                user=self.actor,
+            )
+
+    def test_create_treatment_cycle_from_source_rejects_source_from_other_patient(self):
+        other_cycle = TreatmentCycle.objects.create(
+            patient=self.other_patient,
+            name="其他患者疗程",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 21),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+
+        with self.assertRaisesMessage(ValidationError, "参考疗程与当前患者不匹配。"):
+            create_treatment_cycle_from_source(
+                patient=self.patient,
+                source_cycle_id=other_cycle.id,
+                name="跨患者疗程",
+                start_date=date(2025, 2, 1),
+                cycle_days=21,
+                user=self.actor,
+            )

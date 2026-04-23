@@ -6,12 +6,14 @@
 - 各 Tab（section）局部内容渲染
 """
 
+import json
 import logging
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 import random
 
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db.models import Q
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -26,6 +28,7 @@ from core.service.treatment_cycle import (
     MAX_TREATMENT_CYCLE_DAYS,
     MIN_TREATMENT_CYCLE_DAYS,
     create_treatment_cycle,
+    create_treatment_cycle_from_source,
     get_active_treatment_cycle,
     terminate_treatment_cycle,
 )
@@ -124,6 +127,183 @@ def _build_cycle_form_initial(
         initial["cycle_days_custom"] = initial["cycle_days"]
 
     return initial
+
+
+def _empty_quick_cycle_form_initial() -> dict[str, str]:
+    initial = _empty_cycle_form_initial()
+    initial["source_cycle_id"] = ""
+    return initial
+
+
+def _build_quick_cycle_form_initial(
+    *,
+    source_cycle_id: str = "",
+    name: str = "",
+    start_date: str = "",
+    cycle_days_mode: str = "",
+    cycle_days_custom: str = "",
+    cycle_days: str = "",
+) -> dict[str, str]:
+    initial = _empty_quick_cycle_form_initial()
+    initial.update(
+        _build_cycle_form_initial(
+            name=name,
+            start_date=start_date,
+            cycle_days_mode=cycle_days_mode,
+            cycle_days_custom=cycle_days_custom,
+            cycle_days=cycle_days,
+        )
+    )
+    initial["source_cycle_id"] = source_cycle_id or ""
+    return initial
+
+
+def _parse_cycle_days_input(
+    *,
+    cycle_days_mode_raw: str,
+    cycle_days_custom_raw: str,
+    cycle_days_raw: str,
+) -> tuple[int | None, list[str], str]:
+    errors: list[str] = []
+    cycle_days: int | None = None
+    normalized_mode = cycle_days_mode_raw
+
+    if cycle_days_mode_raw in {"21", "28"}:
+        cycle_days = int(cycle_days_mode_raw)
+    elif cycle_days_mode_raw == "custom":
+        if not cycle_days_custom_raw:
+            errors.append(
+                f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
+            )
+        else:
+            try:
+                cycle_days = int(cycle_days_custom_raw)
+            except ValueError:
+                errors.append(
+                    f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
+                )
+    elif cycle_days_raw:
+        try:
+            cycle_days = int(cycle_days_raw)
+            normalized_mode = cycle_days_raw if cycle_days_raw in {"21", "28"} else "custom"
+        except ValueError:
+            errors.append(
+                f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
+            )
+    else:
+        cycle_days = 21
+        normalized_mode = "21"
+
+    if cycle_days is not None and not (
+        MIN_TREATMENT_CYCLE_DAYS <= cycle_days <= MAX_TREATMENT_CYCLE_DAYS
+    ):
+        errors.append(
+            f"周期天数必须在 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天之间。"
+        )
+
+    return cycle_days, errors, normalized_mode
+
+
+def _parse_cycle_start_date(
+    start_date_raw: str,
+    *,
+    default_to_today: bool,
+    required: bool,
+) -> tuple[date | None, list[str]]:
+    if not start_date_raw:
+        if default_to_today:
+            return date.today(), []
+        if required:
+            return None, ["请填写开始日期。"]
+        return None, []
+
+    try:
+        return date.fromisoformat(start_date_raw), []
+    except ValueError:
+        return None, ["开始日期格式不正确，应为 YYYY-MM-DD。"]
+
+
+def _build_cycle_create_payload(
+    request: HttpRequest,
+    *,
+    require_source_cycle: bool,
+    require_start_date: bool,
+    default_start_date_to_today: bool,
+) -> tuple[dict[str, str], list[str], date | None, int | None, int | None]:
+    name = (request.POST.get("name") or "").strip()
+    start_date_raw = request.POST.get("start_date") or ""
+    cycle_days_mode_raw = (request.POST.get("cycle_days_mode") or "").strip()
+    cycle_days_custom_raw = (request.POST.get("cycle_days_custom") or "").strip()
+    cycle_days_raw = (request.POST.get("cycle_days") or "").strip()
+    source_cycle_id_raw = (request.POST.get("source_cycle_id") or "").strip()
+
+    errors: list[str] = []
+    if not name:
+        errors.append("请填写疗程名称。")
+
+    source_cycle_id: int | None = None
+    if require_source_cycle:
+        if not source_cycle_id_raw:
+            errors.append("请选择参考疗程。")
+        else:
+            try:
+                source_cycle_id = int(source_cycle_id_raw)
+            except ValueError:
+                errors.append("请选择参考疗程。")
+
+    start_date, start_date_errors = _parse_cycle_start_date(
+        start_date_raw,
+        default_to_today=default_start_date_to_today,
+        required=require_start_date,
+    )
+    errors.extend(start_date_errors)
+
+    cycle_days, cycle_day_errors, normalized_mode = _parse_cycle_days_input(
+        cycle_days_mode_raw=cycle_days_mode_raw,
+        cycle_days_custom_raw=cycle_days_custom_raw,
+        cycle_days_raw=cycle_days_raw,
+    )
+    errors.extend(cycle_day_errors)
+
+    payload = {
+        "source_cycle_id": source_cycle_id_raw,
+        "name": name,
+        "start_date": start_date_raw,
+        "cycle_days_mode": normalized_mode,
+        "cycle_days_custom": cycle_days_custom_raw,
+        "cycle_days": cycle_days_raw,
+    }
+    return payload, errors, start_date, cycle_days, source_cycle_id
+
+
+def _build_settings_page_context(
+    patient: PatientProfile,
+    *,
+    tc_page: str | None = None,
+    selected_cycle_id: int | None = None,
+    cycle_form_errors: list[str] | None = None,
+    cycle_form_initial: dict[str, str] | None = None,
+    quick_cycle_form_errors: list[str] | None = None,
+    quick_cycle_form_initial: dict[str, str] | None = None,
+    quick_cycle_modal_open: bool = False,
+) -> dict:
+    context = {
+        "patient": patient,
+        "active_tab": "settings",
+        "cycle_form_errors": cycle_form_errors or [],
+        "cycle_form_initial": cycle_form_initial or _empty_cycle_form_initial(),
+        "quick_cycle_form_errors": quick_cycle_form_errors or [],
+        "quick_cycle_form_initial": quick_cycle_form_initial or _empty_quick_cycle_form_initial(),
+        "quick_cycle_modal_open": quick_cycle_modal_open,
+    }
+    context.update(
+        _build_settings_context(
+            patient,
+            tc_page=tc_page,
+            selected_cycle_id=selected_cycle_id,
+        )
+    )
+    return context
 
 
 def _get_workspace_identities(user):
@@ -438,7 +618,7 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
             except (TypeError, ValueError):
                 selected_cycle_id = None
             context.update(
-                _build_settings_context(
+                _build_settings_page_context(
                     patient,
                     tc_page=request.GET.get("tc_page"),
                     selected_cycle_id=selected_cycle_id,
@@ -754,6 +934,7 @@ def _build_settings_context(
         "can_terminate_selected_cycle": can_terminate_selected_cycle,
         "is_cycle_editable": is_cycle_editable,
         "cycle_page": cycle_page,
+        "quick_cycle_candidates": cycles,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
         "current_day_index": current_day_index,
@@ -789,88 +970,37 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
     if patient is None:
         raise Http404("未找到患者")
 
-    name = (request.POST.get("name") or "").strip()
-    start_date_raw = request.POST.get("start_date") or ""
-    cycle_days_mode_raw = (request.POST.get("cycle_days_mode") or "").strip()
-    cycle_days_custom_raw = (request.POST.get("cycle_days_custom") or "").strip()
-    cycle_days_raw = (request.POST.get("cycle_days") or "").strip()
-
-    errors: list[str] = []
-
-    # 简单字段校验与解析
-    if not name:
-        errors.append("请填写疗程名称。")
-
-    try:
-        start_date = date.fromisoformat(start_date_raw) if start_date_raw else date.today()
-    except ValueError:
-        errors.append("开始日期格式不正确，应为 YYYY-MM-DD。")
-        start_date = None  # type: ignore[assignment]
-
-    cycle_days: int | None = None
-    if cycle_days_mode_raw in {"21", "28"}:
-        cycle_days = int(cycle_days_mode_raw)
-    elif cycle_days_mode_raw == "custom":
-        if not cycle_days_custom_raw:
-            errors.append(
-                f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
-            )
-        else:
-            try:
-                cycle_days = int(cycle_days_custom_raw)
-            except ValueError:
-                errors.append(
-                    f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
-                )
-    elif cycle_days_raw:
-        try:
-            cycle_days = int(cycle_days_raw)
-        except ValueError:
-            errors.append(
-                f"请输入 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天的疗程天数。"
-            )
-    else:
-        cycle_days = 21
-        cycle_days_mode_raw = "21"
-
-    if cycle_days is not None and not (
-        MIN_TREATMENT_CYCLE_DAYS <= cycle_days <= MAX_TREATMENT_CYCLE_DAYS
-    ):
-        errors.append(
-            f"周期天数必须在 {MIN_TREATMENT_CYCLE_DAYS}-{MAX_TREATMENT_CYCLE_DAYS} 天之间。"
-        )
+    payload, errors, start_date, cycle_days, _ = _build_cycle_create_payload(
+        request,
+        require_source_cycle=False,
+        require_start_date=False,
+        default_start_date_to_today=True,
+    )
 
     new_cycle: TreatmentCycle | None = None
     if not errors and start_date and cycle_days is not None:
         try:
             new_cycle = create_treatment_cycle(
                 patient=patient,
-                name=name,
+                name=payload["name"],
                 start_date=start_date,
                 cycle_days=cycle_days,
             )
         except ValidationError as exc:
             errors.extend(exc.messages)
 
-    # 重新构建设置页面上下文，包含疗程列表与可能的错误提示
-    context: dict = {
-        "patient": patient,
-        "active_tab": "settings",
-        "cycle_form_errors": errors,
-        "cycle_form_initial": _build_cycle_form_initial(
-            name=name,
-            start_date=start_date_raw,
-            cycle_days_mode=cycle_days_mode_raw,
-            cycle_days_custom=cycle_days_custom_raw,
-            cycle_days=cycle_days_raw,
+    context = _build_settings_page_context(
+        patient,
+        tc_page=request.GET.get("tc_page"),
+        selected_cycle_id=new_cycle.id if new_cycle else None,
+        cycle_form_errors=errors,
+        cycle_form_initial=_build_cycle_form_initial(
+            name=payload["name"],
+            start_date=payload["start_date"],
+            cycle_days_mode=payload["cycle_days_mode"],
+            cycle_days_custom=payload["cycle_days_custom"],
+            cycle_days=payload["cycle_days"],
         ),
-    }
-    context.update(
-        _build_settings_context(
-            patient,
-            tc_page=request.GET.get("tc_page"),
-            selected_cycle_id=new_cycle.id if new_cycle else None,
-        )
     )
 
     return render(
@@ -878,6 +1008,69 @@ def patient_treatment_cycle_create(request: HttpRequest, patient_id: int) -> Htt
         "web_doctor/partials/settings/main.html",
         context,
     )
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_treatment_cycle_quick_create(request: HttpRequest, patient_id: int) -> HttpResponse:
+    patients_qs = _get_workspace_patients(request.user, query=None)
+    patient = patients_qs.filter(pk=patient_id).first()
+    if patient is None:
+        raise Http404("未找到患者")
+
+    payload, errors, start_date, cycle_days, source_cycle_id = _build_cycle_create_payload(
+        request,
+        require_source_cycle=True,
+        require_start_date=True,
+        default_start_date_to_today=False,
+    )
+
+    new_cycle: TreatmentCycle | None = None
+    copied_count = 0
+    if not errors and start_date and cycle_days is not None and source_cycle_id is not None:
+        try:
+            new_cycle, copied_count = create_treatment_cycle_from_source(
+                patient=patient,
+                source_cycle_id=source_cycle_id,
+                name=payload["name"],
+                start_date=start_date,
+                cycle_days=cycle_days,
+                user=request.user,
+            )
+        except ValidationError as exc:
+            errors.extend(exc.messages)
+
+    context = _build_settings_page_context(
+        patient,
+        tc_page=request.GET.get("tc_page"),
+        selected_cycle_id=new_cycle.id if new_cycle else None,
+        quick_cycle_form_errors=errors,
+        quick_cycle_form_initial=_build_quick_cycle_form_initial(
+            source_cycle_id=payload["source_cycle_id"],
+            name=payload["name"],
+            start_date=payload["start_date"],
+            cycle_days_mode=payload["cycle_days_mode"],
+            cycle_days_custom=payload["cycle_days_custom"],
+            cycle_days=payload["cycle_days"],
+        ),
+        quick_cycle_modal_open=bool(errors),
+    )
+    response = render(
+        request,
+        "web_doctor/partials/settings/main.html",
+        context,
+    )
+    if new_cycle is not None:
+        if copied_count > 0:
+            message = f"疗程创建成功，已复制 {copied_count} 条计划"
+        else:
+            message = "已创建新疗程，参考疗程下无可复制计划"
+        response["HX-Trigger"] = json.dumps(
+            {"plan-success": {"message": message}},
+            ensure_ascii=True,
+        )
+    return response
 
 
 @login_required
