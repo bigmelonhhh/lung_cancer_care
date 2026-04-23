@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+import base64
 import json
+import mimetypes
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import requests
 from django.conf import settings
+from django.core.files.storage import default_storage
 
 from ai_vision.exceptions import AiVisionConfigurationError, AiVisionResponseError
 
 
 DEFAULT_TIMEOUT = 120.0
+IMAGE_FETCH_TIMEOUT = 30.0
 
 
 def _resolve_required_setting(name: str) -> str:
@@ -20,7 +24,27 @@ def _resolve_required_setting(name: str) -> str:
     return value
 
 
-def build_doubao_image_url_value(image_url: str) -> str:
+def _iter_local_image_base_urls() -> list[str]:
+    return [
+        str(value).rstrip("/")
+        for value in (
+            getattr(settings, "AI_VISION_IMAGE_BASE_URL", "") or "",
+            getattr(settings, "WEB_BASE_URL", "") or "",
+        )
+        if str(value).strip()
+    ]
+
+
+def _normalize_media_url() -> str:
+    media_url = str(getattr(settings, "MEDIA_URL", "/media/") or "/media/").strip()
+    if not media_url.startswith("/"):
+        media_url = f"/{media_url}"
+    if not media_url.endswith("/"):
+        media_url = f"{media_url}/"
+    return media_url
+
+
+def _build_public_image_fetch_url(image_url: str) -> str | None:
     text = str(image_url or "").strip()
     if not text:
         raise AiVisionResponseError("ReportImage.image_url 为空，无法发起 AI 解析。")
@@ -29,16 +53,118 @@ def build_doubao_image_url_value(image_url: str) -> str:
         return text
 
     if text.startswith("/"):
-        base_url = str(getattr(settings, "AI_VISION_IMAGE_BASE_URL", "") or "").rstrip("/")
-        if not base_url:
-            base_url = str(getattr(settings, "WEB_BASE_URL", "") or "").rstrip("/")
+        base_url = next(iter(_iter_local_image_base_urls()), "")
         if base_url:
             return f"{base_url}{text}"
-        raise AiVisionConfigurationError(
-            "未配置 AI_VISION_IMAGE_BASE_URL 或 WEB_BASE_URL，无法拼接图片访问地址。"
-        )
+        return None
 
-    raise AiVisionResponseError(f"无法解析图片地址: {text}")
+    return None
+
+
+def _resolve_storage_path(image_url: str) -> str | None:
+    text = str(image_url or "").strip()
+    if not text:
+        raise AiVisionResponseError("ReportImage.image_url 为空，无法发起 AI 解析。")
+
+    media_url = _normalize_media_url()
+    parsed = urlparse(text)
+
+    if parsed.scheme:
+        parsed_path = parsed.path or ""
+        parsed_origin = f"{parsed.scheme}://{parsed.netloc}"
+        if parsed_origin not in _iter_local_image_base_urls():
+            return None
+        if not parsed_path.startswith(media_url):
+            return None
+        return unquote(parsed_path[len(media_url):].lstrip("/"))
+
+    if text.startswith("/"):
+        if not text.startswith(media_url):
+            return None
+        return unquote(text[len(media_url):].lstrip("/"))
+
+    return unquote(text.lstrip("/"))
+
+
+def _detect_image_media_type(path_hint: str, data: bytes, header_value: str = "") -> str:
+    content_type = str(header_value or "").split(";", 1)[0].strip().lower()
+    if content_type.startswith("image/"):
+        return content_type
+
+    guessed_type, _ = mimetypes.guess_type(path_hint)
+    if guessed_type and guessed_type.startswith("image/"):
+        return guessed_type
+
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data[:6] in {b"GIF87a", b"GIF89a"}:
+        return "image/gif"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith(b"BM"):
+        return "image/bmp"
+    if data.startswith((b"II*\x00", b"MM\x00*")):
+        return "image/tiff"
+
+    raise AiVisionResponseError(f"无法识别图片格式: {path_hint or 'unknown'}")
+
+
+def _read_image_bytes_from_storage(storage_path: str) -> tuple[bytes, str]:
+    try:
+        with default_storage.open(storage_path, "rb") as image_file:
+            data = image_file.read()
+    except OSError as exc:
+        raise AiVisionResponseError(f"读取本地图片失败: {storage_path}") from exc
+
+    if not data:
+        raise AiVisionResponseError(f"本地图片内容为空: {storage_path}")
+
+    return data, _detect_image_media_type(storage_path, data)
+
+
+def _download_image_bytes(url: str, *, timeout: float = IMAGE_FETCH_TIMEOUT) -> tuple[bytes, str]:
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise AiVisionResponseError(f"服务端下载图片失败: {url}") from exc
+
+    data = response.content
+    if not data:
+        raise AiVisionResponseError(f"服务端下载到空图片内容: {url}")
+
+    media_type = _detect_image_media_type(
+        urlparse(url).path,
+        data,
+        header_value=response.headers.get("Content-Type", ""),
+    )
+    return data, media_type
+
+
+def build_doubao_image_data_url(image_url: str) -> str:
+    text = str(image_url or "").strip()
+    if not text:
+        raise AiVisionResponseError("ReportImage.image_url 为空，无法发起 AI 解析。")
+
+    storage_path = _resolve_storage_path(text)
+    if storage_path:
+        try:
+            data, media_type = _read_image_bytes_from_storage(storage_path)
+        except AiVisionResponseError:
+            public_url = _build_public_image_fetch_url(text)
+            if not public_url:
+                raise
+            data, media_type = _download_image_bytes(public_url)
+    else:
+        public_url = _build_public_image_fetch_url(text)
+        if not public_url:
+            raise AiVisionResponseError(f"无法解析图片地址: {text}")
+        data, media_type = _download_image_bytes(public_url)
+
+    encoded = base64.b64encode(data).decode("ascii")
+    return f"data:{media_type};base64,{encoded}"
 
 
 def parse_json_text(text: str, *, source: str) -> dict[str, Any]:
@@ -80,7 +206,7 @@ def request_doubao_report_json(
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": build_doubao_image_url_value(image_url),
+                            "url": build_doubao_image_data_url(image_url),
                         },
                     },
                 ],
