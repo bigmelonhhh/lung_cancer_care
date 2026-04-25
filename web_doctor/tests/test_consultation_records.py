@@ -517,3 +517,14 @@ class ConsultationRecordsTests(TestCase):
         )
         self.assertIn("指标数据加载中...", detail_html)
         self.assertIn('x-text="metricError"', detail_html)
+        self.assertIn(':class="getMetricCellClass(row)"', detail_html)
+        self.assertIn(
+            "getMetricCellClass(row, { value: row.previous_value_display, allowPlaceholderNeutral: true })",
+            detail_html,
+        )
+        self.assertIn(
+            "getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true })",
+            detail_html,
+        )
+        self.assertNotIn("text-emerald-600", detail_html)
+        self.assertNotIn("row.delta_direction === 'up'", detail_html)

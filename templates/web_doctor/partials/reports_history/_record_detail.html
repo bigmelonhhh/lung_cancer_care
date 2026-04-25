@@ -90,16 +90,18 @@
                 <tbody class="divide-y divide-slate-100">
                     <template x-for="row in activeMetricData?.rows || []" :key="row.field_code">
                         <tr>
-                            <td class="px-2 py-1.5 text-slate-700" x-text="row.field_code"></td>
-                            <td class="px-2 py-1.5 text-slate-700" x-text="row.field_name"></td>
+                            <td class="px-2 py-1.5" :class="getMetricCellClass(row)" x-text="row.field_code"></td>
+                            <td class="px-2 py-1.5" :class="getMetricCellClass(row)" x-text="row.field_name"></td>
                             <td class="px-2 py-1.5 font-medium"
-                                :class="{'text-rose-600': row.abnormal_flag === 'HIGH', 'text-amber-600': row.abnormal_flag === 'LOW', 'text-slate-700': !['HIGH', 'LOW'].includes(row.abnormal_flag)}"
+                                :class="getMetricCellClass(row)"
                                 x-text="row.current_value_display"></td>
                             <td class="px-2 py-1.5 text-slate-600" x-text="row.unit"></td>
                             <td class="px-2 py-1.5 text-slate-600" x-text="row.reference_range"></td>
-                            <td class="px-2 py-1.5 text-slate-600" x-text="row.previous_value_display"></td>
                             <td class="px-2 py-1.5"
-                                :class="{'text-emerald-600': row.delta_direction === 'up', 'text-rose-600': row.delta_direction === 'down', 'text-slate-600': row.delta_direction === 'none'}"
+                                :class="getMetricCellClass(row, { value: row.previous_value_display, allowPlaceholderNeutral: true })"
+                                x-text="row.previous_value_display"></td>
+                            <td class="px-2 py-1.5"
+                                :class="getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true })"
                                 x-text="row.delta_display"></td>
                         </tr>
                     </template>

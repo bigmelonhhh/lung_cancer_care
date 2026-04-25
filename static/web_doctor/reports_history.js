@@ -173,6 +173,53 @@
       metricCache: {},
       metricLoadingKey: "",
       metricError: "",
+      /**
+       * 解析指标行的异常等级。
+       * @param {Object} row 指标行对象，至少包含 abnormal_flag 字段。
+       * @returns {string} 返回 high、low 或 normal，用于统一映射单元格样式。
+       */
+      getMetricAbnormalLevel: function (row) {
+        if (!row || !row.abnormal_flag) {
+          return "normal";
+        }
+        if (row.abnormal_flag === "HIGH") {
+          return "high";
+        }
+        if (row.abnormal_flag === "LOW") {
+          return "low";
+        }
+        return "normal";
+      },
+      /**
+       * 获取当前指标行的异常高亮样式。
+       * @param {Object} row 指标行对象，至少包含 abnormal_flag 字段。
+       * @returns {string} 返回适用于单元格的 Tailwind 颜色类字符串。
+       */
+      getMetricHighlightClass: function (row) {
+        var abnormalLevel = this.getMetricAbnormalLevel(row);
+        if (abnormalLevel === "high") {
+          return "bg-rose-100 text-rose-700";
+        }
+        if (abnormalLevel === "low") {
+          return "bg-sky-100 text-sky-700";
+        }
+        return "text-slate-700";
+      },
+      /**
+       * 获取指标表格单元格的最终样式类。
+       * @param {Object} row 指标行对象，至少包含 abnormal_flag 字段。
+       * @param {Object} options 单元格控制参数，包含 value 和 allowPlaceholderNeutral。
+       * @returns {string} 返回最终绑定到单元格的颜色类；当占位值需要保持中性时返回默认样式。
+       */
+      getMetricCellClass: function (row, options) {
+        var resolvedOptions = options || {};
+        var value = resolvedOptions.value;
+        var allowPlaceholderNeutral = Boolean(resolvedOptions.allowPlaceholderNeutral);
+        if (allowPlaceholderNeutral && value === "-") {
+          return "text-slate-600";
+        }
+        return this.getMetricHighlightClass(row);
+      },
       startEdit: function (rootEl) {
         if (this.saving) return;
         this.originalInterpretation = this.interpretation;
