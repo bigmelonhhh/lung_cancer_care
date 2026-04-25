@@ -1,3 +1,4 @@
+<div id="followup-review-section">
 {{ review_indicator.catalog|json_script:"followup-review-catalog-json" }}
 {{ review_indicator.selected_mapping_ids|json_script:"followup-review-selected-json" }}
 
@@ -163,6 +164,7 @@
       x-ref="reviewConfigForm"
       class="hidden"
     >
+      {% csrf_token %}
       <template x-for="mappingId in effectiveMappingIds()" :key="mappingId">
         <input type="hidden" name="review_metric_mappings" :value="mappingId">
       </template>
@@ -172,13 +174,14 @@
   <template x-teleport="body">
     <div
       x-show="configOpen"
+      x-init="$nextTick(function() { if (window.htmx) window.htmx.process($el); })"
       x-cloak
       style="display: none; z-index: 10050;"
       class="fixed inset-0 flex items-center justify-center bg-slate-900/40 px-4 py-6"
       @keydown.escape.window="closeConfig()"
     >
       <div
-        class="flex w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
+        class="flex w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl"
         style="height: 750px; max-height: calc(100vh - 3rem);"
         @click.outside="closeConfig()"
       >
@@ -242,7 +245,7 @@
             </div>
           </div>
           <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-            <div class="grid grid-cols-1 gap-2 md:grid-cols-2">
+            <div class="grid grid-cols-3 gap-2 md:grid-cols-3">
               <template x-for="field in visibleFields()" :key="field.mapping_id">
                 <label
                   class="flex items-start gap-3 rounded-md border p-2 transition"
@@ -250,13 +253,13 @@
                 >
                   <input
                     type="checkbox"
-                    class="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    class=" h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     :checked="isDraftSelected(field.mapping_id)"
                     :disabled="!field.selectable"
                     @change="toggleMapping(field)"
                   >
                   <span class="min-w-0">
-                    <span class="block break-words text-sm font-semibold text-slate-900" x-text="field.field_name"></span>
+                    <span class="block break-words text-[12px] font-semibold text-slate-900" x-text="field.field_display_name || field.field_name"></span>
                   </span>
                 </label>
               </template>
@@ -278,12 +281,12 @@
           </button>
           <button
             type="button"
-            hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-            hx-target="#indicators-wrapper"
+            hx-post="{% url 'web_doctor:patient_indicator_preferences_update' patient.id %}"
+            hx-target="#followup-review-section"
             hx-swap="outerHTML"
             hx-include="#routine-filter-form,#followup-review-config-form"
-            hx-on:htmx:before-request="configOpen = false"
-            hx-on:htmx:after-request="configOpen = false"
+            @htmx:before-request="configOpen = false"
+            @htmx:after-request="configOpen = false"
             class="rounded-md bg-blue-600 px-5 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
           >
             确定
@@ -302,4 +305,5 @@
       </div>
     {% endfor %}
   </div>
+</div>
 </div>

@@ -21,6 +21,7 @@ class FollowupReviewTemplateTests(TestCase):
                                 "field_id": 21,
                                 "field_code": "WBC",
                                 "field_name": "白细胞计数",
+                                "field_display_name": "白细胞计数(WBC)",
                                 "abbr": "WBC",
                                 "unit": "10^9/L",
                                 "value_type": "DECIMAL",
@@ -43,16 +44,53 @@ class FollowupReviewTemplateTests(TestCase):
         )
 
         self.assertIn('id="followup-review-config-form"', html)
+        self.assertIn('id="followup-review-section"', html)
         self.assertIn('id="followup-review-catalog-json"', html)
         self.assertIn('id="followup-review-selected-json"', html)
         self.assertIn('name="review_metric_mappings"', html)
+        self.assertIn("field.field_display_name || field.field_name", html)
+        self.assertIn('/doctor/workspace/patient/1/indicators/preferences/', html)
+        self.assertIn('hx-post="', html)
+        self.assertIn('hx-target="#followup-review-section"', html)
         self.assertIn("配置核心关注指标", html)
         self.assertIn("搜索检查项、指标名称、编码或缩写", html)
         self.assertIn("检查项", html)
         self.assertIn("确定", html)
         self.assertIn('x-teleport="body"', html)
+        self.assertIn("window.htmx.process($el)", html)
         self.assertIn('style="display: none; z-index: 10050;"', html)
         self.assertIn('x-show="configOpen"', html)
-        self.assertIn('hx-on:htmx:before-request="configOpen = false"', html)
-        self.assertIn('hx-on:htmx:after-request="configOpen = false"', html)
+        self.assertIn('@htmx:before-request="configOpen = false"', html)
+        self.assertIn('@htmx:after-request="configOpen = false"', html)
         self.assertNotIn('onclick="this.closest(\'form\').style.display=\'none\'"', html)
+
+    def test_followup_chart_renders_null_data_as_valid_javascript(self):
+        html = render_to_string(
+            "web_doctor/partials/indicators/followup_chart.html",
+            {
+                "chart": {
+                    "id": "chart-followup-review-test",
+                    "title": "血常规-白细胞计数（WBC） *10^9/L",
+                    "subtitle": "2026-03-27 ~ 2026-04-25",
+                    "dates": ["04-24", "04-25"],
+                    "dates_json": '["04-24", "04-25"]',
+                    "series": [
+                        {
+                            "name": "白细胞计数",
+                            "data": [1.2, None],
+                            "data_json": "[1.2, null]",
+                            "color": "#2563eb",
+                        }
+                    ],
+                    "y_min": 0,
+                    "y_max": 10,
+                    "empty_message": "暂无复查结果数据",
+                }
+            },
+        )
+
+        self.assertIn("[1.2, null]", html)
+        self.assertNotIn("None", html)
+        self.assertIn("connectNulls: false", html)
+        self.assertNotIn("2026-03-27 ~ 2026-04-25", html)
+        self.assertNotIn("暂无复查结果数据", html)

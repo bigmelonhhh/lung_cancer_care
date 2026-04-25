@@ -224,6 +224,11 @@ urlpatterns = [
         name="questionnaire_detail",
     ),
     path(
+        "doctor/workspace/patient/<int:patient_id>/indicators/preferences/",
+        views.patient_indicator_preferences_update,
+        name="patient_indicator_preferences_update",
+    ),
+    path(
         "doctor/workspace/patient/<int:patient_id>/<str:section>/",
         views.patient_workspace_section,
         name="patient_workspace_section",

@@ -1,4 +1,5 @@
 import logging
+import json
 from datetime import date, timedelta, datetime
 from decimal import Decimal, ROUND_CEILING, InvalidOperation
 from django.db.models import Count, Prefetch, Q
@@ -17,7 +18,7 @@ from core.service.treatment_cycle import get_treatment_cycles as _get_treatment_
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
-from health_data.models import QuestionnaireSubmission
+from health_data.models import CheckupResultValue, QuestionnaireSubmission
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from users.models import PatientProfile
 
@@ -29,6 +30,8 @@ _CYCLE_STATE_RANK = {
     "completed": 2,
     "terminated": 3,
 }
+_INDICATOR_PREFERENCES_VERSION = 1
+_FOLLOWUP_REVIEW_PREFERENCES_KEY = "followup_review"
 
 
 def _resolve_cycle_runtime_state(cycle: TreatmentCycle, today: date | None = None) -> str:
@@ -63,6 +66,510 @@ def get_treatment_cycles(patient: PatientProfile, page: int = 1, page_size: int 
     cycles = list(getattr(cycles_page, "object_list", []) or [])
     cycles_page.object_list = _sort_cycles_for_indicators(cycles, today=timezone.localdate())
     return cycles_page
+
+
+def build_followup_review_catalog() -> tuple[list[dict], dict[int, dict], list[int]]:
+    review_mapping_qs = (
+        CheckupFieldMapping.objects.filter(
+            is_active=True,
+            standard_field__is_active=True,
+        )
+        .select_related("standard_field")
+        .order_by("sort_order", "id")
+    )
+    checkup_items = list(
+        CheckupLibrary.objects.filter(is_active=True)
+        .prefetch_related(
+            Prefetch(
+                "standard_field_mappings",
+                queryset=review_mapping_qs,
+                to_attr="active_standard_field_mappings",
+            )
+        )
+        .order_by("sort_order", "name", "id")
+    )
+
+    review_catalog = []
+    mapping_meta: dict[int, dict] = {}
+    all_mapping_ids = []
+    for checkup in checkup_items:
+        fields = []
+        for mapping in getattr(checkup, "active_standard_field_mappings", []):
+            standard_field = mapping.standard_field
+            selectable = standard_field.value_type == StandardFieldValueType.DECIMAL
+            field_name = standard_field.chinese_name or standard_field.english_abbr or standard_field.local_code or ""
+            field_abbr = standard_field.english_abbr or ""
+            field_display_name = f"{field_name}({field_abbr})" if field_abbr else field_name
+            field_item = {
+                "mapping_id": mapping.id,
+                "field_id": standard_field.id,
+                "field_code": standard_field.local_code or "",
+                "field_name": field_name,
+                "field_display_name": field_display_name,
+                "abbr": field_abbr,
+                "unit": standard_field.default_unit or "",
+                "value_type": standard_field.value_type,
+                "selectable": selectable,
+            }
+            fields.append(field_item)
+            mapping_meta[mapping.id] = {
+                **field_item,
+                "checkup_id": checkup.id,
+                "checkup_code": checkup.code or "",
+                "checkup_name": checkup.name or "",
+                "category_name": checkup.get_category_display(),
+            }
+            all_mapping_ids.append(mapping.id)
+        review_catalog.append(
+            {
+                "checkup_id": checkup.id,
+                "checkup_code": checkup.code or "",
+                "checkup_name": checkup.name or "",
+                "category_name": checkup.get_category_display(),
+                "fields": fields,
+            }
+        )
+
+    return review_catalog, mapping_meta, all_mapping_ids
+
+
+def normalize_followup_review_mapping_ids(
+    raw_mapping_ids: list[str] | list[int] | None,
+    mapping_meta: dict[int, dict] | None = None,
+) -> list[int]:
+    if mapping_meta is None:
+        _, mapping_meta, _ = build_followup_review_catalog()
+
+    normalized_mapping_ids = []
+    seen_mapping_ids = set()
+    for mapping_id_raw in raw_mapping_ids or []:
+        try:
+            mapping_id = int(mapping_id_raw)
+        except (TypeError, ValueError):
+            continue
+        mapping_info = mapping_meta.get(mapping_id)
+        if (
+            not mapping_info
+            or not mapping_info["selectable"]
+            or mapping_id in seen_mapping_ids
+        ):
+            continue
+        normalized_mapping_ids.append(mapping_id)
+        seen_mapping_ids.add(mapping_id)
+    return normalized_mapping_ids
+
+
+def get_saved_followup_review_mapping_ids(patient: PatientProfile) -> list[int]:
+    preferences = getattr(patient, "indicator_preferences", {}) or {}
+    if not isinstance(preferences, dict):
+        return []
+    followup_review_preferences = preferences.get(_FOLLOWUP_REVIEW_PREFERENCES_KEY, {})
+    if not isinstance(followup_review_preferences, dict):
+        return []
+    selected_mapping_ids = followup_review_preferences.get("selected_mapping_ids", [])
+    if not isinstance(selected_mapping_ids, list):
+        return []
+    return selected_mapping_ids
+
+
+def save_followup_review_preferences(
+    patient: PatientProfile,
+    raw_mapping_ids: list[str] | list[int] | None,
+    user_id: int | None,
+) -> list[int]:
+    selected_mapping_ids = normalize_followup_review_mapping_ids(raw_mapping_ids)
+    preferences = patient.indicator_preferences if isinstance(patient.indicator_preferences, dict) else {}
+    preferences = {**preferences}
+    preferences["version"] = _INDICATOR_PREFERENCES_VERSION
+    preferences[_FOLLOWUP_REVIEW_PREFERENCES_KEY] = {
+        "selected_mapping_ids": selected_mapping_ids,
+        "updated_at": timezone.now().isoformat(),
+        "updated_by": user_id,
+    }
+    patient.indicator_preferences = preferences
+    patient.save(update_fields=["indicator_preferences", "updated_at"])
+    return selected_mapping_ids
+
+
+def _format_followup_review_chart_title(mapping_info: dict, unit: str = "") -> str:
+    field_name = mapping_info["field_name"]
+    if mapping_info["abbr"]:
+        field_name = f"{field_name}（{mapping_info['abbr']}）"
+    title = f"{mapping_info['checkup_name']}-{field_name}"
+    if unit:
+        title = f"{title} {unit}"
+    return title
+
+
+def _query_followup_review_series(
+    *,
+    patient: PatientProfile,
+    mapping_ids: list[int],
+    mapping_meta: dict[int, dict],
+    date_list: list[date],
+    start_date: date,
+    end_date: date,
+) -> tuple[dict[int, list[float | None]], dict[int, list[float]], dict[int, str]]:
+    if not mapping_ids:
+        return {}, {}, {}
+
+    selected_pairs = {
+        (mapping_meta[mapping_id]["checkup_id"], mapping_meta[mapping_id]["field_id"])
+        for mapping_id in mapping_ids
+    }
+    checkup_ids = {checkup_id for checkup_id, _ in selected_pairs}
+    field_ids = {field_id for _, field_id in selected_pairs}
+
+    result_values = (
+        CheckupResultValue.objects.filter(
+            patient=patient,
+            checkup_item_id__in=checkup_ids,
+            standard_field_id__in=field_ids,
+            report_date__range=(start_date, end_date),
+            value_numeric__isnull=False,
+        )
+        .order_by("report_date", "id")
+        .only(
+            "id",
+            "checkup_item_id",
+            "standard_field_id",
+            "report_date",
+            "value_numeric",
+            "unit",
+        )
+    )
+
+    values_by_pair_and_date: dict[tuple[int, int], dict[date, float]] = {
+        pair: {} for pair in selected_pairs
+    }
+    unit_by_pair: dict[tuple[int, int], str] = {}
+    for result_value in result_values:
+        pair = (result_value.checkup_item_id, result_value.standard_field_id)
+        if pair not in selected_pairs:
+            continue
+        values_by_pair_and_date[pair][result_value.report_date] = float(result_value.value_numeric)
+        if result_value.unit:
+            unit_by_pair[pair] = result_value.unit
+
+    series_by_mapping: dict[int, list[float | None]] = {}
+    values_by_mapping: dict[int, list[float]] = {}
+    unit_by_mapping: dict[int, str] = {}
+    for mapping_id in mapping_ids:
+        mapping_info = mapping_meta[mapping_id]
+        pair = (mapping_info["checkup_id"], mapping_info["field_id"])
+        day_value_map = values_by_pair_and_date.get(pair, {})
+        series_data = [day_value_map.get(day) for day in date_list]
+        series_by_mapping[mapping_id] = series_data
+        values_by_mapping[mapping_id] = [
+            value for value in series_data if value is not None
+        ]
+        unit_by_mapping[mapping_id] = unit_by_pair.get(pair) or mapping_info["unit"]
+
+    return series_by_mapping, values_by_mapping, unit_by_mapping
+
+
+def _to_decimal(value):
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+
+
+def _calc_dynamic_y_max(values, default_max, y_min, baselines=None, decimals=0):
+    candidates = []
+    for val in values or []:
+        dec_val = _to_decimal(val)
+        if dec_val is not None:
+            candidates.append(dec_val)
+    for baseline in baselines or []:
+        dec_val = _to_decimal(baseline)
+        if dec_val is not None:
+            candidates.append(dec_val)
+
+    if not candidates:
+        return default_max
+
+    raw_max = max(candidates)
+    scaled = raw_max * Decimal("1.2")
+
+    if decimals <= 0:
+        y_max = scaled.to_integral_value(rounding=ROUND_CEILING)
+        epsilon = Decimal("1")
+    else:
+        quant = Decimal("1").scaleb(-decimals)
+        y_max = (scaled / quant).to_integral_value(rounding=ROUND_CEILING) * quant
+        epsilon = quant
+
+    y_min_dec = _to_decimal(y_min)
+    if y_min_dec is not None and y_max < (y_min_dec + epsilon):
+        y_max = y_min_dec + epsilon
+
+    if decimals <= 0:
+        try:
+            return int(y_max)
+        except (TypeError, ValueError):
+            return int(y_max)
+    return int(y_max)
+
+
+def _resolve_indicators_date_context(
+    patient: PatientProfile,
+    cycle_id: str | None = None,
+    start_date_str: str | None = None,
+    end_date_str: str | None = None,
+    filter_type: str | None = None,
+    *,
+    include_treatment_cycles: bool = True,
+) -> dict:
+    today = timezone.localdate()
+    default_start_date = today - timedelta(days=29)
+    default_end_date = today
+
+    def _parse_date_range(start_raw: str | None, end_raw: str | None) -> tuple[date, date] | None:
+        if not start_raw or not end_raw:
+            return None
+        try:
+            return date.fromisoformat(start_raw), date.fromisoformat(end_raw)
+        except ValueError:
+            return None
+
+    treatment_cycles = []
+    if include_treatment_cycles:
+        cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
+        treatment_cycles = cycles_page.object_list
+
+    start_date: date | None = None
+    end_date: date | None = None
+    selected_cycle_id: str | None = None
+
+    normalized_filter_type = filter_type if filter_type in {"cycle", "date"} else None
+    is_default_view = False
+
+    if normalized_filter_type == "cycle":
+        if cycle_id:
+            try:
+                cycle = TreatmentCycle.objects.get(pk=cycle_id, patient=patient)
+                start_date = cycle.start_date
+                end_date = cycle.end_date if cycle.end_date else today
+                selected_cycle_id = str(cycle.id)
+            except (TreatmentCycle.DoesNotExist, ValueError):
+                start_date = default_start_date
+                end_date = default_end_date
+                normalized_filter_type = "date"
+                is_default_view = True
+        else:
+            start_date = default_start_date
+            end_date = default_end_date
+            normalized_filter_type = "date"
+            is_default_view = True
+    elif normalized_filter_type == "date":
+        parsed_range = _parse_date_range(start_date_str, end_date_str)
+        if parsed_range:
+            start_date, end_date = parsed_range
+        else:
+            start_date = default_start_date
+            end_date = default_end_date
+            is_default_view = True
+    else:
+        start_date = default_start_date
+        end_date = default_end_date
+        normalized_filter_type = "date"
+        is_default_view = True
+
+    delta_days = (end_date - start_date).days
+    if delta_days > 366:
+        end_date = start_date + timedelta(days=365)
+        delta_days = 365
+    elif delta_days < 0:
+        end_date = start_date
+        delta_days = 0
+
+    query_end_date = end_date + timedelta(days=1)
+    start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
+    end_dt = timezone.make_aware(datetime.combine(query_end_date, datetime.min.time()))
+
+    display_date_fmt = "%m-%d"
+    date_list = [start_date + timedelta(days=i) for i in range(delta_days + 1)]
+    date_strs = [d.strftime(display_date_fmt) for d in date_list]
+
+    return {
+        "today": today,
+        "start_date": start_date,
+        "end_date": end_date,
+        "start_dt": start_dt,
+        "end_dt": end_dt,
+        "date_list": date_list,
+        "date_strs": date_strs,
+        "treatment_cycles": treatment_cycles,
+        "selected_cycle_id": selected_cycle_id,
+        "is_default_view": is_default_view,
+        "normalized_filter_type": normalized_filter_type or "date",
+    }
+
+
+def build_followup_review_context(
+    patient: PatientProfile,
+    cycle_id: str | None = None,
+    start_date_str: str | None = None,
+    end_date_str: str | None = None,
+    filter_type: str | None = None,
+    review_metric_mappings: list[str] | None = None,
+) -> dict:
+    date_context = _resolve_indicators_date_context(
+        patient,
+        cycle_id=cycle_id,
+        start_date_str=start_date_str,
+        end_date_str=end_date_str,
+        filter_type=filter_type,
+        include_treatment_cycles=False,
+    )
+    return {
+        "review_indicator": _build_followup_review_indicator(
+            patient=patient,
+            date_list=date_context["date_list"],
+            date_strs=date_context["date_strs"],
+            start_date=date_context["start_date"],
+            end_date=date_context["end_date"],
+            review_metric_mappings=review_metric_mappings,
+        ),
+    }
+
+
+def _build_followup_review_indicator(
+    *,
+    patient: PatientProfile,
+    date_list: list[date],
+    date_strs: list[str],
+    start_date: date,
+    end_date: date,
+    review_metric_mappings: list[str] | None = None,
+) -> dict:
+    review_catalog, mapping_meta, all_mapping_ids = build_followup_review_catalog()
+    raw_selected_mappings = (
+        get_saved_followup_review_mapping_ids(patient)
+        if review_metric_mappings is None
+        else review_metric_mappings
+    )
+    normalized_selected_mapping_ids = normalize_followup_review_mapping_ids(
+        raw_selected_mappings,
+        mapping_meta=mapping_meta,
+    )
+
+    review_palette = [
+        "#2563eb",
+        "#059669",
+        "#ea580c",
+        "#9333ea",
+        "#db2777",
+        "#0f766e",
+        "#b45309",
+        "#4f46e5",
+    ]
+
+    followup_series_by_mapping, followup_values_by_mapping, followup_unit_by_mapping = _query_followup_review_series(
+        patient=patient,
+        mapping_ids=normalized_selected_mapping_ids,
+        mapping_meta=mapping_meta,
+        date_list=date_list,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    dates_json = json.dumps(date_strs, ensure_ascii=False)
+
+    review_series = []
+    review_values = []
+    for idx, mapping_id in enumerate(normalized_selected_mapping_ids):
+        mapping_info = mapping_meta[mapping_id]
+        data_points = followup_series_by_mapping.get(mapping_id, [None] * len(date_list))
+        real_values = followup_values_by_mapping.get(mapping_id, [])
+        review_values.extend(real_values)
+        review_series.append(
+            {
+                "name": mapping_info["field_name"],
+                "data": data_points,
+                "data_json": json.dumps(data_points, ensure_ascii=False),
+                "color": review_palette[idx % len(review_palette)],
+                "has_data": bool(real_values),
+            }
+        )
+
+    review_y_max = _calc_dynamic_y_max(review_values, default_max=120, y_min=0, baselines=None, decimals=0)
+    review_charts = []
+    for idx, series_item in enumerate(review_series):
+        mapping_id = normalized_selected_mapping_ids[idx]
+        mapping_info = mapping_meta[mapping_id]
+        unit = followup_unit_by_mapping.get(mapping_id, mapping_info["unit"])
+        single_values = followup_values_by_mapping.get(mapping_id, [])
+        single_chart_y_max = _calc_dynamic_y_max(
+            single_values,
+            default_max=120,
+            y_min=0,
+            baselines=None,
+            decimals=0,
+        )
+        review_charts.append(
+            {
+                "id": f"chart-followup-review-{idx}",
+                "title": _format_followup_review_chart_title(mapping_info, unit=unit),
+                "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+                "dates": date_strs,
+                "dates_json": dates_json,
+                "series": [series_item],
+                "y_min": 0,
+                "y_max": single_chart_y_max,
+                "compliance": 0,
+                "empty_message": "" if single_values else "暂无复查结果数据",
+            }
+        )
+
+    focus_mapping_id = normalized_selected_mapping_ids[0] if normalized_selected_mapping_ids else None
+    if focus_mapping_id:
+        focus_mapping_info = mapping_meta[focus_mapping_id]
+        focus_values = followup_values_by_mapping.get(focus_mapping_id, [])
+    else:
+        focus_mapping_info = None
+        focus_values = []
+    focus_latest_value = focus_values[-1] if focus_values else 0
+    focus_prev_value = focus_values[-2] if len(focus_values) > 1 else focus_latest_value
+    focus_delta = round(focus_latest_value - focus_prev_value, 1)
+    focus_name = focus_mapping_info["field_name"] if focus_mapping_info else "暂无关注指标"
+    focus_category_name = focus_mapping_info["checkup_name"] if focus_mapping_info else ""
+    focus_code = str(focus_mapping_id) if focus_mapping_id else ""
+
+    return {
+        "module_title": "复查指标",
+        "title": "核心关注指标",
+        "focus_metric": {
+            "code": focus_code,
+            "name": focus_name,
+            "category_name": focus_category_name,
+            "current_value": focus_latest_value,
+            "delta": focus_delta,
+            "is_up": focus_delta >= 0,
+        },
+        "catalog": review_catalog,
+        "selected_mapping_ids": normalized_selected_mapping_ids,
+        "selected_count": len(normalized_selected_mapping_ids),
+        "all_mappings_count": len(all_mapping_ids),
+        "selected_labels": [
+            mapping_meta[mapping_id]["field_name"] for mapping_id in normalized_selected_mapping_ids[:6]
+        ],
+        "overflow_selected_count": max(len(normalized_selected_mapping_ids) - 6, 0),
+        "chart": {
+            "id": "chart-followup-review",
+            "title": "复查核心指标趋势",
+            "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
+            "dates": date_strs,
+            "dates_json": dates_json,
+            "series": review_series,
+            "y_min": 0,
+            "y_max": review_y_max,
+            "compliance": 0,
+        },
+        "charts": review_charts,
+    }
 
 
 def build_indicators_context(
@@ -649,80 +1156,16 @@ def build_indicators_context(
         dynamic_y_fallback=4,
     )
 
-    review_mapping_qs = (
-        CheckupFieldMapping.objects.filter(
-            is_active=True,
-            standard_field__is_active=True,
-        )
-        .select_related("standard_field")
-        .order_by("sort_order", "id")
+    review_catalog, mapping_meta, all_mapping_ids = build_followup_review_catalog()
+    raw_selected_mappings = (
+        get_saved_followup_review_mapping_ids(patient)
+        if review_metric_mappings is None
+        else review_metric_mappings
     )
-    checkup_items = list(
-        CheckupLibrary.objects.filter(is_active=True)
-        .prefetch_related(
-            Prefetch(
-                "standard_field_mappings",
-                queryset=review_mapping_qs,
-                to_attr="active_standard_field_mappings",
-            )
-        )
-        .order_by("sort_order", "name", "id")
+    normalized_selected_mapping_ids = normalize_followup_review_mapping_ids(
+        raw_selected_mappings,
+        mapping_meta=mapping_meta,
     )
-
-    review_catalog = []
-    mapping_meta = {}
-    all_mapping_ids = []
-    for checkup in checkup_items:
-        fields = []
-        for mapping in getattr(checkup, "active_standard_field_mappings", []):
-            standard_field = mapping.standard_field
-            selectable = standard_field.value_type == StandardFieldValueType.DECIMAL
-            field_item = {
-                "mapping_id": mapping.id,
-                "field_id": standard_field.id,
-                "field_code": standard_field.local_code or "",
-                "field_name": standard_field.chinese_name or standard_field.english_abbr or standard_field.local_code or "",
-                "abbr": standard_field.english_abbr or "",
-                "unit": standard_field.default_unit or "",
-                "value_type": standard_field.value_type,
-                "selectable": selectable,
-            }
-            fields.append(field_item)
-            mapping_meta[mapping.id] = {
-                **field_item,
-                "checkup_id": checkup.id,
-                "checkup_code": checkup.code or "",
-                "checkup_name": checkup.name or "",
-                "category_name": checkup.get_category_display(),
-            }
-            all_mapping_ids.append(mapping.id)
-        review_catalog.append(
-            {
-                "checkup_id": checkup.id,
-                "checkup_code": checkup.code or "",
-                "checkup_name": checkup.name or "",
-                "category_name": checkup.get_category_display(),
-                "fields": fields,
-            }
-        )
-
-    raw_selected_mappings = review_metric_mappings or []
-    normalized_selected_mapping_ids = []
-    seen_mapping_ids = set()
-    for mapping_id_raw in raw_selected_mappings:
-        try:
-            mapping_id = int(mapping_id_raw)
-        except (TypeError, ValueError):
-            continue
-        mapping_info = mapping_meta.get(mapping_id)
-        if (
-            not mapping_info
-            or not mapping_info["selectable"]
-            or mapping_id in seen_mapping_ids
-        ):
-            continue
-        normalized_selected_mapping_ids.append(mapping_id)
-        seen_mapping_ids.add(mapping_id)
 
     review_palette = [
         "#2563eb",
@@ -735,39 +1178,42 @@ def build_indicators_context(
         "#4f46e5",
     ]
 
-    def _build_mock_followup_series(seed_text: str) -> list[float]:
-        code_seed = sum(ord(ch) for ch in seed_text)
-        base_value = 20 + (code_seed % 30)
-        values = []
-        for index, _ in enumerate(date_list):
-            weekly_wave = ((index + (code_seed % 5)) % 7) - 3
-            trend_value = (index * ((code_seed % 4) + 1)) / max(len(date_list), 1)
-            current_value = round(base_value + weekly_wave * 0.8 + trend_value, 1)
-            values.append(max(current_value, 0))
-        return values
+    followup_series_by_mapping, followup_values_by_mapping, followup_unit_by_mapping = _query_followup_review_series(
+        patient=patient,
+        mapping_ids=normalized_selected_mapping_ids,
+        mapping_meta=mapping_meta,
+        date_list=date_list,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    dates_json = json.dumps(date_strs, ensure_ascii=False)
 
     review_series = []
     review_values = []
     for idx, mapping_id in enumerate(normalized_selected_mapping_ids):
         mapping_info = mapping_meta[mapping_id]
-        seed_text = f"{mapping_info['checkup_code']}:{mapping_info['field_code']}:{mapping_id}"
-        data_points = _build_mock_followup_series(seed_text)
-        review_values.extend(data_points)
+        data_points = followup_series_by_mapping.get(mapping_id, [None] * len(date_list))
+        real_values = followup_values_by_mapping.get(mapping_id, [])
+        review_values.extend(real_values)
         review_series.append(
             {
                 "name": mapping_info["field_name"],
                 "data": data_points,
+                "data_json": json.dumps(data_points, ensure_ascii=False),
                 "color": review_palette[idx % len(review_palette)],
+                "has_data": bool(real_values),
             }
         )
 
     review_y_max = _calc_dynamic_y_max(review_values, default_max=120, y_min=0, baselines=None, decimals=0)
     review_charts = []
     for idx, series_item in enumerate(review_series):
-        mapping_info = mapping_meta[normalized_selected_mapping_ids[idx]]
-        unit_suffix = f" / {mapping_info['unit']}" if mapping_info["unit"] else ""
+        mapping_id = normalized_selected_mapping_ids[idx]
+        mapping_info = mapping_meta[mapping_id]
+        unit = followup_unit_by_mapping.get(mapping_id, mapping_info["unit"])
+        single_values = followup_values_by_mapping.get(mapping_id, [])
         single_chart_y_max = _calc_dynamic_y_max(
-            series_item["data"],
+            single_values,
             default_max=120,
             y_min=0,
             baselines=None,
@@ -776,37 +1222,27 @@ def build_indicators_context(
         review_charts.append(
             {
                 "id": f"chart-followup-review-{idx}",
-                "title": series_item["name"],
-                "subtitle": (
-                    f"{mapping_info['checkup_name']}{unit_suffix} · "
-                    f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}"
-                ),
+                "title": _format_followup_review_chart_title(mapping_info, unit=unit),
+                "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
                 "dates": date_strs,
+                "dates_json": dates_json,
                 "series": [series_item],
                 "y_min": 0,
                 "y_max": single_chart_y_max,
                 "compliance": 0,
+                "empty_message": "" if single_values else "暂无复查结果数据",
             }
         )
 
     focus_mapping_id = normalized_selected_mapping_ids[0] if normalized_selected_mapping_ids else None
     if focus_mapping_id:
         focus_mapping_info = mapping_meta[focus_mapping_id]
-        focus_seed = f"{focus_mapping_info['checkup_code']}:{focus_mapping_info['field_code']}:{focus_mapping_id}"
+        focus_values = followup_values_by_mapping.get(focus_mapping_id, [])
     else:
         focus_mapping_info = None
-        first_selectable_mapping = next(
-            (info for info in mapping_meta.values() if info["selectable"]),
-            None,
-        )
-        focus_seed = (
-            f"{first_selectable_mapping['checkup_code']}:{first_selectable_mapping['field_code']}"
-            if first_selectable_mapping
-            else "followup-review"
-        )
-    focus_data = _build_mock_followup_series(focus_seed)
-    focus_latest_value = focus_data[-1] if focus_data else 0
-    focus_prev_value = focus_data[-2] if len(focus_data) > 1 else focus_latest_value
+        focus_values = []
+    focus_latest_value = focus_values[-1] if focus_values else 0
+    focus_prev_value = focus_values[-2] if len(focus_values) > 1 else focus_latest_value
     focus_delta = round(focus_latest_value - focus_prev_value, 1)
     focus_name = focus_mapping_info["field_name"] if focus_mapping_info else "暂无关注指标"
     focus_category_name = focus_mapping_info["checkup_name"] if focus_mapping_info else ""
@@ -835,6 +1271,7 @@ def build_indicators_context(
             "title": "复查核心指标趋势",
             "subtitle": f"{start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}",
             "dates": date_strs,
+            "dates_json": dates_json,
             "series": review_series,
             "y_min": 0,
             "y_max": review_y_max,

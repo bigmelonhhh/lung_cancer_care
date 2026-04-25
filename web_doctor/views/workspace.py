@@ -668,13 +668,18 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
         elif section == "indicators":
             from web_doctor.views.indicators import build_indicators_context
             template_name = "web_doctor/partials/indicators/indicators.html"
+            review_metric_mappings = (
+                request.GET.getlist("review_metric_mappings")
+                if "review_metric_mappings" in request.GET
+                else None
+            )
             context.update(build_indicators_context(
                 patient,
                 cycle_id=request.GET.get("cycle_id"),
                 start_date_str=request.GET.get("start_date"),
                 end_date_str=request.GET.get("end_date"),
                 filter_type=request.GET.get("filter_type"),
-                review_metric_mappings=request.GET.getlist("review_metric_mappings"),
+                review_metric_mappings=review_metric_mappings,
             ))
 
         elif section == "statistics":
@@ -711,6 +716,37 @@ def patient_workspace_section(request: HttpRequest, patient_id: int, section: st
         </div>
         """
         return HttpResponse(error_html)
+
+
+@login_required
+@check_doctor_or_assistant
+@require_POST
+def patient_indicator_preferences_update(request: HttpRequest, patient_id: int) -> HttpResponse:
+    patient = get_object_or_404(_get_workspace_patients(request.user, query=None), pk=patient_id)
+
+    from web_doctor.views.indicators import (
+        build_followup_review_context,
+        save_followup_review_preferences,
+    )
+
+    save_followup_review_preferences(
+        patient,
+        request.POST.getlist("review_metric_mappings"),
+        user_id=request.user.id,
+    )
+    context = {
+        "patient": patient,
+        "active_tab": "indicators",
+    }
+    context.update(build_followup_review_context(
+        patient,
+        cycle_id=request.POST.get("cycle_id"),
+        start_date_str=request.POST.get("start_date"),
+        end_date_str=request.POST.get("end_date"),
+        filter_type=request.POST.get("filter_type"),
+        review_metric_mappings=None,
+    ))
+    return render(request, "web_doctor/partials/indicators/followup_review_monitoring.html", context)
 
 
 def _build_settings_context(

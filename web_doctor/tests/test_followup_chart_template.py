@@ -27,5 +27,6 @@ class FollowupChartTemplateTests(TestCase):
         )
 
         self.assertIn("白细胞计数", html)
+        self.assertNotIn("2026-01-01 ~ 2026-01-07", html)
         self.assertNotIn("依从性：", html)
         self.assertNotIn("viewBox=\"0 0 24 24\"", html)

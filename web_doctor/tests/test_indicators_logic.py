@@ -18,7 +18,14 @@ from core.models import (
     TreatmentCycle,
     choices,
 )
-from health_data.models import HealthMetric, MetricType, QuestionnaireSubmission
+from health_data.models import (
+    CheckupResultValue,
+    HealthMetric,
+    MetricType,
+    QuestionnaireSubmission,
+    ReportImage,
+    ReportUpload,
+)
 from web_doctor.views.indicators import build_indicators_context
 
 User = get_user_model()
@@ -408,6 +415,10 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(review_indicator["catalog"][0]["checkup_name"], "血常规")
         self.assertEqual(len(review_indicator["catalog"][0]["fields"]), 2)
         self.assertTrue(review_indicator["catalog"][0]["fields"][0]["selectable"])
+        self.assertEqual(
+            review_indicator["catalog"][0]["fields"][0]["field_display_name"],
+            "白细胞计数(WBC)",
+        )
         self.assertFalse(review_indicator["catalog"][0]["fields"][1]["selectable"])
         self.assertEqual(len(review_indicator["chart"]["series"]), 0)
         self.assertEqual(len(review_indicator["charts"]), 0)
@@ -490,6 +501,208 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(len(review_indicator["chart"]["series"]), 1)
         self.assertEqual(len(review_indicator["charts"]), 1)
         self.assertEqual(len(review_indicator["chart"]["series"][0]["data"]), len(context["dates"]))
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_followup_review_uses_saved_patient_preferences_when_no_request_param(self, *_mocks):
+        checkup = CheckupLibrary.objects.create(
+            name="血生化",
+            code="BLOOD_CHEMISTRY_INDICATOR",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        field = StandardField.objects.create(
+            local_code="ALT_INDICATOR",
+            chinese_name="谷丙转氨酶",
+            value_type=StandardFieldValueType.DECIMAL,
+            is_active=True,
+        )
+        mapping = CheckupFieldMapping.objects.create(
+            checkup_item=checkup,
+            standard_field=field,
+            is_active=True,
+        )
+        self.patient.indicator_preferences = {
+            "version": 1,
+            "followup_review": {"selected_mapping_ids": [mapping.id]},
+        }
+        self.patient.save(update_fields=["indicator_preferences"])
+
+        context = build_indicators_context(self.patient)
+
+        review_indicator = context["review_indicator"]
+        self.assertEqual(review_indicator["selected_mapping_ids"], [mapping.id])
+        self.assertEqual(review_indicator["selected_count"], 1)
+        self.assertEqual(len(review_indicator["charts"]), 1)
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_followup_review_request_param_overrides_saved_patient_preferences(self, *_mocks):
+        checkup = CheckupLibrary.objects.create(
+            name="血常规",
+            code="BLOOD_ROUTINE_OVERRIDE_INDICATOR",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        saved_field = StandardField.objects.create(
+            local_code="WBC_OVERRIDE_INDICATOR",
+            chinese_name="白细胞计数",
+            value_type=StandardFieldValueType.DECIMAL,
+            is_active=True,
+        )
+        request_field = StandardField.objects.create(
+            local_code="HGB_OVERRIDE_INDICATOR",
+            chinese_name="血红蛋白",
+            value_type=StandardFieldValueType.DECIMAL,
+            is_active=True,
+        )
+        saved_mapping = CheckupFieldMapping.objects.create(
+            checkup_item=checkup,
+            standard_field=saved_field,
+            is_active=True,
+        )
+        request_mapping = CheckupFieldMapping.objects.create(
+            checkup_item=checkup,
+            standard_field=request_field,
+            is_active=True,
+        )
+        self.patient.indicator_preferences = {
+            "version": 1,
+            "followup_review": {"selected_mapping_ids": [saved_mapping.id]},
+        }
+        self.patient.save(update_fields=["indicator_preferences"])
+
+        context = build_indicators_context(
+            self.patient,
+            review_metric_mappings=[str(request_mapping.id)],
+        )
+
+        review_indicator = context["review_indicator"]
+        self.assertEqual(review_indicator["selected_mapping_ids"], [request_mapping.id])
+        self.assertEqual(review_indicator["selected_labels"], ["血红蛋白"])
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_followup_review_chart_uses_structured_checkup_values(self, *_mocks):
+        start_date = self.today - timedelta(days=3)
+        same_day = start_date + timedelta(days=1)
+        checkup = CheckupLibrary.objects.create(
+            name="血常规",
+            code="BLOOD_ROUTINE_REAL_INDICATOR",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        other_checkup = CheckupLibrary.objects.create(
+            name="血生化",
+            code="BLOOD_CHEMISTRY_REAL_INDICATOR",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        field = StandardField.objects.create(
+            local_code="WBC_REAL_INDICATOR",
+            chinese_name="白细胞计数",
+            english_abbr="WBC",
+            value_type=StandardFieldValueType.DECIMAL,
+            default_unit="10^9/L",
+            is_active=True,
+        )
+        mapping = CheckupFieldMapping.objects.create(
+            checkup_item=checkup,
+            standard_field=field,
+            is_active=True,
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=other_checkup,
+            standard_field=field,
+            is_active=True,
+        )
+
+        upload = ReportUpload.objects.create(patient=self.patient)
+
+        def create_result(report_date, value, *, item=checkup, unit=""):
+            image = ReportImage.objects.create(
+                upload=upload,
+                image_url=f"https://example.com/{item.id}-{report_date}-{value}.jpg",
+                record_type=ReportImage.RecordType.CHECKUP,
+                checkup_item=item,
+                report_date=report_date,
+            )
+            return CheckupResultValue.objects.create(
+                patient=self.patient,
+                report_image=image,
+                checkup_item=item,
+                standard_field=field,
+                report_date=report_date,
+                raw_name="白细胞计数",
+                normalized_name=f"wbc-{item.id}-{report_date}-{value}",
+                value_numeric=Decimal(str(value)),
+                raw_value=str(value),
+                unit=unit,
+            )
+
+        create_result(start_date, "1.2")
+        create_result(same_day, "2.3")
+        create_result(same_day, "2.8", unit="*10^9/L")
+        create_result(start_date + timedelta(days=2), "9.9", item=other_checkup)
+        create_result(start_date - timedelta(days=1), "7.7")
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=start_date.isoformat(),
+            end_date_str=self.today.isoformat(),
+            filter_type="date",
+            review_metric_mappings=[str(mapping.id)],
+        )
+
+        chart = context["review_indicator"]["charts"][0]
+        series_data = chart["series"][0]["data"]
+        self.assertEqual(series_data, [1.2, 2.8, None, None])
+        self.assertEqual(chart["series"][0]["data_json"], "[1.2, 2.8, null, null]")
+        self.assertIn("血常规-白细胞计数（WBC） *10^9/L", chart["title"])
+        self.assertEqual(chart["empty_message"], "")
+        self.assertEqual(context["review_indicator"]["focus_metric"]["current_value"], 2.8)
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_followup_review_chart_keeps_configured_metric_when_no_data(self, *_mocks):
+        checkup = CheckupLibrary.objects.create(
+            name="肿瘤标志物",
+            code="TUMOR_MARKER_EMPTY_INDICATOR",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        field = StandardField.objects.create(
+            local_code="CEA_EMPTY_INDICATOR",
+            chinese_name="癌胚抗原",
+            english_abbr="CEA",
+            value_type=StandardFieldValueType.DECIMAL,
+            is_active=True,
+        )
+        mapping = CheckupFieldMapping.objects.create(
+            checkup_item=checkup,
+            standard_field=field,
+            is_active=True,
+        )
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=(self.today - timedelta(days=1)).isoformat(),
+            end_date_str=self.today.isoformat(),
+            filter_type="date",
+            review_metric_mappings=[str(mapping.id)],
+        )
+
+        chart = context["review_indicator"]["charts"][0]
+        self.assertEqual(chart["series"][0]["data"], [None, None])
+        self.assertEqual(chart["empty_message"], "暂无复查结果数据")
 
 
 @patch("web_doctor.views.indicators.get_treatment_cycles", return_value=SimpleNamespace(object_list=[]))

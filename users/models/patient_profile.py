@@ -186,6 +186,12 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】患者日常活动步数参考值；【用法】由医生在管理端配置；【示例】6000；【参数】int；【返回值】int",
     )
+    indicator_preferences = models.JSONField(
+        "指标配置偏好",
+        default=dict,
+        blank=True,
+        help_text="【业务说明】保存患者级共享的指标配置；【用法】医生工作台核心关注指标读取；【示例】{'followup_review': {'selected_mapping_ids': [1, 2]}}；【参数】dict；【返回值】dict",
+    )
     is_active = models.BooleanField(
         "是否有效",
         default=True,
