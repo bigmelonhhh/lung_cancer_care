@@ -111,7 +111,8 @@
                     >
                         {# 图片本体 #}
                         <div class="w-full h-[160px] bg-slate-100 rounded-lg border border-slate-200 overflow-hidden relative cursor-pointer group/img"
-                             @click="$dispatch('show-preview', '{{ img.url }}')">
+                             data-preview-url="{{ img.url|escape }}"
+                             @click.stop="$dispatch('show-preview', $el.dataset.previewUrl)">
                             <img src="{{ img.thumbnail_url|default:img.url }}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105">
                             
                             {# 归档状态标签 (仅未归档且非编辑态显示) #}

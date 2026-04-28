@@ -1,7 +1,27 @@
 {% load static %}
 <div class="bg-white min-h-screen p-3 relative"
-     x-data="{ activeTab: '{{ active_tab|default:'records' }}', showPreview: false, previewImage: '' }"
-     @show-preview.window="showPreview = true; previewImage = $event.detail">
+     x-data="{
+        activeTab: '{{ active_tab|default:'records' }}',
+        showPreview: false,
+        previewImage: '',
+        openPreview(url) {
+            if (!url) return;
+            this.previewImage = url;
+            this.showPreview = true;
+        },
+        closePreview() {
+            this.showPreview = false;
+            window.setTimeout(() => {
+                if (!this.showPreview) this.previewImage = '';
+            }, 200);
+        },
+        requestClosePreview() {
+            window.dispatchEvent(new CustomEvent('close-preview'));
+        }
+     }"
+     @show-preview.window="if ($root.contains($event.target)) openPreview($event.detail)"
+     @close-preview.window="closePreview()"
+     @keydown.escape.window="requestClosePreview()">
     <style>
         #reports-section-loading {
             opacity: 0;
@@ -67,6 +87,7 @@
         <div 
             x-show="showPreview" 
             class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+            @click.self="requestClosePreview()"
             x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0"
             x-transition:enter-end="opacity-100"
@@ -75,13 +96,16 @@
             x-transition:leave-end="opacity-0"
             style="display: none;"
         >
-            <div class="relative max-w-4xl max-h-full" @click.outside="showPreview = false">
-                <button 
-                    @click="showPreview = false" 
-                    class="absolute -top-10 right-0 text-white hover:text-slate-300 transition-colors"
-                >
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
+            <button
+                type="button"
+                aria-label="关闭图片预览"
+                @pointerdown.stop.prevent="requestClosePreview()"
+                @click.stop.prevent="requestClosePreview()"
+                class="fixed top-4 right-4 z-[10001] inline-flex h-15 w-15 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60 hover:text-slate-200"
+            >
+                <svg class="w-12 h-12 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div class="relative max-w-4xl max-h-full">
                 <img :src="previewImage" class="max-w-full max-h-[90vh] rounded shadow-2xl object-contain">
             </div>
         </div>

@@ -4841,6 +4841,10 @@ video {
   background-color: rgb(255 255 255 / 0.2);
 }
 
+.hover\:bg-black\/60:hover {
+  background-color: rgb(0 0 0 / 0.6);
+}
+
 .hover\:text-blue-600:hover {
   --tw-text-opacity: 1;
   color: rgb(37 99 235 / var(--tw-text-opacity, 1));
@@ -4939,6 +4943,11 @@ video {
 .hover\:text-white:hover {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.hover\:text-slate-200:hover {
+  --tw-text-opacity: 1;
+  color: rgb(226 232 240 / var(--tw-text-opacity, 1));
 }
 
 .hover\:underline:hover {

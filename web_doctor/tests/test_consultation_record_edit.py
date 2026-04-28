@@ -289,6 +289,13 @@ class ConsultationModalLayeringTemplateTests(SimpleTestCase):
         self.assertIn("<template x-teleport=\"body\">", content)
         self.assertIn("x-show=\"showPreview\"", content)
         self.assertIn("class=\"fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4\"", content)
+        self.assertIn("@show-preview.window=\"if ($root.contains($event.target)) openPreview($event.detail)\"", content)
+        self.assertIn("@close-preview.window=\"closePreview()\"", content)
+        self.assertIn("@click.self=\"requestClosePreview()\"", content)
+        self.assertIn("@keydown.escape.window=\"requestClosePreview()\"", content)
+        self.assertIn("@pointerdown.stop.prevent=\"requestClosePreview()\"", content)
+        self.assertIn("aria-label=\"关闭图片预览\"", content)
+        self.assertNotIn("@click.outside=\"showPreview = false\"", content)
 
     def test_home_checkup_modal_teleports_to_body(self):
         content = self._read("templates/web_doctor/partials/home/checkup_record_modal.html")
