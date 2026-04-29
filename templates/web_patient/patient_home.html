@@ -337,6 +337,11 @@
             </div>
             <div>
               <h4 class="font-bold text-slate-800 text-sm">今日步数</h4>
+              {% if has_baseline_steps %}
+              <p class="mt-1 text-sm text-slate-500">
+                目标：{{ baseline_steps }} 步
+              </p>
+              {% endif %}
             </div>
           </div>
           <div class="text-sm text-slate-500 whitespace-nowrap">

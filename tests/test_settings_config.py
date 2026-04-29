@@ -140,7 +140,8 @@ class SettingsHelperTests(unittest.TestCase):
 class LoggingConfigTests(unittest.TestCase):
     def test_build_logging_config_in_normal_mode(self):
         module = _import_settings("lung_cancer_care.settings.logging")
-        config = module.build_logging_config(Path("/tmp"), "WARNING")
+        with patch.object(sys, "argv", ["manage.py", "runserver"]):
+            config = module.build_logging_config(Path("/tmp"), "WARNING")
 
         self.assertEqual(config["root"]["level"], "WARNING")
         self.assertEqual(

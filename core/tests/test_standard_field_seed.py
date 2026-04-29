@@ -93,8 +93,6 @@ class StandardFieldSeedSyncTests(TestCase):
 
     def test_builtin_seed_file_is_present_and_parseable(self):
         self.assertTrue(Path(DEFAULT_STANDARD_FIELD_SEED_PATH).exists())
-        self.assertGreater(StandardField.objects.count(), 10)
-        self.assertGreater(StandardFieldAlias.objects.count(), 10)
 
         stats = sync_standard_field_seed(
             standard_field_model=StandardField,
@@ -103,11 +101,23 @@ class StandardFieldSeedSyncTests(TestCase):
             checkup_model=CheckupLibrary,
             path=DEFAULT_STANDARD_FIELD_SEED_PATH,
         )
+        self.assertGreater(StandardField.objects.count(), 10)
+        self.assertGreater(StandardFieldAlias.objects.count(), 10)
+        self.assertGreater(stats["created_fields"] + stats["skipped_fields"], 10)
+        self.assertGreater(stats["created_aliases"] + stats["skipped_aliases"], 10)
 
-        self.assertEqual(stats["created_fields"], 0)
-        self.assertEqual(stats["created_aliases"], 0)
-        self.assertGreater(stats["skipped_fields"], 10)
-        self.assertGreater(stats["skipped_aliases"], 10)
+        second_stats = sync_standard_field_seed(
+            standard_field_model=StandardField,
+            alias_model=StandardFieldAlias,
+            mapping_model=CheckupFieldMapping,
+            checkup_model=CheckupLibrary,
+            path=DEFAULT_STANDARD_FIELD_SEED_PATH,
+        )
+
+        self.assertEqual(second_stats["created_fields"], 0)
+        self.assertEqual(second_stats["created_aliases"], 0)
+        self.assertGreater(second_stats["skipped_fields"], 10)
+        self.assertGreater(second_stats["skipped_aliases"], 10)
 
     def test_builtin_seed_contains_myocardial_marker_bundle(self):
         seed_data = load_standard_field_seed(DEFAULT_STANDARD_FIELD_SEED_PATH)

@@ -280,6 +280,8 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     daily_plans = []
     list_data = {}
     step_count = "0"
+    baseline_steps = getattr(patient, "baseline_steps", None)
+    has_baseline_steps = baseline_steps is not None
     unread_chat_count = 0
 
     completed_task_types = set()
@@ -415,6 +417,8 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "patient_id": patient_id,
         "menuUrl": task_url_mapping,
         "step_count": step_count,
+        "baseline_steps": baseline_steps,
+        "has_baseline_steps": has_baseline_steps,
         "unread_chat_count": unread_chat_count,
     }
     return render(request, "web_patient/patient_home.html", context)

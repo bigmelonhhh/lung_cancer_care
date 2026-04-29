@@ -79,3 +79,21 @@ class PatientHomeUnreadBadgeTests(TestCase):
       html,
       r"<h3 class=\"text-lg font-bold text-slate-800\">今日计划</h3>[\s\S]*今日步数",
     )
+
+  @patch("web_patient.views.chat_api.get_unread_chat_count", return_value=0)
+  def test_baseline_steps_hidden_when_unset(self, mock_func):
+    html = self._get_home_html()
+    self.assertNotIn("目标：", html)
+    self.assertNotIn("基础设置指标就绪", html)
+    self.assertNotIn("步数基础指标", html)
+
+  @patch("web_patient.views.chat_api.get_unread_chat_count", return_value=0)
+  def test_baseline_steps_shown_when_set(self, mock_func):
+    self.patient.baseline_steps = 6000
+    self.patient.save(update_fields=["baseline_steps"])
+
+    html = self._get_home_html()
+
+    self.assertIn("目标：6000 步", html)
+    self.assertNotIn("基础设置指标就绪", html)
+    self.assertNotIn("步数基础指标", html)
