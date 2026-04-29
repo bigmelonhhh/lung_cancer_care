@@ -1316,6 +1316,10 @@ video {
   max-height: 60vh;
 }
 
+.max-h-\[70vh\] {
+  max-height: 70vh;
+}
+
 .max-h-\[80vh\] {
   max-height: 80vh;
 }
@@ -1334,10 +1338,6 @@ video {
 
 .max-h-screen {
   max-height: 100vh;
-}
-
-.max-h-\[70vh\] {
-  max-height: 70vh;
 }
 
 .min-h-0 {
@@ -4719,6 +4719,10 @@ video {
   border-color: rgb(148 163 184 / var(--tw-border-opacity, 1));
 }
 
+.hover\:bg-black\/60:hover {
+  background-color: rgb(0 0 0 / 0.6);
+}
+
 .hover\:bg-blue-50:hover {
   --tw-bg-opacity: 1;
   background-color: rgb(239 246 255 / var(--tw-bg-opacity, 1));
@@ -4841,10 +4845,6 @@ video {
   background-color: rgb(255 255 255 / 0.2);
 }
 
-.hover\:bg-black\/60:hover {
-  background-color: rgb(0 0 0 / 0.6);
-}
-
 .hover\:text-blue-600:hover {
   --tw-text-opacity: 1;
   color: rgb(37 99 235 / var(--tw-text-opacity, 1));
@@ -4910,6 +4910,11 @@ video {
   color: rgb(159 18 57 / var(--tw-text-opacity, 1));
 }
 
+.hover\:text-slate-200:hover {
+  --tw-text-opacity: 1;
+  color: rgb(226 232 240 / var(--tw-text-opacity, 1));
+}
+
 .hover\:text-slate-300:hover {
   --tw-text-opacity: 1;
   color: rgb(203 213 225 / var(--tw-text-opacity, 1));
@@ -4943,11 +4948,6 @@ video {
 .hover\:text-white:hover {
   --tw-text-opacity: 1;
   color: rgb(255 255 255 / var(--tw-text-opacity, 1));
-}
-
-.hover\:text-slate-200:hover {
-  --tw-text-opacity: 1;
-  color: rgb(226 232 240 / var(--tw-text-opacity, 1));
 }
 
 .hover\:underline:hover {

@@ -14,3 +14,4 @@ markdown==3.7
 concurrent-log-handler==0.9.28
 django-changelog==0.1.2
 chinesecalendar==1.11.0
+playwright==1.58.0

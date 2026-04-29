@@ -21,11 +21,17 @@
             }
             return;
           }
-          window.LCCAssetLoader.ensure('htmx').catch(function () {
-            if (typeof console !== 'undefined' && console.error) {
-              console.error('[LCCAssetLoader] failed to preload base sales htmx');
-            }
-          });
+          window.LCCAssetLoader.ensure('htmx')
+            .then(function () {
+              if (window.htmx && document.body) {
+                window.htmx.process(document.body);
+              }
+            })
+            .catch(function () {
+              if (typeof console !== 'undefined' && console.error) {
+                console.error('[LCCAssetLoader] failed to preload base sales htmx');
+              }
+            });
         }
 
         function ensureAlpineStack() {

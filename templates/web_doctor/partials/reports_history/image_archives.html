@@ -19,17 +19,20 @@
 
     {# 1. 顶部筛选 #}
     <form class="bg-white p-4 rounded-lg shadow-sm border border-slate-200 flex flex-wrap items-center gap-4"
+          data-testid="archive-filter-form"
           hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content"
           hx-target="#reports-history-content"
           hx-indicator="#search-loading"
           hx-trigger="submit delay:300ms"
+          onsubmit="const start=this.querySelector('[name=startDate]').value; const end=this.querySelector('[name=endDate]').value; if (start && end && start > end) { alert('开始日期不能晚于结束日期'); return false; }"
+          hx-on::before-request="if (archiveFilters.dateStart && archiveFilters.dateEnd && archiveFilters.dateStart > archiveFilters.dateEnd) { alert('开始日期不能晚于结束日期'); event.preventDefault(); }"
           @submit.prevent="if(archiveFilters.dateStart && archiveFilters.dateEnd && archiveFilters.dateStart > archiveFilters.dateEnd) { alert('开始日期不能晚于结束日期'); return; } $el.requestSubmit()">
         <div class="flex items-center gap-2">
             <label class="text-sm font-medium text-slate-700">上传日期：</label>
             <div class="flex items-center gap-1">
-                <input type="date" name="startDate" x-model="archiveFilters.dateStart" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                <input type="date" name="startDate" data-testid="archive-date-start" x-model="archiveFilters.dateStart" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
                 <span class="text-slate-400">-</span>
-                <input type="date" name="endDate" x-model="archiveFilters.dateEnd" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
+                <input type="date" name="endDate" data-testid="archive-date-end" x-model="archiveFilters.dateEnd" class="border text-sm border-slate-300 rounded-md focus:border-indigo-500 focus:ring-indigo-500 py-1 w-32">
             </div>
         </div>
         
@@ -111,6 +114,7 @@
                     >
                         {# 图片本体 #}
                         <div class="w-full h-[160px] bg-slate-100 rounded-lg border border-slate-200 overflow-hidden relative cursor-pointer group/img"
+                             data-testid="archive-image-card"
                              data-preview-url="{{ img.url|escape }}"
                              @click.stop="$dispatch('show-preview', $el.dataset.previewUrl)">
                             <img src="{{ img.thumbnail_url|default:img.url }}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover/img:scale-105">
@@ -189,6 +193,7 @@
                             {# 类目选择 (Popover Trigger) #}
                             <div class="relative">
                                 <select x-model="tempCat"
+                                        data-testid="archive-category-select"
                                         :value="tempCat"
                                         :disabled="itemIsArchived"
                                         :class="itemIsArchived ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''"
@@ -222,6 +227,7 @@
                             <div>
                                 <input type="date"
                                        x-model="tempDate"
+                                       data-testid="archive-date-input"
                                        :disabled="itemIsArchived"
                                        :class="itemIsArchived ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : ''"
                                        class="border date-input block w-full text-xs border-slate-300 rounded shadow-sm focus:border-indigo-500 focus:ring-indigo-500 py-1 px-2">
@@ -234,6 +240,7 @@
                 {# 底部操作栏 #}
                 <div class="mt-6 pt-4 border-t border-slate-100 flex justify-end gap-2">
                     <button 
+                        data-testid="archive-edit-submit-button"
                         @click="if(isGroupEditing) { saveGroup(); } else { isGroupEditing = true; }"
                         class="px-6 py-2 rounded text-sm font-medium transition-colors shadow-sm min-w-[100px]"
                         :class="isGroupEditing ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'"

@@ -408,12 +408,15 @@ def patient_checkup_timeline(request: HttpRequest, patient_id: int) -> HttpRespo
     }
     return render(request, "web_doctor/partials/home/checkup_timeline.html", context)
 
-def get_checkup_history_data(filters: dict) -> list:
+def get_checkup_history_data(patient_or_filters, filters: dict | None = None) -> list:
     """
     获取复查/诊疗历史记录模拟数据
     """
     import random
     from datetime import date, timedelta
+
+    if filters is None:
+        filters = patient_or_filters
     
     history_list = []
     

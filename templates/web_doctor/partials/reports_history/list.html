@@ -48,6 +48,7 @@
     {# 顶部 Tab 切换 #}
     <div class="flex items-center justify-center gap-12 border-b border-slate-100 mb-6">
         <button 
+            data-testid="reports-tab-records"
             @click="activeTab = 'records'"
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=records&fragment=content"
             hx-target="#reports-history-content"
@@ -61,6 +62,7 @@
             <div x-show="activeTab === 'records'" class="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-full"></div>
         </button>
         <button 
+            data-testid="reports-tab-images"
             @click="activeTab = 'images'"
             hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'reports' %}?tab=images&fragment=content"
             hx-target="#reports-history-content"
@@ -76,7 +78,7 @@
     </div>
 
     {# 内容区域 #}
-    <div id="reports-history-content" class="px-2 min-h-[400px]">
+    <div id="reports-history-content" data-testid="reports-history-content" class="px-2 min-h-[400px]">
         {% include reports_content_template %}
     </div>
 
@@ -85,6 +87,7 @@
     {# 图片预览弹窗 #}
     <template x-teleport="body">
         <div 
+            data-testid="image-preview-overlay"
             x-show="showPreview" 
             class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
             @click.self="requestClosePreview()"
@@ -97,6 +100,7 @@
             style="display: none;"
         >
             <button
+                data-testid="image-preview-close"
                 type="button"
                 aria-label="关闭图片预览"
                 @pointerdown.stop.prevent="requestClosePreview()"

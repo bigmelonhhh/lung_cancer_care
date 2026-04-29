@@ -11,7 +11,8 @@
     "lint:html": "node scripts/lint-html.js",
     "tailwind:build": "tailwindcss -i static/src/tailwind.css -o static/css/app.css --minify",
     "tailwind:watch": "tailwindcss -i static/src/tailwind.css -o static/css/app.css --watch",
-    "test:ui": "node scripts/test-ui.js"
+    "test:ui": "node scripts/test-ui.js",
+    "test:browser": "node scripts/test-browser.js"
   },
   "repository": {
     "type": "git",
