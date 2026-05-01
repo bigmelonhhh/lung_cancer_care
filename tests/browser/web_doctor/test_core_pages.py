@@ -1,5 +1,6 @@
 from django.test import tag
 
+from chat.models import Conversation, ConversationType, Message, MessageSenderRole
 from tests.browser.web_doctor.base import DoctorBrowserTestCase, expect
 
 
@@ -17,6 +18,30 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator("#patient-content")).to_contain_text("概况", timeout=10000)
         expect(self.page.get_by_test_id("workspace-tab-home")).to_be_visible(timeout=10000)
         expect(self.page.get_by_test_id("workspace-tab-reports")).to_be_visible(timeout=10000)
+
+    def test_patient_selection_keeps_chat_after_todo_sidebar_refresh(self):
+        conversation = Conversation.objects.create(
+            type=ConversationType.PATIENT_STUDIO,
+            patient=self.patient,
+            studio=self.studio,
+            created_by=self.doctor_user,
+        )
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.patient_user,
+            sender_role_snapshot=MessageSenderRole.PATIENT,
+            sender_display_name_snapshot="Browser Patient",
+            studio_name_snapshot=self.studio.name,
+            text_content="聊天保持回归测试",
+        )
+
+        self.open_doctor_workspace()
+        self.page.locator('[data-patient-item][data-patient-id="%s"]' % self.patient.id).click()
+
+        expect(self.page.locator("#patient-content")).to_contain_text("概况", timeout=10000)
+        expect(self.page.locator("#patient-todo-list")).to_contain_text("Browser Patient的待办", timeout=10000)
+        expect(self.page.locator("#chat-messages-container")).to_contain_text("聊天保持回归测试", timeout=10000)
+        expect(self.page.locator('[data-test="empty-state"]')).to_be_hidden(timeout=10000)
 
     def test_patient_workspace_core_tabs_load(self):
         self.open_patient_workspace()
