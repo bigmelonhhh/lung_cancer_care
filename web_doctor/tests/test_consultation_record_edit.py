@@ -306,6 +306,60 @@ class ConsultationModalLayeringTemplateTests(SimpleTestCase):
         self.assertIn("class=\"fixed inset-0 z-[10001]\"", content)
         self.assertIn("x-cloak", content)
 
+    def test_home_checkup_modal_mounts_once_outside_timeline_partial(self):
+        home_content = self._read("templates/web_doctor/partials/home/home.html")
+        timeline_content = self._read("templates/web_doctor/partials/home/checkup_timeline.html")
+
+        self.assertIn(
+            '{% include "web_doctor/partials/home/checkup_record_modal.html" %}',
+            home_content,
+        )
+        self.assertNotIn("checkup_record_modal.html", timeline_content)
+
+    def test_home_checkup_timeline_refreshes_stale_selected_month(self):
+        content = self._read("templates/web_doctor/partials/home/checkup_timeline.html")
+        self.assertIn('id="checkup-timeline-content"', content)
+        self.assertIn('id="checkup-timeline-month-bars"', content)
+        self.assertIn('id="checkup-timeline-details"', content)
+        self.assertIn("selectMonth(month)", content)
+        self.assertIn("refreshTimeline(month)", content)
+        self.assertIn("refreshMonthBars(month)", content)
+        self.assertIn("window.__homeCheckupTimelineStaleMonths", content)
+        self.assertIn("selected_month=${encodeURIComponent(selected)}", content)
+        self.assertIn("DOMParser().parseFromString", content)
+        self.assertIn("currentContent.replaceWith(nextContent)", content)
+        self.assertIn("currentBars.replaceWith(nextBars)", content)
+        self.assertIn("Alpine.initTree(nextContent)", content)
+        self.assertIn("Alpine.initTree(nextBars)", content)
+        self.assertIn("@click=\"selectMonth('{{ month_data.month_label }}')\"", content)
+        self.assertNotIn("@click=\"selectedMonth =", content)
+        self.assertNotIn("swap: 'outerHTML'", content)
+
+    def test_home_checkup_modal_marks_and_cleans_teleported_layer(self):
+        content = self._read("templates/web_doctor/partials/home/checkup_record_modal.html")
+        self.assertIn("data-home-checkup-record-modal-root", content)
+        self.assertIn("data-home-checkup-record-modal-layer", content)
+        self.assertIn(':data-home-checkup-record-modal-owner="componentId"', content)
+        self.assertIn("window.__homeCheckupRecordModalActiveOwner = this.componentId", content)
+        self.assertIn("if (!this.isActiveModalOwner()) return", content)
+        self.assertIn("removeModalRoots({ keepCurrent: true })", content)
+        self.assertIn("destroy() {", content)
+        self.assertIn("removeOwnedModalLayers()", content)
+        self.assertIn("document.body.addEventListener('htmx:beforeSwap', this.beforeSwapHandler)", content)
+        self.assertIn("'checkup-timeline-container'", content)
+        self.assertIn("data-home-checkup-record-file-input", content)
+        self.assertIn("openFilePicker()", content)
+        self.assertNotIn("$refs.fileInput", content)
+        self.assertIn("refreshTimelineAfterSave(recordMonth)", content)
+        self.assertIn("const submittedRecordMonth = (this.formData.report_date || '').slice(0, 7)", content)
+        self.assertIn("recordMonth === selectedMonth", content)
+        self.assertIn("timelineData.refreshTimeline(selectedMonth)", content)
+        self.assertIn("this.markTimelineMonthStale(recordMonth)", content)
+        self.assertIn("timelineData.refreshMonthBars(selectedMonth)", content)
+        self.assertIn("this.closeModal();", content)
+        self.assertIn("this.refreshTimelineAfterSave(submittedRecordMonth)", content)
+        self.assertNotIn("htmx.ajax('GET', this.refreshUrl", content)
+
     def test_home_reports_preview_modal_teleports_to_body(self):
         content = self._read("templates/web_doctor/partials/home/reports.html")
         self.assertIn("<template x-teleport=\"body\">", content)

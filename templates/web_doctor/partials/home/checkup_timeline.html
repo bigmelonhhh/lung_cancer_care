@@ -1,19 +1,87 @@
-<div id="checkup-timeline-container" class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6" x-data="{ selectedMonth: '{{ current_month }}' }">
-    {# 标题栏 #}
-    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-        <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">复查/诊疗</h3> 
-        <button 
-            class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-            onclick="document.getElementById('tab-reports').click()"
-        >
-            历史记录
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-            </svg>
-        </button>
-    </div>
+<div id="checkup-timeline-container"
+     class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden mt-6"
+     x-data="{
+        selectedMonth: '{{ current_month }}',
+        refreshUrl: '{% url 'web_doctor:patient_checkup_timeline' patient.id %}',
+        getStaleMonths() {
+            if (!(window.__homeCheckupTimelineStaleMonths instanceof Set)) {
+                window.__homeCheckupTimelineStaleMonths = new Set();
+            }
+            return window.__homeCheckupTimelineStaleMonths;
+        },
+        selectMonth(month) {
+            this.selectedMonth = month;
+            if (this.getStaleMonths().has(month)) {
+                this.refreshTimeline(month);
+            }
+        },
+        async loadTimelineDocument(month) {
+            const selected = month || this.selectedMonth;
+            const separator = this.refreshUrl.includes('?') ? '&' : '?';
+            const response = await fetch(`${this.refreshUrl}${separator}selected_month=${encodeURIComponent(selected)}`, {
+                headers: { 'HX-Request': 'true' }
+            });
+            if (!response.ok) return null;
+            const html = await response.text();
+            return new DOMParser().parseFromString(html, 'text/html');
+        },
+        async refreshTimeline(month) {
+            const selected = month || this.selectedMonth;
+            const staleMonths = this.getStaleMonths();
+            const doc = await this.loadTimelineDocument(selected);
+            if (!doc) return;
+            const nextContent = doc.getElementById('checkup-timeline-content');
+            const currentContent = document.getElementById('checkup-timeline-content');
+            if (!nextContent || !currentContent) return;
+            if (window.Alpine && typeof Alpine.destroyTree === 'function') {
+                Alpine.destroyTree(currentContent);
+            }
+            currentContent.replaceWith(nextContent);
+            if (window.htmx && typeof htmx.process === 'function') {
+                htmx.process(nextContent);
+            }
+            if (window.Alpine && typeof Alpine.initTree === 'function') {
+                Alpine.initTree(nextContent);
+            }
+            if (selected === this.selectedMonth) {
+                staleMonths.delete(selected);
+            }
+        },
+        async refreshMonthBars(month) {
+            const selected = month || this.selectedMonth;
+            const doc = await this.loadTimelineDocument(selected);
+            if (!doc) return;
+            const nextBars = doc.getElementById('checkup-timeline-month-bars');
+            const currentBars = document.getElementById('checkup-timeline-month-bars');
+            if (!nextBars || !currentBars) return;
+            if (window.Alpine && typeof Alpine.destroyTree === 'function') {
+                Alpine.destroyTree(currentBars);
+            }
+            currentBars.replaceWith(nextBars);
+            if (window.htmx && typeof htmx.process === 'function') {
+                htmx.process(nextBars);
+            }
+            if (window.Alpine && typeof Alpine.initTree === 'function') {
+                Alpine.initTree(nextBars);
+            }
+        }
+     }">
+    <div id="checkup-timeline-content">
+        {# 标题栏 #}
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+            <h3 class="text-base font-bold text-slate-800 border-l-4 border-indigo-500 pl-3">复查/诊疗</h3> 
+            <button 
+                class="text-sm text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                onclick="document.getElementById('tab-reports').click()"
+            >
+                历史记录
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
 
-    <div class="p-6">
+        <div class="p-6">
         {# 顶部操作栏 #}
         <div class="flex items-center justify-between mb-8">
             <div class="flex gap-4">
@@ -40,35 +108,37 @@
         </div>
 
         {# 时间轴图表 #}
-        <div class="relative w-full overflow-x-auto pb-4">
+        <div id="checkup-timeline-month-bars" class="relative w-full overflow-x-auto pb-4">
             <div class="min-w-[800px] flex justify-between items-end min-h-40 relative px-4">
                 {# 月份柱状条 #}
                 {% for month_data in timeline_data %}
                 <div 
                     class="flex flex-col items-center gap-2 cursor-pointer group relative  "
+                    data-testid="checkup-month-bar"
+                    data-checkup-month="{{ month_data.month_label }}"
                     :class="selectedMonth === '{{ month_data.month_label }}' ? 'bg-[rgba(22,164,106,0.3)] ' : 'bg-[#f1f1f1]'"
-                    @click="selectedMonth = '{{ month_data.month_label }}'"
+                    @click="selectMonth('{{ month_data.month_label }}')"
                 >
                     {# 柱子上方的图标统计 #}
                     <div class="flex flex-col items-center gap-1 mb-1 h-[80px] justify-end">
                         {% if month_data.checkup_count > 0 %}
                         <div class="flex items-center text-sm text-slate-600">
                             <svg class="w-4 h-4 text-green-600 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-                            {{ month_data.checkup_count }}
+                            <span data-testid="checkup-month-count-checkup">{{ month_data.checkup_count }}</span>
                         </div>
                         {% endif %}
                         
                         {% if month_data.outpatient_count > 0 %}
                         <div class="flex items-center text-sm text-slate-600">
                             <svg class="w-4 h-4 text-amber-500 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                            {{ month_data.outpatient_count }}
+                            <span data-testid="checkup-month-count-outpatient">{{ month_data.outpatient_count }}</span>
                         </div>
                         {% endif %}
                         
                         {% if month_data.hospitalization_count > 0 %}
                         <div class="flex items-center text-sm text-slate-600 ">
                             <svg class="w-4 h-4 text-purple-600 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/></svg>
-                            {{ month_data.hospitalization_count }}
+                            <span data-testid="checkup-month-count-hospitalization">{{ month_data.hospitalization_count }}</span>
                         </div>
                         {% endif %}
                     </div>
@@ -93,14 +163,14 @@
         </div>
 
                 {# 底部详情展示区域 #}
-        <div class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto ">
+        <div id="checkup-timeline-details" class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto ">
             <div class="text-xs text-slate-500 mb-2">提示：日期优先显示报告日期，缺失时显示创建日期</div>
             <div class="w-full flex gap-4 min-w-max relative pt-6">
                 {# 时间轴横线 #}
                 <div class="absolute top-2.5 left-0 w-full h-0.5 bg-slate-200"></div>
 
                 {% for month_data in timeline_data %}
-                <div x-show="selectedMonth === '{{ month_data.month_label }}'" class="flex gap-4 animate-fade-in ">
+                <div x-show="selectedMonth === '{{ month_data.month_label }}'" class="flex gap-4 animate-fade-in "{% if month_data.month_label != current_month %} style="display: none;"{% endif %}>
                     {% for event in month_data.events %}
                     <div class="relative flex flex-col items-center group">
                         {# 时间轴上的圆点 #}
@@ -138,7 +208,6 @@
                 {% endfor %}
             </div>
         </div>
+        </div>
     </div>
 </div>
-
-{% include "web_doctor/partials/home/checkup_record_modal.html" %}

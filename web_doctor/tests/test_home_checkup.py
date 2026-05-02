@@ -253,6 +253,64 @@ class TestHomeCheckupTimeline(TestCase):
 
     @patch("web_doctor.views.home.get_active_checkup_library")
     @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_patient_checkup_timeline_view_uses_valid_selected_month(self, mock_get_orders, mock_lib):
+        mock_lib.return_value = []
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 3, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        doctor_user = CustomUser.objects.create_user(
+            phone="13900000002",
+            user_type=user_choices.UserType.DOCTOR,
+        )
+        DoctorProfile.objects.create(
+            user=doctor_user,
+            name="王医生",
+            hospital="测试医院",
+            department="测试科室",
+        )
+        self.client.force_login(doctor_user)
+
+        url = reverse("web_doctor:patient_checkup_timeline", kwargs={"patient_id": self.patient.id})
+        response = self.client.get(f"{url}?selected_month=2023-01")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "selectedMonth: '2023-01'")
+        self.assertContains(response, 'id="checkup-timeline-content"')
+        self.assertContains(response, 'id="checkup-timeline-month-bars"')
+        self.assertContains(response, 'id="checkup-timeline-details"')
+        self.assertContains(response, "x-show=\"selectedMonth === '2023-02'\" class=\"flex gap-4 animate-fade-in \" style=\"display: none;\"")
+
+    @patch("web_doctor.views.home.get_active_checkup_library")
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
+    def test_patient_checkup_timeline_view_ignores_invalid_selected_month(self, mock_get_orders, mock_lib):
+        mock_lib.return_value = []
+        mock_order = MagicMock()
+        mock_order.start_date = date(2023, 1, 1)
+        mock_order.end_date = date(2023, 3, 31)
+        mock_get_orders.return_value = [mock_order]
+
+        doctor_user = CustomUser.objects.create_user(
+            phone="13900000003",
+            user_type=user_choices.UserType.DOCTOR,
+        )
+        DoctorProfile.objects.create(
+            user=doctor_user,
+            name="赵医生",
+            hospital="测试医院",
+            department="测试科室",
+        )
+        self.client.force_login(doctor_user)
+
+        url = reverse("web_doctor:patient_checkup_timeline", kwargs={"patient_id": self.patient.id})
+        response = self.client.get(f"{url}?selected_month=not-a-month")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "selectedMonth: '2023-03'")
+
+    @patch("web_doctor.views.home.get_active_checkup_library")
+    @patch("web_doctor.views.home.get_paid_orders_for_patient")
     def test_patient_checkup_timeline_view_events_order_asc(self, mock_get_orders, mock_lib):
         mock_lib.return_value = []
         mock_order = MagicMock()

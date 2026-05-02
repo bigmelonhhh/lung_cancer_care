@@ -1,10 +1,13 @@
-<div x-data="(() => {
+<div data-home-checkup-record-modal-root
+     :data-home-checkup-record-modal-owner="componentId"
+     x-data="(() => {
     return {
         // 1. 状态变量
         isOpen: false,
         isSaving: false,
         isDragging: false,
         sourcePage: 'timeline',
+        componentId: `home-checkup-record-modal-${Date.now()}-${Math.random().toString(36).slice(2)}`,
         
         // 2. 数据模型
         formData: {
@@ -33,9 +36,11 @@
         files: [], // {file, preview, category, subcategory, searchOpen, searchText}
         showRecordTypePrompt: false,
         pendingUploadAction: '',
+        beforeSwapHandler: null,
 
         // 6. 初始化
         init() {
+            this.claimModalOwnership();
             this.$watch('isOpen', value => {
                 document.body.style.overflow = value ? 'hidden' : '';
             });
@@ -51,10 +56,51 @@
                 });
                 if (this.errors.record_type) delete this.errors.record_type;
             });
+            this.beforeSwapHandler = (event) => {
+                const target = event.detail && event.detail.target;
+                if (!target || !['patient-content', 'checkup-timeline-container'].includes(target.id)) return;
+                this.removeModalLayers({
+                    keepCurrent: target.id === 'checkup-timeline-container',
+                });
+                document.body.style.overflow = '';
+            };
+            document.body.addEventListener('htmx:beforeSwap', this.beforeSwapHandler);
+        },
+
+        destroy() {
+            document.body.style.overflow = '';
+            if (this.isActiveModalOwner()) {
+                window.__homeCheckupRecordModalActiveOwner = null;
+            }
+            if (this.beforeSwapHandler) {
+                document.body.removeEventListener('htmx:beforeSwap', this.beforeSwapHandler);
+                this.beforeSwapHandler = null;
+            }
+            this.removeOwnedModalLayers();
         },
 
         // 7. 方法
+        claimModalOwnership() {
+            window.__homeCheckupRecordModalActiveOwner = this.componentId;
+            this.removeModalRoots({ keepCurrent: true });
+            this.removeModalLayers({ keepCurrent: true });
+        },
+
+        isActiveModalOwner() {
+            return window.__homeCheckupRecordModalActiveOwner === this.componentId;
+        },
+
+        removeModalRoots(options = {}) {
+            const keepCurrent = options.keepCurrent !== false;
+            document.querySelectorAll('[data-home-checkup-record-modal-root]').forEach((root) => {
+                if (keepCurrent && (root === this.$root || root.dataset.homeCheckupRecordModalOwner === this.componentId)) return;
+                root.remove();
+            });
+        },
+
         openModal(type) {
+            if (!this.isActiveModalOwner()) return;
+            this.removeModalLayers({ keepCurrent: true });
             this.resetForm();
             if (type) {
                 this.formData.record_type = type;
@@ -82,10 +128,64 @@
             this.pendingUploadAction = '';
         },
 
+        removeModalLayers(options = {}) {
+            const keepCurrent = options.keepCurrent !== false;
+            document.querySelectorAll('[data-home-checkup-record-modal-layer]').forEach((layer) => {
+                if (keepCurrent && layer.dataset.homeCheckupRecordModalOwner === this.componentId) return;
+                layer.remove();
+            });
+        },
+
+        removeOwnedModalLayers() {
+            document.querySelectorAll('[data-home-checkup-record-modal-layer]').forEach((layer) => {
+                if (layer.dataset.homeCheckupRecordModalOwner === this.componentId) layer.remove();
+            });
+        },
+
+        getCurrentModalLayer() {
+            return Array.from(document.querySelectorAll('[data-home-checkup-record-modal-layer]')).find((layer) => {
+                return layer.dataset.homeCheckupRecordModalOwner === this.componentId;
+            });
+        },
+
+        openFilePicker() {
+            const layer = this.getCurrentModalLayer();
+            const input = layer ? layer.querySelector('[data-home-checkup-record-file-input]') : null;
+            if (input) input.click();
+        },
+
+        getTimelineComponent() {
+            const timeline = document.getElementById('checkup-timeline-container');
+            if (!timeline || !window.Alpine || typeof Alpine.$data !== 'function') return null;
+            return Alpine.$data(timeline);
+        },
+
+        markTimelineMonthStale(month) {
+            if (!(window.__homeCheckupTimelineStaleMonths instanceof Set)) {
+                window.__homeCheckupTimelineStaleMonths = new Set();
+            }
+            window.__homeCheckupTimelineStaleMonths.add(month);
+        },
+
+        refreshTimelineAfterSave(recordMonth) {
+            const timelineData = this.getTimelineComponent();
+            const selectedMonth = timelineData ? timelineData.selectedMonth : '';
+            if (recordMonth && selectedMonth && recordMonth === selectedMonth && typeof timelineData.refreshTimeline === 'function') {
+                timelineData.refreshTimeline(selectedMonth);
+                return;
+            }
+            if (recordMonth) {
+                this.markTimelineMonthStale(recordMonth);
+                if (selectedMonth && typeof timelineData.refreshMonthBars === 'function') {
+                    timelineData.refreshMonthBars(selectedMonth);
+                }
+            }
+        },
+
         requireRecordType(action) {
             if (this.formData.record_type) {
                 if (action === 'click') {
-                    this.$refs.fileInput.click();
+                    this.openFilePicker();
                 }
                 return true;
             }
@@ -101,7 +201,7 @@
             const action = this.pendingUploadAction;
             this.pendingUploadAction = '';
             if (action === 'click') {
-                this.$nextTick(() => this.$refs.fileInput.click());
+                this.$nextTick(() => this.openFilePicker());
             }
         },
 
@@ -241,16 +341,13 @@
                 const result = await response.json();
 
                 if (response.ok && result.status === 'success') {
+                    const submittedRecordMonth = (this.formData.report_date || '').slice(0, 7);
                     // 1. 关闭弹框
                     this.closeModal();
                     
-                    // 2. 触发HTMX局部刷新
-                    htmx.ajax('GET', this.refreshUrl, {
-                        target: '#checkup-timeline-container',
-                        select: '#checkup-timeline-container',
-                        swap: 'outerHTML'
-                    });
-                    
+                    // 2. 按报告日期决定是否刷新当前时间轴
+                    this.refreshTimelineAfterSave(submittedRecordMonth);
+                     
                 } else {
                     alert(result.message || '保存失败');
                 }
@@ -266,7 +363,7 @@
      @open-record-modal.window="openModal($event.detail.type, $event.detail.source)">
 
     <template x-teleport="body">
-    <div>
+    <div data-home-checkup-record-modal-layer :data-home-checkup-record-modal-owner="componentId">
         <!-- Backdrop -->
         <div x-show="isOpen"
              x-cloak
@@ -366,7 +463,7 @@
                              class="relative border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center transition-colors cursor-pointer mb-4"
                              :class="isDragging ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:bg-slate-50'">
                             
-                            <input type="file" x-ref="fileInput" @change="handleFileSelect" multiple accept="image/*" class="hidden">
+                            <input type="file" data-home-checkup-record-file-input @change="handleFileSelect" multiple accept="image/*" class="hidden">
                             <svg class="w-10 h-10 text-slate-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                             </svg>

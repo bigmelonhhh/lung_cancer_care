@@ -383,14 +383,19 @@ def patient_checkup_timeline(request: HttpRequest, patient_id: int) -> HttpRespo
     timeline_data = timeline_result["timeline_data"]
     start_date, end_date = timeline_result["date_range"]
     
-    # Logic for default selected month (same as build_home_context)
-    today = date.today()
-    if start_date and end_date and start_date <= today <= end_date:
-        current_month_str = today.strftime("%Y-%m")
-    elif timeline_data:
-        current_month_str = timeline_data[-1]["month_label"]
+    requested_month = request.GET.get("selected_month", "").strip()
+    available_months = {item["month_label"] for item in timeline_data}
+    if requested_month in available_months:
+        current_month_str = requested_month
     else:
-        current_month_str = today.strftime("%Y-%m")
+        # Logic for default selected month (same as build_home_context)
+        today = date.today()
+        if start_date and end_date and start_date <= today <= end_date:
+            current_month_str = today.strftime("%Y-%m")
+        elif timeline_data:
+            current_month_str = timeline_data[-1]["month_label"]
+        else:
+            current_month_str = today.strftime("%Y-%m")
     
     # 获取复查分类二级数据
     try:
