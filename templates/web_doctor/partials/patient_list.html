@@ -239,6 +239,7 @@
   const SECTION_STATE_KEY = "doctor_patient_list_section_state";
   const FILTER_KEY = "doctor_patient_list_filter";
   const SELECTED_KEY = "doctor_patient_list_selected_patient_id";
+  const RESTORE_SELECTED_ON_RETURN_KEY = "doctor_workspace_restore_selected_on_return";
   const SECTIONS = ["managed", "stopped", "unpaid"];
   const DEFAULT_SECTION_STATE = { managed: true, stopped: false, unpaid: false };
   let initialMainContent = "";
@@ -392,6 +393,20 @@
     applySelectedHighlight();
   };
 
+  const shouldRestoreSelectedOnReturn = function () {
+    try {
+      return sessionStorage.getItem(RESTORE_SELECTED_ON_RETURN_KEY) === "true";
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const consumeRestoreSelectedOnReturn = function () {
+    try {
+      sessionStorage.removeItem(RESTORE_SELECTED_ON_RETURN_KEY);
+    } catch (e) {}
+  };
+
   const getMainContent = function () {
     return document.getElementById("main-content");
   };
@@ -532,6 +547,50 @@
     return true;
   };
 
+  const restoreSelectedWorkspaceFromSession = function () {
+    if (!shouldRestoreSelectedOnReturn()) return;
+
+    const selectedId = sessionStorage.getItem(SELECTED_KEY);
+    const selectedBtn = selectedId
+      ? document.querySelector('button[data-patient-item][data-patient-id="' + selectedId + '"]')
+      : null;
+    if (!selectedBtn) {
+      consumeRestoreSelectedOnReturn();
+      return;
+    }
+
+    const patientId = selectedBtn.dataset && selectedBtn.dataset.patientId ? parseInt(selectedBtn.dataset.patientId, 10) : null;
+    const config = {
+      id: patientId,
+      name: selectedBtn.dataset.patientName || "",
+      homeUrl: selectedBtn.dataset.homeUrl || "",
+      todoUrl: selectedBtn.dataset.todoUrl || "",
+    };
+    if (!config.id || !config.homeUrl) {
+      consumeRestoreSelectedOnReturn();
+      return;
+    }
+
+    const startRestore = function () {
+      const started = startWorkspaceLoad(config);
+      if (started) consumeRestoreSelectedOnReturn();
+    };
+
+    if (window.htmx) {
+      startRestore();
+      return;
+    }
+
+    if (window.LCCAssetLoader && typeof window.LCCAssetLoader.ensure === "function") {
+      window.LCCAssetLoader.ensure("htmx").then(startRestore).catch(function () {
+        consumeRestoreSelectedOnReturn();
+      });
+      return;
+    }
+
+    consumeRestoreSelectedOnReturn();
+  };
+
   const handleHomeLoadFailure = function (seq) {
     const pending = pendingWorkspacePatient;
     if (!pending) return;
@@ -622,6 +681,7 @@
     applyFilter();
 
     clearSelectedState();
+    consumeRestoreSelectedOnReturn();
     nextWorkspaceLoadSeq();
     clearPendingWorkspaceRequest();
     restoreMainContentToInitial();
@@ -778,5 +838,6 @@
   }
   snapshotMainContent();
   applyAllUIState(false);
+  restoreSelectedWorkspaceFromSession();
 })();
 </script>

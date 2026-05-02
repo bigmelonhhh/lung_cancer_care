@@ -25,11 +25,24 @@
             }
             return;
           }
-          window.LCCAssetLoader.ensure('htmx').catch(function () {
-            if (typeof console !== 'undefined' && console.error) {
-              console.error('[LCCAssetLoader] failed to preload htmx');
-            }
-          });
+          window.LCCAssetLoader.ensure('htmx')
+            .then(function () {
+              var processBody = function () {
+                if (window.htmx && document.body && typeof window.htmx.process === 'function') {
+                  window.htmx.process(document.body);
+                }
+              };
+              if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', processBody, { once: true });
+                return;
+              }
+              processBody();
+            })
+            .catch(function () {
+              if (typeof console !== 'undefined' && console.error) {
+                console.error('[LCCAssetLoader] failed to preload htmx');
+              }
+            });
         }
 
         function ensureAlpineStack() {

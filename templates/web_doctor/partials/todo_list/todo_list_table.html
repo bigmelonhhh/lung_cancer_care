@@ -86,9 +86,12 @@
 {% if todo_page.paginator.num_pages > 1 %}
 <div class="mt-4 flex items-center justify-center space-x-2 pb-6">
     {% if todo_page.has_previous %}
-        <a hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.previous_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+        <a href="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.previous_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+           data-todo-page-link
+           data-todo-url="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.previous_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+           hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.previous_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
            hx-target="#todo-table-container"
-           hx-replace-url="true"
+           hx-indicator="#todo-loading"
            class="px-3 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 text-sm cursor-pointer">
             &lt;
         </a>
@@ -100,17 +103,23 @@
         {% if todo_page.number == i %}
             <span class="px-3 py-1 border border-blue-500 bg-blue-500 text-white rounded text-sm">{{ i }}</span>
         {% else %}
-            <a hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ i }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+            <a href="{% url 'web_doctor:doctor_todo_list' %}?page={{ i }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+               data-todo-page-link
+               data-todo-url="{% url 'web_doctor:doctor_todo_list' %}?page={{ i }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+               hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ i }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
                hx-target="#todo-table-container"
-               hx-replace-url="true"
+               hx-indicator="#todo-loading"
                class="px-3 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 text-sm cursor-pointer">{{ i }}</a>
         {% endif %}
     {% endfor %}
 
     {% if todo_page.has_next %}
-        <a hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.next_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+        <a href="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.next_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+           data-todo-page-link
+           data-todo-url="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.next_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
+           hx-get="{% url 'web_doctor:doctor_todo_list' %}?page={{ todo_page.next_page_number }}&status={{ current_status }}&start_date={{ start_date }}&end_date={{ end_date }}&patient_id={{ patient_id|default:'' }}"
            hx-target="#todo-table-container"
-           hx-replace-url="true"
+           hx-indicator="#todo-loading"
            class="px-3 py-1 border border-slate-300 rounded text-slate-600 hover:bg-slate-50 text-sm cursor-pointer">
             &gt;
         </a>

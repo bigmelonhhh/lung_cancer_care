@@ -90,12 +90,19 @@
 
         // 2. 监听 pageshow 事件 (用于处理浏览器后退/缓存恢复)
         window.addEventListener('pageshow', function(event) {
+            if (event.persisted) {
+                try {
+                    sessionStorage.removeItem('doctor_workspace_restore_selected_on_return');
+                } catch (e) {}
+            }
+
             // 处理从待办列表页回退后的“跳转到指标”意图
             try {
                 const pendingJumpRaw = sessionStorage.getItem('todo_pending_jump');
                 if (pendingJumpRaw) {
                     sessionStorage.removeItem('todo_pending_jump');
                     sessionStorage.removeItem('todo_needs_refresh');
+                    sessionStorage.removeItem('doctor_workspace_restore_selected_on_return');
                     const pendingJump = JSON.parse(pendingJumpRaw);
                     if (pendingJump && pendingJump.action === 'indicators' && window.goToPatientIndicators) {
                         window.goToPatientIndicators({ patientId: pendingJump.patientId, query: pendingJump.query });

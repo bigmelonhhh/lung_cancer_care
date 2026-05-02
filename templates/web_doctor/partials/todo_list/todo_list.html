@@ -1,7 +1,18 @@
 {% extends "layouts/base_doctor.html" %}
 
 {% block content %}
-<div class="flex flex-col h-full bg-white" x-data="todoListFilter()">
+<style>
+    #todo-loading {
+        display: none;
+    }
+
+    #todo-loading.htmx-request,
+    .htmx-request #todo-loading {
+        display: flex;
+    }
+</style>
+
+<div class="flex flex-col h-full bg-white">
     <!-- 顶部标题区 -->
     <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
         <div class="flex items-center gap-3">
@@ -25,10 +36,11 @@
     <!-- 筛选与搜索区 -->
     <div class="px-6 py-4">
         <form id="todo-filter-form"
+              action="{% url 'web_doctor:doctor_todo_list' %}"
+              method="get"
               hx-get="{% url 'web_doctor:doctor_todo_list' %}"
               hx-target="#todo-table-container"
               hx-indicator="#todo-loading"
-              hx-replace-url="true"
               class="bg-white rounded-lg border border-slate-200 p-4 shadow-sm">
             
             <div class="flex flex-wrap items-center gap-6">
@@ -37,19 +49,19 @@
                     <span class="text-sm font-medium text-slate-700">事件状态：</span>
                     <div class="flex bg-slate-100 p-1 rounded-md">
                         <label class="cursor-pointer">
-                            <input type="radio" name="status" value="all" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <input type="radio" name="status" value="all" class="hidden peer" {% if current_status == 'all' or not current_status %}checked{% endif %}>
                             <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">所有</span>
                         </label>
                         <label class="cursor-pointer">
-                            <input type="radio" name="status" value="pending" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <input type="radio" name="status" value="pending" class="hidden peer" {% if current_status == 'pending' %}checked{% endif %}>
                             <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">待跟进</span>
                         </label>
                         <label class="cursor-pointer">
-                            <input type="radio" name="status" value="escalate" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <input type="radio" name="status" value="escalate" class="hidden peer" {% if current_status == 'escalate' %}checked{% endif %}>
                             <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">升级主任</span>
                         </label>
                         <label class="cursor-pointer">
-                            <input type="radio" name="status" value="completed" class="hidden peer" x-model="status" @change="$dispatch('submit-search')">
+                            <input type="radio" name="status" value="completed" class="hidden peer" {% if current_status == 'completed' %}checked{% endif %}>
                             <span class="px-4 py-1.5 rounded text-sm transition-colors peer-checked:bg-white peer-checked:text-blue-600 peer-checked:shadow-sm text-slate-600 hover:text-slate-800">已完成</span>
                         </label>
                     </div>
@@ -59,16 +71,16 @@
                 <div class="flex items-center gap-3 ml-auto">
                     <span class="text-sm font-medium text-slate-700">日期：</span>
                     <div class="flex items-center gap-2">
-                        <input type="date" name="start_date" x-model="startDate" class="px-3 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-600" placeholder="YYYY-MM-DD">
+                        <input type="date" name="start_date" value="{{ start_date|default:'' }}" class="px-3 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-600" placeholder="YYYY-MM-DD">
                         <span class="text-slate-400">-</span>
-                        <input type="date" name="end_date" x-model="endDate" class="px-3 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-600" placeholder="YYYY-MM-DD">
+                        <input type="date" name="end_date" value="{{ end_date|default:'' }}" class="px-3 py-1.5 border border-slate-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-slate-600" placeholder="YYYY-MM-DD">
                     </div>
                     
                     <div class="flex items-center gap-2 ml-2">
                         <button type="submit" class="px-5 py-1.5 bg-blue-600  text-white rounded text-sm font-medium transition-colors">
                             搜索
                         </button>
-                        <button type="button" @click="resetFilters()" class="px-4 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded text-sm font-medium transition-colors active:scale-95">
+                        <button type="button" id="todo-reset-btn" class="px-4 py-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded text-sm font-medium transition-colors active:scale-95">
                             重置
                         </button>
                     </div>
@@ -77,9 +89,6 @@
             <!-- 隐藏的分页重置 -->
             <input type="hidden" name="page" value="1">
             <input type="hidden" name="patient_id" value="{{ patient_id|default:'' }}">
-            
-            <!-- 触发 HTMX 的隐藏按钮，用于 Alpine.js 调度 -->
-            <button type="submit" id="hidden-search-btn" class="hidden"></button>
         </form>
     </div>
 
@@ -110,30 +119,168 @@
         }
     }
 
-    function todoListFilter() {
-        return {
-            status: '{{ current_status|default:"all" }}',
-            startDate: '{{ start_date|default:"" }}',
-            endDate: '{{ end_date|default:"" }}',
-            
-            init() {
-                // 监听自定义事件来触发搜索
-                this.$el.addEventListener('submit-search', () => {
-                    // 使用 setTimeout 确保 x-model 更新完成后再触发
-                    setTimeout(() => {
-                        htmx.trigger('#todo-filter-form', 'submit');
-                    }, 50);
-                });
-            },
-            
-            resetFilters() {
-                this.status = 'all';
-                this.startDate = '';
-                this.endDate = '';
-                // 触发 HTMX 请求
-                this.$dispatch('submit-search');
+    (function initializeTodoListInteractions() {
+        if (window.__doctorTodoListInteractionsInitialized) return;
+        window.__doctorTodoListInteractionsInitialized = true;
+        let todoRequestSeq = 0;
+        let todoAbortController = null;
+
+        function getForm() {
+            return document.getElementById('todo-filter-form');
+        }
+
+        function getTableContainer() {
+            return document.getElementById('todo-table-container');
+        }
+
+        function getLoadingIndicator() {
+            return document.getElementById('todo-loading');
+        }
+
+        function setLoading(isLoading) {
+            const loading = getLoadingIndicator();
+            if (!loading) return;
+            loading.classList.toggle('htmx-request', !!isLoading);
+        }
+
+        function setPage(page) {
+            const form = getForm();
+            const pageInput = form ? form.querySelector('input[name="page"]') : null;
+            if (pageInput) pageInput.value = String(page || 1);
+        }
+
+        function getPageFromUrl(url) {
+            try {
+                return new URL(url, window.location.origin).searchParams.get('page') || '1';
+            } catch (e) {
+                return '1';
             }
         }
-    }
+
+        function buildFormUrl() {
+            const form = getForm();
+            if (!form) return '';
+            const params = new URLSearchParams(new FormData(form));
+            const action = form.getAttribute('action') || window.location.pathname;
+            return action + '?' + params.toString();
+        }
+
+        function runInlineScripts(root) {
+            root.querySelectorAll('script').forEach(function(oldScript) {
+                const script = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(function(attr) {
+                    script.setAttribute(attr.name, attr.value);
+                });
+                script.text = oldScript.textContent || '';
+                oldScript.replaceWith(script);
+            });
+        }
+
+        function processHtmx(root) {
+            if (window.htmx && typeof window.htmx.process === 'function') {
+                window.htmx.process(root || document.body);
+            }
+        }
+
+        function refreshTodoTable(options) {
+            const container = getTableContainer();
+            if (!container) return;
+
+            const opts = options || {};
+            if (opts.resetPage) setPage(1);
+            if (opts.page) setPage(opts.page);
+
+            const url = opts.url || buildFormUrl();
+            if (!url) return;
+
+            todoRequestSeq += 1;
+            const requestSeq = todoRequestSeq;
+            if (todoAbortController) {
+                todoAbortController.abort();
+            }
+            todoAbortController = new AbortController();
+
+            setLoading(true);
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'HX-Request': 'true',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                credentials: 'same-origin',
+                signal: todoAbortController.signal
+            })
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('待办列表加载失败');
+                }
+                return response.text();
+            })
+            .then(function(html) {
+                if (requestSeq !== todoRequestSeq) return;
+                container.innerHTML = html;
+                runInlineScripts(container);
+                processHtmx(container);
+            })
+            .catch(function(error) {
+                if (error && error.name === 'AbortError') return;
+                console.error(error);
+                alert('待办列表加载失败，请稍后重试');
+            })
+            .finally(function() {
+                if (requestSeq === todoRequestSeq) {
+                    todoAbortController = null;
+                    setLoading(false);
+                }
+            });
+        }
+
+        window.refreshTodoTable = refreshTodoTable;
+
+        document.addEventListener('submit', function(event) {
+            if (event.target !== getForm()) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            refreshTodoTable({ resetPage: event.isTrusted });
+        }, true);
+
+        document.addEventListener('change', function(event) {
+            const target = event.target;
+            if (!target || !target.matches('#todo-filter-form input[name="status"]')) return;
+            refreshTodoTable({ resetPage: true });
+        });
+
+        document.addEventListener('click', function(event) {
+            const clickTarget = event.target;
+            if (!clickTarget || typeof clickTarget.closest !== 'function') return;
+
+            const resetBtn = clickTarget.closest('#todo-reset-btn');
+            if (resetBtn) {
+                const form = getForm();
+                if (!form) return;
+                const allStatus = form.querySelector('input[name="status"][value="all"]');
+                const startDate = form.querySelector('input[name="start_date"]');
+                const endDate = form.querySelector('input[name="end_date"]');
+                if (allStatus) allStatus.checked = true;
+                if (startDate) startDate.value = '';
+                if (endDate) endDate.value = '';
+                refreshTodoTable({ resetPage: true });
+                return;
+            }
+
+            const pageLink = clickTarget.closest('a[data-todo-page-link]');
+            if (!pageLink) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            const url = pageLink.getAttribute('data-todo-url') || pageLink.getAttribute('href');
+            refreshTodoTable({
+                url: url,
+                page: getPageFromUrl(url),
+                resetPage: false
+            });
+        }, true);
+
+        processHtmx(document.body);
+    })();
 </script>
 {% endblock %}

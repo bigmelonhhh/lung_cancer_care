@@ -116,6 +116,91 @@ class DoctorPartialPagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator("body")).to_contain_text("桌面端待办待处理")
         expect(self.page.locator("body")).to_contain_text("待办列表")
 
+    def test_todo_list_status_filter_refreshes_table_without_url_change(self):
+        todo_url = (
+            self.url_for("web_doctor:doctor_todo_list")
+            + "?patient_id=%s" % self.patient.id
+        )
+        self.page.goto(todo_url, wait_until="domcontentloaded")
+        initial_url = self.page.url
+
+        table_body = self.page.locator("#todo-table-body")
+        expect(table_body).to_contain_text("桌面端待办待处理")
+
+        self.page.locator("#todo-filter-form").locator("label", has_text="已完成").click()
+
+        expect(table_body).to_contain_text("桌面端已处理待办", timeout=10000)
+        expect(table_body).not_to_contain_text("桌面端待办待处理")
+        self.assertEqual(self.page.url, initial_url)
+
+    def test_todo_list_date_filter_refreshes_table_without_url_change(self):
+        PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor,
+            event_type=AlertEventType.DATA,
+            event_level=AlertLevel.MILD,
+            event_title="桌面端日期外待办",
+            event_content="日期范围外",
+            event_time=timezone.now() - timedelta(days=7),
+            status=AlertStatus.PENDING,
+        )
+        todo_url = (
+            self.url_for("web_doctor:doctor_todo_list")
+            + "?patient_id=%s" % self.patient.id
+        )
+        self.page.goto(todo_url, wait_until="domcontentloaded")
+        initial_url = self.page.url
+
+        table_body = self.page.locator("#todo-table-body")
+        expect(table_body).to_contain_text("桌面端日期外待办")
+
+        today = timezone.localdate().isoformat()
+        self.page.locator('#todo-filter-form input[name="start_date"]').fill(today)
+        self.page.locator('#todo-filter-form input[name="end_date"]').fill(today)
+        self.page.locator("#todo-filter-form").get_by_role("button", name="搜索").click()
+
+        expect(table_body).to_contain_text("桌面端待办待处理", timeout=10000)
+        expect(table_body).not_to_contain_text("桌面端日期外待办")
+        self.assertEqual(self.page.url, initial_url)
+
+    def test_todo_list_pagination_preserves_filters_and_does_not_replace_url(self):
+        for index in range(11):
+            PatientAlert.objects.create(
+                patient=self.patient,
+                doctor=self.doctor,
+                event_type=AlertEventType.DATA,
+                event_level=AlertLevel.MILD,
+                event_title="分页待办 %02d" % index,
+                event_content="分页测试",
+                event_time=timezone.now() - timedelta(minutes=index),
+                status=AlertStatus.PENDING,
+            )
+
+        todo_url = (
+            self.url_for("web_doctor:doctor_todo_list")
+            + "?patient_id=%s&status=pending" % self.patient.id
+        )
+        self.page.goto(todo_url, wait_until="domcontentloaded")
+        initial_url = self.page.url
+
+        table_body = self.page.locator("#todo-table-body")
+        expect(table_body).to_contain_text("分页待办 00")
+        page_two_link = self.page.locator('a[data-todo-page-link][data-todo-url*="page=2"]').get_by_text("2")
+        expect(page_two_link).to_be_visible()
+
+        page_two_link.click()
+
+        expect(table_body).to_contain_text("桌面端待办待处理", timeout=10000)
+        expect(table_body).not_to_contain_text("桌面端已处理待办")
+        self.assertEqual(self.page.url, initial_url)
+
+        self.page.locator("#todo-filter-form").locator("label", has_text="已完成").click()
+
+        expect(table_body).to_contain_text("桌面端已处理待办", timeout=10000)
+        expect(table_body).not_to_contain_text("桌面端待办待处理")
+        self.assertEqual(self.page.locator('#todo-filter-form input[name="page"]').input_value(), "1")
+        self.assertEqual(self.page.url, initial_url)
+
     def test_reports_records_and_create_modal_partials_load(self):
         self.page.goto(
             self._section_url("reports", "tab=records"),
