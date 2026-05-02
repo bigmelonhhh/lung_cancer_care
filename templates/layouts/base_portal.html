@@ -139,9 +139,19 @@
           }
         }
 
+        function shouldSkipAlpineLifecycle(event) {
+          var detail = event.detail || {};
+          var target = detail.target || event.target;
+          var swapSpec = detail.swapSpec || {};
+          if (swapSpec.swapStyle === 'none') return true;
+          if (target === document.body || target === document.documentElement) return true;
+          return false;
+        }
+
         document.addEventListener('htmx:beforeSwap', function (event) {
           var Alpine = getAlpine();
           if (!Alpine) return;
+          if (shouldSkipAlpineLifecycle(event)) return;
           var target = event.detail && event.detail.target ? event.detail.target : event.target;
           pauseAlpineMutations(Alpine);
           destroyAlpineTree(target, Alpine);
@@ -150,6 +160,7 @@
         document.addEventListener('htmx:afterSwap', function (event) {
           var Alpine = getAlpine();
           if (!Alpine) return;
+          if (shouldSkipAlpineLifecycle(event)) return;
           var target = event.detail && event.detail.target ? event.detail.target : event.target;
           try {
             initAlpineTree(target, Alpine);

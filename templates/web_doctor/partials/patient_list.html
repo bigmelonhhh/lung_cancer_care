@@ -498,9 +498,10 @@
 
   const loadPatientTodoSidebar = function (todoUrl, seq) {
     if (!todoUrl || !window.htmx || typeof window.htmx.ajax !== "function") return false;
+    if (!getTodoSidebar()) return false;
     const requestUrl = buildRequestUrlWithSeq(todoUrl, seq);
     window.htmx.ajax("GET", requestUrl, {
-      target: "body",
+      target: "#patient-todo-list",
       swap: "none",
     });
     return true;
