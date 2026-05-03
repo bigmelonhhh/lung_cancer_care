@@ -40,7 +40,8 @@ class HealthRecordsMembershipLogicTests(TestCase):
         self.assertEqual(response.context["service_packages"], [])
         self.assertEqual(response.context["checkup_stats"], [])
         self.assertEqual(response.context["health_survey_stats"], [])
-        self.assertTrue(len(response.context["health_stats"]) > 0)
+        self.assertEqual(response.context["health_stats"], [])
+        self.assertContains(response, "暂无一般监测数据")
 
     def test_member_health_records_returns_member_modules(self):
         self._create_paid_order()
@@ -48,7 +49,8 @@ class HealthRecordsMembershipLogicTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["is_member"])
         self.assertTrue(len(response.context["service_packages"]) > 0)
-        self.assertTrue(len(response.context["health_survey_stats"]) > 0)
+        self.assertEqual(response.context["health_survey_stats"], [])
+        self.assertContains(response, "暂无随访问卷数据")
 
     def test_membership_status_endpoint(self):
         status_url = reverse("web_patient:membership_status")
@@ -64,4 +66,3 @@ class HealthRecordsMembershipLogicTests(TestCase):
         data2 = resp2.json()
         self.assertTrue(data2["success"])
         self.assertTrue(data2["is_member"])
-

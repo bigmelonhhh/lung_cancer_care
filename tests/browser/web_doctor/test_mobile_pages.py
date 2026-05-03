@@ -18,6 +18,7 @@ from core.models import (
 )
 from health_data.models import (
     HealthMetric,
+    MetricType,
     QuestionnaireAnswer,
     QuestionnaireSubmission,
     ReportImage,
@@ -197,6 +198,13 @@ class DoctorMobilePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator("#member-content")).to_be_visible(timeout=10000)
 
     def test_mobile_health_records_and_metric_detail_load(self):
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BODY_TEMPERATURE,
+            measured_at=timezone.now(),
+            value_main=Decimal("36.80"),
+            source="manual",
+        )
         records_url = (
             self.url_for("web_doctor:mobile_health_records")
             + "?patient_id=%s" % self.patient.id
@@ -205,6 +213,8 @@ class DoctorMobilePagesBrowserTests(DoctorBrowserTestCase):
 
         expect(self.page.locator("body")).to_contain_text("健康档案")
         expect(self.page.locator("body")).to_contain_text("一般监测指标")
+        expect(self.page.locator("body")).to_contain_text("体温")
+        expect(self.page.locator("body")).not_to_contain_text("异常：0次")
         expect(self.page.get_by_role("button", name="查看详情").first).to_be_visible()
 
         detail_url = (

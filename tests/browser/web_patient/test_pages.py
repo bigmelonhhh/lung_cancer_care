@@ -132,10 +132,20 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         expect(self.page.locator("body")).to_contain_text("血常规")
         expect(self.page.locator("body")).to_contain_text("上传复查结果")
 
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BODY_TEMPERATURE,
+            measured_at=timezone.now(),
+            value_main=Decimal("36.80"),
+            source="manual",
+        )
         self._open("web_patient:health_records")
         expect(self.page.locator("body")).to_contain_text("健康档案")
         expect(self.page.locator("body")).to_contain_text("复查档案")
         expect(self.page.locator("body")).to_contain_text("随访问卷")
+        expect(self.page.locator("body")).to_contain_text("体温")
+        expect(self.page.locator("body")).not_to_contain_text("血压")
+        expect(self.page.locator("body")).not_to_contain_text("异常：0次")
 
         self._open(
             "web_patient:health_record_detail",

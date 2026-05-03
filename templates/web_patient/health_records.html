@@ -190,12 +190,14 @@
                         <h3 class="font-bold text-slate-800 text-base mb-1 " style="max-width: 220px;">{{ stat.title }}</h3>
                         <div class="flex items-center gap-4 text-sm text-slate-500 font-medium">
                             <span>记录：{{ stat.count }}次</span>
+                            {% if stat.abnormal %}
                             <div class="flex items-center gap-1">
-                                <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                                 </svg>
-                                <span class="text-red-500">异常：{{ stat.abnormal }}次</span>
+                                <span class="text-slate-500">异常：<span class="text-red-500">{{ stat.abnormal }}次</span></span>
                             </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -204,6 +206,8 @@
                     查看详情
                 </button>
             </div>
+            {% empty %}
+            <div class="p-4 text-sm text-slate-500">暂无一般监测数据</div>
             {% endfor %}
         </div>
         
@@ -274,14 +278,16 @@
                         <h3 class="font-bold text-slate-800 text-base mb-1 " style="max-width: 220px;">{{ stat.title }}</h3>
                         <div class="flex items-center gap-4 text-sm text-slate-500 font-medium">
                             <span>记录：{{ stat.count }}次</span>
+                            {% if stat.abnormal %}
                             <div class="flex items-center gap-1">
                                
-                                <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                <svg class="w-4 h-4 text-slate-500" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
                                 </svg>
                                
-                                <span class="text-red-500">异常：{{ stat.abnormal }}次</span>
+                                <span class="text-slate-500">异常：<span class="text-red-500">{{ stat.abnormal }}次</span></span>
                             </div>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

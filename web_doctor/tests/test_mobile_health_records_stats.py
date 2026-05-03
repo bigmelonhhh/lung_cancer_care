@@ -122,7 +122,41 @@ class MobileHealthRecordsStatsTests(TestCase):
         self.assertEqual(temp_stat["count"], 1)
         self.assertEqual(temp_stat["abnormal"], 1)
         self.assertContains(response, "记录：1次")
-        self.assertContains(response, "异常：1次")
+        self.assertContains(response, "异常：")
+
+    def test_health_records_hide_unconfigured_items_and_omit_zero_abnormal(self):
+        measured_at = self._make_aware(self.order.start_date, hour=9)
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BODY_TEMPERATURE,
+            source=MetricSource.MANUAL,
+            value_main=Decimal("36.80"),
+            measured_at=measured_at,
+        )
+
+        self.client.force_login(self.doctor_user)
+        doctor_response = self.client.get(f"{self.doctor_url}?patient_id={self.patient.id}")
+        self.assertEqual(doctor_response.status_code, 200)
+
+        self.client.force_login(self.patient_user)
+        patient_response = self.client.get(self.patient_url)
+        self.assertEqual(patient_response.status_code, 200)
+
+        for response in (doctor_response, patient_response):
+            self.assertEqual(
+                [item["type"] for item in response.context["health_stats"]],
+                ["temperature"],
+            )
+            temp_stat = response.context["health_stats"][0]
+            self.assertEqual(temp_stat["count"], 1)
+            self.assertEqual(temp_stat["abnormal"], 0)
+            self.assertEqual(response.context["health_survey_stats"], [])
+            self.assertEqual(response.context["checkup_stats"], [])
+            self.assertContains(response, "体温")
+            self.assertContains(response, "记录：1次")
+            self.assertNotContains(response, "异常：0次")
+            self.assertNotContains(response, "血压")
+            self.assertNotContains(response, "抑郁评估")
 
     def test_mobile_health_records_shows_questionnaire_count_and_abnormal(self):
         measured_at = self._make_aware(self.order.start_date, hour=12)

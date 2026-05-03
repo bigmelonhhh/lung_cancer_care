@@ -88,9 +88,8 @@ class HealthRecordsAbnormalCountTest(TestCase):
         temp_stat = next(item for item in context['health_stats'] if item['type'] == 'temperature')
         self.assertEqual(temp_stat['abnormal'], 1)
         
-        # 检查其他指标异常数应为 0
-        bp_stat = next(item for item in context['health_stats'] if item['type'] == 'bp')
-        self.assertEqual(bp_stat['abnormal'], 0)
+        # 未配置且无异常的项目不应展示，避免给患者心理暗示
+        self.assertFalse(any(item['type'] == 'bp' for item in context['health_stats']))
         
         # 检查咳嗽问卷异常数
         cough_stat = next(item for item in context['health_survey_stats'] if item['type'] == 'cough')
@@ -147,8 +146,9 @@ class HealthRecordsAbnormalCountTest(TestCase):
         response = self.client.get('/p/health/records/')
         context = response.context
         
-        temp_stat = next(item for item in context['health_stats'] if item['type'] == 'temperature')
-        self.assertEqual(temp_stat['abnormal'], 0)
+        self.assertFalse(
+            any(item['type'] == 'temperature' for item in response.context['health_stats'])
+        )
 
     def test_abnormal_count_date_range(self):
         """测试日期范围过滤（未来日期的报警不应计入，如果 end_date 是今天）"""
@@ -170,18 +170,15 @@ class HealthRecordsAbnormalCountTest(TestCase):
         response = self.client.get('/p/health/records/')
         context = response.context
         
-        temp_stat = next(item for item in context['health_stats'] if item['type'] == 'temperature')
         # 视图中 end_date = timezone.now().date()
-        # 如果 future_time.date() > now.date()，则不应计入
-        self.assertEqual(temp_stat['abnormal'], 0)
+        # 如果 future_time.date() > now.date()，则不应计入；无记录且无异常时不展示
+        self.assertFalse(any(item['type'] == 'temperature' for item in context['health_stats']))
 
     def test_abnormal_count_no_data(self):
         """测试无数据情况"""
         response = self.client.get('/p/health/records/')
         context = response.context
-        
-        for item in context['health_stats']:
-            self.assertEqual(item['abnormal'], 0)
-            
-        for item in context['health_survey_stats']:
-            self.assertEqual(item['abnormal'], 0)
+
+        self.assertEqual(context['health_stats'], [])
+        self.assertEqual(context['health_survey_stats'], [])
+        self.assertContains(response, "暂无一般监测数据")

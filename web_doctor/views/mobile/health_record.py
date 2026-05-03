@@ -332,6 +332,16 @@ def health_records(request: HttpRequest) -> HttpResponse:
                 count_ = 0
             checkup_stats.append({"code": code, "title": title_, "count": count_})
 
+    health_stats = [
+        item for item in health_stats if item["count"] or item.get("abnormal", 0)
+    ]
+    health_survey_stats = [
+        item for item in health_survey_stats if item["count"] or item.get("abnormal", 0)
+    ]
+    checkup_stats = [
+        item for item in checkup_stats if item["count"] or item.get("abnormal", 0)
+    ]
+
     context = {
         "patient_id": patient_id,
         "is_member": is_member,

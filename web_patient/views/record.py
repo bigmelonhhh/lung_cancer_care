@@ -956,6 +956,12 @@ def health_records(request: HttpRequest) -> HttpResponse:
                     }
                 )
 
+    health_stats = [item for item in health_stats if item["count"] or item["abnormal"]]
+    health_survey_stats = [
+        item for item in health_survey_stats if item["count"] or item["abnormal"]
+    ]
+    checkup_stats = [item for item in checkup_stats if item["count"] or item["abnormal"]]
+
     context = {
         "patient_id": patient_id,
         "is_member": is_member,

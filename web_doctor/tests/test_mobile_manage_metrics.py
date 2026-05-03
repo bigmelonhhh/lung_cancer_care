@@ -57,12 +57,8 @@ class MobileManageMetricsTests(TestCase):
         self.assertTemplateUsed(response, "web_doctor/mobile/health_records.html")
         self.assertContains(response, "健康档案")
         self.assertContains(response, "一般监测指标")
-        self.assertContains(response, "用药")
-        self.assertContains(
-            response,
-            f'patient_id={self.patient.id}',
-        )
-        self.assertContains(response, "查看详情")
+        self.assertContains(response, "暂无一般监测数据")
+        self.assertNotContains(response, "查看详情")
 
     def test_health_record_detail_returns_empty_list_when_no_data(self):
         self.client.force_login(self.doctor_user)
