@@ -103,10 +103,10 @@
                             <td class="px-2 py-1.5 text-slate-600" x-text="row.unit"></td>
                             <td class="px-2 py-1.5 text-slate-600" x-text="row.reference_range"></td>
                             <td class="px-2 py-1.5"
-                                :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row, { value: row.previous_value_display, allowPlaceholderNeutral: true }) : (row.previous_value_display === '-' ? 'text-slate-600' : (row.abnormal_flag === 'HIGH' ? 'bg-rose-100 text-rose-700' : (row.abnormal_flag === 'LOW' ? 'bg-sky-100 text-sky-700' : 'text-slate-700')))"
+                                :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row, { value: row.previous_value_display, allowPlaceholderNeutral: true, source: 'delta' }) : (row.previous_value_display === '-' ? 'text-slate-600' : (row.delta_direction === 'up' ? 'bg-rose-100 text-rose-700' : (row.delta_direction === 'down' ? 'bg-sky-100 text-sky-700' : 'text-slate-700')))"
                                 x-text="row.previous_value_display"></td>
                             <td class="px-2 py-1.5"
-                                :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true }) : (row.delta_display === '-' ? 'text-slate-600' : (row.abnormal_flag === 'HIGH' ? 'bg-rose-100 text-rose-700' : (row.abnormal_flag === 'LOW' ? 'bg-sky-100 text-sky-700' : 'text-slate-700')))"
+                                :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true, source: 'delta' }) : (row.delta_display === '-' ? 'text-slate-600' : (row.delta_direction === 'up' ? 'bg-rose-100 text-rose-700' : (row.delta_direction === 'down' ? 'bg-sky-100 text-sky-700' : 'text-slate-700')))"
                                 x-text="row.delta_display"></td>
                         </tr>
                     </template>

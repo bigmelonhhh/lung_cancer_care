@@ -519,14 +519,15 @@ class ConsultationRecordsTests(TestCase):
         self.assertIn('x-text="metricError"', detail_html)
         self.assertIn("typeof getMetricCellClass === 'function'", detail_html)
         self.assertIn(
-            "getMetricCellClass(row, { value: row.previous_value_display, allowPlaceholderNeutral: true })",
+            "getMetricCellClass(row, { value: row.previous_value_display, allowPlaceholderNeutral: true, source: 'delta' })",
             detail_html,
         )
         self.assertIn(
-            "getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true })",
+            "getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true, source: 'delta' })",
             detail_html,
         )
         self.assertIn("bg-rose-100 text-rose-700", detail_html)
         self.assertIn("bg-sky-100 text-sky-700", detail_html)
         self.assertNotIn("text-emerald-600", detail_html)
-        self.assertNotIn("row.delta_direction === 'up'", detail_html)
+        self.assertIn("row.delta_direction === 'up'", detail_html)
+        self.assertIn("row.delta_direction === 'down'", detail_html)

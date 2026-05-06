@@ -561,6 +561,49 @@ class CheckupResultServiceTests(TestCase):
         self.assertEqual(row["delta_display"], "+1.4")
         self.assertEqual(row["delta_direction"], "up")
 
+    def test_build_report_image_metrics_payload_marks_negative_delta_direction(self):
+        previous_image = ReportImage.objects.create(
+            upload=self.upload,
+            image_url="https://example.com/blood-prev-down.png",
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item=self.blood_routine,
+            report_date=date(2026, 3, 30),
+        )
+        CheckupFieldMapping.objects.create(
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            sort_order=100,
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=previous_image,
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            report_date=previous_image.report_date,
+            raw_name=self.numeric_raw_name,
+            normalized_name=self.numeric_normalized_name,
+            raw_value="6.0",
+            value_numeric=Decimal("6.0"),
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=self.blood_image,
+            checkup_item=self.blood_routine,
+            standard_field=self.wbc_field,
+            report_date=self.blood_image.report_date,
+            raw_name=self.numeric_raw_name,
+            normalized_name=self.numeric_normalized_name,
+            raw_value="5.6",
+            value_numeric=Decimal("5.6"),
+        )
+
+        payload = build_report_image_metrics_payload(self.blood_image)
+
+        row = payload["rows"][0]
+        self.assertEqual(row["previous_value_display"], "6.0")
+        self.assertEqual(row["delta_display"], "-0.4")
+        self.assertEqual(row["delta_direction"], "down")
+
     def test_build_report_image_metrics_payload_uses_text_fallback_for_text_field(self):
         previous_image = ReportImage.objects.create(
             upload=self.upload,

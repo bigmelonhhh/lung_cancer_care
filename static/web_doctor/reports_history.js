@@ -243,17 +243,38 @@
         return "text-slate-700";
       },
       /**
+       * 获取当前指标行的变化方向高亮样式。
+       * @param {Object} row 指标行对象，至少包含 delta_direction 字段。
+       * @returns {string} 返回适用于单元格的 Tailwind 颜色类字符串。
+       */
+      getMetricDeltaHighlightClass: function (row) {
+        if (!row || !row.delta_direction) {
+          return "text-slate-700";
+        }
+        if (row.delta_direction === "up") {
+          return "bg-rose-100 text-rose-700";
+        }
+        if (row.delta_direction === "down") {
+          return "bg-sky-100 text-sky-700";
+        }
+        return "text-slate-700";
+      },
+      /**
        * 获取指标表格单元格的最终样式类。
-       * @param {Object} row 指标行对象，至少包含 abnormal_flag 字段。
-       * @param {Object} options 单元格控制参数，包含 value 和 allowPlaceholderNeutral。
+       * @param {Object} row 指标行对象，至少包含 abnormal_flag 或 delta_direction 字段。
+       * @param {Object} options 单元格控制参数，包含 value、allowPlaceholderNeutral 和 source。
        * @returns {string} 返回最终绑定到单元格的颜色类；当占位值需要保持中性时返回默认样式。
        */
       getMetricCellClass: function (row, options) {
         var resolvedOptions = options || {};
         var value = resolvedOptions.value;
         var allowPlaceholderNeutral = Boolean(resolvedOptions.allowPlaceholderNeutral);
+        var source = resolvedOptions.source || "abnormal";
         if (allowPlaceholderNeutral && value === "-") {
           return "text-slate-600";
+        }
+        if (source === "delta") {
+          return this.getMetricDeltaHighlightClass(row);
         }
         return this.getMetricHighlightClass(row);
       },
