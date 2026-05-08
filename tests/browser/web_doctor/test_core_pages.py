@@ -1,6 +1,10 @@
+from datetime import timedelta
+
 from django.test import tag
+from django.utils import timezone
 
 from chat.models import Conversation, ConversationType, Message, MessageSenderRole
+from core.models import TreatmentCycle, choices
 from tests.browser.web_doctor.base import DoctorBrowserTestCase, expect
 
 
@@ -61,6 +65,72 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         self.page.get_by_test_id("workspace-tab-reports").click()
         expect(self.page.get_by_test_id("reports-history-content")).to_be_visible(timeout=10000)
         expect(self.page.locator("#patient-content")).to_contain_text("诊疗记录", timeout=10000)
+
+    def test_indicators_filter_controls_survive_search_refresh(self):
+        today = timezone.localdate()
+        selected_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器中间疗程",
+            start_date=today - timedelta(days=9),
+            end_date=today,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器后续疗程",
+            start_date=today + timedelta(days=1),
+            end_date=today + timedelta(days=10),
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-indicators").click()
+
+        form = self.page.locator("#routine-filter-form")
+        start_input = form.locator("#routine_start_date")
+        end_input = form.locator("#routine_end_date")
+        search_button = form.get_by_role("button", name="搜索")
+
+        expect(start_input).to_be_visible(timeout=10000)
+        expect(end_input).to_be_visible(timeout=10000)
+        expect(search_button).to_be_visible(timeout=10000)
+
+        start_value = (today - timedelta(days=6)).isoformat()
+        end_value = today.isoformat()
+        start_input.fill(start_value)
+        end_input.fill(end_value)
+        with self.page.expect_response(lambda response: "/indicators/" in response.url and "filter_type=date" in response.url):
+            search_button.click()
+
+        expect(self.page.locator("#indicators-wrapper")).to_be_visible(timeout=10000)
+        form = self.page.locator("#routine-filter-form")
+        start_input = form.locator("#routine_start_date")
+        end_input = form.locator("#routine_end_date")
+        search_button = form.get_by_role("button", name="搜索")
+        expect(start_input).to_be_visible(timeout=10000)
+        expect(end_input).to_be_visible(timeout=10000)
+        expect(search_button).to_be_visible(timeout=10000)
+        expect(start_input).to_have_value(start_value)
+        expect(end_input).to_have_value(end_value)
+
+        form.locator("[data-routine-filter-type]").select_option("cycle")
+        cycle_select = form.locator('select[name="cycle_id"]')
+        expect(cycle_select).to_be_visible(timeout=10000)
+        cycle_select.select_option(str(selected_cycle.id))
+        with self.page.expect_response(
+            lambda response: "/indicators/" in response.url
+            and "filter_type=cycle" in response.url
+            and "cycle_id=%s" % selected_cycle.id in response.url
+        ):
+            form.get_by_role("button", name="搜索").click()
+
+        expect(self.page.locator("#indicators-wrapper")).to_be_visible(timeout=10000)
+        form = self.page.locator("#routine-filter-form")
+        cycle_select = form.locator('select[name="cycle_id"]')
+        expect(cycle_select).to_be_visible(timeout=10000)
+        expect(form.get_by_role("button", name="搜索")).to_be_visible(timeout=10000)
+        expect(cycle_select).to_have_value(str(selected_cycle.id))
+        expect(self.page.locator("#patient-content")).to_contain_text("浏览器中间疗程", timeout=10000)
 
     def test_settings_profile_edit_modal_opens_and_closes(self):
         self.open_patient_workspace()

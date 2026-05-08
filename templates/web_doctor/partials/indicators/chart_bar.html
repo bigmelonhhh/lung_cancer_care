@@ -1,4 +1,4 @@
-<!-- Chart Bar Component -->
+<!-- Questionnaire Line Chart Component -->
 <div class="bg-white p-4 rounded-lg shadow-sm ">
     <div class="flex items-center gap-2 mb-4">
              {% if chart.id == "chart-physical" %}
@@ -36,13 +36,15 @@
             {% for s in chart.series %}
             {
                 name: '{{ s.name }}',
-                type: 'bar',
-                barMaxWidth: 20,
+                type: 'line',
+                smooth: true,
+                connectNulls: true,
+                symbol: 'circle',
+                symbolSize: 8,
                 itemStyle: {
-                    color: '{{ s.color }}',
-                    borderRadius: [4, 4, 0, 0]
+                    color: '{{ s.color }}'
                 },
-                data: {{ s.data|safe }},
+                data: {% if s.data_json %}{{ s.data_json|safe }}{% else %}{{ s.data|safe }}{% endif %},
                 missing: {{ s.missing|default:"[]"|safe }}
             },
             {% endfor %}
@@ -79,7 +81,7 @@
                 tooltip: {
                     trigger: 'axis',
                     axisPointer: {
-                        type: 'shadow'
+                        type: 'line'
                     },
                     formatter: function(params) {
                         if (!params || !params.length) return '';
@@ -92,7 +94,7 @@
                             if ((value === undefined || value === null) && param.data && param.data.value !== undefined) {
                                 value = param.data.value;
                             }
-                            var display = isMissing ? '无' : value;
+                            var display = isMissing || value === undefined || value === null ? '-' : value;
                             lines.push(param.marker + ' ' + param.seriesName + ': ' + display);
                         });
                         return lines.join('<br/>');
@@ -102,9 +104,9 @@
                     data: seriesData.map(function(item) { return item.name; }),
                     top: 0,
                     right: 0,
-                    icon: 'roundRect',
-                    itemWidth: 12,
-                    itemHeight: 12,
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
                     textStyle: {
                         fontSize: 12,
                         color: '#64748b'
@@ -119,15 +121,12 @@
                 },
                 xAxis: {
                     type: 'category',
-                    boundaryGap: true,
+                    boundaryGap: false,
                     data: chartData,
                     axisLine: {
                         lineStyle: {
                             color: '#94a3b8'
                         }
-                    },
-                    axisTick: {
-                        alignWithLabel: true
                     }
                 },
                 yAxis: {

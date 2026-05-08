@@ -109,12 +109,13 @@
                 name: '{{ s.name }}',
                 type: 'line',
                 smooth: true,
+                connectNulls: true,
                 symbol: 'circle',
-                symbolSize: 6,
+                symbolSize: 8,
                 itemStyle: {
                     color: '{{ s.color }}'
                 },
-                data: {{ s.data|safe }}{% if s.baseline %},
+                data: {% if s.data_json %}{{ s.data_json|safe }}{% else %}{{ s.data|safe }}{% endif %}{% if s.baseline %},
                 // 基线值存在时，使用 markLine 绘制水平基线（每条 series 独立判断）
                 markLine: {
                     silent: true,
@@ -165,7 +166,20 @@
             var myChart = echarts.init(chartDom);
             var option = {
                 tooltip: {
-                    trigger: 'axis'
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        if (!params || !params.length) return '';
+                        var lines = [params[0].axisValue];
+                        params.forEach(function(param) {
+                            var value = param.value;
+                            if ((value === undefined || value === null) && param.data && param.data.value !== undefined) {
+                                value = param.data.value;
+                            }
+                            var display = value === undefined || value === null ? '-' : value;
+                            lines.push(param.marker + ' ' + param.seriesName + ': ' + display);
+                        });
+                        return lines.join('<br/>');
+                    }
                 },
                 legend: {
                     data: seriesData.map(function(item) { return item.name; }),

@@ -5,38 +5,33 @@
         <!-- 筛选表单区域 -->
         <form id="routine-filter-form" 
               class="flex items-center gap-4 text-sm relative" 
-              onsubmit="return false;"
-              x-data="{ 
-                  filterType: '{{ current_filter_type|default:'date' }}',
-                  updateDatesFromCycle(event) {
-                      const select = event.target;
-                      const option = select.options[select.selectedIndex];
-                      const start = option.getAttribute('data-start') || '';
-                      const end = option.getAttribute('data-end') || '';
-                      
-                      const startInput = document.getElementById('routine_start_date');
-                      const endInput = document.getElementById('routine_end_date');
-                      
-                      if (startInput) startInput.value = start;
-                      if (endInput) endInput.value = end;
-                  }
-              }"
+              action="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
+              method="get"
+              hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
+              hx-target="#patient-content"
+              hx-swap="innerHTML"
+              hx-indicator="#workspace-loading-overlay"
+              onsubmit="window.LCCRoutineIndicatorFilter && window.LCCRoutineIndicatorFilter.sync(this)"
+              data-routine-filter-form
         >
             <!-- 筛选条件选择 --> 
             <div class="flex items-center gap-2">
-                <input type="hidden" name="filter_type" x-model="filterType">
+                <input type="hidden" name="filter_type" value="{{ current_filter_type|default:'date' }}" data-routine-filter-value>
                 <span class="text-slate-600">筛选条件:</span>
-                <select x-model="filterType" class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500">
-                    <option value="cycle">按疗程选择</option>
-                    <option value="date">按日期查看</option>
+                <select
+                    data-routine-filter-type
+                    onchange="this.form.querySelector('input[name=filter_type]').value = this.value; window.LCCRoutineIndicatorFilter && window.LCCRoutineIndicatorFilter.sync(this.form)"
+                    class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500">
+                    <option value="cycle" {% if current_filter_type == 'cycle' %}selected{% endif %}>按疗程选择</option>
+                    <option value="date" {% if current_filter_type != 'cycle' %}selected{% endif %}>按日期查看</option>
                 </select>
             </div>
 
             <!-- 按疗程选择 -->
-            <div class="flex items-center gap-2" x-show="filterType === 'cycle'" x-cloak>
+            <div data-routine-filter-panel="cycle" class="flex items-center gap-2 {% if current_filter_type != 'cycle' %}hidden{% endif %}">
                 <select name="cycle_id" 
-                        :disabled="filterType !== 'cycle'"
-                        @change="updateDatesFromCycle($event)"
+                        {% if current_filter_type != 'cycle' %}disabled{% endif %}
+                        onchange="window.LCCRoutineIndicatorFilter && window.LCCRoutineIndicatorFilter.updateDatesFromCycle(this)"
                         class="border border-slate-300 rounded px-2 py-1 text-slate-700 focus:outline-none focus:border-indigo-500 min-w-[300px]">
                     {% for cycle in treatment_cycles %}
                     <option value="{{ cycle.id }}" 
@@ -50,7 +45,7 @@
             </div>
             
             <!-- 按日期查看 -->
-            <div class="flex items-center gap-2" x-show="filterType === 'date'" x-cloak>
+            <div data-routine-filter-panel="date" class="flex items-center gap-2 {% if current_filter_type == 'cycle' %}hidden{% endif %}">
                 <div class="flex items-center border border-slate-300 rounded px-2 py-1 bg-white">
                                         <input placeholder="开始日期" type="date" name="start_date" id="routine_start_date" value="{{ current_start_date }}" class="focus:outline-none text-slate-700 date-input">
                     <span class="text-slate-400 mx-1">-</span>
@@ -60,18 +55,52 @@
             </div>
 
             <!-- 按钮组 -->
-            <div class="flex items-center gap-2" x-show="filterType !== ''" x-cloak>
+            <div class="flex items-center gap-2">
                 <button 
-                    hx-get="{% url 'web_doctor:patient_workspace_section' patient.id 'indicators' %}"
-                    hx-target="#indicators-wrapper"
-                    hx-swap="outerHTML"
-                    hx-include="#routine-filter-form"
+                    type="submit"
+                    onclick="this.form.querySelector('input[name=filter_type]').value = this.form.querySelector('[data-routine-filter-type]').value; window.LCCRoutineIndicatorFilter && window.LCCRoutineIndicatorFilter.sync(this.form)"
                     class="ml-3 px-4 lg:px-6 py-1.5 bg-indigo-600 text-white text-sm rounded-[4px] hover:bg-indigo-700 shadow-sm transition-colors cursor-pointer">
                     搜索
                 </button>
             </div>
         </form>
     </div>
+
+    <script>
+        (function() {
+            if (window.LCCRoutineIndicatorFilter) return;
+            window.LCCRoutineIndicatorFilter = {
+                updateDatesFromCycle: function(select) {
+                    if (!select) return;
+                    var option = select.options[select.selectedIndex];
+                    var form = select.form || document.getElementById('routine-filter-form');
+                    if (!option || !form) return;
+                    var startInput = form.querySelector('#routine_start_date');
+                    var endInput = form.querySelector('#routine_end_date');
+                    if (startInput) startInput.value = option.getAttribute('data-start') || '';
+                    if (endInput) endInput.value = option.getAttribute('data-end') || '';
+                },
+                sync: function(form) {
+                    if (!form) return;
+                    var filterSelect = form.querySelector('[data-routine-filter-type]');
+                    var filterType = filterSelect ? filterSelect.value : 'date';
+                    var filterValue = form.querySelector('[data-routine-filter-value]');
+                    var cyclePanel = form.querySelector('[data-routine-filter-panel="cycle"]');
+                    var datePanel = form.querySelector('[data-routine-filter-panel="date"]');
+                    var cycleSelect = form.querySelector('select[name="cycle_id"]');
+                    if (filterValue) filterValue.value = filterType;
+                    if (cyclePanel) cyclePanel.classList.toggle('hidden', filterType !== 'cycle');
+                    if (datePanel) datePanel.classList.toggle('hidden', filterType === 'cycle');
+                    if (cycleSelect) {
+                        cycleSelect.disabled = filterType !== 'cycle';
+                        if (filterType === 'cycle') {
+                            this.updateDatesFromCycle(cycleSelect);
+                        }
+                    }
+                }
+            };
+        })();
+    </script>
 
     <!-- Medication Record -->
     <div class="bg-white p-4 rounded-lg shadow-sm ">

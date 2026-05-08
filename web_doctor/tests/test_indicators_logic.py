@@ -3,6 +3,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from django.template.loader import render_to_string
 from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
@@ -282,6 +283,53 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(kwargs["end_date"].time(), datetime.min.time())
 
     @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
+    def test_routine_chart_uses_null_for_missing_days_but_keeps_real_zero(self, mock_query, *_mocks):
+        start_date = self.today - timedelta(days=2)
+        end_date = self.today
+
+        def metric(day_offset, value_main=None, value_sub=None):
+            return SimpleNamespace(
+                measured_at=timezone.make_aware(
+                    datetime.combine(start_date + timedelta(days=day_offset), datetime.min.time())
+                ),
+                value_main=value_main,
+                value_sub=value_sub,
+            )
+
+        def side_effect(*args, **kwargs):
+            if kwargs.get("metric_type") == MetricType.BLOOD_OXYGEN:
+                return SimpleNamespace(
+                    object_list=[
+                        metric(0, value_main=0),
+                        metric(2, value_main=95),
+                    ]
+                )
+            return SimpleNamespace(object_list=[])
+
+        mock_query.side_effect = side_effect
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=start_date.isoformat(),
+            end_date_str=end_date.isoformat(),
+            filter_type="date",
+        )
+
+        series = context["charts"]["spo2"]["series"][0]
+        self.assertEqual(series["data"], [0.0, None, 95.0])
+        self.assertEqual(series["data_json"], "[0.0, null, 95.0]")
+        html = render_to_string(
+            "web_doctor/partials/indicators/chart.html",
+            {"chart": context["charts"]["spo2"]},
+        )
+        self.assertIn("connectNulls: true", html)
+        self.assertIn("symbolSize: 8", html)
+        self.assertIn("data: [0.0, null, 95.0]", html)
+        self.assertIn("? '-' : value", html)
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
     @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
     @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type")
     def test_questionnaire_chart_missing_flags(self, mock_query, *_mocks):
@@ -326,8 +374,18 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(len(series["missing"]), 3)
         self.assertEqual(series["missing"], [0, 1, 1])
         self.assertEqual(series["data"][0], 0.0)
-        self.assertEqual(series["data"][1], 0.0)
-        self.assertEqual(series["data"][2], 0.0)
+        self.assertIsNone(series["data"][1])
+        self.assertIsNone(series["data"][2])
+        self.assertEqual(series["data_json"], "[0.0, null, null]")
+        html = render_to_string(
+            "web_doctor/partials/indicators/chart_bar.html",
+            {"chart": context["charts"]["physical"]},
+        )
+        self.assertIn("type: 'line'", html)
+        self.assertIn("connectNulls: true", html)
+        self.assertIn("symbolSize: 8", html)
+        self.assertIn("data: [0.0, null, null]", html)
+        self.assertIn("? '-' : value", html)
         oral_series = context["charts"]["oral_mucosa"]["series"][0]
         self.assertEqual(len(oral_series["missing"]), 3)
         self.assertEqual(context["charts"]["oral_mucosa"]["y_max"], 4)
@@ -664,6 +722,11 @@ class IndicatorsLogicTests(TestCase):
         series_data = chart["series"][0]["data"]
         self.assertEqual(series_data, [1.2, 2.8, None, None])
         self.assertEqual(chart["series"][0]["data_json"], "[1.2, 2.8, null, null]")
+        html = render_to_string("web_doctor/partials/indicators/followup_chart.html", {"chart": chart})
+        self.assertIn("connectNulls: true", html)
+        self.assertIn("symbolSize: 8", html)
+        self.assertIn("data: [1.2, 2.8, null, null]", html)
+        self.assertIn("? '-' : value", html)
         self.assertIn("血常规-白细胞计数（WBC） *10^9/L", chart["title"])
         self.assertEqual(chart["empty_message"], "")
         self.assertEqual(context["review_indicator"]["focus_metric"]["current_value"], 2.8)

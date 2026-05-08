@@ -18,9 +18,9 @@
                 name: '{{ s.name|escapejs }}',
                 type: 'line',
                 smooth: true,
-                connectNulls: false,
+                connectNulls: true,
                 symbol: 'circle',
-                symbolSize: 6,
+                symbolSize: 8,
                 itemStyle: {
                     color: '{{ s.color }}'
                 },
@@ -72,7 +72,20 @@
             var myChart = echarts.init(chartDom);
             var option = {
                 tooltip: {
-                    trigger: 'axis'
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        if (!params || !params.length) return '';
+                        var lines = [params[0].axisValue];
+                        params.forEach(function(param) {
+                            var value = param.value;
+                            if ((value === undefined || value === null) && param.data && param.data.value !== undefined) {
+                                value = param.data.value;
+                            }
+                            var display = value === undefined || value === null ? '-' : value;
+                            lines.push(param.marker + ' ' + param.seriesName + ': ' + display);
+                        });
+                        return lines.join('<br/>');
+                    }
                 },
                 legend: {
                     data: seriesData.map(function(item) { return item.name; }),

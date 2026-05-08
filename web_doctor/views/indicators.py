@@ -735,7 +735,7 @@ def build_indicators_context(
             if val is not None:
                 data_map[d] = float(val)
         
-        series = [data_map.get(d, 0) for d in date_list]
+        series = [data_map.get(d) for d in date_list]
         values = list(data_map.values())
         return series, values
 
@@ -756,6 +756,7 @@ def build_indicators_context(
             {
                 "name": "静息血氧",
                 "data": spo2_data,
+                "data_json": json.dumps(spo2_data, ensure_ascii=False),
                 "color": "#3b82f6",
                 "baseline": patient.baseline_blood_oxygen,
             }
@@ -782,12 +783,14 @@ def build_indicators_context(
             {
                 "name": "收缩压",
                 "data": bp_sbp,
+                "data_json": json.dumps(bp_sbp, ensure_ascii=False),
                 "color": "#3b82f6",
                 "baseline": patient.baseline_blood_pressure_sbp,
             },
             {
                 "name": "舒张压",
                 "data": bp_dbp,
+                "data_json": json.dumps(bp_dbp, ensure_ascii=False),
                 "color": "#10b981",
                 "baseline": patient.baseline_blood_pressure_dbp,
             }
@@ -813,6 +816,7 @@ def build_indicators_context(
             {
                 "name": "静息心率",
                 "data": hr_data,
+                "data_json": json.dumps(hr_data, ensure_ascii=False),
                 "color": "#3b82f6",
                 "baseline": patient.baseline_heart_rate,
             }
@@ -838,6 +842,7 @@ def build_indicators_context(
             {
                 "name": "体重",
                 "data": weight_data,
+                "data_json": json.dumps(weight_data, ensure_ascii=False),
                 "color": "#3b82f6",
                 "baseline": patient.baseline_weight,
             }
@@ -863,6 +868,7 @@ def build_indicators_context(
             {
                 "name": "体温",
                 "data": temp_data,
+                "data_json": json.dumps(temp_data, ensure_ascii=False),
                 "color": "#3b82f6",
                 "baseline": patient.baseline_body_temperature,
             }
@@ -888,6 +894,7 @@ def build_indicators_context(
             {
                 "name": "步数",
                 "data": steps_data,
+                "data_json": json.dumps(steps_data, ensure_ascii=False),
                 "color": "#3b82f6",
                 "baseline": patient.baseline_steps,
             }
@@ -1051,15 +1058,20 @@ def build_indicators_context(
             has_submission_dates = submission_dates is not None
             submission_dates = submission_dates or set()
             for d in date_list:
-                data.append(float(score_map.get(d, 0)))
-                if has_submission_dates:
-                    missing_flags.append(0 if d in submission_dates else 1)
+                has_submission = has_submission_dates and d in submission_dates
+                if has_submission:
+                    data.append(float(score_map.get(d, 0)))
+                    missing_flags.append(0)
+                elif has_submission_dates:
+                    data.append(None)
+                    missing_flags.append(1)
                 else:
+                    data.append(float(score_map.get(d, 0)))
                     missing_flags.append(0)
         except Exception as e:
             logger.error(f"Failed to fetch questionnaire scores for {code}: {e}")
-            data = [0] * len(date_strs)
-            missing_flags = [0] * len(date_strs)
+            data = [None] * len(date_strs)
+            missing_flags = [1] * len(date_strs)
 
         y_max_value = y_max
         if dynamic_y_max:
@@ -1085,7 +1097,15 @@ def build_indicators_context(
             "id": f"chart-{chart_id_suffix}", 
             "title": title,
             "dates": date_strs,
-            "series": [{"name": series_name, "data": data, "missing": missing_flags, "color": color}],
+            "series": [
+                {
+                    "name": series_name,
+                    "data": data,
+                    "data_json": json.dumps(data, ensure_ascii=False),
+                    "missing": missing_flags,
+                    "color": color,
+                }
+            ],
             "y_min": y_min,
             "y_max": y_max_value,
         }
