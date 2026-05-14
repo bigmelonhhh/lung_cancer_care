@@ -209,6 +209,53 @@
   }, true);
 })();
 
+// 历史疗程详情：行选中高亮与关闭详情后重置
+(function () {
+  if (window.__historyCycleDetailHooksInstalled) return;
+  window.__historyCycleDetailHooksInstalled = true;
+
+  const selectedClasses = ["border-indigo-200", "bg-indigo-50", "ring-1", "ring-indigo-100"];
+  const idleClasses = ["border-slate-200", "bg-white"];
+
+  function getHistoryRows() {
+    return Array.from(document.querySelectorAll("[data-history-cycle-row]"));
+  }
+
+  function setRowSelected(row) {
+    getHistoryRows().forEach((candidate) => {
+      candidate.classList.remove(...selectedClasses);
+      candidate.classList.add(...idleClasses);
+      candidate.removeAttribute("aria-selected");
+    });
+    if (!row) return;
+    row.classList.remove(...idleClasses);
+    row.classList.add(...selectedClasses);
+    row.setAttribute("aria-selected", "true");
+  }
+
+  function resetHistoryPlanSlot() {
+    const slot = document.getElementById("history-plan-table-slot");
+    if (!slot) return;
+    slot.innerHTML = "";
+    setRowSelected(null);
+  }
+
+  document.body.addEventListener("click", function (event) {
+    const closeBtn = event.target && event.target.closest && event.target.closest("[data-history-plan-close]");
+    if (closeBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      resetHistoryPlanSlot();
+      return;
+    }
+
+    const row = event.target && event.target.closest && event.target.closest("[data-history-cycle-row]");
+    if (!row) return;
+    if (event.target.closest("[data-quick-cycle-open]")) return;
+    setRowSelected(row);
+  }, true);
+})();
+
 // 计划表行：统一处理复查 / 问卷 / 监测的启停联动，只安装一次全局监听
 (function () {
   function initPlanRows(root) {
@@ -293,8 +340,11 @@
     }
     if (
       target.id === "plan-table-slot" ||
+      target.id === "history-plan-table-slot" ||
       target.id === "plan-table-container" ||
-      (target.closest && target.closest("#plan-table-container"))
+      target.id === "history-plan-table-container" ||
+      (target.closest && target.closest("#plan-table-container")) ||
+      (target.closest && target.closest("#history-plan-table-container"))
     ) {
       window.__initSettingsPlanRows(target);
     }

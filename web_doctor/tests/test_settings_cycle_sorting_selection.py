@@ -242,17 +242,41 @@ class SettingsCycleSortingSelectionTests(TestCase):
         terminated_history_row = next(
             row for row in history_row_tags if f'data-cycle-id="{terminated.id}"' in row
         )
-        self.assertNotIn("hx-get=", natural_history_row)
+        plan_table_url = reverse("web_doctor:patient_settings_plan_table", args=[self.patient.id])
+        self.assertIn("hx-get=", natural_history_row)
+        self.assertIn(
+            f"{plan_table_url}?cycle_id={naturally_finished.id}&detail_context=history",
+            natural_history_row,
+        )
+        self.assertIn('hx-target="#history-plan-table-slot"', natural_history_row)
+        self.assertIn('hx-swap="innerHTML"', natural_history_row)
+        self.assertIn("cursor-pointer", natural_history_row)
+        self.assertIn("hover:bg-slate-50", natural_history_row)
+        self.assertIn("[data-quick-cycle-open]", natural_history_row)
         self.assertNotIn("aria-current", natural_history_row)
-        self.assertNotIn("hx-get=", terminated_history_row)
+        self.assertIn("hx-get=", terminated_history_row)
+        self.assertIn(
+            f"{plan_table_url}?cycle_id={terminated.id}&detail_context=history",
+            terminated_history_row,
+        )
+        self.assertIn('hx-target="#history-plan-table-slot"', terminated_history_row)
+        self.assertIn('hx-swap="innerHTML"', terminated_history_row)
+        self.assertIn("cursor-pointer", terminated_history_row)
+        self.assertIn("hover:bg-slate-50", terminated_history_row)
+        self.assertIn("[data-quick-cycle-open]", terminated_history_row)
         self.assertNotIn("aria-current", terminated_history_row)
+        self.assertIn('id="history-plan-table-slot"', history_section)
+        self.assertNotIn("点击历史疗程查看配置详情", history_section)
+        self.assertNotIn('id="history-plan-empty-template"', history_section)
+        self.assertNotIn('data-history-plan-empty-state', history_section)
+        self.assertIn("__historyCycleDetailHooksInstalled", html)
         rename_url = reverse(
             "web_doctor:patient_treatment_cycle_rename",
             args=[self.patient.id, naturally_finished.id],
         )
         self.assertNotIn(rename_url, html)
 
-    def test_historical_cycle_id_is_not_selected_or_loaded(self):
+    def test_historical_cycle_id_is_not_selected_but_history_row_can_load_detail(self):
         self._patch_settings_dependencies()
         today = date.today()
         current = TreatmentCycle.objects.create(
@@ -279,11 +303,15 @@ class SettingsCycleSortingSelectionTests(TestCase):
         self.assertContains(response, "当前选中：")
         plan_table_url = reverse("web_doctor:patient_settings_plan_table", args=[self.patient.id])
         self.assertContains(response, f'hx-get="{plan_table_url}?cycle_id={current.id}"')
-        self.assertNotContains(response, f'hx-get="{plan_table_url}?cycle_id={historical.id}"')
         html = response.content.decode("utf-8")
         row_tags = re.findall(r'<div[^>]*data-cycle-select-row[^>]*>', html)
         self.assertTrue(any(f'data-cycle-id="{current.id}"' in row for row in row_tags))
         self.assertFalse(any(f'data-cycle-id="{historical.id}"' in row for row in row_tags))
+        history_row_tags = re.findall(r'<div[^>]*data-history-cycle-row[^>]*>', html)
+        historical_row = next(row for row in history_row_tags if f'data-cycle-id="{historical.id}"' in row)
+        self.assertIn(f'{plan_table_url}?cycle_id={historical.id}&detail_context=history', historical_row)
+        self.assertIn('hx-target="#history-plan-table-slot"', historical_row)
+        self.assertIn(f'hx-get="{plan_table_url}?cycle_id={current.id}"', html)
 
     def test_no_current_cycles_does_not_select_or_load_history(self):
         self._patch_settings_dependencies()
@@ -338,3 +366,30 @@ class SettingsCycleSortingSelectionTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'data-plan-day="28"')
         self.assertContains(response, "D28")
+
+    def test_history_plan_table_fragment_renders_history_wrapper(self):
+        self._patch_settings_dependencies()
+        today = date.today()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="历史详情疗程",
+            start_date=today - timedelta(days=30),
+            end_date=today - timedelta(days=10),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+
+        url = reverse("web_doctor:patient_settings_plan_table", args=[self.patient.id])
+        response = self.client.get(f"{url}?cycle_id={cycle.id}&detail_context=history")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "历史疗程配置详情")
+        self.assertContains(response, "历史详情疗程")
+        self.assertContains(response, str(cycle.start_date))
+        self.assertContains(response, str(cycle.end_date))
+        self.assertContains(response, cycle.get_status_display())
+        self.assertContains(response, "关闭配置详情")
+        self.assertContains(response, "data-history-plan-close")
+        self.assertContains(response, 'id="history-plan-table-container"')
+        self.assertContains(response, 'id="history-plan-day-tooltip"')
+        self.assertNotContains(response, 'id="plan-table-container"')

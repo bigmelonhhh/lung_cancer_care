@@ -4423,6 +4423,11 @@ video {
   --tw-ring-color: rgb(255 255 255 / 0.2);
 }
 
+.ring-indigo-100 {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(224 231 255 / var(--tw-ring-opacity, 1));
+}
+
 .ring-opacity-5 {
   --tw-ring-opacity: 0.05;
 }

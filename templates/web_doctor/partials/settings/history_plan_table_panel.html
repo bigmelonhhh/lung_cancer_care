@@ -1,0 +1,29 @@
+<div
+  class="mt-3 rounded-lg border border-slate-200 bg-white px-4 py-4 text-left"
+  data-history-plan-table-panel
+>
+  <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <h5 class="text-sm font-semibold text-slate-700">历史疗程配置详情</h5>
+      <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+        <span class="font-medium text-slate-800">{{ cycle.name }}</span>
+        <span>{{ cycle.start_date|date:"Y-m-d" }} ~ {{ cycle.end_date|date:"Y-m-d" }}</span>
+        <span>状态：{{ cycle.get_status_display }}</span>
+      </div>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      <span class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
+        只读
+      </span>
+      <button
+        type="button"
+        data-history-plan-close
+        class="rounded border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+      >
+        关闭配置详情
+      </button>
+    </div>
+  </div>
+
+  {% include "web_doctor/partials/settings/plan_table.html" with plan_table_container_id="history-plan-table-container" plan_day_tooltip_id="history-plan-day-tooltip" %}
+</div>

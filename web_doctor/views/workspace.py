@@ -1791,6 +1791,13 @@ def patient_settings_plan_table(request: HttpRequest, patient_id: int) -> HttpRe
     if table_context.get("cycle") is None:
         return HttpResponse("", status=204)
 
+    if request.GET.get("detail_context") == "history":
+        return render(
+            request,
+            "web_doctor/partials/settings/history_plan_table_panel.html",
+            table_context,
+        )
+
     return render(
         request,
         "web_doctor/partials/settings/plan_table.html",

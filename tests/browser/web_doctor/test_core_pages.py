@@ -145,6 +145,63 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         modal.locator('button[type="button"]').first.click()
         expect(modal).to_be_hidden(timeout=10000)
 
+    def test_settings_history_cycle_detail_opens_in_history_panel_and_closes(self):
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器当前疗程",
+            start_date=today - timedelta(days=2),
+            end_date=today + timedelta(days=12),
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        historical_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器历史疗程",
+            start_date=today - timedelta(days=30),
+            end_date=today - timedelta(days=15),
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-settings").click()
+
+        expect(self.page.locator("#plan-table-slot #plan-table-container")).to_be_visible(timeout=10000)
+        history_slot = self.page.locator("#history-plan-table-slot")
+        self.assertEqual(history_slot.inner_html().strip(), "")
+
+        history_row = self.page.locator(
+            '[data-history-cycle-row][data-cycle-id="%s"]' % historical_cycle.id
+        )
+        expect(history_row).to_be_visible(timeout=10000)
+        expect(history_row).to_contain_text("浏览器历史疗程")
+        self.assertIn("hover:bg-slate-50", history_row.get_attribute("class") or "")
+
+        with self.page.expect_response(
+            lambda response: "/settings/plan-table/" in response.url
+            and "cycle_id=%s" % historical_cycle.id in response.url
+            and "detail_context=history" in response.url
+        ):
+            history_row.get_by_text("浏览器历史疗程").click()
+
+        expect(history_slot.locator("[data-history-plan-table-panel]")).to_be_visible(timeout=10000)
+        expect(history_slot).to_contain_text("历史疗程配置详情")
+        expect(history_slot).to_contain_text("浏览器历史疗程")
+        expect(history_slot.locator("#history-plan-table-container")).to_be_visible(timeout=10000)
+        expect(self.page.locator("#plan-table-slot #plan-table-container")).to_be_visible(timeout=10000)
+        expect(self.page.locator("#history-plan-table-slot #plan-table-container")).to_have_count(0)
+        expect(history_row).to_have_attribute("aria-selected", "true")
+        self.assertIn("bg-indigo-50", history_row.get_attribute("class") or "")
+
+        history_slot.get_by_role("button", name="关闭配置详情").click()
+
+        expect(history_slot.locator("[data-history-plan-table-panel]")).to_have_count(0)
+        self.page.wait_for_function(
+            "selector => !document.querySelector(selector).hasAttribute('aria-selected')",
+            arg='[data-history-cycle-row][data-cycle-id="%s"]' % historical_cycle.id,
+        )
+        self.assertEqual(history_slot.inner_html().strip(), "")
+        self.assertNotIn("bg-indigo-50", history_row.get_attribute("class") or "")
+
     def test_change_password_page_loads_and_returns_to_workspace(self):
         self.page.goto(self.url_for("web_doctor:doctor_change_password"), wait_until="domcontentloaded")
 

@@ -1,8 +1,8 @@
 {# 单个疗程的计划视图：用药 + 复查 + 随访 #}
 {% load plan_dates %}
 
-{% with cycle_days=cycle.cycle_days|default:21 total_columns=cycle.cycle_days|default:21|add:"3" plan_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px %}
-<div id="plan-table-container" class="mt-3">
+{% with cycle_days=cycle.cycle_days|default:21 total_columns=cycle.cycle_days|default:21|add:"3" plan_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px container_id=plan_table_container_id|default:"plan-table-container" tooltip_id=plan_day_tooltip_id|default:"plan-day-tooltip" %}
+<div id="{{ container_id }}" class="mt-3" data-plan-table-container>
   <div class="sticky top-0 z-20 bg-slate-50">
     <div class="overflow-hidden" data-plan-table-head-clip>
       <table
@@ -96,7 +96,7 @@
               <form
                 method="post"
                 hx-post="{% url 'web_doctor:patient_cycle_medication_add' patient.id cycle.id %}"
-                hx-target="#plan-table-container"
+                hx-target="#{{ container_id }}"
                 hx-swap="outerHTML"
                 class="flex items-center gap-2"
               >
@@ -175,7 +175,8 @@
   </div>
 
   <div
-    id="plan-day-tooltip"
+    id="{{ tooltip_id }}"
+    data-plan-day-tooltip
     class="fixed z-50 hidden max-w-[260px] rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-lg opacity-0 translate-y-1 transition-opacity transition-transform duration-150 sm:max-w-[320px] sm:text-sm"
     role="tooltip"
     aria-hidden="true"
@@ -200,8 +201,10 @@
     var showTimer = null;
     var hideTimer = null;
 
-    function getTooltipEl() {
-      return document.getElementById('plan-day-tooltip');
+    function getTooltipEl(targetEl) {
+      var container = targetEl && targetEl.closest ? targetEl.closest('[data-plan-table-container]') : null;
+      if (container) return container.querySelector('[data-plan-day-tooltip]');
+      return document.querySelector('[data-plan-day-tooltip]');
     }
 
     function clearTimers() {
@@ -262,7 +265,7 @@
     }
 
     function showTooltip(targetEl) {
-      var tooltipEl = getTooltipEl();
+      var tooltipEl = getTooltipEl(targetEl);
       if (!tooltipEl || !targetEl) return;
 
       setTooltipContent(tooltipEl, targetEl);
@@ -274,7 +277,7 @@
     }
 
     function hideTooltip() {
-      var tooltipEl = getTooltipEl();
+      var tooltipEl = getTooltipEl(activeTarget);
       if (!tooltipEl) return;
 
       tooltipEl.setAttribute('aria-hidden', 'true');
@@ -329,14 +332,14 @@
 
     window.addEventListener('scroll', function() {
       if (!activeTarget) return;
-      var tooltipEl = getTooltipEl();
+      var tooltipEl = getTooltipEl(activeTarget);
       if (!tooltipEl) return;
       positionTooltip(tooltipEl, activeTarget);
     }, true);
 
     window.addEventListener('resize', function() {
       if (!activeTarget) return;
-      var tooltipEl = getTooltipEl();
+      var tooltipEl = getTooltipEl(activeTarget);
       if (!tooltipEl) return;
       positionTooltip(tooltipEl, activeTarget);
     });
@@ -345,22 +348,29 @@
 
 <script>
   (function() {
+    function findPlanTableContainer(root) {
+      if (!root) return document.querySelector('[data-plan-table-container]');
+      if (root.matches && root.matches('[data-plan-table-container]')) return root;
+      if (root.closest) {
+        var closest = root.closest('[data-plan-table-container]');
+        if (closest) return closest;
+      }
+      if (root.querySelector) {
+        var nested = root.querySelector('[data-plan-table-container]');
+        if (nested) return nested;
+      }
+      return document.querySelector('[data-plan-table-container]');
+    }
+
     function shouldInitFromTarget(target) {
       if (!target) return false;
-      if (target.id === 'plan-table-slot' || target.id === 'plan-table-container') return true;
-      if (target.closest && target.closest('#plan-table-container')) return true;
+      if (target.id === 'plan-table-slot' || target.id === 'history-plan-table-slot') return true;
+      if (findPlanTableContainer(target)) return true;
       return false;
     }
 
     function initPlanTableStickyHead(root) {
-      var container = null;
-      if (root && root.id === 'plan-table-container') {
-        container = root;
-      } else if (root && root.closest) {
-        container = root.closest('#plan-table-container');
-      } else {
-        container = document.getElementById('plan-table-container');
-      }
+      var container = findPlanTableContainer(root);
       if (!container || container.dataset.planStickyBound === '1') return;
 
       var bodyScroll = container.querySelector('[data-plan-table-body-scroll]');
