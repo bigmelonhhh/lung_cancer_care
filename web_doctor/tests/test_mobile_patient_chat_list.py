@@ -134,6 +134,21 @@ class MobilePatientChatListTests(TestCase):
         self.assertContains(response, 'data-test="mobile-internal-chat-fab"')
         self.assertContains(response, "联系主任")
 
+    def test_disabled_assistant_page_hides_patient_chat_input_controls(self):
+        self.assistant_profile.patient_chat_permission = (
+            choices.AssistantPatientChatPermission.DISABLED
+        )
+        self.assistant_profile.save(update_fields=["patient_chat_permission"])
+
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(self.mobile_chat_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["can_chat"])
+        self.assertNotContains(response, 'data-test="mobile-chat-input"')
+        self.assertNotContains(response, 'data-test="mobile-send-btn"')
+        self.assertContains(response, 'data-test="mobile-internal-chat-fab"')
+
     def test_doctor_page_hides_chat_input_controls(self):
         self.client.force_login(self.doctor_user)
         response = self.client.get(self.mobile_chat_url)
@@ -227,6 +242,51 @@ class MobilePatientChatListTests(TestCase):
         self.assertEqual(last_message.sender_id, self.assistant_user.id)
         self.assertEqual(last_message.text_content, "助理发送测试")
 
+    def test_disabled_assistant_cannot_send_text_message_to_patient_conversation(self):
+        self.assistant_profile.patient_chat_permission = (
+            choices.AssistantPatientChatPermission.DISABLED
+        )
+        self.assistant_profile.save(update_fields=["patient_chat_permission"])
+
+        self.client.force_login(self.assistant_user)
+        before_count = Message.objects.filter(conversation=self.conversation).count()
+
+        response = self.client.post(
+            self.send_text_url,
+            data=json.dumps({"conversation_id": self.conversation.id, "content": "禁发测试"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["status"], "error")
+        self.assertIn("该助理无权在患者会话发言", payload["message"])
+        self.assertEqual(Message.objects.filter(conversation=self.conversation).count(), before_count)
+
+    def test_disabled_assistant_cannot_upload_image_to_patient_conversation(self):
+        self.assistant_profile.patient_chat_permission = (
+            choices.AssistantPatientChatPermission.DISABLED
+        )
+        self.assistant_profile.save(update_fields=["patient_chat_permission"])
+        image_file = SimpleUploadedFile(
+            "patient.png",
+            b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR",
+            content_type="image/png",
+        )
+
+        self.client.force_login(self.assistant_user)
+        before_count = Message.objects.filter(conversation=self.conversation).count()
+        response = self.client.post(
+            self.upload_image_url,
+            data={"conversation_id": self.conversation.id, "image": image_file},
+        )
+
+        self.assertEqual(response.status_code, 400)
+        payload = response.json()
+        self.assertEqual(payload["status"], "error")
+        self.assertIn("该助理无权在患者会话发言", payload["message"])
+        self.assertEqual(Message.objects.filter(conversation=self.conversation).count(), before_count)
+
     def test_director_send_text_to_patient_conversation_is_denied(self):
         self.client.force_login(self.director_user)
 
@@ -287,6 +347,31 @@ class MobilePatientChatListTests(TestCase):
         self.assertIsNotNone(last_message)
         self.assertEqual(last_message.sender_id, self.assistant_user.id)
         self.assertEqual(last_message.text_content, "助理内部沟通")
+
+    def test_disabled_assistant_can_send_text_message_to_internal_conversation(self):
+        self.assistant_profile.patient_chat_permission = (
+            choices.AssistantPatientChatPermission.DISABLED
+        )
+        self.assistant_profile.save(update_fields=["patient_chat_permission"])
+        internal_conversation = self.service.get_or_create_internal_conversation(
+            patient=self.patient_profile,
+            studio=self.studio,
+            operator=self.assistant_user,
+        )
+
+        self.client.force_login(self.assistant_user)
+        response = self.client.post(
+            self.send_text_url,
+            data=json.dumps({"conversation_id": internal_conversation.id, "content": "禁患者聊但内部可发"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "success")
+        last_message = Message.objects.filter(conversation=internal_conversation).order_by("-id").first()
+        self.assertIsNotNone(last_message)
+        self.assertEqual(last_message.sender_id, self.assistant_user.id)
+        self.assertEqual(last_message.text_content, "禁患者聊但内部可发")
 
     def test_assistant_can_upload_image_to_internal_conversation(self):
         internal_conversation = self.service.get_or_create_internal_conversation(

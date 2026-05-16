@@ -44,6 +44,13 @@ class AssistantProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】入职日期；【用法】人事统计；【示例】2024-09-01；【参数】date；【返回值】date",
     )
+    patient_chat_permission = models.CharField(
+        "患者聊天权限",
+        max_length=20,
+        choices=choices.AssistantPatientChatPermission.choices,
+        default=choices.AssistantPatientChatPermission.ALLOWED,
+        help_text="【业务说明】控制助理是否可在患者会话发言；【用法】禁用后仅限制患者会话发送，不影响查看与内部沟通；【示例】allowed；【参数】枚举字符串；【返回值】str",
+    )
     doctors = models.ManyToManyField(
         "users.DoctorProfile",
         through="users.DoctorAssistantMap",
@@ -82,3 +89,16 @@ class AssistantProfile(TimeStampedModel):
         """
 
         return f"{self.name}({self.get_status_display()})"
+
+    def can_send_patient_chat_messages(self) -> bool:
+        """
+        【业务说明】判断助理是否可在患者会话发言。
+        【用法】医生端聊天权限控制与服务层发送校验。
+        【参数】self。
+        【返回值】bool。
+        """
+
+        return (
+            self.patient_chat_permission
+            != choices.AssistantPatientChatPermission.DISABLED
+        )

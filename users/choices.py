@@ -48,3 +48,10 @@ class AssistantStatus(models.IntegerChoices):
 
     ACTIVE = 1, "在职"
     INACTIVE = 2, "离职"
+
+
+class AssistantPatientChatPermission(models.TextChoices):
+    """【业务说明】控制医生助理是否可在患者会话发言。"""
+
+    ALLOWED = "allowed", "允许和患者聊天"
+    DISABLED = "disabled", "禁止和患者聊天"

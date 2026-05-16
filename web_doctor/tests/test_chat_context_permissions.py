@@ -3,6 +3,7 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
+from users import choices
 from users.choices import UserType
 from users.models import (
     AssistantProfile,
@@ -95,4 +96,19 @@ class ChatContextPermissionsTest(TestCase):
 
         self.assertFalse(data["is_director"])
         self.assertTrue(data["can_send_patient"])
+        self.assertTrue(data["can_send_internal"])
+
+    def test_disabled_assistant_cannot_send_patient_but_can_send_internal(self):
+        self.assistant_profile.patient_chat_permission = (
+            choices.AssistantPatientChatPermission.DISABLED
+        )
+        self.assistant_profile.save(update_fields=["patient_chat_permission"])
+
+        self.client.force_login(self.assistant_user)
+        response = self.client.get(self.url, {"patient_id": self.patient.id})
+        self.assertEqual(response.status_code, 200)
+        data = response.json()["data"]
+
+        self.assertFalse(data["is_director"])
+        self.assertFalse(data["can_send_patient"])
         self.assertTrue(data["can_send_internal"])

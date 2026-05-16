@@ -751,6 +751,11 @@ class ChatService:
                 raise ValidationError("发送者不属于该工作室。")
             if self._is_director(sender, conversation.studio):
                 raise ValidationError("主任不可在患者会话发言。")
+            if (
+                sender.user_type == user_choices.UserType.ASSISTANT
+                and not self._assistant_can_send_patient_messages(sender)
+            ):
+                raise ValidationError("该助理无权在患者会话发言。")
             return
 
         if conversation.type == ConversationType.INTERNAL:
@@ -799,6 +804,17 @@ class ChatService:
             return sales_profile.doctors.filter(studio_id=studio.id).exists()
 
         return False
+
+    def _assistant_can_send_patient_messages(self, user: CustomUser) -> bool:
+        assistant_profile = getattr(user, "assistant_profile", None)
+        if not assistant_profile:
+            return False
+        if hasattr(assistant_profile, "can_send_patient_chat_messages"):
+            return assistant_profile.can_send_patient_chat_messages()
+        return (
+            getattr(assistant_profile, "patient_chat_permission", "")
+            != user_choices.AssistantPatientChatPermission.DISABLED
+        )
 
     def _is_director(self, user: CustomUser, studio: DoctorStudio) -> bool:
         doctor_profile = getattr(user, "doctor_profile", None)

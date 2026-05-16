@@ -99,7 +99,7 @@ class AssistantCreationForm(AssistantDoctorMixin):
 
     class Meta:
         model = AssistantProfile
-        fields = ["name", "status", "work_phone", "joined_at"]
+        fields = ["name", "status", "work_phone", "joined_at", "patient_chat_permission"]
 
     def clean_phone(self):
         phone = self.cleaned_data["phone"].strip()
@@ -149,7 +149,7 @@ class AssistantChangeForm(AssistantDoctorMixin):
 
     class Meta:
         model = AssistantProfile
-        fields = ["name", "status", "work_phone", "joined_at"]
+        fields = ["name", "status", "work_phone", "joined_at", "patient_chat_permission"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -226,12 +226,14 @@ class AssistantProfileAdmin(admin.ModelAdmin):
             return (
                 ("账号信息", {"fields": ("phone", "is_active", "reset_password")}),
                 ("档案信息", {"fields": ("name", "status", "work_phone", "joined_at")}),
+                ("权限设置", {"fields": ("patient_chat_permission",)}),
                 ("负责医生", {"fields": ("doctors",)}),
                 ("只读信息", {"fields": self.readonly_fields}),
             )
         return (
             ("账号信息", {"fields": ("phone", "password")}),
             ("档案信息", {"fields": ("name", "status", "work_phone", "joined_at")}),
+            ("权限设置", {"fields": ("patient_chat_permission",)}),
             ("负责医生", {"fields": ("doctors",)}),
         )
 

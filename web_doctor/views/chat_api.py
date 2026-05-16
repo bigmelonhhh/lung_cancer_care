@@ -9,6 +9,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from chat.services.chat import ChatService
 from chat.models import Conversation, MessageSenderRole
+from users import choices
 from users.models import PatientRelation
 from users.decorators import check_doctor_or_assistant
 from users.models.patient_profile import PatientProfile
@@ -95,6 +96,18 @@ def _can_view_conversation(user, conversation: Conversation, service: ChatServic
         return True
 
     return False
+
+
+def _assistant_can_send_patient_messages(user) -> bool:
+    assistant_profile = getattr(user, "assistant_profile", None)
+    if not assistant_profile:
+        return True
+    if hasattr(assistant_profile, "can_send_patient_chat_messages"):
+        return assistant_profile.can_send_patient_chat_messages()
+    return (
+        getattr(assistant_profile, "patient_chat_permission", "")
+        != choices.AssistantPatientChatPermission.DISABLED
+    )
 
 
 def _log_permission_denied(request: HttpRequest, conversation: Conversation, reason: str) -> None:
@@ -191,7 +204,7 @@ def get_chat_context(request: HttpRequest):
                     tab_internal_label = "医生助理"
                 else:
                     # 平台医生/助理视角
-                    can_send_patient = True
+                    can_send_patient = _assistant_can_send_patient_messages(user)
                     can_send_internal = True
                     
                     # 内部会话对方标签：显示主任

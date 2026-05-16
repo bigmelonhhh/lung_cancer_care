@@ -12,7 +12,11 @@ from chat.services.chat import ChatService
 from users import choices
 from users.decorators import check_doctor_or_assistant
 from users.models import PatientProfile
-from web_doctor.views.chat_api import _can_view_conversation, _serialize_message
+from web_doctor.views.chat_api import (
+    _assistant_can_send_patient_messages,
+    _can_view_conversation,
+    _serialize_message,
+)
 from web_doctor.views.workspace import _get_workspace_patients
 
 
@@ -203,7 +207,7 @@ def patient_chat_list(request: HttpRequest, patient_id: int) -> HttpResponse:
         has_next=has_next,
         next_cursor=next_cursor,
         conversation_id=conversation.id,
-        can_chat=is_assistant,
+        can_chat=is_assistant and _assistant_can_send_patient_messages(request.user),
     )
     context.update(
         {
