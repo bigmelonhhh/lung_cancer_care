@@ -105,6 +105,18 @@
                         </span>
                     </div>
 
+                    {# 身高 #}
+                    <div class="flex items-center">
+                        <span class="text-slate-500  shrink-0 text-right mr-3">身高：</span>
+                        <span class="text-slate-800 font-medium" data-metric="height" data-value="{{ patient.baseline_height|default:'' }}">
+                            {% if patient.baseline_height %}
+                                {{ patient.baseline_height }} cm
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
+                    </div>
+
                     {# 体温 #}
                     <div class="flex items-center">
                         <span class="text-slate-500  shrink-0 text-right mr-3">体温：</span>
@@ -259,6 +271,15 @@
                            class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
                 </div>
 
+                {# 身高 #}
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">身高 (cm)</label>
+                    <input type="number" step="0.1" name="height" min="0" max="300"
+                           value="{{ patient.baseline_height|default:'' }}"
+                           placeholder="请输入身高基线值" 
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
                 {# 体温 #}
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">体温 (℃)</label>
@@ -360,6 +381,8 @@ document.getElementById('edit-medical-modal').addEventListener('input', function
                 input.value = dataMap['heart_rate'] || '';
             } else if (name === 'weight') {
                 input.value = dataMap['weight'] || '';
+            } else if (name === 'height') {
+                input.value = dataMap['height'] || '';
             } else if (name === 'temperature') {
                 input.value = dataMap['temperature'] || '';
             } else if (name === 'steps') {

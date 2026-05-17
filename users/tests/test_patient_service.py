@@ -130,6 +130,10 @@ class PatientServiceTests(TestCase):
             "phone": "18600000001", # Phone unchanged
             "gender": choices.Gender.MALE,
             "birth_date": datetime.date(1981, 6, 16),
+            "marital_status": "已婚",
+            "ethnicity": "汉族",
+            "native_place": "江苏南京",
+            "occupation": "工程师",
             "address": "123 New Address St",
             "remark": "需重点关注随访",
         }
@@ -145,6 +149,10 @@ class PatientServiceTests(TestCase):
         self.assertEqual(self.patient_profile.name, "John Doe Updated")
         self.assertEqual(self.patient_profile.address, "123 New Address St")
         self.assertEqual(self.patient_profile.birth_date, datetime.date(1981, 6, 16))
+        self.assertEqual(self.patient_profile.marital_status, "已婚")
+        self.assertEqual(self.patient_profile.ethnicity, "汉族")
+        self.assertEqual(self.patient_profile.native_place, "江苏南京")
+        self.assertEqual(self.patient_profile.occupation, "工程师")
         self.assertEqual(self.patient_profile.remark, "需重点关注随访")
 
     def test_edit_by_doctor_success(self):
@@ -316,6 +324,7 @@ class PatientServiceTests(TestCase):
             "baseline_body_temperature": Decimal("36.6"),
             "baseline_blood_oxygen": 98,
             "baseline_weight": Decimal("68.5"),
+            "baseline_height": Decimal("170.5"),
             "baseline_blood_pressure_sbp": 120,
             "baseline_blood_pressure_dbp": 80,
             "baseline_heart_rate": 72,
@@ -333,6 +342,7 @@ class PatientServiceTests(TestCase):
         self.assertEqual(self.patient_profile.baseline_body_temperature, Decimal("36.6"))
         self.assertEqual(self.patient_profile.baseline_blood_oxygen, 98)
         self.assertEqual(self.patient_profile.baseline_weight, Decimal("68.5"))
+        self.assertEqual(self.patient_profile.baseline_height, Decimal("170.5"))
         self.assertEqual(self.patient_profile.baseline_blood_pressure_sbp, 120)
         self.assertEqual(self.patient_profile.baseline_blood_pressure_dbp, 80)
         self.assertEqual(self.patient_profile.baseline_heart_rate, 72)

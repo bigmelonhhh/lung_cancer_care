@@ -62,6 +62,27 @@
             <dd id="basic-birth-date" class="text-slate-900 font-medium min-w-0 break-words text-right font-mono"></dd>
           </div>
           <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 font-medium">年龄</dt>
+            <dd id="basic-age" class="text-slate-900 font-medium min-w-0 break-words text-right"></dd>
+          </div>
+          <div class="pt-2 mt-2 border-t border-slate-50"></div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 font-medium">婚姻状况</dt>
+            <dd id="basic-marital-status" class="text-slate-900 font-medium min-w-0 break-words text-right"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 font-medium">民族</dt>
+            <dd id="basic-ethnicity" class="text-slate-900 font-medium min-w-0 break-words text-right"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 font-medium">籍贯</dt>
+            <dd id="basic-native-place" class="text-slate-900 font-medium min-w-0 break-words text-right"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
+            <dt class="text-slate-500 shrink-0 font-medium">职业</dt>
+            <dd id="basic-occupation" class="text-slate-900 font-medium min-w-0 break-words text-right"></dd>
+          </div>
+          <div class="flex items-start gap-3 justify-between">
             <dt class="text-slate-500 shrink-0 font-medium">患者地址</dt>
             <dd id="basic-address" class="text-slate-900 font-medium min-w-0 break-words text-right leading-relaxed" title=""></dd>
           </div>
@@ -259,6 +280,11 @@
         setText(document.getElementById("basic-gender"), info.gender, "-");
         setText(document.getElementById("basic-phone"), info.phone, "-");
         setText(document.getElementById("basic-birth-date"), info.birth_date, "-");
+        setText(document.getElementById("basic-age"), info.age ? (String(info.age) + "岁") : "", "-");
+        setText(document.getElementById("basic-marital-status"), info.marital_status, "未填写");
+        setText(document.getElementById("basic-ethnicity"), info.ethnicity, "未填写");
+        setText(document.getElementById("basic-native-place"), info.native_place, "未填写");
+        setText(document.getElementById("basic-occupation"), info.occupation, "未填写");
         setText(document.getElementById("basic-address"), info.address, "-");
         const addressEl = document.getElementById("basic-address");
         if (addressEl) addressEl.setAttribute("title", (info.address || "").toString());

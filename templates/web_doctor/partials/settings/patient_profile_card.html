@@ -11,6 +11,7 @@
         </div>
         
         <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-y-2 gap-x-2 text-sm content-start overflow-y-auto">
+            <div class="col-span-1 lg:col-span-2 text-xs font-semibold text-slate-400 pt-1">基础信息</div>
             <div class="flex items-baseline">
                 <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">患者姓名</span>
                 <span class="text-slate-800 font-medium truncate">{{ patient_info.name }}</span>
@@ -27,10 +28,33 @@
                 <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">出生日期</span>
                 <span class="text-slate-800 font-medium truncate">{{ patient_info.birth_date }}</span>
             </div>
+            <div class="flex items-baseline">
+                <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">年龄</span>
+                <span class="text-slate-800 font-medium truncate">{% if patient_info.age %}{{ patient_info.age }} 岁{% else %}未填写{% endif %}</span>
+            </div>
+            <div class="col-span-1 lg:col-span-2 text-xs font-semibold text-slate-400 pt-2">人口学信息</div>
+            <div class="flex items-baseline">
+                <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">婚姻状况</span>
+                <span class="text-slate-800 font-medium truncate">{{ patient_info.marital_status|default:"未填写" }}</span>
+            </div>
+            <div class="flex items-baseline">
+                <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">民族</span>
+                <span class="text-slate-800 font-medium truncate">{{ patient_info.ethnicity|default:"未填写" }}</span>
+            </div>
+            <div class="flex items-baseline">
+                <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">籍贯</span>
+                <span class="text-slate-800 font-medium truncate">{{ patient_info.native_place|default:"未填写" }}</span>
+            </div>
+            <div class="flex items-baseline">
+                <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">职业</span>
+                <span class="text-slate-800 font-medium truncate">{{ patient_info.occupation|default:"未填写" }}</span>
+            </div>
+            <div class="col-span-1 lg:col-span-2 text-xs font-semibold text-slate-400 pt-2">联系信息</div>
             <div class="flex items-baseline col-span-1 lg:col-span-2">
                 <span class="text-slate-500 w-20 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">患者地址</span>
                 <span class="text-slate-800 font-medium  truncate" title="{{ patient_info.address }}">{{ patient_info.address }}</span>
             </div>
+            <div class="col-span-1 lg:col-span-2 text-xs font-semibold text-slate-400 pt-2">紧急联系人信息</div>
             <div class="flex items-baseline col-span-1 lg:col-span-2">
                 <span class="text-slate-500 w-24 lg:w-24 shrink-0 text-right mr-2 lg:mr-3">紧急联系人</span>
                 <span class="text-slate-800 font-medium  truncate">
@@ -90,6 +114,9 @@
               onsubmit="return validateProfileForm(this)">
             {% csrf_token %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="md:col-span-2 pb-1">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">基础信息</span>
+                </div>
                 <div class="space-y-1">
                     <label class="block text-sm font-medium text-slate-700">患者姓名 <span class="text-rose-500">*</span></label>
                     <input type="text" placeholder="请输入患者姓名" name="name" value="{{ patient_info.name }}" required class="w-full rounded-lg  text-sm focus:border-[#6366f1] focus:outline-none border border-[#999999] p-2">
@@ -108,6 +135,28 @@
                         <option value="男" {% if patient_info.gender == '男' %}selected{% endif %}>男</option>
                         <option value="女" {% if patient_info.gender == '女' %}selected{% endif %}>女</option>
                     </select>
+                </div>
+                <div class="md:col-span-2 pt-2 pb-1 border-t border-dashed mt-2">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">人口学信息</span>
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">婚姻状况</label>
+                    <input type="text" name="marital_status" placeholder="请输入婚姻状况" value="{{ patient_info.marital_status }}" class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">民族</label>
+                    <input type="text" name="ethnicity" placeholder="请输入民族" value="{{ patient_info.ethnicity }}" class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">籍贯</label>
+                    <input type="text" name="native_place" placeholder="请输入籍贯" value="{{ patient_info.native_place }}" class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">职业</label>
+                    <input type="text" name="occupation" placeholder="请输入职业" value="{{ patient_info.occupation }}" class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+                <div class="md:col-span-2 pt-2 pb-1 border-t border-dashed mt-2">
+                    <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">联系信息</span>
                 </div>
                 <div class="space-y-1 md:col-span-2">
                     <label class="block text-sm font-medium text-slate-700">患者地址 <span class="text-rose-500">*</span></label>

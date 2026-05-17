@@ -87,13 +87,17 @@ class MobilePatientBasicInfoTests(TestCase):
         self.assertIn("gender", patient_info)
         self.assertEqual(patient_info.get("phone"), self.patient.phone)
         self.assertIn("birth_date", patient_info)
+        self.assertIn("age", patient_info)
+        self.assertIn("marital_status", patient_info)
+        self.assertIn("ethnicity", patient_info)
+        self.assertIn("native_place", patient_info)
+        self.assertIn("occupation", patient_info)
         self.assertIn("address", patient_info)
         self.assertIn("emergency_contact", patient_info)
         self.assertIn("emergency_relation", patient_info)
         self.assertIn("emergency_phone", patient_info)
         self.assertIn("relations", patient_info)
         self.assertNotIn("id_card", patient_info)
-        self.assertNotIn("age", patient_info)
 
     def test_medical_info_api_returns_latest(self):
         MedicalHistory.objects.create(

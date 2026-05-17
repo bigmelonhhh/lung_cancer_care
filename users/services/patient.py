@@ -440,6 +440,14 @@ class PatientService:
             profile.phone = phone
             profile.gender = data.get("gender", profile.gender)
             profile.birth_date = data.get("birth_date", profile.birth_date)
+            profile.marital_status = (
+                data.get("marital_status", profile.marital_status) or ""
+            ).strip()
+            profile.ethnicity = (data.get("ethnicity", profile.ethnicity) or "").strip()
+            profile.native_place = (
+                data.get("native_place", profile.native_place) or ""
+            ).strip()
+            profile.occupation = (data.get("occupation", profile.occupation) or "").strip()
             profile.address = (data.get("address") or "").strip()
             profile.ec_name = (data.get("ec_name") or "").strip()
             profile.ec_relation = (data.get("ec_relation") or "").strip()
@@ -453,6 +461,9 @@ class PatientService:
             )
             profile.baseline_weight = data.get(
                 "baseline_weight", profile.baseline_weight
+            )
+            profile.baseline_height = data.get(
+                "baseline_height", profile.baseline_height
             )
             profile.baseline_blood_pressure_sbp = data.get(
                 "baseline_blood_pressure_sbp", profile.baseline_blood_pressure_sbp
@@ -496,6 +507,10 @@ class PatientService:
             profile.gender = data.get("gender", choices.Gender.UNKNOWN)
             profile.birth_date = data.get("birth_date")
             profile.claim_status = choices.ClaimStatus.CLAIMED
+            profile.marital_status = (data.get("marital_status") or "").strip()
+            profile.ethnicity = (data.get("ethnicity") or "").strip()
+            profile.native_place = (data.get("native_place") or "").strip()
+            profile.occupation = (data.get("occupation") or "").strip()
             profile.address = (data.get("address") or "").strip()
             profile.ec_name = (data.get("ec_name") or "").strip()
             profile.ec_relation = (data.get("ec_relation") or "").strip()
@@ -504,6 +519,7 @@ class PatientService:
             profile.baseline_body_temperature = data.get("baseline_body_temperature")
             profile.baseline_blood_oxygen = data.get("baseline_blood_oxygen")
             profile.baseline_weight = data.get("baseline_weight")
+            profile.baseline_height = data.get("baseline_height")
             profile.baseline_blood_pressure_sbp = data.get("baseline_blood_pressure_sbp")
             profile.baseline_blood_pressure_dbp = data.get("baseline_blood_pressure_dbp")
             profile.baseline_heart_rate = data.get("baseline_heart_rate")

@@ -51,6 +51,30 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】用于推算年龄、评估依从风险；【用法】可空；【示例】1969-05-10；【参数】date；【返回值】date",
     )
+    marital_status = models.CharField(
+        "婚姻状况",
+        max_length=20,
+        blank=True,
+        help_text="【业务说明】患者人口学信息；【用法】医生建档或随访补充；【示例】已婚；【参数】str；【返回值】str",
+    )
+    ethnicity = models.CharField(
+        "民族",
+        max_length=20,
+        blank=True,
+        help_text="【业务说明】患者人口学信息；【用法】医生建档或随访补充；【示例】汉族；【参数】str；【返回值】str",
+    )
+    native_place = models.CharField(
+        "籍贯",
+        max_length=100,
+        blank=True,
+        help_text="【业务说明】患者人口学信息；【用法】医生建档或随访补充；【示例】江苏南京；【参数】str；【返回值】str",
+    )
+    occupation = models.CharField(
+        "职业",
+        max_length=50,
+        blank=True,
+        help_text="【业务说明】患者人口学信息；【用法】医生建档或随访补充；【示例】退休；【参数】str；【返回值】str",
+    )
     id_card = models.CharField(
         "身份证号",
         max_length=18,
@@ -161,6 +185,14 @@ class PatientProfile(TimeStampedModel):
         null=True,
         blank=True,
         help_text="【业务说明】患者目标或稳定体重，用于监测体重波动；【用法】由医生在管理端配置；【示例】68.5；【参数】decimal；【返回值】decimal",
+    )
+    baseline_height = models.DecimalField(
+        "身高基线(cm)",
+        max_digits=5,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="【业务说明】患者身高参考值，用于完整记录生命体征基线；【用法】由医生在管理端配置；【示例】170.5；【参数】decimal；【返回值】decimal",
     )
     baseline_blood_pressure_sbp = models.PositiveSmallIntegerField(
         "血压基线-收缩压",
