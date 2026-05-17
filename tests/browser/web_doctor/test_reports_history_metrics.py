@@ -98,7 +98,7 @@ class DoctorReportsHistoryMetricsBrowserTests(DoctorBrowserTestCase):
             abnormal_flag=CheckupResultAbnormalFlag.NORMAL,
         )
 
-    def test_metric_previous_and_delta_cells_use_delta_direction_highlight(self):
+    def _open_metric_detail(self):
         self.open_patient_workspace()
         self.page.get_by_test_id("workspace-tab-reports").click()
         expect(self.page.get_by_test_id("reports-history-content")).to_be_visible(timeout=10000)
@@ -111,13 +111,45 @@ class DoctorReportsHistoryMetricsBrowserTests(DoctorBrowserTestCase):
         metric_button.click()
         expect(detail.locator("table")).to_contain_text("WBC_BROWSER_UP", timeout=10000)
         expect(detail.locator("table")).to_contain_text("RBC_BROWSER_DOWN")
+        return detail
+
+    def test_metric_previous_and_delta_cells_use_delta_direction_highlight(self):
+        detail = self._open_metric_detail()
 
         wbc_cells = detail.locator("tbody tr", has_text="WBC_BROWSER_UP").locator("td")
         self.assertIn("text-slate-700", wbc_cells.nth(2).get_attribute("class") or "")
+        expect(wbc_cells.nth(2).locator("svg.icon").nth(0)).to_be_hidden()
+        expect(wbc_cells.nth(2).locator("svg.icon").nth(1)).to_be_hidden()
         self.assertIn("bg-rose-100", wbc_cells.nth(5).get_attribute("class") or "")
         self.assertIn("bg-rose-100", wbc_cells.nth(6).get_attribute("class") or "")
 
         rbc_cells = detail.locator("tbody tr", has_text="RBC_BROWSER_DOWN").locator("td")
         self.assertIn("text-slate-700", rbc_cells.nth(2).get_attribute("class") or "")
+        expect(rbc_cells.nth(2).locator("svg.icon").nth(0)).to_be_hidden()
+        expect(rbc_cells.nth(2).locator("svg.icon").nth(1)).to_be_hidden()
+        self.assertIn("bg-sky-100", rbc_cells.nth(5).get_attribute("class") or "")
+        self.assertIn("bg-sky-100", rbc_cells.nth(6).get_attribute("class") or "")
+
+    def test_metric_current_result_cells_show_reference_range_arrows(self):
+        CheckupResultValue.objects.filter(
+            report_image=self.current_image,
+            standard_field=self.wbc_field,
+        ).update(abnormal_flag=CheckupResultAbnormalFlag.HIGH)
+        CheckupResultValue.objects.filter(
+            report_image=self.current_image,
+            standard_field=self.rbc_field,
+        ).update(abnormal_flag=CheckupResultAbnormalFlag.LOW)
+
+        detail = self._open_metric_detail()
+
+        wbc_cells = detail.locator("tbody tr", has_text="WBC_BROWSER_UP").locator("td")
+        self.assertIn("bg-rose-100", wbc_cells.nth(2).get_attribute("class") or "")
+        expect(wbc_cells.nth(2).locator("svg.icon").nth(0)).to_be_visible()
+        expect(wbc_cells.nth(2).locator("svg.icon").nth(1)).to_be_hidden()
+
+        rbc_cells = detail.locator("tbody tr", has_text="RBC_BROWSER_DOWN").locator("td")
+        self.assertIn("bg-sky-100", rbc_cells.nth(2).get_attribute("class") or "")
+        expect(rbc_cells.nth(2).locator("svg.icon").nth(0)).to_be_hidden()
+        expect(rbc_cells.nth(2).locator("svg.icon").nth(1)).to_be_visible()
         self.assertIn("bg-sky-100", rbc_cells.nth(5).get_attribute("class") or "")
         self.assertIn("bg-sky-100", rbc_cells.nth(6).get_attribute("class") or "")

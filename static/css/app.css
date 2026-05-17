@@ -4390,6 +4390,11 @@ video {
   --tw-ring-color: rgb(229 231 235 / var(--tw-ring-opacity, 1));
 }
 
+.ring-indigo-100 {
+  --tw-ring-opacity: 1;
+  --tw-ring-color: rgb(224 231 255 / var(--tw-ring-opacity, 1));
+}
+
 .ring-indigo-200 {
   --tw-ring-opacity: 1;
   --tw-ring-color: rgb(199 210 254 / var(--tw-ring-opacity, 1));
@@ -4421,11 +4426,6 @@ video {
 
 .ring-white\/20 {
   --tw-ring-color: rgb(255 255 255 / 0.2);
-}
-
-.ring-indigo-100 {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(224 231 255 / var(--tw-ring-opacity, 1));
 }
 
 .ring-opacity-5 {

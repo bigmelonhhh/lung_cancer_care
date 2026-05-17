@@ -526,6 +526,9 @@ class ConsultationRecordsTests(TestCase):
             "getMetricCellClass(row, { value: row.delta_display, allowPlaceholderNeutral: true, source: 'delta' })",
             detail_html,
         )
+        self.assertIn("row.abnormal_flag === 'HIGH'", detail_html)
+        self.assertIn("row.abnormal_flag === 'LOW'", detail_html)
+        self.assertIn('class="icon h-3.5 w-3.5', detail_html)
         self.assertIn("bg-rose-100 text-rose-700", detail_html)
         self.assertIn("bg-sky-100 text-sky-700", detail_html)
         self.assertNotIn("text-emerald-600", detail_html)

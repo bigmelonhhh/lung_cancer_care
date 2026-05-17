@@ -98,8 +98,16 @@
                                 :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row) : (row.abnormal_flag === 'HIGH' ? 'bg-rose-100 text-rose-700' : (row.abnormal_flag === 'LOW' ? 'bg-sky-100 text-sky-700' : 'text-slate-700'))"
                                 x-text="row.field_name"></td>
                             <td class="px-2 py-1.5 font-medium"
-                                :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row) : (row.abnormal_flag === 'HIGH' ? 'bg-rose-100 text-rose-700' : (row.abnormal_flag === 'LOW' ? 'bg-sky-100 text-sky-700' : 'text-slate-700'))"
-                                x-text="row.current_value_display"></td>
+                                :class="typeof getMetricCellClass === 'function' ? getMetricCellClass(row) : (row.abnormal_flag === 'HIGH' ? 'bg-rose-100 text-rose-700' : (row.abnormal_flag === 'LOW' ? 'bg-sky-100 text-sky-700' : 'text-slate-700'))">
+                                <span class="inline-flex items-center gap-1">
+                                    <span x-text="row.current_value_display"></span>
+                                    <svg x-show="row.abnormal_flag === 'HIGH'"
+                                         style="display:none;" t="1778850802993" class="icon h-3.5 w-3.5 " viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="3012" width="48" height="48"><path d="M512 927.8464a32 32 0 0 1-32-31.8464V203.3664a32 32 0 0 1 64 0V896a32 32 0 0 1-32 31.8464z" fill="#2C2C2C" p-id="3013"></path><path d="M766.464 458.8032a31.8976 31.8976 0 0 1-22.6304-9.3696L512 217.6 280.1664 449.4336a32 32 0 1 1-45.2608-45.2608L512 127.0784l277.0944 277.0944a32 32 0 0 1-22.6304 54.6304z" fill="#2C2C2C" p-id="3014"></path></svg>
+                                 <svg x-show="row.abnormal_flag === 'LOW'"
+                                         style="display:none;" t="1778850934367" class="icon h-3.5 w-3.5" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="4123" width="48" height="48"><path d="M537.6 760.490667l175.7184-175.7184a25.6 25.6 0 1 1 36.181333 36.215466l-219.409066 219.409067a25.6 25.6 0 0 1-36.181334 0L274.432 620.987733a25.6 25.6 0 0 1 36.215467-36.181333l175.7184 175.684267V186.197333a25.6 25.6 0 1 1 51.2 0V760.490667z" fill="#2c2c2c" p-id="4124"></path></svg>
+                                   
+                                </span>
+                            </td>
                             <td class="px-2 py-1.5 text-slate-600" x-text="row.unit"></td>
                             <td class="px-2 py-1.5 text-slate-600" x-text="row.reference_range"></td>
                             <td class="px-2 py-1.5"
