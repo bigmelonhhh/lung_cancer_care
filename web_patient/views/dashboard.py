@@ -130,6 +130,9 @@ def onboarding(request: HttpRequest) -> HttpResponse:
     【页面说明】患者 onboarding 引导页 `/p/onboarding/`。
     【模板】`web_patient/onboarding.html`，用于引导首访或无档案用户完善资料。
     """
+    if request.patient:
+        return redirect(reverse("web_patient:patient_home"))
+
     context = {}
     if not request.user.is_authenticated:
         context["session_invalid"] = True

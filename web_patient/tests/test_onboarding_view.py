@@ -3,6 +3,7 @@ from django.urls import reverse
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from users.choices import UserType
+from users.models import PatientProfile
 
 
 class OnboardingViewTests(TestCase):
@@ -46,3 +47,45 @@ class OnboardingViewTests(TestCase):
 
     # 会话失效提示在已登录用户下不应出现
     self.assertNotContains(response, "当前会话已失效")
+
+  def test_onboarding_existing_patient_redirects_to_home(self):
+    """已建档患者再次访问引导页时直接进入管理首页"""
+    User = get_user_model()
+    user = User.objects.create_user(
+      username="patient_with_profile",
+      password="secure-pass-123",
+      user_type=UserType.PATIENT,
+      wx_openid="openid_patient_with_profile",
+    )
+    PatientProfile.objects.create(
+      user=user,
+      name="已建档患者",
+      phone="13900008888",
+    )
+    self.client.force_login(user)
+
+    response = self.client.get(reverse("web_patient:onboarding"))
+
+    self.assertEqual(response.status_code, 302)
+    self.assertEqual(response.url, reverse("web_patient:patient_home"))
+
+  def test_entry_existing_patient_redirects_to_home(self):
+    """已建档患者直接访问建档表单时直接进入管理首页"""
+    User = get_user_model()
+    user = User.objects.create_user(
+      username="patient_entry_with_profile",
+      password="secure-pass-123",
+      user_type=UserType.PATIENT,
+      wx_openid="openid_patient_entry_with_profile",
+    )
+    PatientProfile.objects.create(
+      user=user,
+      name="已建档患者",
+      phone="13900009999",
+    )
+    self.client.force_login(user)
+
+    response = self.client.get(reverse("web_patient:entry"))
+
+    self.assertEqual(response.status_code, 302)
+    self.assertEqual(response.url, reverse("web_patient:patient_home"))

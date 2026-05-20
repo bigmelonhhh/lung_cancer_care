@@ -21,6 +21,9 @@ def patient_entry(request: HttpRequest) -> HttpResponse:
     【页面说明】患者自助建档页 `/p/entry/`。
     """
 
+    if request.method == "GET" and request.patient:
+        return redirect(reverse("web_patient:patient_home"))
+
     if request.method == "POST":
         form = PatientEntryVerificationForm(request.POST)
         if form.is_valid():

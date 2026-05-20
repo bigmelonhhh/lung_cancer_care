@@ -244,11 +244,10 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         expect(self.page.locator("body")).to_contain_text("Browser Patient")
 
         self._open("web_patient:onboarding")
-        expect(self.page.locator("body")).to_contain_text("完善资料，开启守护旅程")
+        expect(self.page.locator("body")).to_contain_text("管理计划")
 
         self._open("web_patient:entry")
-        expect(self.page.locator("body")).to_contain_text("完善康复档案")
-        expect(self.page.locator("body")).to_contain_text("确认提交档案")
+        expect(self.page.locator("body")).to_contain_text("管理计划")
 
         self._open("web_patient:document_detail", "User_Policy")
         expect(self.page.locator("body")).to_contain_text("用户协议")
