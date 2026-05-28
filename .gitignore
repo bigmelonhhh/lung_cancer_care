@@ -93,3 +93,5 @@ package-lock.json
 !static/vendor/browser-image-compression/2.0.2/browser-image-compression.js.map
 .venv
 .editorconfig
+/.codegraph
+/.cursor
