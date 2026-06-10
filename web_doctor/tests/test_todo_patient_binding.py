@@ -191,6 +191,17 @@ class TodoPatientBindingTests(TestCase):
         self.assertContains(response, "搜索")
         self.assertContains(response, "重置")
 
+    def test_todo_modal_uses_responsive_record_layout_classes(self):
+        """Test todo modal record sections keep responsive single-row-first layout classes."""
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(url, {'patient_id': self.patient1.id, 'status': 'pending'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="todo-history-list" class="space-y-3"', html=False)
+        self.assertContains(response, 'flex flex-wrap items-center justify-between gap-2', html=False)
+        self.assertContains(response, 'mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1', html=False)
+        self.assertContains(response, 'flex flex-wrap items-center gap-x-2 gap-y-1', html=False)
+
     def test_todo_list_page_htmx_table_only(self):
         """Test doctor_todo_list_page with HTMX request returns table only"""
         url = reverse('web_doctor:doctor_todo_list')

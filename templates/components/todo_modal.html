@@ -17,7 +17,7 @@
                 <div class="border border-slate-200 rounded bg-white p-2 max-h-56 overflow-y-auto">
                     <div id="todo-history-loading" class="hidden text-sm text-slate-400 py-2">加载处理中...</div>
                     <div id="todo-history-empty" class="hidden text-sm text-slate-400 py-2">暂无处理记录</div>
-                    <div id="todo-history-list" class="space-y-2"></div>
+                    <div id="todo-history-list" class="space-y-3"></div>
                 </div>
             </div>
             <div>
@@ -25,7 +25,7 @@
                 <div class="border border-slate-200 rounded bg-white p-2 max-h-56 overflow-y-auto">
                     <div id="todo-source-loading" class="hidden text-sm text-slate-400 py-2">加载处理中...</div>
                     <div id="todo-source-empty" class="hidden text-sm text-slate-400 py-2">暂无异常数据</div>
-                    <div id="todo-source-list" class="space-y-2"></div>
+                    <div id="todo-source-list" class="space-y-3"></div>
                 </div>
             </div>
         </div>
@@ -141,14 +141,16 @@
 
             return ''
                 + '<div class="border border-slate-200 rounded p-3 bg-slate-50">'
-                +   '<div class="flex items-center justify-between gap-2">'
+                +   '<div class="flex flex-wrap items-center justify-between gap-2">'
                 +       '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' + getStatusBadgeClass(statusCode) + '">'
                 +           escapeHtml(statusDisplay)
                 +       '</span>'
-                +       '<span class="text-xs text-slate-400">' + escapeHtml(handledAt) + '</span>'
+                +       '<span class="shrink-0 whitespace-nowrap text-xs text-slate-400">' + escapeHtml(handledAt) + '</span>'
                 +   '</div>'
-                +   '<div class="mt-2 text-sm text-slate-700 whitespace-pre-wrap break-words">' + escapeHtml(handleContent) + '</div>'
-                +   '<div class="mt-1 text-xs text-slate-500">处理人：' + escapeHtml(handlerName) + '</div>'
+                +   '<div class="mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">'
+                +       '<div class="min-w-0 flex-1 text-sm text-slate-700 whitespace-pre-wrap break-words">' + escapeHtml(handleContent) + '</div>'
+                +       '<div class="shrink-0 whitespace-nowrap text-xs text-slate-500">处理人：' + escapeHtml(handlerName) + '</div>'
+                +   '</div>'
                 + '</div>';
         }).join('');
 
@@ -176,14 +178,16 @@
 
             return ''
                 + '<div class="border border-slate-200 rounded p-3 bg-slate-50">'
-                +   '<div class="flex items-start justify-between gap-2">'
-                +       '<div class="min-w-0">'
-                +           '<div class="text-sm font-medium text-slate-800 break-words">' + escapeHtml(sourceLabel) + ' ' + escapeHtml(valueDisplay) + '</div>'
-                +           (baselineDisplay ? '<div class="mt-1 text-xs text-slate-500">基线 ' + escapeHtml(baselineDisplay) + '</div>' : '')
+                +   '<div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">'
+                +       '<div class="min-w-0 flex-1">'
+                +           '<div class="flex flex-wrap items-center gap-x-2 gap-y-1">'
+                +               '<div class="text-sm font-medium text-slate-800 break-words">' + escapeHtml(sourceLabel) + ' ' + escapeHtml(valueDisplay) + '</div>'
+                +               (baselineDisplay ? '<div class="whitespace-nowrap text-xs text-slate-500">基线 ' + escapeHtml(baselineDisplay) + '</div>' : '')
+                +               (levelDisplay ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">' + escapeHtml(levelDisplay) + '</span>' : '')
+                +           '</div>'
                 +       '</div>'
-                +       '<span class="text-xs text-slate-400 shrink-0">' + escapeHtml(occurredAt) + '</span>'
+                +       '<span class="shrink-0 whitespace-nowrap text-xs text-slate-400">' + escapeHtml(occurredAt) + '</span>'
                 +   '</div>'
-                +   (levelDisplay ? '<div class="mt-2"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">' + escapeHtml(levelDisplay) + '</span></div>' : '')
                 + '</div>';
         }).join('');
 

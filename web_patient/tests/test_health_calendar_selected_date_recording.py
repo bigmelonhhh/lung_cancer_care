@@ -83,7 +83,7 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
             "2026-01-11 19:46",
         )
 
-    @patch[MagicMock | AsyncMock]("web_patient.views.record.timezone.now")
+    @patch("web_patient.views.record.timezone.now")
     def test_record_bp_selected_date_uses_submit_current_time_when_not_touched(
         self, mock_now
     ):
