@@ -8,17 +8,27 @@ from unittest.mock import MagicMock, patch
 from core.models import (
     CheckupFieldMapping,
     CheckupLibrary,
+    DailyTask,
+    MonitoringTemplate,
+    PlanItem,
+    Questionnaire,
     QuestionnaireCode,
     StandardField,
     StandardFieldValueType,
+    TreatmentCycle,
 )
+from core.models import choices as core_choices
 from health_data.models import (
     CheckupResultValue,
+    ClinicalEvent,
     HealthMetric,
     MetricSource,
+    MetricType,
+    QuestionnaireSubmission,
     ReportImage,
     ReportUpload,
 )
+from market.models import Order, Product
 from users.models import CustomUser, PatientProfile, DoctorStudio, DoctorProfile
 from users import choices as user_choices
 from chat.models import ConversationSession, ConversationType, Conversation
@@ -153,6 +163,137 @@ class TestManagementStatsChatIntegration(TestCase):
         self.assertEqual(charts["oral_mucosa"]["dates"], ["2025-01", "2025-02", "2025-03"])
         self.assertEqual(charts["oral_mucosa"]["series"][0]["data"], [0, 1, 0])
         self.assertEqual(charts["oral_mucosa"]["title"], "口腔黏膜损伤自评量表统计次数: 1次")
+
+    def test_get_context_data_uses_actual_overview_counts_for_selected_package(self):
+        product = Product.objects.create(
+            name="年度服务包",
+            price=Decimal("199.00"),
+            duration_days=90,
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.make_aware(datetime(2025, 1, 1, 9, 0)),
+        )
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="测试疗程",
+            start_date=self.start_date,
+            end_date=self.end_date,
+            cycle_days=90,
+        )
+
+        medication = PlanItem.objects.create(
+            cycle=cycle,
+            category=core_choices.PlanItemCategory.MEDICATION,
+            template_id=1,
+            item_name="靶向药",
+            schedule_days=[1, 2, 3],
+        )
+        monitor_template, _ = MonitoringTemplate.objects.get_or_create(
+            code=MetricType.BLOOD_PRESSURE,
+            defaults={
+                "name": "血压",
+                "metric_type": MetricType.BLOOD_PRESSURE,
+            },
+        )
+        monitoring = PlanItem.objects.create(
+            cycle=cycle,
+            category=core_choices.PlanItemCategory.MONITORING,
+            template_id=monitor_template.id,
+            item_name="血压",
+            schedule_days=[1, 2],
+        )
+        for day_offset in range(3):
+            DailyTask.objects.create(
+                patient=self.patient,
+                plan_item=medication,
+                task_date=self.start_date + timedelta(days=day_offset),
+                task_type=core_choices.PlanItemCategory.MEDICATION,
+                title="用药",
+                status=core_choices.TaskStatus.COMPLETED,
+                completed_at=timezone.make_aware(
+                    datetime.combine(
+                        self.start_date + timedelta(days=day_offset),
+                        datetime.min.time(),
+                    )
+                ),
+            )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=monitoring,
+            task_date=self.start_date,
+            task_type=core_choices.PlanItemCategory.MONITORING,
+            title="血压",
+            status=core_choices.TaskStatus.COMPLETED,
+            completed_at=timezone.make_aware(datetime(2025, 1, 1, 10, 0)),
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=monitoring,
+            task_date=self.start_date + timedelta(days=1),
+            task_type=core_choices.PlanItemCategory.MONITORING,
+            title="血压",
+            status=core_choices.TaskStatus.PENDING,
+        )
+
+        for hour in (8, 20):
+            HealthMetric.objects.create(
+                patient=self.patient,
+                metric_type=MetricType.USE_MEDICATED,
+                measured_at=timezone.make_aware(datetime(2025, 1, 1, hour, 0)),
+            )
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 1, 11, 0)),
+        )
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.make_aware(datetime(2025, 1, 2, 11, 0)),
+        )
+
+        ConversationSession.objects.create(
+            conversation=self.conversation,
+            patient=self.patient,
+            conversation_type=ConversationType.PATIENT_STUDIO,
+            start_at=timezone.make_aware(datetime(2025, 1, 3, 8, 0)),
+            end_at=timezone.make_aware(datetime(2025, 1, 3, 8, 30)),
+        )
+        questionnaire = Questionnaire.objects.create(code="Q_STATS", name="随访问卷")
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+        )
+        submission.created_at = timezone.make_aware(datetime(2025, 1, 3, 9, 0))
+        submission.save(update_fields=["created_at"])
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_date=date(2025, 1, 4),
+            event_type=3,
+        )
+        ClinicalEvent.objects.create(
+            patient=self.patient,
+            event_date=date(2025, 1, 5),
+            event_type=2,
+        )
+
+        context = self.view.get_context_data(self.patient)
+        overview = context["stats_overview"]
+
+        self.assertEqual(overview["medication_taken"], 2)
+        self.assertEqual(overview["medication_compliance"], "100%")
+        self.assertEqual(overview["indicators_monitoring"], 2)
+        self.assertEqual(overview["indicators_recorded"], 2)
+        self.assertEqual(overview["monitoring_compliance"], "50%")
+        self.assertEqual(overview["online_consultation"], 1)
+        self.assertEqual(overview["follow_up"], 1)
+        self.assertEqual(overview["checkup"], 1)
+        self.assertEqual(overview["hospitalization"], 1)
+        self.assertEqual(sum(context["charts"]["medication"]["series"][0]["data"]), 2)
 
     def _create_followup_mapping(self):
         checkup = CheckupLibrary.objects.create(

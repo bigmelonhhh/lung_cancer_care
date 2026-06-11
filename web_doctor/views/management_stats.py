@@ -11,7 +11,12 @@ from market.service.order import get_paid_orders_for_patient
 from core.service.tasks import get_adherence_metrics, MONITORING_ADHERENCE_ALL
 from health_data.services.health_metric import HealthMetricService
 from core.models.choices import PlanItemCategory
-from health_data.models import CheckupResultValue, MetricType, QuestionnaireSubmission
+from health_data.models import (
+    CheckupResultValue,
+    ClinicalEvent,
+    MetricType,
+    QuestionnaireSubmission,
+)
 from django.contrib.auth.decorators import login_required
 from users.decorators import check_doctor_or_assistant
 from chat.services.chat import ChatService
@@ -54,9 +59,59 @@ class ManagementStatsView:
             start_date = active_package["start_date"]
             end_date = active_package["end_date"]
 
+        # 生成图表数据
+        charts = self._generate_charts_data(patient, start_date, end_date)
+
+        # 生成复查指标统计
+        followup_review_charts = self._generate_followup_review_charts(patient, start_date, end_date)
+        
+        # 生成咨询数据统计
+        query_stats = self._generate_query_stats(patient, start_date, end_date)
+
         # 管理数据概览
+        stats_overview = self._build_stats_overview(
+            patient,
+            start_date,
+            end_date,
+            query_stats=query_stats,
+        )
+
+        return {
+            "service_packages": service_packages,
+            "stats_overview": stats_overview,
+            "charts": charts,
+            "followup_review_charts": followup_review_charts,
+            "query_stats": query_stats,
+        }
+
+    @staticmethod
+    def _format_rate(rate: float | None) -> str:
+        if rate is None:
+            return "0%"
+        return f"{int(rate * 100)}%"
+
+    @staticmethod
+    def _build_datetime_range(
+        start_date: date,
+        end_date: date,
+    ) -> tuple[datetime.datetime, datetime.datetime]:
+        start_dt = datetime.datetime.combine(start_date, datetime.time.min)
+        end_dt = datetime.datetime.combine(end_date, datetime.time.max)
+        if timezone.is_aware(timezone.now()):
+            start_dt = timezone.make_aware(start_dt)
+            end_dt = timezone.make_aware(end_dt)
+        return start_dt, end_dt
+
+    def _build_stats_overview(
+        self,
+        patient: Any,
+        start_date: date | None,
+        end_date: date | None,
+        *,
+        query_stats: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
         stats_overview = {
-            "medication_adjustment": 0, 
+            "medication_adjustment": 0,
             "medication_taken": 0,
             "medication_compliance": "0%",
             "indicators_monitoring": 0,
@@ -67,58 +122,69 @@ class ManagementStatsView:
             "checkup": 0,
             "hospitalization": 0,
         }
+        if not patient or not start_date or not end_date:
+            return stats_overview
 
-        if start_date and end_date:
-            # 1. 药物相关统计
-            med_metrics = get_adherence_metrics(
-                patient_id=patient.id,
-                adherence_type=PlanItemCategory.MEDICATION,
-                start_date=start_date,
-                end_date=end_date
-            )
-            stats_overview["medication_taken"] = med_metrics.get("completed", 0)
-            med_rate = med_metrics.get("rate")
-            if med_rate is not None:
-                stats_overview["medication_compliance"] = f"{int(med_rate * 100)}%"
+        med_metrics = get_adherence_metrics(
+            patient_id=patient.id,
+            adherence_type=PlanItemCategory.MEDICATION,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        stats_overview["medication_compliance"] = self._format_rate(
+            med_metrics.get("rate")
+        )
+        stats_overview["medication_taken"] = HealthMetricService.count_metric_uploads(
+            patient=patient,
+            metric_type=MetricType.USE_MEDICATED,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
-            # 2. 监测相关统计
-            # 监测依从性
-            mon_metrics = get_adherence_metrics(
-                patient_id=patient.id,
-                adherence_type=MONITORING_ADHERENCE_ALL,
-                start_date=start_date,
-                end_date=end_date
-            )
-            stats_overview["indicators_monitoring"] = mon_metrics.get("total", 0)
-            mon_rate = mon_metrics.get("rate")
-            if mon_rate is not None:
-                stats_overview["monitoring_compliance"] = f"{int(mon_rate * 100)}%"
-            
-            # 监测记录数 (实际上传量)
-            record_count = HealthMetricService.count_metric_uploads(
+        mon_metrics = get_adherence_metrics(
+            patient_id=patient.id,
+            adherence_type=MONITORING_ADHERENCE_ALL,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        stats_overview["indicators_monitoring"] = mon_metrics.get("total", 0)
+        stats_overview["monitoring_compliance"] = self._format_rate(
+            mon_metrics.get("rate")
+        )
+        stats_overview["indicators_recorded"] = HealthMetricService.count_metric_uploads(
+            patient=patient,
+            metric_type=MONITORING_ADHERENCE_ALL,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        query_stats = query_stats or self._generate_query_stats(
+            patient,
+            start_date,
+            end_date,
+        )
+        stats_overview["online_consultation"] = query_stats.get("total_count", 0)
+
+        start_dt, end_dt = self._build_datetime_range(start_date, end_date)
+        stats_overview["follow_up"] = QuestionnaireSubmission.objects.filter(
+            patient=patient,
+            created_at__gte=start_dt,
+            created_at__lte=end_dt,
+        ).count()
+
+        clinical_counts = dict(
+            ClinicalEvent.objects.filter(
                 patient=patient,
-                metric_type=MONITORING_ADHERENCE_ALL,
-                start_date=start_date,
-                end_date=end_date
+                event_date__range=(start_date, end_date),
             )
-            stats_overview["indicators_recorded"] = record_count
+            .values("event_type")
+            .annotate(count=Count("id"))
+            .values_list("event_type", "count")
+        )
+        stats_overview["hospitalization"] = clinical_counts.get(2, 0)
+        stats_overview["checkup"] = clinical_counts.get(3, 0)
 
-        # 生成图表数据
-        charts = self._generate_charts_data(patient, start_date, end_date)
-
-        # 生成复查指标统计
-        followup_review_charts = self._generate_followup_review_charts(patient, start_date, end_date)
-        
-        # 生成咨询数据统计
-        query_stats = self._generate_query_stats(patient, start_date, end_date)
-
-        return {
-            "service_packages": service_packages,
-            "stats_overview": stats_overview,
-            "charts": charts,
-            "followup_review_charts": followup_review_charts,
-            "query_stats": query_stats,
-        }
+        return stats_overview
 
     @staticmethod
     def _build_month_labels(start_date: date | None, end_date: date | None) -> list[str]:
