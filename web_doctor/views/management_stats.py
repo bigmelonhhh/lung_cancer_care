@@ -91,6 +91,12 @@ class ManagementStatsView:
         return f"{int(rate * 100)}%"
 
     @staticmethod
+    def _format_medication_compliance(rate: float | None, medication_taken: int) -> str:
+        if medication_taken <= 0 or rate is None:
+            return "-"
+        return f"{int(rate * 100)}%"
+
+    @staticmethod
     def _build_datetime_range(
         start_date: date,
         end_date: date,
@@ -113,7 +119,7 @@ class ManagementStatsView:
         stats_overview = {
             "medication_adjustment": 0,
             "medication_taken": 0,
-            "medication_compliance": "0%",
+            "medication_compliance": "-",
             "indicators_monitoring": 0,
             "indicators_recorded": 0,
             "monitoring_compliance": "0%",
@@ -131,14 +137,15 @@ class ManagementStatsView:
             start_date=start_date,
             end_date=end_date,
         )
-        stats_overview["medication_compliance"] = self._format_rate(
-            med_metrics.get("rate")
-        )
         stats_overview["medication_taken"] = HealthMetricService.count_metric_uploads(
             patient=patient,
             metric_type=MetricType.USE_MEDICATED,
             start_date=start_date,
             end_date=end_date,
+        )
+        stats_overview["medication_compliance"] = self._format_medication_compliance(
+            med_metrics.get("rate"),
+            stats_overview["medication_taken"],
         )
 
         mon_metrics = get_adherence_metrics(

@@ -295,6 +295,48 @@ class TestManagementStatsChatIntegration(TestCase):
         self.assertEqual(overview["hospitalization"], 1)
         self.assertEqual(sum(context["charts"]["medication"]["series"][0]["data"]), 2)
 
+    def test_get_context_data_shows_dash_for_medication_compliance_without_uploads(self):
+        product = Product.objects.create(
+            name="年度服务包",
+            price=Decimal("199.00"),
+            duration_days=90,
+        )
+        Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.make_aware(datetime(2025, 1, 1, 9, 0)),
+        )
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="测试疗程",
+            start_date=self.start_date,
+            end_date=self.end_date,
+            cycle_days=90,
+        )
+        medication = PlanItem.objects.create(
+            cycle=cycle,
+            category=core_choices.PlanItemCategory.MEDICATION,
+            template_id=1,
+            item_name="靶向药",
+            schedule_days=[1, 2],
+        )
+        for day_offset in range(2):
+            DailyTask.objects.create(
+                patient=self.patient,
+                plan_item=medication,
+                task_date=self.start_date + timedelta(days=day_offset),
+                task_type=core_choices.PlanItemCategory.MEDICATION,
+                title="用药",
+                status=core_choices.TaskStatus.PENDING,
+            )
+
+        overview = self.view.get_context_data(self.patient)["stats_overview"]
+
+        self.assertEqual(overview["medication_taken"], 0)
+        self.assertEqual(overview["medication_compliance"], "-")
+
     def _create_followup_mapping(self):
         checkup = CheckupLibrary.objects.create(
             name="血常规",
