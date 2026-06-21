@@ -5,6 +5,7 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from users.models import PatientProfile
 from chat.models import Conversation, Message, PatientStudioAssignment
+from chat.services.chat import ChatService
 
 from django.utils import timezone
 from users.choices import UserType
@@ -88,6 +89,64 @@ class ChatApiTests(TestCase):
         self.assertEqual(len(data['messages']), 1)
         self.assertEqual(data['messages'][0]['text_content'], content)
         self.assertIn("created_at_display", data["messages"][0])
+
+    def test_list_messages_initial_page_returns_latest_messages_with_history_cursor(self):
+        service = ChatService()
+        conversation = service.get_or_create_patient_conversation(self.patient)
+        created = [
+            service.create_text_message(conversation, self.doctor_user2, f"Message {idx:02d}")
+            for idx in range(60)
+        ]
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(len(data["messages"]), 50)
+        self.assertEqual(data["messages"][0]["text_content"], "Message 10")
+        self.assertEqual(data["messages"][-1]["text_content"], "Message 59")
+        self.assertTrue(data["has_next"])
+        self.assertEqual(data["next_cursor"], str(created[10].id))
+
+    def test_list_messages_before_id_returns_previous_page_in_ascending_order(self):
+        service = ChatService()
+        conversation = service.get_or_create_patient_conversation(self.patient)
+        created = [
+            service.create_text_message(conversation, self.doctor_user2, f"Message {idx:02d}")
+            for idx in range(60)
+        ]
+
+        response = self.client.get(self.list_url, {"before_id": created[10].id})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(len(data["messages"]), 10)
+        self.assertEqual(data["messages"][0]["text_content"], "Message 00")
+        self.assertEqual(data["messages"][-1]["text_content"], "Message 09")
+        self.assertFalse(data["has_next"])
+        self.assertEqual(data["next_cursor"], "")
+
+    def test_list_messages_after_id_keeps_incremental_polling_semantics(self):
+        service = ChatService()
+        conversation = service.get_or_create_patient_conversation(self.patient)
+        created = [
+            service.create_text_message(conversation, self.doctor_user2, f"Message {idx:02d}")
+            for idx in range(3)
+        ]
+
+        response = self.client.get(self.list_url, {"after_id": created[0].id})
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "success")
+        self.assertEqual(
+            [message["text_content"] for message in data["messages"]],
+            ["Message 01", "Message 02"],
+        )
+        self.assertFalse(data["has_next"])
+        self.assertEqual(data["next_cursor"], "")
 
     def test_send_invalid_content(self):
          # Test sending empty content (assuming service/view validation)
