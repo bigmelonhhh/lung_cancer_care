@@ -1,0 +1,30 @@
+{% firstof variant "secondary" as button_variant %}
+{% firstof size "md" as button_size %}
+{% if button_variant == "primary" %}
+  {% firstof "bg-blue-600 text-white border border-blue-600 shadow-sm shadow-blue-100 hover:bg-blue-500 active:bg-blue-700 focus:ring-blue-200" as variant_class %}
+{% elif button_variant == "danger" %}
+  {% firstof "bg-rose-600 text-white border border-rose-600 shadow-sm shadow-rose-100 hover:bg-rose-500 active:bg-rose-700 focus:ring-rose-200" as variant_class %}
+{% elif button_variant == "ghost" %}
+  {% firstof "bg-transparent text-slate-600 border border-transparent hover:bg-slate-100 active:bg-slate-200 focus:ring-slate-200" as variant_class %}
+{% else %}
+  {% firstof "bg-white text-slate-700 border border-slate-200 shadow-sm hover:bg-slate-50 active:bg-slate-100 focus:ring-slate-200" as variant_class %}
+{% endif %}
+{% if button_size == "sm" %}
+  {% firstof "h-8 px-3 text-xs" as size_class %}
+{% elif button_size == "lg" %}
+  {% firstof "h-11 px-5 text-base" as size_class %}
+{% else %}
+  {% firstof "h-10 px-4 text-sm" as size_class %}
+{% endif %}
+{% firstof extra_class "" as extra_button_class %}
+{% if href %}
+<a href="{{ href }}" class="inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 {{ size_class }} {{ variant_class }} {% if full_width %}w-full{% endif %} {% if disabled %}pointer-events-none opacity-60{% endif %} {{ extra_button_class }}" {% if disabled %}aria-disabled="true"{% endif %} {{ attrs|default:""|safe }}>
+  {% if icon %}<span class="inline-flex shrink-0">{{ icon|safe }}</span>{% endif %}
+  <span>{{ label }}</span>
+</a>
+{% else %}
+<button type="{{ type|default:'button' }}" class="inline-flex items-center justify-center gap-2 rounded-lg font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 {{ size_class }} {{ variant_class }} {% if full_width %}w-full{% endif %} {{ extra_button_class }}" {% if disabled %}disabled{% endif %} {{ attrs|default:""|safe }}>
+  {% if icon %}<span class="inline-flex shrink-0">{{ icon|safe }}</span>{% endif %}
+  <span>{{ label }}</span>
+</button>
+{% endif %}

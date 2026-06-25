@@ -1,0 +1,15 @@
+{% firstof tone "neutral" as badge_tone %}
+{% if badge_tone == "success" %}
+  {% firstof "bg-emerald-50 text-emerald-700 border-emerald-100" as tone_class %}
+{% elif badge_tone == "warning" %}
+  {% firstof "bg-amber-50 text-amber-700 border-amber-100" as tone_class %}
+{% elif badge_tone == "danger" %}
+  {% firstof "bg-rose-50 text-rose-700 border-rose-100" as tone_class %}
+{% elif badge_tone == "info" %}
+  {% firstof "bg-blue-50 text-blue-700 border-blue-100" as tone_class %}
+{% else %}
+  {% firstof "bg-slate-50 text-slate-600 border-slate-200" as tone_class %}
+{% endif %}
+<span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium {{ tone_class }} {{ extra_class|default:'' }}" {{ attrs|default:""|safe }}>
+  {{ label }}
+</span>

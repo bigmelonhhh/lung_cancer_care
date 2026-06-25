@@ -1,0 +1,14 @@
+{% firstof tone "info" as alert_tone %}
+{% if alert_tone == "success" %}
+  {% firstof "border-emerald-200 bg-emerald-50 text-emerald-800" as alert_class %}
+{% elif alert_tone == "warning" %}
+  {% firstof "border-amber-200 bg-amber-50 text-amber-800" as alert_class %}
+{% elif alert_tone == "danger" %}
+  {% firstof "border-rose-200 bg-rose-50 text-rose-800" as alert_class %}
+{% else %}
+  {% firstof "border-blue-200 bg-blue-50 text-blue-800" as alert_class %}
+{% endif %}
+<div class="rounded-lg border px-4 py-3 {{ alert_class }} {{ extra_class|default:'' }}" role="{{ role|default:'status' }}" {{ attrs|default:""|safe }}>
+  {% if title %}<p class="text-sm font-semibold">{{ title }}</p>{% endif %}
+  {% if message %}<p class="{% if title %}mt-1 {% endif %}text-sm leading-6">{{ message }}</p>{% endif %}
+</div>

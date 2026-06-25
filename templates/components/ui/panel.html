@@ -1,0 +1,22 @@
+<section class="rounded-lg border border-slate-200 bg-white shadow-sm {{ extra_class|default:'' }}" {{ attrs|default:""|safe }}>
+  {% if title or description or action_label %}
+    <div class="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="min-w-0">
+        {% if title %}<h2 class="text-sm font-semibold text-slate-900">{{ title }}</h2>{% endif %}
+        {% if description %}<p class="mt-1 text-sm leading-5 text-slate-500">{{ description }}</p>{% endif %}
+      </div>
+      {% if action_label and action_href %}
+        <div class="shrink-0">
+          {% include "components/ui/button.html" with label=action_label href=action_href variant=action_variant|default:"secondary" size="sm" attrs=action_attrs %}
+        </div>
+      {% endif %}
+    </div>
+  {% endif %}
+  <div class="{{ body_class|default:'p-4' }}">
+    {% if body_template %}
+      {% include body_template %}
+    {% else %}
+      {{ body|default:"" }}
+    {% endif %}
+  </div>
+</section>

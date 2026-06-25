@@ -1,7 +1,7 @@
 # 肺癌院外管理系统 - 开发指南
 
-**版本**：2.2  
-**最后更新**：2026-06-16
+**版本**：2.3  
+**最后更新**：2026-06-25
 
 本文档用于约束本项目的日常开发，面向 AI 与新同事快速扫读。内容同时覆盖**当前仓库事实**与**新增代码目标规范**，并以渐进治理方式持续收敛系统质量。
 
@@ -36,6 +36,7 @@
   - `regions`、`market`、`business_support`：区域、商城、短信、设备等支撑能力。
 - 关键目录：
   - 共享布局：`templates/layouts/`
+  - 项目 UI 组件库：`templates/components/ui/`
   - 静态资源：`static/web_doctor/`、`static/web_patient/`、`static/web_sales/`
   - App 测试：各自 `tests/`
   - 跨站点与浏览器测试：根目录 `tests/`
@@ -83,6 +84,17 @@
 - 样式优先写在模板或 Form Widget 中，统一使用 Tailwind CSS。
 - 非必要不新增独立 CSS 文件；只有 Tailwind 表达困难或第三方覆盖成本高时才新增。
 - JS 按端归档到对应 `static/web_*` 目录，禁止混写医生端、患者端、销售端逻辑。
+- 新增页面优先复用项目 UI 组件，组件统一放在 `templates/components/ui/`，通过 Django `{% include %}` 调用；当前基础组件包括 `button.html`、`badge.html`、`alert.html`、`empty_state.html`、`loading.html`、`page_header.html`、`panel.html`、`form_field.html`、`table_empty.html`、`modal.html`。
+- UI 组件库只封装无业务含义的基础视觉与交互外壳；患者卡片、任务状态、指标摘要、疗程信息等带业务语义的片段，按端放在 `templates/web_doctor/`、`templates/web_patient/`、`templates/web_sales/` 下的局部模板中。
+- 不引入 AntD、Element Plus、Bootstrap 等重型或框架绑定 UI 组件库；如需日期、图表、图片压缩等复杂能力，继续按场景引入轻量专项库并优先本地托管到 `static/vendor/`。
+- 不要为了套用组件而改动存量页面；存量页面按“进入相关功能开发或重构时渐进替换”的方式收敛，避免大范围纯样式搬迁。
+- 新增或重构页面的基础组件用法示例：
+  ```django
+  {% include "components/ui/page_header.html" with title="患者管理" subtitle="集中查看随访、指标和待办" %}
+  {% include "components/ui/button.html" with label="保存" variant="primary" type="submit" %}
+  {% include "components/ui/badge.html" with label=task.status_label tone=task.status_tone %}
+  {% include "components/ui/empty_state.html" with title="暂无数据" description="当前筛选条件下没有记录。" %}
+  ```
 
 ## 6. 业务专项规则
 - 微信生态：

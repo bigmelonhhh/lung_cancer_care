@@ -1,0 +1,10 @@
+<div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-6 py-10 text-center {{ extra_class|default:'' }}" {{ attrs|default:""|safe }}>
+  {% if eyebrow %}<p class="mb-2 text-xs font-medium uppercase tracking-wide text-slate-400">{{ eyebrow }}</p>{% endif %}
+  <p class="text-sm font-semibold text-slate-700">{{ title|default:"暂无数据" }}</p>
+  {% if description %}<p class="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-500">{{ description }}</p>{% endif %}
+  {% if action_label and action_href %}
+    <div class="mt-4">
+      {% include "components/ui/button.html" with label=action_label href=action_href variant=action_variant|default:"secondary" size="sm" %}
+    </div>
+  {% endif %}
+</div>

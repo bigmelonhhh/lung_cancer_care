@@ -1,0 +1,12 @@
+<div class="flex flex-col gap-4 border-b border-slate-200 pb-4 sm:flex-row sm:items-center sm:justify-between {{ extra_class|default:'' }}" {{ attrs|default:""|safe }}>
+  <div class="min-w-0">
+    {% if eyebrow %}<p class="text-xs font-medium uppercase tracking-wide text-slate-400">{{ eyebrow }}</p>{% endif %}
+    <h1 class="text-xl font-semibold leading-7 text-slate-900">{{ title }}</h1>
+    {% if subtitle %}<p class="mt-1 text-sm leading-6 text-slate-500">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if action_label and action_href %}
+    <div class="shrink-0">
+      {% include "components/ui/button.html" with label=action_label href=action_href variant=action_variant|default:"primary" size="sm" attrs=action_attrs %}
+    </div>
+  {% endif %}
+</div>
