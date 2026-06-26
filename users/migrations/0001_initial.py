@@ -107,10 +107,10 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(auto_now_add=True, db_index=True, help_text='【业务说明】记录数据首次写入时间；【用法】只读字段，自动写入；【示例】2025-01-01 09:00;【参数】无；【返回值】datetime', verbose_name='创建时间')),
                 ('updated_at', models.DateTimeField(auto_now=True, db_index=True, help_text='【业务说明】记录最新修改时间，方便比对变更；【用法】ORM 保存时自动更新；【示例】2025-01-02 18:30;【参数】无；【返回值】datetime', verbose_name='更新时间')),
-                ('name', models.CharField(help_text='【业务说明】工作室对外名称；【用法】展示；【示例】张主任肺癌工作室；【参数】str；【返回值】str', max_length=50, verbose_name='工作室名称')),
+                ('name', models.CharField(help_text='【业务说明】工作室对外名称；【用法】展示；【示例】张主任慢病工作室；【参数】str；【返回值】str', max_length=50, verbose_name='工作室名称')),
                 ('code', models.CharField(help_text='【业务说明】内部唯一编码，用于生成二维码；【用法】不可重复；【示例】STU001；【参数】str；【返回值】str', max_length=20, unique=True, verbose_name='工作室编码')),
                 ('qr_code_url', models.URLField(blank=True, help_text='【业务说明】二维码图片地址；【用法】前端展示下载；【示例】https://cdn/qrcode.png；【参数】URL；【返回值】str', max_length=255, verbose_name='二维码地址')),
-                ('intro', models.TextField(blank=True, help_text='【业务说明】工作室简介；【用法】介绍服务内容；【示例】专注肺癌精准康复；【参数】text；【返回值】str', verbose_name='工作室介绍')),
+                ('intro', models.TextField(blank=True, help_text='【业务说明】工作室简介；【用法】介绍服务内容；【示例】专注慢病精准康复；【参数】text；【返回值】str', verbose_name='工作室介绍')),
                 ('owner_doctor', models.ForeignKey(help_text='【业务说明】工作室负责人；【用法】必须指定；【示例】DoctorProfile#1；【参数】外键；【返回值】DoctorProfile', on_delete=django.db.models.deletion.CASCADE, related_name='owned_studios', to='users.doctorprofile', verbose_name='负责人')),
             ],
             options={

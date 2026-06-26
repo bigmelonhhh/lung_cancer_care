@@ -34,7 +34,7 @@ class ConsultationChatLogicTest(TestCase):
         self.patient_profile = PatientProfile.objects.create(user=self.patient_user, name="张鹏")
 
         # 3. Create Studio
-        self.studio = DoctorStudio.objects.create(name="肺部康复管理工作室", owner_doctor=self.doctor_profile)
+        self.studio = DoctorStudio.objects.create(name="慢病康复管理工作室", owner_doctor=self.doctor_profile)
         # Link Doctor to Studio
         self.doctor_profile.studio = self.studio
         self.doctor_profile.save()
@@ -42,7 +42,7 @@ class ConsultationChatLogicTest(TestCase):
     def test_case_1_doctor_association(self):
         """
         测试用例1 - 医生关联验证：
-        - 模拟"李白"医生已创建"肺部康复管理工作室" (setUp已完成)
+        - 模拟"李白"医生已创建"慢病康复管理工作室" (setUp已完成)
         - 验证医生登录后能正确显示患者"张鹏"的数据 (模拟后台关联)
         - 检查聊天页面是否正常显示，不应出现showNoStudioError布局提醒
         """
@@ -109,7 +109,7 @@ class ConsultationChatLogicTest(TestCase):
         """
         测试用例3 - 患者关联验证：
         - 模拟患者"张鹏"后台已关联"李白"医生
-        - 验证患者前台显示正确关联了"李白"医生和"肺部康复管理工作室"
+        - 验证患者前台显示正确关联了"李白"医生和"慢病康复管理工作室"
         - 检查患者进入聊天页面时是否正常显示，不应出现showNoStudioError布局提醒
         """
         
@@ -122,7 +122,7 @@ class ConsultationChatLogicTest(TestCase):
         
         # Verify active assignment
         assignment = self.patient_service.get_active_studio_assignment(self.patient_profile)
-        self.assertEqual(assignment.studio.name, "肺部康复管理工作室")
+        self.assertEqual(assignment.studio.name, "慢病康复管理工作室")
         
         # Verify Chat Logic
         # 1. API Call (Happy Path)

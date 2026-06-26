@@ -15,7 +15,7 @@ class DoctorStudio(TimeStampedModel):
     name = models.CharField(
         "工作室名称",
         max_length=50,
-        help_text="【业务说明】工作室对外名称；【用法】展示；【示例】张主任肺癌工作室；【参数】str；【返回值】str",
+        help_text="【业务说明】工作室对外名称；【用法】展示；【示例】张主任慢病工作室；【参数】str；【返回值】str",
     )
     code = models.CharField(
         "工作室编码",
@@ -27,7 +27,7 @@ class DoctorStudio(TimeStampedModel):
     intro = models.TextField(
         "工作室介绍",
         blank=True,
-        help_text="【业务说明】工作室简介；【用法】介绍服务内容；【示例】专注肺癌精准康复；【参数】text；【返回值】str",
+        help_text="【业务说明】工作室简介；【用法】介绍服务内容；【示例】专注慢病精准康复；【参数】text；【返回值】str",
     )
     owner_doctor = models.ForeignKey(
         "users.DoctorProfile",

@@ -1,4 +1,4 @@
-"""肺部康复管理平台的自定义后台站点配置。"""
+"""慢病康复管理平台的自定义后台站点配置。"""
 
 from django.conf import settings
 from django.contrib.admin import AdminSite
@@ -10,8 +10,8 @@ from .changelog import get_changelog_page_context
 
 
 class LungCancerAdminSite(AdminSite):
-    site_header = "肺部康复管理系统后台"
-    site_title = "肺部康复管理系统"
+    site_header = "慢病康复管理系统后台"
+    site_title = "慢病康复管理系统"
     index_title = "后台管理首页"
     index_template = "admin/custom_index.html"
 

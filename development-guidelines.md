@@ -1,4 +1,4 @@
-# 肺癌院外管理系统 - 开发指南 (Development Guidelines)
+# 慢病院外管理系统 - 开发指南 (Development Guidelines)
 
 **版本**：2.0  
 **最后更新**：2025-11-27

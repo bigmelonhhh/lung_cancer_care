@@ -52,7 +52,7 @@ class TextTemplateService:
             {
                 "code": "subscribe_welcome",
                 "title": "关注欢迎语",
-                "content": "你好，欢迎关注肺部康复管理助手！发送【帮助】查看指令。",
+                "content": "你好，欢迎关注慢病康复管理助手！发送【帮助】查看指令。",
                 "vars": "未关注用户第一次关注回复信息",
             },
 
