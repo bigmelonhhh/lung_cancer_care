@@ -1,4 +1,4 @@
-<div class="flex flex-col flex-1 min-h-0" 
+<div class="flex flex-col flex-1 h-full min-h-0" 
      x-data="chatWidget()" 
      x-init="init()"
      @update-chat-patient.window="handlePatientSelect($event.detail)">
@@ -96,8 +96,8 @@
         </div>
 
         <!-- 底部输入栏 -->
-        <div class="doctor-chat-input" x-show="canChat" style="display: none;">
-        <div class="h-full p-3 border-t border-slate-100 bg-white">
+        <div class="doctor-chat-input shrink-0 border-t border-slate-100 bg-white" x-show="canChat" style="display: none;">
+        <div class="p-3">
             <div class="flex items-end gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200 transition-all">
                 <textarea 
                     x-model="inputText" 
@@ -152,13 +152,7 @@
   background-clip: content-box;
 }
 .doctor-chat-input {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
   width: 100%;
-  height: 70px;
-  z-index: 20;
 }
 @media (max-height: 800px) {
   .doctor-chat-scroll {
@@ -222,11 +216,6 @@ function chatWidget() {
             this.syncChatPermission('init');
             this.$watch('activeTab', () => this.syncChatPermission('activeTab'));
             this.$watch(() => JSON.stringify(this.permissions), () => this.syncChatPermission('permissions'));
-            this.updateLayoutHeights();
-            this._onResize = () => {
-                this.updateLayoutHeights();
-            };
-            window.addEventListener('resize', this._onResize);
             this._onVisibilityChange = () => {
                 if (document.hidden) {
                     this.stopPolling();
@@ -243,9 +232,6 @@ function chatWidget() {
 
         destroy() {
             this.stopPolling();
-            if (this._onResize) {
-                window.removeEventListener('resize', this._onResize);
-            }
             if (this._onVisibilityChange) {
                 document.removeEventListener('visibilitychange', this._onVisibilityChange);
             }
@@ -305,9 +291,6 @@ function chatWidget() {
             await this.fetchContext(this.patientId);
             this.syncChatPermission('handlePatientSelect');
              
-            this.$nextTick(() => {
-                this.updateLayoutHeights();
-            });
             await this.loadMessages();
             this.startPolling();
         },
@@ -325,7 +308,6 @@ function chatWidget() {
             this.messages = [];
             this.$nextTick(() => {
                 this.syncChatPermission('switchTab');
-                this.updateLayoutHeights();
                 this.loadMessages();
                 this.scheduleNextPoll(0);
             });
@@ -615,42 +597,8 @@ function chatWidget() {
             this.canChat = next;
            
             if (changed) {
-                this.$nextTick(() => this.updateLayoutHeights());
+                this.$nextTick(() => this.scrollToBottom());
             }
-        },
-
-        updateLayoutHeights() {
-            this.$nextTick(() => {
-                const messagesEl = this.$refs.messagesContainer;
-                if (!messagesEl) return;
-
-                const viewportHeight = window.innerHeight || 0;
-                const topNavEl = document.querySelector('header');
-                const topNavHeight = topNavEl ? topNavEl.getBoundingClientRect().height : 64;
-
-                const todoEl = document.getElementById('patient-todo-list');
-                const todoHeight = todoEl ? todoEl.getBoundingClientRect().height : 0;
-
-                const chatHeaderEl = this.$el.querySelector('.doctor-chat-header');
-                const chatHeaderHeight = chatHeaderEl ? chatHeaderEl.getBoundingClientRect().height : 0;
-
-                const rawRemainingHeight = viewportHeight - topNavHeight - todoHeight - chatHeaderHeight;
-                let maxHeight = Math.max(240, Math.min(rawRemainingHeight, viewportHeight));
-                if (maxHeight < 390) {
-                    maxHeight = 280; 
-                }
-
-                if (maxHeight > 500) {
-                    maxHeight = 440; 
-                }
-                
-                messagesEl.style.maxHeight = `${maxHeight}px`;
-                messagesEl.style.height = '';
-                messagesEl.style.minHeight = '';
-                const inputHeight = this.canChat ? 120 : 0;
-                const safeGap = 16;
-                messagesEl.style.setProperty('padding-bottom', `${inputHeight + safeGap}px`, 'important');
-            });
         },
 
         isMyMessage(msg) {

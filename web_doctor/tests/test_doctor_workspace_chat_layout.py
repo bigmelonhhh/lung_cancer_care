@@ -30,10 +30,14 @@ class DoctorWorkspaceChatLayoutTest(TestCase):
         self.assertIn('id="chat-messages-container"', content)
         self.assertIn("doctor-chat-scroll", content)
         self.assertIn("doctor-chat-input", content)
-        self.assertIn('doctor-chat-input" x-show="canChat"', content)
+        self.assertIn('doctor-chat-input shrink-0', content)
+        self.assertIn('x-show="canChat"', content)
         self.assertNotIn("clamp(120px, 16vh, 360px)", content)
         self.assertNotIn("--doctor-chat-input-height", content)
-        self.assertIn("this.canChat ? 120 : 0", content)
+        self.assertNotIn("position: absolute", content)
+        self.assertNotIn("messagesEl.style.maxHeight", content)
+        self.assertNotIn("messagesEl.style.setProperty('padding-bottom'", content)
+        self.assertNotIn("this.canChat ? 120 : 0", content)
 
     @patch("web_doctor.views.workspace.enrich_patients_with_counts", return_value=[])
     def test_doctor_workspace_contains_core_ui_elements(self, _mock_enrich):
