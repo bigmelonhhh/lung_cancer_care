@@ -77,15 +77,20 @@ class ListMessagesPermissionRegressionTest(TestCase):
 
         self.url = reverse("web_doctor:chat_api_list_messages")
 
-    def test_director_can_view_patient_conversation_even_if_conversation_studio_mismatch(self):
-        self.client.force_login(self.director_user)
+    def test_conversation_studio_owner_can_view_patient_conversation(self):
+        self.client.force_login(self.other_owner_user)
         response = self.client.get(self.url, {"conversation_id": self.conversation.id})
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "success")
         self.assertEqual(len(payload["messages"]), 1)
 
-    def test_assistant_can_view_patient_conversation_even_if_conversation_studio_mismatch(self):
+    def test_director_cannot_view_patient_conversation_when_conversation_studio_mismatch(self):
+        self.client.force_login(self.director_user)
+        response = self.client.get(self.url, {"conversation_id": self.conversation.id})
+        self.assertEqual(response.status_code, 403)
+
+    def test_assistant_cannot_view_patient_conversation_when_conversation_studio_mismatch(self):
         assistant_user = User.objects.create_user(
             username="assistant_perm_reg",
             password="password",
@@ -97,9 +102,7 @@ class ListMessagesPermissionRegressionTest(TestCase):
 
         self.client.force_login(assistant_user)
         response = self.client.get(self.url, {"conversation_id": self.conversation.id})
-        self.assertEqual(response.status_code, 200)
-        payload = response.json()
-        self.assertEqual(payload["status"], "success")
+        self.assertEqual(response.status_code, 403)
 
     def test_unrelated_doctor_is_denied(self):
         unrelated_user = User.objects.create_user(

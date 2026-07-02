@@ -1,4 +1,5 @@
 {% extends "layouts/base_doctor.html" %}
+{% load static %}
 
 {% block content %}
 <div class="fixed inset-0 top-16 flex bg-gray-50 overflow-hidden">
@@ -75,6 +76,8 @@
 
 <!-- 引入待办事项弹框组件 -->
 {% include "components/todo_modal.html" %}
+
+<script src="{% static 'web_doctor/reports_history.js' %}"></script>
 
 <script>
     // 监听跨页面消息，当待办事项更新时自动刷新首页数据

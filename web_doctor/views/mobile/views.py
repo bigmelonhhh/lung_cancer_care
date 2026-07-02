@@ -6,6 +6,7 @@ from django.core.exceptions import ValidationError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.views.decorators.cache import never_cache
 
 from chat.models.choices import MessageContentType
 from chat.services.chat import ChatService
@@ -16,6 +17,7 @@ from users.models import PatientProfile
 
 @login_required
 @check_doctor_or_assistant
+@never_cache
 def mobile_home(request: HttpRequest) -> HttpResponse:
     logger = logging.getLogger(__name__)
 
@@ -69,7 +71,7 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
         context = {
             "doctor": {
                 "name": request.user.wx_nickname or request.user.username or "--",
-                "title": "平台助理" if is_assistant else "--",
+                "title": "" if is_assistant else "--",
                 "department": "--",
                 "hospital": "--",
                 "phone": getattr(request.user, "phone", "") or "--",
@@ -114,7 +116,7 @@ def mobile_home(request: HttpRequest) -> HttpResponse:
             or request.user.username
             or "--"
         )
-        display_title = "平台助理"
+        display_title = ""
         assistant_doctors = list(assistant_doctors_qs) if assistant_doctors_qs is not None else []
         stats_doctor_ids = [doctor.id for doctor in assistant_doctors]
         studio_names = []

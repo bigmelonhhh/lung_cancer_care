@@ -113,6 +113,43 @@ class DoctorReportsHistoryMetricsBrowserTests(DoctorBrowserTestCase):
         expect(detail.locator("table")).to_contain_text("RBC_BROWSER_DOWN")
         return detail
 
+    def test_content_fragment_detail_expand_has_reports_loader_from_workspace_shell(self):
+        console_failures = []
+        self.page.on(
+            "console",
+            lambda message: console_failures.append(message.text)
+            if message.type in ("error", "warning")
+            and (
+                "loadReportsDetail is not a function" in message.text
+                or "Alpine Expression Error" in message.text
+            )
+            else None,
+        )
+        self.page.on("pageerror", lambda error: console_failures.append(str(error)))
+
+        self.open_doctor_workspace()
+        fragment_url = (
+            self.url_for("web_doctor:patient_workspace_section", self.patient.id, "reports")
+            + "?tab=records&fragment=content"
+        )
+        self.page.evaluate(
+            """async ({ url }) => {
+                const response = await fetch(url, { headers: { "X-Requested-With": "XMLHttpRequest" } });
+                const html = await response.text();
+                const main = document.getElementById("main-content");
+                main.innerHTML = `<div id="reports-history-content" data-testid="reports-history-content">${html}</div>`;
+                if (window.htmx) window.htmx.process(main);
+                if (window.Alpine) window.Alpine.initTree(main);
+            }""",
+            {"url": fragment_url},
+        )
+
+        expect(self.page.locator(f"#report-row-summary-{self.current_event.id}")).to_be_visible(timeout=10000)
+        self.page.locator(f"#report-row-summary-{self.current_event.id}").click()
+        detail = self.page.locator(f"#report-detail-body-{self.current_event.id}")
+        expect(detail).to_contain_text("报告备注与解读", timeout=10000)
+        self.assertEqual(console_failures, [])
+
     def test_metric_previous_and_delta_cells_use_delta_direction_highlight(self):
         detail = self._open_metric_detail()
 

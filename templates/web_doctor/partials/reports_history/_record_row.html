@@ -15,6 +15,14 @@
             if (this.detailLoaded || this.loadingDetail) return;
             this.loadingDetail = true;
             try {
+                if (typeof window.loadReportsDetail !== 'function') {
+                    const target = document.getElementById('report-detail-body-{{ report.id }}');
+                    if (target) {
+                        target.innerHTML = '<div class=&quot;px-6 py-6 text-sm text-rose-600&quot;>详情加载失败，请刷新后重试。</div>';
+                    }
+                    this.detailLoaded = false;
+                    return;
+                }
                 const loaded = await window.loadReportsDetail(this.detailUrl, 'report-detail-body-{{ report.id }}');
                 this.detailLoaded = loaded;
             } finally {

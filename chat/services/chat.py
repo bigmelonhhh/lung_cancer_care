@@ -5,7 +5,7 @@ from typing import Iterable, Optional
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Case, CharField, Count, Value, When
+from django.db.models import Case, CharField, Count, Q, Value, When
 from django.db.models.functions import ExtractHour, TruncMonth
 from django.utils import timezone
 
@@ -66,9 +66,6 @@ class ChatService:
                 type=ConversationType.PATIENT_STUDIO,
                 defaults={"studio": studio, "created_by": operator},
             )
-            if not created and conversation.studio_id != studio.id:
-                conversation.studio = studio
-                conversation.save(update_fields=["studio", "updated_at"])
 
         return conversation
 
@@ -104,9 +101,6 @@ class ChatService:
                 type=ConversationType.INTERNAL,
                 defaults={"studio": studio, "created_by": operator},
             )
-            if not created and conversation.studio_id != studio.id:
-                conversation.studio = studio
-                conversation.save(update_fields=["studio", "updated_at"])
 
         return conversation
 
@@ -446,6 +440,8 @@ class ChatService:
         """
         if studio is None:
             raise ValidationError("工作室不能为空。")
+        if not self._is_user_studio_member(viewer, studio):
+            return []
 
         conversations = (
             Conversation.objects.filter(
@@ -733,6 +729,20 @@ class ChatService:
             "monthly": monthly,
             "time_slots": slot_defaults,
         }
+    def can_view_conversation(self, user: CustomUser, conversation: Conversation) -> bool:
+        """
+        判断用户当前是否仍有权查看会话。
+
+        会话查看权限只跟会话自身归属工作室的当前成员关系有关，避免患者当前医生
+        迁移后给旧工作室会话提供兜底授权。
+        """
+        if user is None or conversation is None:
+            return False
+        studio = getattr(conversation, "studio", None)
+        if studio is None:
+            return False
+        return self._is_user_studio_member(user, studio)
+
     def _assert_sender_can_send(
         self, conversation: Conversation, sender: CustomUser
     ) -> None:
@@ -783,6 +793,9 @@ class ChatService:
         return relation is not None
 
     def _is_user_studio_member(self, user: CustomUser, studio: DoctorStudio) -> bool:
+        if user is None or studio is None:
+            return False
+
         if user.user_type == user_choices.UserType.DOCTOR:
             doctor_profile = getattr(user, "doctor_profile", None)
             if not doctor_profile:
@@ -795,13 +808,17 @@ class ChatService:
             assistant_profile = getattr(user, "assistant_profile", None)
             if not assistant_profile:
                 return False
-            return assistant_profile.doctors.filter(studio_id=studio.id).exists()
+            return assistant_profile.doctors.filter(
+                Q(studio_id=studio.id) | Q(owned_studios=studio)
+            ).exists()
 
         if user.user_type == user_choices.UserType.SALES:
             sales_profile = getattr(user, "sales_profile", None)
             if not sales_profile:
                 return False
-            return sales_profile.doctors.filter(studio_id=studio.id).exists()
+            return sales_profile.doctors.filter(
+                Q(studio_id=studio.id) | Q(owned_studios=studio)
+            ).exists()
 
         return False
 

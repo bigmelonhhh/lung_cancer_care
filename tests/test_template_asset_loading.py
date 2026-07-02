@@ -102,6 +102,19 @@ class TemplateAssetLoadingTests(SimpleTestCase):
         self.assertIn("finally {", row_template)
         self.assertIn("this.loadingDetail = false;", row_template)
 
+    def test_doctor_workspace_loads_reports_history_script_from_stable_shell(self):
+        workspace = self._read("templates/web_doctor/index.html")
+
+        self.assertIn("{% load static %}", workspace)
+        self.assertIn("web_doctor/reports_history.js", workspace)
+
+    def test_reports_history_row_guards_missing_detail_loader(self):
+        row_template = self._read("templates/web_doctor/partials/reports_history/_record_row.html")
+
+        self.assertIn("typeof window.loadReportsDetail !== 'function'", row_template)
+        self.assertIn("详情加载失败，请刷新后重试。", row_template)
+        self.assertIn("this.detailLoaded = false;", row_template)
+
     def test_base_doctor_has_sync_jquery_chain_with_fallbacks(self):
         doctor = self._read("templates/layouts/base_doctor.html")
         local_idx = doctor.find("vendor/jquery/3.7.1/jquery.min.js")

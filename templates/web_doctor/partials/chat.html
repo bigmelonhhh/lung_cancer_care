@@ -261,10 +261,13 @@ function chatWidget() {
                 const data = await res.json();
                 if (data.status === 'success') {
                     const info = data.data;
-                    this.currentUserInfo = `当前账号: ${info.user_name}(${info.role_label})`;
+                    const displayRoleLabel = (info.display_role_label ?? info.role_label ?? '').trim();
+                    this.currentUserInfo = displayRoleLabel
+                        ? `当前账号: ${info.user_name}(${displayRoleLabel})`
+                        : `当前账号: ${info.user_name}`;
                     if (patientId) {
-                        this.patientLabel = info.tab_patient_label;
-                        this.internalLabel = info.tab_internal_label;
+                        this.patientLabel = info.display_tab_patient_label || info.tab_patient_label;
+                        this.internalLabel = info.display_tab_internal_label || info.tab_internal_label;
                         
                         this.conversations.patient = info.patient_conversation_id;
                         this.conversations.internal = info.internal_conversation_id;

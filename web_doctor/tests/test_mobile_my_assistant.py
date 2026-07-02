@@ -215,13 +215,15 @@ class MobileMyAssistantTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["doctor"]["name"], "平台助理A")
-        self.assertEqual(response.context["doctor"]["title"], "平台助理")
+        self.assertEqual(response.context["doctor"]["title"], "")
         self.assertFalse(response.context["show_my_assistant"])
         self.assertTrue(response.context["show_related_doctors"])
         self.assertFalse(response.context["show_department"])
         self.assertFalse(response.context["show_hospital"])
         self.assertNotContains(response, reverse("web_doctor:mobile_my_assistant"))
         self.assertContains(response, reverse("web_doctor:mobile_related_doctors"))
+        self.assertContains(response, "平台助理A")
+        self.assertNotContains(response, ">平台助理<")
         self.assertNotContains(response, "测试科室")
         self.assertNotContains(response, "测试医院")
 
@@ -333,12 +335,14 @@ class MobileMyAssistantTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["doctor"]["name"], "平台助理A")
-        self.assertEqual(response.context["doctor"]["title"], "平台助理")
+        self.assertEqual(response.context["doctor"]["title"], "")
         self.assertFalse(response.context["show_department"])
         self.assertFalse(response.context["show_hospital"])
         self.assertFalse(response.context["show_my_assistant"])
         self.assertTrue(response.context["show_related_doctors"])
         self.assertContains(response, reverse("web_doctor:mobile_related_doctors"))
+        self.assertContains(response, "平台助理A")
+        self.assertNotContains(response, ">平台助理<")
 
         studio_names = set(response.context["doctor"]["studio_name"].split("、"))
         self.assertEqual(studio_names, {"张主任工作室", "李主任工作室"})

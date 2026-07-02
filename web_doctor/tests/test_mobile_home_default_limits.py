@@ -7,9 +7,17 @@ from django.utils import timezone
 
 from chat.models import Conversation, Message
 from chat.models.choices import ConversationType, MessageContentType
+from chat.services.chat import ChatService
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert
 from users import choices
-from users.models import CustomUser, DoctorProfile, DoctorStudio, PatientProfile
+from users.models import (
+    AssistantProfile,
+    CustomUser,
+    DoctorAssistantMap,
+    DoctorProfile,
+    DoctorStudio,
+    PatientProfile,
+)
 
 
 class MobileHomeDefaultLimitTests(TestCase):
@@ -160,6 +168,98 @@ class MobileHomeDefaultLimitTests(TestCase):
         ctx = response.context
         self.assertEqual(ctx["stats"]["consultations_count"], 0)
         self.assertEqual(ctx["consultations"], [])
+
+    def test_assistant_mobile_home_does_not_show_old_studio_consultation_after_doctor_moves(self):
+        """医助失去旧工作室权限后，移动首页患者咨询不能显示旧工作室消息。"""
+        assistant_user = CustomUser.objects.create_user(
+            username="assistant_limit_home",
+            phone="13800000103",
+            password=self.password,
+            user_type=choices.UserType.ASSISTANT,
+        )
+        assistant_profile = AssistantProfile.objects.create(
+            user=assistant_user,
+            name="首页医助",
+            status=choices.AssistantStatus.ACTIVE,
+        )
+        DoctorAssistantMap.objects.create(
+            doctor=self.doctor_profile,
+            assistant=assistant_profile,
+        )
+        conversation = Conversation.objects.create(
+            patient=self.patient,
+            studio=self.studio,
+            type=ConversationType.PATIENT_STUDIO,
+            created_by=self.doctor,
+            last_message_at=timezone.now(),
+        )
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.patient.user,
+            sender_display_name_snapshot=self.patient.name,
+            studio_name_snapshot=self.studio.name,
+            content_type=MessageContentType.TEXT,
+            text_content="旧工作室咨询不应出现",
+        )
+        new_studio = DoctorStudio.objects.create(
+            name="新真实工作室",
+            code="STUDIO_LIMIT_002",
+            owner_doctor=self.doctor_profile,
+        )
+        self.doctor_profile.studio = new_studio
+        self.doctor_profile.save(update_fields=["studio"])
+
+        self.client.force_login(assistant_user)
+        self.client.get(
+            reverse(
+                "web_doctor:mobile_patient_chat_list",
+                kwargs={"patient_id": self.patient.id},
+            )
+        )
+        response = self.client.get(self.mobile_home_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["stats"]["consultations_count"], 0)
+        self.assertEqual(response.context["consultations"], [])
+        self.assertNotContains(response, "旧工作室咨询不应出现")
+        conversation.refresh_from_db()
+        self.assertEqual(conversation.studio_id, self.studio.id)
+
+    def test_conversation_summaries_return_empty_when_viewer_is_not_studio_member(self):
+        """会话摘要不能向已解绑医助返回旧工作室咨询。"""
+        assistant_user = CustomUser.objects.create_user(
+            username="assistant_limit_unbound",
+            phone="13800000104",
+            password=self.password,
+            user_type=choices.UserType.ASSISTANT,
+        )
+        AssistantProfile.objects.create(
+            user=assistant_user,
+            name="解绑医助",
+            status=choices.AssistantStatus.ACTIVE,
+        )
+        conversation = Conversation.objects.create(
+            patient=self.patient,
+            studio=self.studio,
+            type=ConversationType.PATIENT_STUDIO,
+            created_by=self.doctor,
+            last_message_at=timezone.now(),
+        )
+        Message.objects.create(
+            conversation=conversation,
+            sender=self.patient.user,
+            sender_display_name_snapshot=self.patient.name,
+            studio_name_snapshot=self.studio.name,
+            content_type=MessageContentType.TEXT,
+            text_content="解绑后不可见",
+        )
+
+        summaries = ChatService().list_patient_conversation_summaries(
+            self.studio,
+            assistant_user,
+        )
+
+        self.assertEqual(summaries, [])
 
     def test_mobile_home_consultations_page_param_supports_load_more(self):
         """存在分页参数时，咨询列表可按 page/size 取下一页"""
