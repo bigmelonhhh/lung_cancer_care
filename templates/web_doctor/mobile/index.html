@@ -31,7 +31,9 @@
             <div class="text-white flex-1 min-w-0">
                 <div class="flex items-baseline gap-2 mb-1">
                     <h1 class="text-2xl font-lexend font-bold tracking-tight truncate">{{ doctor.name }}</h1>
+                    {% if doctor.title %}
                     <span class="text-lg font-medium text-blue-100 truncate">{{doctor.title }}</span>
+                    {% endif %}
                 </div>
                 
                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-blue-50 font-medium">

@@ -79,23 +79,7 @@ def _serialize_message(msg) -> dict:
 
 
 def _can_view_conversation(user, conversation: Conversation, service: ChatService) -> bool:
-    if conversation is None or user is None:
-        return False
-
-    if service._is_user_studio_member(user, conversation.studio):
-        return True
-
-    patient = getattr(conversation, "patient", None)
-    patient_doctor = getattr(patient, "doctor", None) if patient else None
-    patient_studio = getattr(patient_doctor, "studio", None) if patient_doctor else None
-
-    if not patient_studio:
-        return False
-
-    if service._is_user_studio_member(user, patient_studio):
-        return True
-
-    return False
+    return service.can_view_conversation(user, conversation)
 
 
 def _assistant_can_send_patient_messages(user) -> bool:
@@ -129,6 +113,10 @@ def get_chat_context(request: HttpRequest):
     user = request.user
     doctor_profile = getattr(user, "doctor_profile", None)
     assistant_profile = getattr(user, "assistant_profile", None)
+    is_assistant_account = (
+        getattr(user, "user_type", None) == choices.UserType.ASSISTANT
+        and assistant_profile is not None
+    )
     
     if doctor_profile:
         # 1. 获取真实姓名
@@ -156,6 +144,8 @@ def get_chat_context(request: HttpRequest):
     else:
          return JsonResponse({'status': 'error', 'message': 'Not a doctor or assistant account'}, status=400)
 
+    display_role_label = "" if is_assistant_account else role_label
+
     # 3. 计算会话信息
     chat_service = ChatService()
     patient_id = request.GET.get('patient_id')
@@ -164,6 +154,8 @@ def get_chat_context(request: HttpRequest):
     internal_conv_id = None
     tab_patient_label = "患者"
     tab_internal_label = "内部会话"
+    display_tab_patient_label = tab_patient_label
+    display_tab_internal_label = tab_internal_label
     can_send_patient = True
     can_send_internal = True
     internal_unread_count = 0
@@ -172,6 +164,7 @@ def get_chat_context(request: HttpRequest):
         try:
             patient = PatientProfile.objects.get(id=patient_id)
             tab_patient_label = f"{patient.name}(患者)"
+            display_tab_patient_label = patient.name if is_assistant_account else tab_patient_label
             
             # 确定当前操作的工作室
             target_studio = None
@@ -202,6 +195,7 @@ def get_chat_context(request: HttpRequest):
 
                     # 需求：主任端内部会话标签统一固定为“医生助理”
                     tab_internal_label = "医生助理"
+                    display_tab_internal_label = tab_internal_label
                 else:
                     # 平台医生/助理视角
                     can_send_patient = _assistant_can_send_patient_messages(user)
@@ -213,8 +207,10 @@ def get_chat_context(request: HttpRequest):
                         title = owner.title or ""
                         hospital = owner.hospital or ""
                         tab_internal_label = f"{owner.name}({hospital} {title})".strip()
+                        display_tab_internal_label = owner.name if is_assistant_account else tab_internal_label
                     else:
                         tab_internal_label = "主任(未知)"
+                        display_tab_internal_label = "主任" if is_assistant_account else tab_internal_label
                         
         except PatientProfile.DoesNotExist:
             pass
@@ -224,11 +220,14 @@ def get_chat_context(request: HttpRequest):
         'data': {
             'user_name': real_name,
             'role_label': role_label,
+            'display_role_label': display_role_label,
             'is_director': is_director,
             'studio_name': studio.name if studio else '',
             # New fields
             'tab_patient_label': tab_patient_label,
             'tab_internal_label': tab_internal_label,
+            'display_tab_patient_label': display_tab_patient_label,
+            'display_tab_internal_label': display_tab_internal_label,
             'patient_conversation_id': patient_conv_id,
             'internal_conversation_id': internal_conv_id,
             'can_send_patient': can_send_patient,
@@ -420,7 +419,16 @@ def mark_read(request: HttpRequest):
         if not conversation_id:
             return JsonResponse({'status': 'error', 'message': 'conversation_id is required'}, status=400)
             
-        conversation = Conversation.objects.get(pk=conversation_id)
+        conversation = (
+            Conversation.objects.select_related("patient", "studio")
+            .get(pk=conversation_id)
+        )
+        if not _can_view_conversation(request.user, conversation, service):
+            _log_permission_denied(request, conversation, "mark_read")
+            return JsonResponse(
+                {"status": "error", "message": "Permission denied", "code": "permission_denied"},
+                status=403,
+            )
         service.mark_conversation_read(conversation, request.user, last_message_id)
         
         return JsonResponse({'status': 'success'})

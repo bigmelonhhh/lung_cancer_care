@@ -5,6 +5,7 @@ from django.core.exceptions import PermissionDenied
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.urls import reverse
+from django.views.decorators.cache import never_cache
 
 from chat.models import ConversationReadState, Message
 from chat.models.choices import ConversationType
@@ -159,6 +160,7 @@ def _build_base_chat_context(
 
 @login_required
 @check_doctor_or_assistant
+@never_cache
 def patient_chat_list(request: HttpRequest, patient_id: int) -> HttpResponse:
     patient = _resolve_accessible_patient(request, patient_id)
     if patient is None:
@@ -225,6 +227,7 @@ def patient_chat_list(request: HttpRequest, patient_id: int) -> HttpResponse:
 
 @login_required
 @check_doctor_or_assistant
+@never_cache
 def patient_internal_chat(request: HttpRequest, patient_id: int) -> HttpResponse:
     patient = _resolve_accessible_patient(request, patient_id)
     if patient is None:

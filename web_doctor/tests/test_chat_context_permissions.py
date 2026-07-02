@@ -77,6 +77,9 @@ class ChatContextPermissionsTest(TestCase):
         self.assertFalse(data["can_send_patient"])
         self.assertTrue(data["can_send_internal"])
         self.assertEqual(data["tab_internal_label"], "医生助理")
+        self.assertEqual(data["display_role_label"], "主任")
+        self.assertEqual(data["display_tab_patient_label"], "Patient A(患者)")
+        self.assertEqual(data["display_tab_internal_label"], "医生助理")
 
     def test_platform_doctor_can_chat_both_tabs(self):
         self.client.force_login(self.platform_user)
@@ -87,6 +90,9 @@ class ChatContextPermissionsTest(TestCase):
         self.assertFalse(data["is_director"])
         self.assertTrue(data["can_send_patient"])
         self.assertTrue(data["can_send_internal"])
+        self.assertEqual(data["display_role_label"], "平台医生")
+        self.assertEqual(data["display_tab_patient_label"], "Patient A(患者)")
+        self.assertEqual(data["display_tab_internal_label"], "Dr Director( )")
 
     def test_assistant_can_chat_both_tabs(self):
         self.client.force_login(self.assistant_user)
@@ -97,6 +103,10 @@ class ChatContextPermissionsTest(TestCase):
         self.assertFalse(data["is_director"])
         self.assertTrue(data["can_send_patient"])
         self.assertTrue(data["can_send_internal"])
+        self.assertEqual(data["role_label"], "平台助理")
+        self.assertEqual(data["display_role_label"], "")
+        self.assertEqual(data["display_tab_patient_label"], "Patient A")
+        self.assertEqual(data["display_tab_internal_label"], "Dr Director")
 
     def test_disabled_assistant_cannot_send_patient_but_can_send_internal(self):
         self.assistant_profile.patient_chat_permission = (

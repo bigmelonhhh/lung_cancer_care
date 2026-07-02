@@ -155,6 +155,11 @@
       csrfToken: "",
 
       init() {
+        window.addEventListener("pageshow", (event) => {
+          if (event.persisted) {
+            window.location.reload();
+          }
+        });
         this.csrfToken = this.getCsrfToken();
         this.$nextTick(() => {
           this.scrollToBottom();
