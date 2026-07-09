@@ -6,7 +6,8 @@ We keep each model in its own module for clarity and re-export them here so
 """
 
 from .device import Device
+from .device_provider import DeviceProvider
 from .document import SystemDocument
 from .feedback import Feedback, FeedbackImage
 
-__all__ = ["Device", "SystemDocument", "Feedback", "FeedbackImage"]
+__all__ = ["Device", "DeviceProvider", "SystemDocument", "Feedback", "FeedbackImage"]

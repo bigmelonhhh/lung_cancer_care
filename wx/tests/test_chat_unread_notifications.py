@@ -77,7 +77,7 @@ class ChatUnreadNotificationTests(TestCase):
             created_at_offset_seconds=31,
         )
         with patch(
-            "wx.services.chat_notifications.SmartWatchService.send_message",
+            "wx.services.chat_notifications.HrtWatchService.send_message",
             return_value=(True, "msg123"),
         ) as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
@@ -99,7 +99,7 @@ class ChatUnreadNotificationTests(TestCase):
             user=self.patient_user,
             last_read_message=message,
         )
-        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.chat_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -112,7 +112,7 @@ class ChatUnreadNotificationTests(TestCase):
             created_at_offset_seconds=31,
             sender=self.patient_user,
         )
-        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.chat_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -126,7 +126,7 @@ class ChatUnreadNotificationTests(TestCase):
             sender_role=MessageSenderRole.PLATFORM_DOCTOR,
             created_at_offset_seconds=31,
         )
-        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.chat_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -140,7 +140,7 @@ class ChatUnreadNotificationTests(TestCase):
             sender_role=MessageSenderRole.PLATFORM_DOCTOR,
             created_at_offset_seconds=31,
         )
-        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.chat_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -163,7 +163,7 @@ class ChatUnreadNotificationTests(TestCase):
             payload={"message_id": message.id},
             is_success=True,
         )
-        with patch("wx.services.chat_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.chat_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 
         self.assertFalse(sent)
@@ -179,7 +179,7 @@ class ChatUnreadNotificationTests(TestCase):
             "wx.services.chat_notifications._acquire_debounce_lock",
             return_value=False,
         ) as mock_lock, patch(
-            "wx.services.chat_notifications.SmartWatchService.send_message"
+            "wx.services.chat_notifications.HrtWatchService.send_message"
         ) as mock_send:
             sent = send_chat_unread_notification_for_message(message.id)
 

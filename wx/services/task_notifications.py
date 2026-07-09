@@ -12,7 +12,7 @@ from django.db.models import Prefetch
 from django.utils import timezone
 
 from business_support.models import Device
-from business_support.service.device import SmartWatchService
+from business_support.services.device_integrations.hrt import HrtWatchService
 from core.models import DailyTask, choices as core_choices
 from core.service.tasks import refresh_task_statuses
 from users import choices as user_choices
@@ -542,7 +542,7 @@ def _maybe_send_watch_message(
     if not device_no:
         return
 
-    success, result = SmartWatchService.send_message(device_no, title, content)
+    success, result = HrtWatchService.send_message(device_no, title, content)
     if not success:
         return
 

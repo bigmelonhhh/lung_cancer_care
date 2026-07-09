@@ -6,10 +6,12 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
-from business_support.models import Device
+from business_support.models import Device, DeviceProvider
+from business_support.services.device_integrations.base import DeviceMetricReading
 from core.models import DailyTask, MonitoringTemplate, PlanItem, TreatmentCycle, choices
 from core.service import tasks as task_service
 from health_data.models import HealthMetric, MetricType
+from health_data.services.device_metric_ingestion import DeviceMetricIngestionService
 from health_data.services.health_metric import HealthMetricService
 from users.models import PatientProfile
 
@@ -341,7 +343,7 @@ class TaskCompletionServiceTest(TestCase):
         self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
         self.assertEqual(metric.task_id, task.id)
 
-    def test_handle_payload_steps_completes_task_and_backfills_task_id(self):
+    def test_device_metric_ingestion_steps_completes_task_and_backfills_task_id(self):
         steps_template, _ = MonitoringTemplate.objects.get_or_create(
             code="M_STEPS",
             defaults={
@@ -367,19 +369,23 @@ class TaskCompletionServiceTest(TestCase):
             status=choices.TaskStatus.PENDING,
         )
         device = Device.objects.create(
+            provider=DeviceProvider.objects.get(code="HRT"),
             sn="SN-STEPS-TEST-001",
             imei="IMEI-STEPS-TEST-001",
             current_patient=self.patient,
         )
 
-        payload = {
-            "type": "WATCH",
-            "deviceNo": device.imei,
-            "recordTime": int(self.occurred_at.timestamp() * 1000),
-            "watchData": {"pedo": {"step": 1234}},
-        }
-
-        HealthMetricService.handle_payload(payload)
+        DeviceMetricIngestionService.ingest_readings(
+            [
+                DeviceMetricReading(
+                    provider_code="HRT",
+                    device_no=device.imei,
+                    measured_at=self.occurred_at,
+                    metric_type=MetricType.STEPS,
+                    value_main=Decimal("1234"),
+                )
+            ]
+        )
 
         task.refresh_from_db()
         self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
@@ -390,13 +396,22 @@ class TaskCompletionServiceTest(TestCase):
         )
         self.assertEqual(metric.task_id, task.id)
 
-        payload["watchData"]["pedo"]["step"] = 2345
-        HealthMetricService.handle_payload(payload)
+        DeviceMetricIngestionService.ingest_readings(
+            [
+                DeviceMetricReading(
+                    provider_code="HRT",
+                    device_no=device.imei,
+                    measured_at=self.occurred_at,
+                    metric_type=MetricType.STEPS,
+                    value_main=Decimal("2345"),
+                )
+            ]
+        )
         metric.refresh_from_db()
         self.assertEqual(metric.value_main, Decimal("2345"))
         self.assertEqual(metric.task_id, task.id)
 
-    def test_handle_payload_steps_ignores_decrease_within_same_day(self):
+    def test_device_metric_ingestion_steps_ignores_decrease_within_same_day(self):
         steps_template, _ = MonitoringTemplate.objects.get_or_create(
             code="M_STEPS",
             defaults={
@@ -422,6 +437,7 @@ class TaskCompletionServiceTest(TestCase):
             status=choices.TaskStatus.PENDING,
         )
         device = Device.objects.create(
+            provider=DeviceProvider.objects.get(code="HRT"),
             sn="SN-STEPS-TEST-002",
             imei="IMEI-STEPS-TEST-002",
             current_patient=self.patient,
@@ -429,17 +445,29 @@ class TaskCompletionServiceTest(TestCase):
 
         base_at = self.occurred_at.replace(hour=9, minute=0, second=0, microsecond=0)
 
-        payload = {
-            "type": "WATCH",
-            "deviceNo": device.imei,
-            "recordTime": int(base_at.timestamp() * 1000),
-            "watchData": {"pedo": {"step": 1000}},
-        }
-        HealthMetricService.handle_payload(payload)
+        DeviceMetricIngestionService.ingest_readings(
+            [
+                DeviceMetricReading(
+                    provider_code="HRT",
+                    device_no=device.imei,
+                    measured_at=base_at,
+                    metric_type=MetricType.STEPS,
+                    value_main=Decimal("1000"),
+                )
+            ]
+        )
 
-        payload["recordTime"] = int((base_at + timedelta(minutes=10)).timestamp() * 1000)
-        payload["watchData"]["pedo"]["step"] = 1200
-        HealthMetricService.handle_payload(payload)
+        DeviceMetricIngestionService.ingest_readings(
+            [
+                DeviceMetricReading(
+                    provider_code="HRT",
+                    device_no=device.imei,
+                    measured_at=base_at + timedelta(minutes=10),
+                    metric_type=MetricType.STEPS,
+                    value_main=Decimal("1200"),
+                )
+            ]
+        )
 
         metric = HealthMetric.objects.get(
             patient=self.patient,
@@ -448,9 +476,17 @@ class TaskCompletionServiceTest(TestCase):
         updated_measured_at = metric.measured_at
         self.assertEqual(metric.value_main, Decimal("1200"))
 
-        payload["recordTime"] = int((base_at + timedelta(minutes=20)).timestamp() * 1000)
-        payload["watchData"]["pedo"]["step"] = 1100
-        HealthMetricService.handle_payload(payload)
+        DeviceMetricIngestionService.ingest_readings(
+            [
+                DeviceMetricReading(
+                    provider_code="HRT",
+                    device_no=device.imei,
+                    measured_at=base_at + timedelta(minutes=20),
+                    metric_type=MetricType.STEPS,
+                    value_main=Decimal("1100"),
+                )
+            ]
+        )
 
         metric.refresh_from_db()
         self.assertEqual(metric.value_main, Decimal("1200"))

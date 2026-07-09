@@ -16,6 +16,7 @@ class DeviceAdmin(admin.ModelAdmin):
     list_display = (
         "sn",
         "imei",
+        "provider",
         "model_name",
         "device_type",
         "current_patient",
@@ -29,7 +30,7 @@ class DeviceAdmin(admin.ModelAdmin):
         "ble_name",
         "current_patient__name",
     )
-    list_filter = ("device_type", "is_active")
+    list_filter = ("provider", "device_type", "is_active")
     readonly_fields = ("created_at", "updated_at")
 
     def get_actions(self, request):
