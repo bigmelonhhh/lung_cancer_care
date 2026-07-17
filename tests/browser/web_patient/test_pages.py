@@ -1,4 +1,5 @@
-from datetime import datetime
+from base64 import b64decode
+from datetime import date, datetime
 from decimal import Decimal
 from urllib.parse import urlencode
 
@@ -17,7 +18,14 @@ from core.models import (
     choices as core_choices,
 )
 from core.models.choices import CheckupCategory, PlanItemCategory, ReportType, TaskStatus
-from health_data.models import HealthMetric, MetricType, QuestionnaireAnswer, QuestionnaireSubmission
+from health_data.models import (
+    HealthMetric,
+    MetricType,
+    QuestionnaireAnswer,
+    QuestionnaireSubmission,
+    ReportImage,
+    ReportUpload,
+)
 from users.models import PatientProfile
 
 from tests.browser.web_patient.base import PatientBrowserTestCase, expect
@@ -111,6 +119,21 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         self._open("web_patient:reminder_settings")
         expect(self.page.locator("body")).to_contain_text("提醒设置")
 
+    def test_patient_home_checkup_task_opens_record_page(self):
+        self._create_checkup_task()
+
+        self._open("web_patient:patient_home")
+        self.assertEqual(self.page.evaluate("typeof window.handleTaskClick"), "function")
+
+        action = self.page.locator("#plan-action-checkup button")
+        expect(action).to_be_visible()
+        action.click()
+
+        self.page.wait_for_load_state("domcontentloaded")
+        self.assertIn(reverse("web_patient:record_checkup"), self.page.url)
+        self.assertIn("source=home", self.page.url)
+        expect(self.page.locator("body")).to_contain_text("复查上报")
+
     def test_record_and_health_record_pages_load(self):
         checkup = self._create_checkup_task()
 
@@ -160,6 +183,36 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         )
         expect(self.page.locator("body")).to_contain_text("血常规")
         expect(self.page.locator("body")).to_contain_text("暂无数据")
+
+    def test_record_checkup_upload_image_opens_clear_preview(self):
+        self._create_checkup_task()
+        self.page.set_viewport_size({"width": 320, "height": 700})
+        self._open("web_patient:record_checkup")
+        self.page.evaluate("closeModal()")
+
+        png = b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        self.page.locator('input[type="file"]').first.set_input_files(
+            {"name": "checkup.png", "mimeType": "image/png", "buffer": png}
+        )
+
+        preview_button = self.page.get_by_role("button", name="查看待上传复查原图")
+        expect(preview_button).to_be_visible()
+        preview_button.click()
+
+        modal = self.page.locator("#checkup-image-modal")
+        expect(modal).to_be_visible()
+        modal_image = self.page.locator("#checkup-modal-image")
+        modal_src = modal_image.get_attribute("src") or ""
+        self.assertTrue(modal_src.startswith(("blob:", "data:")))
+        self.assertEqual(
+            modal_image.evaluate("element => getComputedStyle(element).filter"),
+            "none",
+        )
+
+        self.page.get_by_role("button", name="关闭复查原图预览").click()
+        expect(modal).to_be_hidden()
 
     def test_plan_followup_examination_and_calendar_pages_load(self):
         self._open("web_patient:management_plan")
@@ -220,6 +273,60 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         expect(self.page.locator("body")).to_contain_text("反馈问题")
         expect(self.page.locator("body")).to_contain_text("反馈内容")
         expect(self.page.locator("body")).to_contain_text("提交反馈")
+
+    def test_report_upload_image_opens_clear_preview(self):
+        self.page.set_viewport_size({"width": 320, "height": 700})
+        self._open("web_patient:report_upload")
+
+        png = b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        self.page.locator("#file-input").set_input_files(
+            {"name": "report.png", "mimeType": "image/png", "buffer": png}
+        )
+
+        preview_button = self.page.get_by_role("button", name="查看待上传报告原图")
+        expect(preview_button).to_be_visible()
+        preview_button.click()
+
+        modal = self.page.locator("#image-modal")
+        expect(modal).to_be_visible()
+        modal_image = self.page.locator("#modal-image")
+        modal_src = modal_image.get_attribute("src") or ""
+        self.assertTrue(modal_src.startswith(("blob:", "data:")))
+        self.assertEqual(
+            modal_image.evaluate("element => getComputedStyle(element).filter"),
+            "none",
+        )
+
+        self.page.get_by_role("button", name="关闭原图预览").click()
+        expect(modal).to_be_hidden()
+
+    def test_report_list_image_preview_stays_open_when_original_is_clicked(self):
+        upload = ReportUpload.objects.create(patient=self.patient)
+        ReportImage.objects.create(
+            upload=upload,
+            image_url="/static/review_upload_tip.webp",
+            report_date=date(2026, 7, 17),
+        )
+        self.page.set_viewport_size({"width": 320, "height": 700})
+        self._open("web_patient:report_list")
+
+        self.page.get_by_role("button", name="打开报告原图预览").click()
+        modal = self.page.locator("#image-modal")
+        expect(modal).to_be_visible()
+
+        modal_image = self.page.locator("#modal-image")
+        expect(modal_image).to_be_visible()
+        modal_image.click()
+        expect(modal).to_be_visible()
+        self.assertEqual(
+            modal_image.evaluate("element => getComputedStyle(element).filter"),
+            "none",
+        )
+
+        self.page.get_by_role("button", name="关闭报告原图预览").click()
+        expect(modal).to_be_hidden()
 
     def test_binding_onboarding_entry_document_and_chat_pages_load(self):
         SystemDocument.objects.create(

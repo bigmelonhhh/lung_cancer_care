@@ -219,6 +219,24 @@ class FollowupPlanCompletionTests(TestCase):
 
 
 class FollowupRefreshTemplateTests(SimpleTestCase):
+    def test_patient_home_registers_task_handler_before_task_controls_render(self):
+        template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / "patient_home.html"
+        content = template_path.read_text(encoding="utf-8")
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        script_content = script_path.read_text(encoding="utf-8")
+
+        config_index = content.index("window.__PATIENT_HOME_CONFIG__ = {")
+        script_index = content.index("web_patient/patient_home.js")
+        task_control_index = content.index('onclick="handleTaskClick(')
+
+        self.assertLess(config_index, task_control_index)
+        self.assertLess(script_index, task_control_index)
+        self.assertNotIn(
+            '<script src="{% static \'web_patient/patient_home.js\' %}" defer></script>',
+            content,
+        )
+        self.assertIn("window.handleTaskClick = handleTaskClick;", script_content)
+
     def test_patient_home_uses_single_pageshow_refresh_entry(self):
         template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / "patient_home.html"
         content = template_path.read_text(encoding="utf-8")

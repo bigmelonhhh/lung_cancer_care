@@ -62,6 +62,27 @@ class UiComponentLibraryTests(SimpleTestCase):
         self.assertIn('alt="检查报告"', html)
         self.assertIn("已保护", html)
 
+    def test_privacy_image_component_renders_display_only_variant(self):
+        html = render_to_string(
+            "components/ui/privacy_image.html",
+            {
+                "src": "/media/private-report.jpg",
+                "display_only": True,
+                "size_class": "w-full",
+                "alt": "待上传的检查报告",
+            },
+        )
+
+        self.assertIn('<div class="relative w-full aspect-square max-w-full', html)
+        self.assertNotIn("<button", html)
+        self.assertNotIn('aria-label="打开原图预览"', html)
+        self.assertNotIn("focus-visible:ring-2", html)
+        self.assertIn('src="/media/private-report.jpg"', html)
+        self.assertIn('alt="待上传的检查报告"', html)
+        self.assertIn("blur-[2px]", html)
+        self.assertIn("bg-white/10", html)
+        self.assertIn("隐私保护", html)
+
     def test_patient_chat_uses_privacy_image_component_for_self_images(self):
         chat_template = (
             Path(settings.BASE_DIR) / "templates/web_patient/consultation_chat.html"
@@ -84,6 +105,121 @@ class UiComponentLibraryTests(SimpleTestCase):
             '<img :src="msg.image_url" class="max-w-full rounded-lg cursor-pointer"',
             chat_template,
         )
+
+    def test_patient_report_list_uses_interactive_privacy_image_component(self):
+        report_list_template = (
+            Path(settings.BASE_DIR) / "templates/web_patient/my_report_list.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            '{% include "components/ui/privacy_image.html" with src=image_url',
+            report_list_template,
+        )
+        self.assertIn('size_class="w-full"', report_list_template)
+        self.assertIn(
+            'attrs=\'onclick="viewImage(this.children[0].src)"\'',
+            report_list_template,
+        )
+        self.assertIn('id="modal-image"', report_list_template)
+        self.assertIn("function viewImage(url)", report_list_template)
+        self.assertIn('role="dialog"', report_list_template)
+        self.assertIn('aria-modal="true"', report_list_template)
+        self.assertIn('aria-label="关闭报告原图预览"', report_list_template)
+        self.assertIn('onclick="event.stopPropagation()"', report_list_template)
+        self.assertIn("event.key === 'Escape'", report_list_template)
+
+    def test_record_checkup_uses_interactive_privacy_image_preview(self):
+        checkup_template = (
+            Path(settings.BASE_DIR) / "templates/web_patient/record_checkup.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            '{% include "components/ui/privacy_image.html" with src=img.url size_class="w-full"',
+            checkup_template,
+        )
+        self.assertNotIn("display_only=True", checkup_template)
+        self.assertIn('aria_label="查看已上传复查原图"', checkup_template)
+        self.assertIn(
+            'attrs=\'onclick="viewImage(this.children[0].src)"\'',
+            checkup_template,
+        )
+        self.assertIn('id="record-checkup-privacy-image-template"', checkup_template)
+        self.assertIn('aria_label="查看待上传复查原图"', checkup_template)
+        self.assertIn(
+            "privacyImageTemplate.content.firstElementChild.cloneNode(true)",
+            checkup_template,
+        )
+        self.assertIn("privacyImage.querySelector('img')", checkup_template)
+        self.assertIn("img.src = url", checkup_template)
+        self.assertIn("privacyImage.addEventListener('click', function()", checkup_template)
+        self.assertIn("viewImage(img.src);", checkup_template)
+        self.assertIn("deleteExistingImage", checkup_template)
+        delete_bar_classes = (
+            "absolute inset-x-0 bottom-0 z-10 flex h-8 items-center justify-center "
+            "rounded-b-2xl bg-slate-700/70 px-2 text-xs font-medium text-white "
+            "backdrop-blur-sm transition-colors hover:bg-slate-700/80 "
+            "active:bg-slate-800/80"
+        )
+        self.assertGreaterEqual(
+            checkup_template.count(delete_bar_classes),
+            2,
+        )
+        self.assertNotIn("absolute top-2 left-2 w-5 h-5", checkup_template)
+        self.assertIn('aria-label="删除{{ item.name }}图片"', checkup_template)
+        self.assertIn("deleteBtn.type = 'button';", checkup_template)
+        self.assertIn("deleteBtn.textContent = '删除';", checkup_template)
+        self.assertNotIn("deleteBtn.innerHTML = '<svg", checkup_template)
+        self.assertIn('id="checkup-image-modal"', checkup_template)
+        self.assertIn('id="checkup-modal-image"', checkup_template)
+        self.assertIn("function viewImage(url)", checkup_template)
+        self.assertIn("function closeImage()", checkup_template)
+        self.assertIn("event.stopPropagation()", checkup_template)
+
+    def test_report_upload_uses_interactive_privacy_image_template(self):
+        upload_template = (
+            Path(settings.BASE_DIR) / "templates/web_patient/my_report_upload.html"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('id="report-upload-privacy-image-template"', upload_template)
+        self.assertIn(
+            '{% include "components/ui/privacy_image.html" with src="" size_class="w-full"',
+            upload_template,
+        )
+        self.assertNotIn("display_only=True", upload_template)
+        self.assertIn('aria_label="查看待上传报告原图"', upload_template)
+        self.assertIn(
+            "privacyImageTemplate.content.firstElementChild.cloneNode(true)",
+            upload_template,
+        )
+        self.assertIn("privacyImage.querySelector('img')", upload_template)
+        self.assertIn("img.src = url", upload_template)
+        self.assertIn("privacyImage.addEventListener('click', function()", upload_template)
+        self.assertIn("viewImage(img.src);", upload_template)
+        self.assertIn("wrapper.querySelector('img')", upload_template)
+        delete_bar_classes = (
+            "absolute inset-x-0 bottom-0 z-10 flex h-8 items-center justify-center "
+            "rounded-b-2xl bg-slate-700/70 px-2 text-xs font-medium text-white "
+            "backdrop-blur-sm transition-colors hover:bg-slate-700/80 "
+            "active:bg-slate-800/80"
+        )
+        self.assertIn(delete_bar_classes, upload_template)
+        self.assertNotIn("absolute top-2 left-2 w-6 h-6", upload_template)
+        self.assertIn("deleteBtn.textContent = '删除';", upload_template)
+        self.assertIn("删除待上传的报告图片", upload_template)
+        self.assertNotIn("deleteBtn.innerHTML = '<svg", upload_template)
+        self.assertNotIn('data-role="size"', upload_template)
+        self.assertNotIn('data-role="status"', upload_template)
+        self.assertNotIn("div.appendChild(badge)", upload_template)
+        self.assertNotIn("formatBytes", upload_template)
+        self.assertIn("window.LCCImageCompression.compressOne", upload_template)
+        self.assertIn("entry.compressedSize = compressedSize", upload_template)
+        self.assertIn("if (img) img.src = newUrl", upload_template)
+        self.assertIn("formData.append('upload_meta'", upload_template)
+        self.assertIn('id="image-modal"', upload_template)
+        self.assertIn('id="modal-image"', upload_template)
+        self.assertIn("function viewImage(url)", upload_template)
+        self.assertIn("function closeImage()", upload_template)
+        self.assertIn("event.stopPropagation()", upload_template)
 
     def test_core_ui_components_render_with_expected_contracts(self):
         button_html = render_to_string(
@@ -211,5 +347,7 @@ class UiComponentLibraryTests(SimpleTestCase):
             'image_attrs=\'@load="handleMessageImageLoad(msg)"\'',
             content,
         )
+        self.assertIn("display_only=True", content)
+        self.assertIn("HTML `<template>`", content)
         self.assertIn("attrs 和 image_attrs 仅允许传入开发者编写的可信字面量", content)
         self.assertIn("不得插入用户可控数据", content)

@@ -56,14 +56,13 @@
                             <p class="text-xs text-gray-500 mb-2">已上传图片：</p>
                             <div class="grid grid-cols-3 gap-3 pb-2" id="existing-container-{{ item.id }}">
                                 {% for img in item.existing_images %}
-                                <div class="relative group rounded-lg overflow-hidden border border-gray-200 w-full aspect-square" id="existing-img-{{ img.id }}">
-                                    <img src="{{ img.url }}" class="w-full h-full object-cover">
+                                <div class="relative group w-full aspect-square" id="existing-img-{{ img.id }}">
+                                    {% include "components/ui/privacy_image.html" with src=img.url size_class="w-full" alt=item.name aria_label="查看已上传复查原图" extra_class="cursor-pointer" attrs='onclick="viewImage(this.children[0].src)"' %}
                                     <button type="button" 
-                                            onclick="deleteExistingImage({{ img.id }}, '{{ item.id }}')"
-                                            class="absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10">
-                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                            onclick="event.stopPropagation(); deleteExistingImage({{ img.id }}, '{{ item.id }}')"
+                                            aria-label="删除{{ item.name }}图片"
+                                            class="absolute inset-x-0 bottom-0 z-10 flex h-8 items-center justify-center rounded-b-2xl bg-slate-700/70 px-2 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-slate-700/80 active:bg-slate-800/80">
+                                        删除
                                     </button>
                                 </div>
                                 {% endfor %}
@@ -170,6 +169,32 @@
     </div>
 
 </div>
+
+<!-- 清晰原图预览：隐私模糊效果仅应用于复查图片缩略图。 -->
+<div id="checkup-image-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/90 p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-label="复查原图预览"
+     onclick="closeImage()">
+    <img id="checkup-modal-image"
+         src=""
+         alt="复查报告原图"
+         class="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+         onclick="event.stopPropagation()">
+    <button type="button"
+            aria-label="关闭复查原图预览"
+            class="absolute right-4 top-4 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            onclick="event.stopPropagation(); closeImage();">
+        <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+</div>
+
+<template id="record-checkup-privacy-image-template">
+    {% include "components/ui/privacy_image.html" with src="" size_class="w-full" alt="待上传的复查图片" aria_label="查看待上传复查原图" extra_class="cursor-pointer" %}
+</template>
 
 <script src="{% static 'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}"></script>
 <script src="{% static 'web_patient/image_compression.js' %}"></script>
@@ -467,9 +492,14 @@ function handleFileChange(event, itemId) {
                 const wrapper = document.getElementById(`preview-${fileId}`);
                 if (wrapper) {
                     const img = wrapper.querySelector('img');
-                    if (img && img.src) URL.revokeObjectURL(img.src);
+                    const previousUrl = img ? img.src : '';
                     const newUrl = URL.createObjectURL(outFile);
                     if (img) img.src = newUrl;
+                    const modalImage = document.getElementById('checkup-modal-image');
+                    if (modalImage && modalImage.src === previousUrl) {
+                        modalImage.src = newUrl;
+                    }
+                    if (previousUrl) URL.revokeObjectURL(previousUrl);
                 }
                 if (!usedOriginal && compressedSize > 500 * 1024) {
                     showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
@@ -495,18 +525,24 @@ function addPreviewElement(itemId, url, fileId, meta) {
     // Create preview wrapper
     const wrapper = document.createElement('div');
     wrapper.id = `preview-${fileId}`;
-    wrapper.className = 'relative group rounded-lg overflow-hidden border border-gray-200 w-full aspect-square';
+    wrapper.className = 'relative group w-full aspect-square';
     
-    // Image
-    const img = document.createElement('img');
+    // Privacy image card
+    const privacyImageTemplate = document.getElementById('record-checkup-privacy-image-template');
+    const privacyImage = privacyImageTemplate.content.firstElementChild.cloneNode(true);
+    const img = privacyImage.querySelector('img');
     img.src = url;
-    img.className = 'w-full h-full object-cover';
-    wrapper.appendChild(img);
+    privacyImage.addEventListener('click', function() {
+        viewImage(img.src);
+    });
+    wrapper.appendChild(privacyImage);
 
-    // Delete Button (UI spec: 20x20, red, top-right 10px - using absolute positioning relative to wrapper)
+    // Full-width delete action stays clear of the privacy badge in the top-right corner.
     const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10';
-    deleteBtn.innerHTML = '<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'absolute inset-x-0 bottom-0 z-10 flex h-8 items-center justify-center rounded-b-2xl bg-slate-700/70 px-2 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-slate-700/80 active:bg-slate-800/80';
+    deleteBtn.textContent = '删除';
+    deleteBtn.setAttribute('aria-label', '删除待上传的复查图片');
     deleteBtn.onclick = function(e) {
         e.stopPropagation(); // Prevent bubbling
         removeFile(itemId, fileId);
@@ -516,6 +552,46 @@ function addPreviewElement(itemId, url, fileId, meta) {
     // Insert before the last element (which is the add button)
     container.insertBefore(wrapper, container.lastElementChild);
 }
+
+let imagePreviewTrigger = null;
+
+function viewImage(url) {
+    if (!url) return;
+
+    const modal = document.getElementById('checkup-image-modal');
+    const modalImage = document.getElementById('checkup-modal-image');
+    if (!modal || !modalImage) return;
+
+    imagePreviewTrigger = document.activeElement;
+    modalImage.src = url;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    const closeButton = modal.querySelector('[aria-label="关闭复查原图预览"]');
+    if (closeButton) closeButton.focus();
+}
+
+function closeImage() {
+    const modal = document.getElementById('checkup-image-modal');
+    const modalImage = document.getElementById('checkup-modal-image');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    if (modalImage) modalImage.src = '';
+
+    if (imagePreviewTrigger && typeof imagePreviewTrigger.focus === 'function') {
+        imagePreviewTrigger.focus();
+    }
+    imagePreviewTrigger = null;
+}
+
+document.addEventListener('keydown', function(event) {
+    const modal = document.getElementById('checkup-image-modal');
+    if (event.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeImage();
+    }
+});
 
 function removeFile(itemId, fileId) {
     if (confirm("确定要移除这张待上传的图片吗？")) {
@@ -529,6 +605,10 @@ function removeFile(itemId, fileId) {
         if (wrapper) {
             // Revoke ObjectURL to free memory
             const img = wrapper.querySelector('img');
+            const modalImage = document.getElementById('checkup-modal-image');
+            if (img && modalImage && modalImage.src === img.src) {
+                closeImage();
+            }
             if (img && img.src) {
                 URL.revokeObjectURL(img.src);
             }
@@ -559,6 +639,11 @@ function deleteExistingImage(imageId, itemId) {
         if (data.status === 'success') {
             const wrapper = document.getElementById(`existing-img-${imageId}`);
             if (wrapper) {
+                const img = wrapper.querySelector('img');
+                const modalImage = document.getElementById('checkup-modal-image');
+                if (img && modalImage && modalImage.src === img.src) {
+                    closeImage();
+                }
                 wrapper.remove();
             }
             showStatus("图片删除成功", "success");

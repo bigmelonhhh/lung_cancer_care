@@ -23,6 +23,26 @@
 {% endblock %}
 
 {% block body %}
+<script>
+  window.__PATIENT_HOME_CONFIG__ = {
+    isMember: {{ is_member|yesno:"true,false" }},
+    buyUrl: "{{ buy_url|escapejs }}",
+    unreadChatCount: {{ unread_chat_count|default:0 }},
+    patientId: "{{ patient_id|default:''|escapejs }}",
+    menuUrl: {{ menuUrl|safe }},
+    csrfToken: "{{ csrf_token|escapejs }}",
+    unreadRefreshIntervalMs: 15000,
+    urls: {
+      submitMedication: "{% url 'web_patient:submit_medication' %}",
+      patientHome: "{% url 'web_patient:patient_home' %}",
+      queryLastMetric: "{% url 'web_patient:query_last_metric' %}",
+      chatUnreadCount: "{% url 'web_patient:chat_api_unread_count' %}",
+      chatResetUnread: "{% url 'web_patient:chat_api_reset_unread' %}"
+    }
+  };
+</script>
+<script src="{% static 'web_patient/patient_home.js' %}"></script>
+
 <div class="min-h-screen bg-white pb-24 relative font-sans">
   <div
     class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-20 px-5 relative rounded-b-[2rem] shadow-md"
@@ -734,23 +754,4 @@
   </div>
 </div>
 
-<script>
-  window.__PATIENT_HOME_CONFIG__ = {
-    isMember: {{ is_member|yesno:"true,false" }},
-    buyUrl: "{{ buy_url|escapejs }}",
-    unreadChatCount: {{ unread_chat_count|default:0 }},
-    patientId: "{{ patient_id|default:''|escapejs }}",
-    menuUrl: {{ menuUrl|safe }},
-    csrfToken: "{{ csrf_token|escapejs }}",
-    unreadRefreshIntervalMs: 15000,
-    urls: {
-      submitMedication: "{% url 'web_patient:submit_medication' %}",
-      patientHome: "{% url 'web_patient:patient_home' %}",
-      queryLastMetric: "{% url 'web_patient:query_last_metric' %}",
-      chatUnreadCount: "{% url 'web_patient:chat_api_unread_count' %}",
-      chatResetUnread: "{% url 'web_patient:chat_api_reset_unread' %}"
-    }
-  };
-</script>
-<script src="{% static 'web_patient/patient_home.js' %}" defer></script>
 {% endblock %}

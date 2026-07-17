@@ -96,8 +96,9 @@
   {% include "components/ui/empty_state.html" with title="暂无数据" description="当前筛选条件下没有记录。" %}
   {% include "components/ui/privacy_image.html" with src="/media/example.jpg" %}
   {% include "components/ui/privacy_image.html" with x_src="msg.image_url" attrs='@click="previewImage(msg.image_url)"' image_attrs='@load="handleMessageImageLoad(msg)"' %}
+  {% include "components/ui/privacy_image.html" with src=image.url display_only=True size_class="w-full" %}
   ```
-- `privacy_image.html` 只提供隐私图片的视觉外壳和交互载体，不创建预览弹窗、Alpine 状态或 JavaScript 行为。attrs 和 image_attrs 仅允许传入开发者编写的可信字面量，不得插入用户可控数据。
+- `privacy_image.html` 只提供隐私图片的视觉外壳和交互载体，不创建预览弹窗、Alpine 状态或 JavaScript 行为。默认渲染可交互按钮；无原图预览行为的图片使用 `display_only=True` 渲染非交互容器。JavaScript 动态生成的回显应将展示态组件预渲染在 HTML `<template>` 中并克隆使用，避免复制组件结构与样式。attrs 和 image_attrs 仅允许传入开发者编写的可信字面量，不得插入用户可控数据。
 
 ## 6. 业务专项规则
 - 微信生态：
