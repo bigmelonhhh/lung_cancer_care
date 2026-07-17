@@ -150,7 +150,7 @@ class UiComponentLibraryTests(SimpleTestCase):
             checkup_template,
         )
         self.assertIn("privacyImage.querySelector('img')", checkup_template)
-        self.assertIn("img.src = url", checkup_template)
+        self.assertIn("img.src = entry.previewUrl", checkup_template)
         self.assertIn("privacyImage.addEventListener('click', function()", checkup_template)
         self.assertIn("viewImage(img.src);", checkup_template)
         self.assertIn("deleteExistingImage", checkup_template)
@@ -160,14 +160,13 @@ class UiComponentLibraryTests(SimpleTestCase):
             "backdrop-blur-sm transition-colors hover:bg-slate-700/80 "
             "active:bg-slate-800/80"
         )
-        self.assertGreaterEqual(
-            checkup_template.count(delete_bar_classes),
-            2,
-        )
+        self.assertIn(delete_bar_classes, checkup_template)
+        self.assertIn("actions.dataset.role = 'upload-actions';", checkup_template)
+        self.assertIn("retryButton.textContent = '重试';", checkup_template)
+        self.assertIn("deleteButton.textContent = '删除';", checkup_template)
         self.assertNotIn("absolute top-2 left-2 w-5 h-5", checkup_template)
         self.assertIn('aria-label="删除{{ item.name }}图片"', checkup_template)
-        self.assertIn("deleteBtn.type = 'button';", checkup_template)
-        self.assertIn("deleteBtn.textContent = '删除';", checkup_template)
+        self.assertIn("deleteButton.type = 'button';", checkup_template)
         self.assertNotIn("deleteBtn.innerHTML = '<svg", checkup_template)
         self.assertIn('id="checkup-image-modal"', checkup_template)
         self.assertIn('id="checkup-modal-image"', checkup_template)
@@ -192,7 +191,7 @@ class UiComponentLibraryTests(SimpleTestCase):
             upload_template,
         )
         self.assertIn("privacyImage.querySelector('img')", upload_template)
-        self.assertIn("img.src = url", upload_template)
+        self.assertIn("img.src = entry.previewUrl", upload_template)
         self.assertIn("privacyImage.addEventListener('click', function()", upload_template)
         self.assertIn("viewImage(img.src);", upload_template)
         self.assertIn("wrapper.querySelector('img')", upload_template)
@@ -202,17 +201,18 @@ class UiComponentLibraryTests(SimpleTestCase):
             "backdrop-blur-sm transition-colors hover:bg-slate-700/80 "
             "active:bg-slate-800/80"
         )
-        self.assertIn(delete_bar_classes, upload_template)
+        self.assertIn("actions.dataset.role = 'upload-actions';", upload_template)
+        self.assertIn("retryButton.textContent = '重试';", upload_template)
+        self.assertIn("deleteButton.textContent = '删除';", upload_template)
         self.assertNotIn("absolute top-2 left-2 w-6 h-6", upload_template)
-        self.assertIn("deleteBtn.textContent = '删除';", upload_template)
         self.assertIn("删除待上传的报告图片", upload_template)
         self.assertNotIn("deleteBtn.innerHTML = '<svg", upload_template)
         self.assertNotIn('data-role="size"', upload_template)
         self.assertNotIn('data-role="status"', upload_template)
         self.assertNotIn("div.appendChild(badge)", upload_template)
         self.assertNotIn("formatBytes", upload_template)
-        self.assertIn("window.LCCImageCompression.compressOne", upload_template)
-        self.assertIn("entry.compressedSize = compressedSize", upload_template)
+        self.assertIn("compressionApi.createQueue", upload_template)
+        self.assertIn("current.compressedSize = result.outputBytes", upload_template)
         self.assertIn("if (img) img.src = newUrl", upload_template)
         self.assertIn("formData.append('upload_meta'", upload_template)
         self.assertIn('id="image-modal"', upload_template)
@@ -220,6 +220,91 @@ class UiComponentLibraryTests(SimpleTestCase):
         self.assertIn("function viewImage(url)", upload_template)
         self.assertIn("function closeImage()", upload_template)
         self.assertIn("event.stopPropagation()", upload_template)
+
+    def test_shared_image_compression_exposes_clinical_readability_contract(self):
+        compression_script = (
+            Path(settings.BASE_DIR) / "static/web_patient/image_compression.js"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('API_VERSION: "clinical-readability-v2"', compression_script)
+        self.assertIn("isQueueContract: isQueueContract", compression_script)
+
+        for api_name in (
+            "inspectImage",
+            "validateSelection",
+            "compressOne",
+            "createQueue",
+        ):
+            self.assertIn(f"{api_name}: {api_name}", compression_script)
+
+        for error_code in (
+            "invalid_image",
+            "too_large",
+            "too_many_pixels",
+            "timeout",
+            "cancelled",
+            "library_unavailable",
+            "compress_failed",
+        ):
+            self.assertIn(f'"{error_code}"', compression_script)
+
+        self.assertIn("maxWidthOrHeight: 2560", compression_script)
+        self.assertIn("maxSizeMB: 1.5", compression_script)
+        self.assertIn("initialQuality: 0.82", compression_script)
+        self.assertIn("preserveExif: false", compression_script)
+        self.assertIn("libURL: workerLibUrl", compression_script)
+        self.assertIn("signal: controller.signal", compression_script)
+        self.assertIn("new File([file], normalizedName", compression_script)
+        self.assertIn("type: inspection.mimeType", compression_script)
+        self.assertIn("outputFile.size > targetBytes", compression_script)
+        self.assertNotIn("preScaleToBox", compression_script)
+        self.assertNotIn("preScaleTo1080p", compression_script)
+        self.assertNotIn("allowOriginal", compression_script)
+        self.assertNotIn("jsdelivr", compression_script)
+
+    def test_patient_upload_pages_use_shared_cancellable_compression_queue(self):
+        base_dir = Path(settings.BASE_DIR)
+        templates = {
+            "record_checkup": (
+                base_dir / "templates/web_patient/record_checkup.html"
+            ).read_text(encoding="utf-8"),
+            "my_report_upload": (
+                base_dir / "templates/web_patient/my_report_upload.html"
+            ).read_text(encoding="utf-8"),
+        }
+
+        accepted_types = 'accept=".jpg,.jpeg,.png,image/jpeg,image/png"'
+        local_worker_attr = (
+            'data-worker-lib-url="{% static '
+            "'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}"
+        )
+        for template in templates.values():
+            self.assertIn(accepted_types, template)
+            self.assertIn(local_worker_attr, template)
+            self.assertIn("image_compression.js' %}?v=clinical-readability-v2", template)
+            self.assertIn("let compressionQueue = null", template)
+            self.assertIn("let compressionInitializationError = null", template)
+            self.assertIn("compressionApi.API_VERSION === COMPRESSION_API_VERSION", template)
+            self.assertIn("compressionApi.isQueueContract(candidateQueue)", template)
+            self.assertIn("typeof compressionApi.createQueue === 'function'", template)
+            self.assertIn("window.LCCImageCompression.validateSelection", template)
+            self.assertIn("compressionApi.createQueue", template)
+            self.assertIn("concurrency: 1", template)
+            self.assertIn("compressionQueue.cancel", template)
+            self.assertIn("compressionQueue.hasPending()", template)
+            self.assertIn("selectionValidationChain = Promise.resolve()", template)
+            self.assertIn("validationInFlight > 0", template)
+            self.assertIn("queued", template)
+            self.assertIn("processing", template)
+            self.assertIn("ready", template)
+            self.assertIn("failed", template)
+            self.assertIn("retry", template.lower())
+            self.assertIn("处理失败", template)
+            self.assertIn("clinical_readability_v2", template)
+            self.assertNotIn("const compressQueue = []", template)
+            self.assertNotIn("compressActiveCount", template)
+            self.assertNotIn("超过500KB", template)
+            self.assertNotIn("将使用原图上传", template)
 
     def test_core_ui_components_render_with_expected_contracts(self):
         button_html = render_to_string(
