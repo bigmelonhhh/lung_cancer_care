@@ -103,7 +103,7 @@ class TaskNotificationTests(TestCase):
         )
 
         with patch(
-            "wx.services.task_notifications.SmartWatchService.send_message",
+            "wx.services.task_notifications.HrtWatchService.send_message",
             return_value=(True, "msg123"),
         ) as mock_send:
             sent = send_daily_task_creation_messages(today)
@@ -132,7 +132,7 @@ class TaskNotificationTests(TestCase):
             task_type=core_choices.PlanItemCategory.MONITORING,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_creation_messages(today)
 
         self.assertEqual(sent, 2)
@@ -165,7 +165,7 @@ class TaskNotificationTests(TestCase):
             task_type=core_choices.PlanItemCategory.MEDICATION,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_reminder_messages(today)
 
         self.assertEqual(sent, 1)
@@ -186,7 +186,7 @@ class TaskNotificationTests(TestCase):
             status=core_choices.TaskStatus.NOT_STARTED,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_reminder_messages(today)
 
         self.assertEqual(sent, 1)
@@ -210,7 +210,7 @@ class TaskNotificationTests(TestCase):
             status=core_choices.TaskStatus.NOT_STARTED,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_reminder_messages(today)
 
         self.assertEqual(sent, 1)
@@ -231,7 +231,7 @@ class TaskNotificationTests(TestCase):
             status=core_choices.TaskStatus.NOT_STARTED,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_reminder_messages(today)
 
         self.assertEqual(sent, 0)
@@ -249,7 +249,7 @@ class TaskNotificationTests(TestCase):
             status=core_choices.TaskStatus.NOT_STARTED,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             first_sent = send_daily_task_reminder_messages(today)
             second_sent = send_daily_task_reminder_messages(today + timedelta(days=2))
 
@@ -280,7 +280,7 @@ class TaskNotificationTests(TestCase):
             task_type=core_choices.PlanItemCategory.MONITORING,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_creation_messages(today)
 
         self.assertEqual(sent, 0)
@@ -301,7 +301,7 @@ class TaskNotificationTests(TestCase):
             task_type=core_choices.PlanItemCategory.MONITORING,
         )
 
-        with patch("wx.services.task_notifications.SmartWatchService.send_message") as mock_send:
+        with patch("wx.services.task_notifications.HrtWatchService.send_message") as mock_send:
             sent = send_daily_task_creation_messages(today)
 
         self.assertEqual(sent, 1)
@@ -332,7 +332,7 @@ class TaskNotificationTests(TestCase):
         )
 
         with patch(
-            "wx.services.task_notifications.SmartWatchService.send_message",
+            "wx.services.task_notifications.HrtWatchService.send_message",
             return_value=(True, "msg123"),
         ) as mock_send:
             sent = send_daily_task_creation_messages(today)

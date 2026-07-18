@@ -58,6 +58,16 @@ class Device(TimeStampedModel):
         help_text="【业务说明】设备分类枚举"
     )
 
+    provider = models.ForeignKey(
+        "business_support.DeviceProvider",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=False,
+        related_name="devices",
+        verbose_name="设备厂商",
+        help_text="【业务说明】设备数据来源厂商"
+    )
+
     is_active = models.BooleanField(
         "是否有效",
         default=True,

@@ -63,6 +63,7 @@ urlpatterns += [
     path('', include('web_sales.urls')),
     path('p/', include('web_patient.urls', namespace='web_patient')),
     path('market/', include('market.urls', namespace='market')),
+    path('deviceupload/<str:provider>/', smartwatch_data_callback, name='device_upload_provider'),
     path('deviceupload', smartwatch_data_callback, name='device_upload_root'),
     path('deviceupload/', smartwatch_data_callback),
 ]

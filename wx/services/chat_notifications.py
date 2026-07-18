@@ -15,7 +15,7 @@ from chat.models import (
     MessageSenderRole,
 )
 from business_support.models import Device
-from business_support.service.device import SmartWatchService
+from business_support.services.device_integrations.hrt import HrtWatchService
 from wx.models import SendMessageLog
 
 
@@ -322,7 +322,7 @@ def _send_watch_message(device_no: str, title: str, content: str) -> tuple[bool,
     if not device_no:
         return False, "缺少设备号"
     try:
-        return SmartWatchService.send_message(device_no, title, content)
+        return HrtWatchService.send_message(device_no, title, content)
     except Exception as exc:  # pragma: no cover - 网络/配置异常
         return False, str(exc)
 
