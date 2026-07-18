@@ -4,10 +4,90 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from business_support.services.device_integrations.base import DeviceCallbackParseError
+from business_support.services.device_integrations.iwown import (
+    IwownDeviceInfoAdapter,
+    IwownHealthDataAdapter,
+    IwownPacketHeaderError,
+    build_iwown_device_log_fields,
+)
 from business_support.services.device_integrations.registry import get_device_provider_adapter
 from health_data.services.device_metric_ingestion import DeviceMetricIngestionService
 
 logger = logging.getLogger(__name__)
+
+
+@csrf_exempt
+def iwown_device_info_callback(request):
+    """Receive and log IWOWN device-information uploads."""
+    adapter = IwownDeviceInfoAdapter()
+    if request.method != "POST":
+        return adapter.invalid_response(status=405)
+    body = request.body
+    try:
+        payload = adapter.parse_body(body)
+    except DeviceCallbackParseError as exc:
+        adapter.log_invalid(
+            body,
+            content_type=request.content_type or "",
+            error=exc,
+        )
+        return adapter.invalid_response()
+    adapter.log_received(
+        payload,
+        body_bytes=len(body),
+        content_type=request.content_type or "",
+    )
+    return adapter.success_response()
+
+
+@csrf_exempt
+def iwown_health_data_callback(request):
+    """Receive IWOWN binary health packets and ingest supported metrics."""
+    adapter = IwownHealthDataAdapter()
+    if request.method != "POST":
+        return adapter.invalid_data_response(status=405)
+
+    body = request.body
+    content_type = request.content_type or ""
+    try:
+        payload = adapter.parse_body(body)
+    except IwownPacketHeaderError as exc:
+        adapter.log_invalid(
+            body_bytes=len(body),
+            content_type=content_type,
+            error=exc,
+        )
+        return adapter.invalid_header_response()
+    except DeviceCallbackParseError as exc:
+        adapter.log_invalid(
+            body_bytes=len(body),
+            content_type=content_type,
+            error=exc,
+        )
+        return adapter.invalid_data_response()
+
+    try:
+        result = DeviceMetricIngestionService.ingest_readings(payload.readings)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            {
+                "event": "iwown_health_data_ingestion_failed",
+                "provider": "IWOWN",
+                **build_iwown_device_log_fields(
+                    payload.raw_payload.get("device_no")
+                ),
+            }
+        )
+        return adapter.invalid_data_response()
+
+    adapter.log_received(
+        payload,
+        body_bytes=len(body),
+        content_type=content_type,
+        created_count=result.created_count,
+        skipped_count=result.skipped_count,
+    )
+    return adapter.success_response()
 
 
 @csrf_exempt  # 必须免除 CSRF，因为是外部服务器调用

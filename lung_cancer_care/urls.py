@@ -23,7 +23,11 @@ from django.http import Http404, HttpResponse
 from django.urls import include, path
 from django.views.generic import TemplateView
 
-from business_support.views import smartwatch_data_callback
+from business_support.views import (
+    iwown_device_info_callback,
+    iwown_health_data_callback,
+    smartwatch_data_callback,
+)
 
 
 site_home_view = TemplateView.as_view(template_name="index.html")
@@ -63,6 +67,16 @@ urlpatterns += [
     path('', include('web_sales.urls')),
     path('p/', include('web_patient.urls', namespace='web_patient')),
     path('market/', include('market.urls', namespace='market')),
+    path(
+        'deviceupload/iwown/deviceinfo/upload',
+        iwown_device_info_callback,
+        name='iwown_device_info_upload',
+    ),
+    path(
+        'deviceupload/iwown/pb/upload',
+        iwown_health_data_callback,
+        name='iwown_health_data_upload',
+    ),
     path('deviceupload/<str:provider>/', smartwatch_data_callback, name='device_upload_provider'),
     path('deviceupload', smartwatch_data_callback, name='device_upload_root'),
     path('deviceupload/', smartwatch_data_callback),
