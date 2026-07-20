@@ -10,6 +10,7 @@ from .device_metric_receipt import DeviceMetricReceipt
 from .device_provider import DeviceProvider
 from .document import SystemDocument
 from .feedback import Feedback, FeedbackImage
+from .sms_log import SMSLog
 
 __all__ = [
     "Device",
@@ -18,4 +19,5 @@ __all__ = [
     "SystemDocument",
     "Feedback",
     "FeedbackImage",
+    "SMSLog",
 ]

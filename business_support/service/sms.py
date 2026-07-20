@@ -5,6 +5,8 @@ import logging
 from django.conf import settings
 from django.core.cache import cache
 
+from business_support.models import SMSLog
+
 logger = logging.getLogger(__name__)
 
 # 常量定义
@@ -57,9 +59,11 @@ class SMSService:
             return False, "网络请求失败"
 
     @classmethod
-    def send_verification_code(cls, phone):
+    def send_verification_code(cls, phone, requested_by=None):
         """
-        业务方法 1: 发送验证码（包含频率限制、生成、存储、发送）
+        业务方法 1: 发送验证码并记录发送结果。
+
+        requested_by 允许为空，以兼容匿名请求和 console 调用。
         """
         # 1. 检查频率限制 (60秒内是否发过)
         limit_key = CACHE_KEY_LIMIT.format(phone)
@@ -77,6 +81,12 @@ class SMSService:
 
         # 4. 调用发送接口
         success, error_msg = cls._send_api_request(phone, message)
+        SMSLog.objects.create(
+            requested_by=requested_by,
+            phone=phone,
+            content=message,
+            is_success=success,
+        )
         
         if success:
             # 5. 发送成功后：

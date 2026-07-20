@@ -69,6 +69,11 @@ def send_auth_code(request: HttpRequest) -> JsonResponse:
     if not phone:
         return JsonResponse({"success": False, "message": "请填写手机号"}, status=400)
 
-    success, message = SMSService.send_verification_code(phone)
+    user = getattr(request, "user", None)
+    requested_by = user if user and user.is_authenticated else None
+    success, message = SMSService.send_verification_code(
+        phone,
+        requested_by=requested_by,
+    )
     status_code = 200 if success else 400
     return JsonResponse({"success": success, "message": message}, status=status_code)
