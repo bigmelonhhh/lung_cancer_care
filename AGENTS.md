@@ -147,7 +147,8 @@
 
 ## 10. Git 与 migration 规范
 - 禁止直接修改生产环境代码。
-- 正常流程：Feature Branch -> Pull Request -> Code Review -> Merge。
+- 分支创建和切换必须由用户显式授权；用户仅说“执行”“直接改”或批准实施计划时，默认在当前分支工作，不得自动创建 Feature Branch 或 worktree。
+- 只有用户明确要求新建分支、worktree 或发起 PR 时，才执行 Feature Branch -> Pull Request -> Code Review -> Merge 流程。
 - 没有 Schema 变更时，不要夹带无关 migration。
 - 有 Schema 变更时，必须提交对应 migration，并在 PR 中说明影响范围、数据风险和回滚方式。
 - 纯格式化、纯搬迁、纯命名重排若无业务收益，避免与功能改动混在一个提交中。
