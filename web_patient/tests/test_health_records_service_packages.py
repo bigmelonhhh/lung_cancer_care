@@ -202,7 +202,7 @@ class HealthRecordsServicePackageTests(TestCase):
         self.assertContains(response, f"questionnaire_id={active.id}")
         self.assertContains(response, f"package_id={current_order.id}")
 
-    def test_eq5d5l_survey_card_displays_latest_health_utility_index(self):
+    def test_eq5d5l_survey_card_does_not_display_latest_health_utility_index(self):
         order = self._create_paid_order(
             paid_at=timezone.now() - timedelta(days=10),
             name="EQ5D5L服务包",
@@ -232,7 +232,7 @@ class HealthRecordsServicePackageTests(TestCase):
 
         response = self.client.get(self.url, {"package_id": str(order.id)})
 
-        self.assertContains(response, "健康效用指数：0.55")
+        self.assertNotContains(response, "健康效用指数：0.55")
 
     def test_checkup_library_and_task_counts(self):
         now = timezone.now()

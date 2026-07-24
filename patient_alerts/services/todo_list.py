@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime
 
 from django.core.exceptions import ValidationError
 from django.core.paginator import Page, Paginator
+from django.db.models import Count
 from django.utils import timezone
 
 from core.models import QuestionnaireCode
@@ -216,6 +218,76 @@ class TodoListService:
 
         qs = qs.filter(event_time__gte=start_dt, event_time__lte=end_dt)
         return qs.count()
+
+    @classmethod
+    def count_questionnaire_abnormal_events(
+        cls,
+        *,
+        patient: PatientProfile,
+        start_at: datetime,
+        end_at: datetime,
+        questionnaire_codes: Iterable[str],
+    ) -> dict[str, int]:
+        """
+        批量统计半开时间区间内各动态问卷的异常次数。
+
+        优先统计不可变的异常来源记录；某个问卷没有来源记录时，
+        兼容统计仍处于激活状态的历史问卷预警。
+        """
+        if not patient or not getattr(patient, "id", None):
+            raise ValidationError("患者信息无效。")
+        if not start_at or not end_at or start_at >= end_at:
+            raise ValidationError("起止时间范围无效。")
+
+        codes = list(
+            dict.fromkeys(
+                code.strip()
+                for code in questionnaire_codes
+                if isinstance(code, str) and code.strip()
+            )
+        )
+        counts = {code: 0 for code in codes}
+        if not codes:
+            return counts
+
+        source_rows = (
+            PatientAlertSource.objects.filter(
+                patient_id=patient.id,
+                source_type="questionnaire",
+                occurred_at__gte=start_at,
+                occurred_at__lt=end_at,
+                source_payload__questionnaire_code__in=codes,
+            )
+            .values("source_payload__questionnaire_code")
+            .annotate(total=Count("id"))
+        )
+        for row in source_rows:
+            code = row["source_payload__questionnaire_code"]
+            if code in counts:
+                counts[code] = int(row["total"])
+
+        fallback_codes = [code for code, count in counts.items() if count == 0]
+        if not fallback_codes:
+            return counts
+
+        alert_rows = (
+            PatientAlert.objects.filter(
+                patient_id=patient.id,
+                is_active=True,
+                event_type=AlertEventType.QUESTIONNAIRE,
+                source_type="questionnaire",
+                event_time__gte=start_at,
+                event_time__lt=end_at,
+                source_payload__questionnaire_code__in=fallback_codes,
+            )
+            .values("source_payload__questionnaire_code")
+            .annotate(total=Count("id"))
+        )
+        for row in alert_rows:
+            code = row["source_payload__questionnaire_code"]
+            if code in counts:
+                counts[code] = int(row["total"])
+        return counts
 
     @staticmethod
     def _build_base_queryset(user: CustomUser):

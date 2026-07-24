@@ -93,7 +93,7 @@ class HealthRecordsAbnormalCountTest(TestCase):
         
         self.assertEqual(context['health_survey_stats'], [])
 
-    def test_oral_mucosa_questionnaire_uses_submission_count_without_abnormal_count(self):
+    def test_oral_mucosa_questionnaire_displays_submission_and_abnormal_counts(self):
         measured_at = timezone.now()
         questionnaire, _ = Questionnaire.objects.update_or_create(
             code=QuestionnaireCode.Q_KQNMLB,
@@ -131,8 +131,10 @@ class HealthRecordsAbnormalCountTest(TestCase):
             if item['questionnaire_id'] == questionnaire.id
         )
         self.assertEqual(oral_stat['count'], 1)
-        self.assertIsNone(oral_stat['abnormal'])
+        self.assertEqual(oral_stat['abnormal'], 1)
         self.assertContains(response, "口腔黏膜损伤自评量表")
+        self.assertContains(response, "异常：")
+        self.assertNotContains(response, "问卷评分：")
 
     def test_abnormal_count_inactive(self):
         """测试已处理（非激活）的报警不计入统计"""

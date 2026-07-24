@@ -260,9 +260,6 @@
                         <h3 class="font-bold text-slate-800 text-base mb-1 " style="max-width: 220px;">{{ stat.title }}</h3>
                         <div class="flex items-center gap-4 text-sm text-slate-500 font-medium">
                             <span>记录：{{ stat.count }}次</span>
-                            {% if stat.latest_score is not None %}
-                            <span>{{ stat.score_label }}：{{ stat.latest_score }}</span>
-                            {% endif %}
                             {% if stat.abnormal %}
                             <div class="flex items-center gap-1">
                                

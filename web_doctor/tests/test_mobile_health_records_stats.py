@@ -140,6 +140,10 @@ class MobileHealthRecordsStatsTests(TestCase):
             "8",
             self._make_aware(self.order.start_date + timedelta(days=1)),
         )
+        self._create_questionnaire_alert(
+            active.code,
+            self._make_aware(self.order.start_date + timedelta(days=1), hour=10),
+        )
         self._create_submission(
             active,
             "3",
@@ -162,13 +166,16 @@ class MobileHealthRecordsStatsTests(TestCase):
         self.assertEqual([item["questionnaire_id"] for item in cards], [active.id])
         self.assertEqual(cards[0]["count"], 1)
         self.assertEqual(cards[0]["latest_score"], Decimal("8.00"))
+        self.assertEqual(cards[0]["abnormal"], 1)
         self.assertContains(response, "生活质量评估 &lt;script&gt;")
+        self.assertContains(response, "异常：")
+        self.assertNotContains(response, "问卷评分：")
         self.assertNotContains(response, "启用但无记录问卷")
         self.assertNotContains(response, "停用问卷")
         self.assertContains(response, f"questionnaire_id={active.id}")
         self.assertContains(response, f"package_id={self.order.id}")
 
-    def test_mobile_eqvas_card_displays_latest_vas_score(self):
+    def test_mobile_eqvas_card_does_not_display_latest_vas_score(self):
         eqvas = Questionnaire.objects.create(
             name="EQVAS量表",
             code="Q_EQVAS",
@@ -187,7 +194,7 @@ class MobileHealthRecordsStatsTests(TestCase):
             {"patient_id": self.patient.id, "package_id": self.order.id},
         )
 
-        self.assertContains(response, "EQ-VAS评分：78.00")
+        self.assertNotContains(response, "EQ-VAS评分：78.00")
 
     def test_mobile_health_records_shows_metric_count_and_abnormal(self):
         measured_at = self._make_aware(self.order.start_date, hour=10)
@@ -270,7 +277,7 @@ class MobileHealthRecordsStatsTests(TestCase):
             if item["questionnaire_id"] == questionnaire.id
         )
         self.assertEqual(cough_stat["count"], 1)
-        self.assertIsNone(cough_stat["abnormal"])
+        self.assertEqual(cough_stat["abnormal"], 0)
         self.assertNotContains(response, "异常：")
 
     def test_mobile_health_records_shows_oral_mucosa_questionnaire_submission(self):
@@ -294,7 +301,7 @@ class MobileHealthRecordsStatsTests(TestCase):
             if item["questionnaire_id"] == questionnaire.id
         )
         self.assertEqual(oral_stat["count"], 1)
-        self.assertIsNone(oral_stat["abnormal"])
+        self.assertEqual(oral_stat["abnormal"], 0)
         self.assertContains(response, "口腔黏膜损伤自评量表")
 
     def test_mobile_health_records_counts_checkup_only_within_service_package_range(self):

@@ -15,6 +15,7 @@ from django.utils import timezone
 from core.models import Questionnaire, choices
 from health_data.models import QuestionnaireSubmission
 from health_data.services.questionnaire_scoring import is_eq5d5l_code, is_eqvas_code
+from patient_alerts.services.todo_list import TodoListService
 
 
 class QuestionnaireDisplayService:
@@ -85,7 +86,7 @@ class QuestionnaireDisplayService:
             created_at__gte=start_at,
             created_at__lt=end_at,
         )
-        questionnaires = (
+        questionnaires = list(
             cls._active_questionnaires()
             .annotate(
                 submission_count=Count(
@@ -103,6 +104,14 @@ class QuestionnaireDisplayService:
             )
             .filter(submission_count__gt=0)
         )
+        abnormal_counts = TodoListService.count_questionnaire_abnormal_events(
+            patient=patient,
+            start_at=start_at,
+            end_at=end_at,
+            questionnaire_codes=[
+                questionnaire.code for questionnaire in questionnaires
+            ],
+        )
 
         cards = []
         for questionnaire in questionnaires:
@@ -119,7 +128,7 @@ class QuestionnaireDisplayService:
                     "score_label": cls._score_label(questionnaire.code),
                     "icon_key": visual["icon_key"],
                     "color": visual["color"],
-                    "abnormal": None,
+                    "abnormal": abnormal_counts.get(questionnaire.code, 0),
                 }
             )
         return cards

@@ -9,6 +9,7 @@ from django.utils import timezone
 from core.models import Questionnaire, QuestionnaireOption, QuestionnaireQuestion
 from health_data.models import QuestionnaireSubmission
 from health_data.services.questionnaire_display import QuestionnaireDisplayService
+from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
 from users.models import PatientProfile
 
 
@@ -106,6 +107,16 @@ class QuestionnaireDisplayServiceTests(TestCase):
             "1",
             self.start_at - timedelta(days=1),
         )
+        PatientAlert.objects.create(
+            patient=self.patient,
+            event_type=AlertEventType.QUESTIONNAIRE,
+            event_level=AlertLevel.MODERATE,
+            event_title="术后呼吸恢复问卷异常",
+            event_content="测试异常",
+            event_time=self.start_at + timedelta(days=2),
+            source_type="questionnaire",
+            source_payload={"questionnaire_code": self.active.code},
+        )
 
         cards = QuestionnaireDisplayService.build_patient_archive_cards(
             patient=self.patient,
@@ -118,6 +129,7 @@ class QuestionnaireDisplayServiceTests(TestCase):
         self.assertEqual(cards[0]["submission_count"], 1)
         self.assertEqual(cards[0]["latest_score"], Decimal("3.00"))
         self.assertEqual(cards[0]["icon_key"], "breath")
+        self.assertEqual(cards[0]["abnormal"], 1)
 
     def test_special_questionnaire_archive_cards_use_distinct_score_labels(self):
         eq5d5l = Questionnaire.objects.create(
