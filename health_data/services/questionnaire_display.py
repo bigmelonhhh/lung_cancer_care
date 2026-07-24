@@ -14,10 +14,19 @@ from django.utils import timezone
 
 from core.models import Questionnaire, choices
 from health_data.models import QuestionnaireSubmission
+from health_data.services.questionnaire_scoring import is_eq5d5l_code, is_eqvas_code
 
 
 class QuestionnaireDisplayService:
     """Build questionnaire view models shared by patient and doctor pages."""
+
+    @staticmethod
+    def _score_label(questionnaire_code: str | None) -> str:
+        if is_eq5d5l_code(questionnaire_code):
+            return "健康效用指数"
+        if is_eqvas_code(questionnaire_code):
+            return "EQ-VAS评分"
+        return "问卷评分"
 
     COLOR_PALETTE = (
         "#3B82F6",
@@ -107,6 +116,7 @@ class QuestionnaireDisplayService:
                     "submission_count": questionnaire.submission_count,
                     "count": questionnaire.submission_count,
                     "latest_score": questionnaire.latest_score,
+                    "score_label": cls._score_label(questionnaire.code),
                     "icon_key": visual["icon_key"],
                     "color": visual["color"],
                     "abnormal": None,
@@ -120,6 +130,11 @@ class QuestionnaireDisplayService:
         questionnaire: Questionnaire,
         actual_scores: list[float],
     ) -> tuple[float, float]:
+        if is_eq5d5l_code(questionnaire.code):
+            return -0.4, 1.0
+        if is_eqvas_code(questionnaire.code):
+            return 0.0, 100.0
+
         theoretical_min = Decimal("0")
         theoretical_max = Decimal("0")
         for question in questionnaire.questions.all():
@@ -203,7 +218,7 @@ class QuestionnaireDisplayService:
                     "color": visual["color"],
                     "series": [
                         {
-                            "name": "问卷评分",
+                            "name": cls._score_label(questionnaire.code),
                             "data": data,
                             "data_json": json.dumps(data, ensure_ascii=False),
                             "missing": [1 if value is None else 0 for value in data],
@@ -302,6 +317,11 @@ class QuestionnaireDisplayService:
         earliest_submission = package_queryset.order_by("created_at", "id").first()
         if earliest_submission is None:
             return [], False, None, None
+        questionnaire_code = (
+            Questionnaire.objects.filter(pk=questionnaire_id)
+            .values_list("code", flat=True)
+            .first()
+        )
 
         tz = timezone.get_current_timezone()
         earliest_month = timezone.localtime(earliest_submission.created_at).date().replace(day=1)
@@ -352,7 +372,10 @@ class QuestionnaireDisplayService:
             next_offset = active_offset + len(month_items)
             if next_offset < month_total:
                 return (
-                    cls._serialize_patient_submissions(submissions),
+                    cls._serialize_patient_submissions(
+                        submissions,
+                        questionnaire_code=questionnaire_code,
+                    ),
                     True,
                     next_month.strftime("%Y-%m"),
                     next_offset,
@@ -367,7 +390,10 @@ class QuestionnaireDisplayService:
 
         has_more = bool(submissions) and next_month >= earliest_month
         return (
-            cls._serialize_patient_submissions(submissions),
+            cls._serialize_patient_submissions(
+                submissions,
+                questionnaire_code=questionnaire_code,
+            ),
             has_more,
             next_month.strftime("%Y-%m") if has_more else None,
             0 if has_more else None,
@@ -376,10 +402,13 @@ class QuestionnaireDisplayService:
     @staticmethod
     def _serialize_patient_submissions(
         submissions: list[QuestionnaireSubmission],
+        *,
+        questionnaire_code: str | None,
     ) -> list[dict[str, Any]]:
         """Convert submission rows to the existing health-record card shape."""
         records = []
         weekday_labels = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+        score_label = QuestionnaireDisplayService._score_label(questionnaire_code)
         for submission in submissions:
             submitted_at = timezone.localtime(submission.created_at)
             records.append(
@@ -397,7 +426,7 @@ class QuestionnaireDisplayService:
                     "can_operate": False,
                     "data": [
                         {
-                            "label": "问卷评分",
+                            "label": score_label,
                             "value": submission.total_score
                             if submission.total_score is not None
                             else "-",
@@ -458,7 +487,12 @@ class QuestionnaireDisplayService:
             "dates": [item.strftime("%m-%d") for item in date_list],
             "series": [
                 {
-                    "name": questionnaire.name,
+                    "name": (
+                        cls._score_label(questionnaire.code)
+                        if is_eq5d5l_code(questionnaire.code)
+                        or is_eqvas_code(questionnaire.code)
+                        else questionnaire.name
+                    ),
                     "data": values,
                     "color": visual["color"],
                 }

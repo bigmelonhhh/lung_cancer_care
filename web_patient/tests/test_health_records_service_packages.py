@@ -202,6 +202,38 @@ class HealthRecordsServicePackageTests(TestCase):
         self.assertContains(response, f"questionnaire_id={active.id}")
         self.assertContains(response, f"package_id={current_order.id}")
 
+    def test_eq5d5l_survey_card_displays_latest_health_utility_index(self):
+        order = self._create_paid_order(
+            paid_at=timezone.now() - timedelta(days=10),
+            name="EQ5D5L服务包",
+            duration_days=30,
+        )
+        eq5d5l = Questionnaire.objects.create(
+            name="EQ5D5L量表",
+            code="Q_EQ5D5L",
+            is_active=True,
+            sort_order=1,
+        )
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=eq5d5l,
+            total_score=Decimal("0.55"),
+        )
+        submitted_at = timezone.make_aware(
+            datetime.combine(
+                order.start_date + timedelta(days=1),
+                datetime.min.time(),
+            ),
+            timezone.get_current_timezone(),
+        )
+        QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+            created_at=submitted_at
+        )
+
+        response = self.client.get(self.url, {"package_id": str(order.id)})
+
+        self.assertContains(response, "健康效用指数：0.55")
+
     def test_checkup_library_and_task_counts(self):
         now = timezone.now()
         latest_order = self._create_paid_order(

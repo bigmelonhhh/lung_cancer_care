@@ -119,6 +119,49 @@ class QuestionnaireDisplayServiceTests(TestCase):
         self.assertEqual(cards[0]["latest_score"], Decimal("3.00"))
         self.assertEqual(cards[0]["icon_key"], "breath")
 
+    def test_special_questionnaire_archive_cards_use_distinct_score_labels(self):
+        eq5d5l = Questionnaire.objects.create(
+            name="EQ5D5L量表",
+            code="Q_EQ5D5L",
+            is_active=True,
+            sort_order=5,
+        )
+        eqvas = Questionnaire.objects.create(
+            name="EQVAS量表",
+            code="Q_EQVAS",
+            is_active=True,
+            sort_order=6,
+        )
+        self._submission(
+            eq5d5l,
+            self.patient,
+            "0.55",
+            self.start_at + timedelta(days=2),
+        )
+        self._submission(
+            eqvas,
+            self.patient,
+            "78",
+            self.start_at + timedelta(days=3),
+        )
+
+        cards = QuestionnaireDisplayService.build_patient_archive_cards(
+            patient=self.patient,
+            start_at=self.start_at,
+            end_at=self.end_at,
+        )
+
+        eq5d5l_card = next(
+            item for item in cards if item["questionnaire_id"] == eq5d5l.id
+        )
+        eqvas_card = next(
+            item for item in cards if item["questionnaire_id"] == eqvas.id
+        )
+        self.assertEqual(eq5d5l_card["score_label"], "健康效用指数")
+        self.assertEqual(eq5d5l_card["latest_score"], Decimal("0.55"))
+        self.assertEqual(eqvas_card["score_label"], "EQ-VAS评分")
+        self.assertEqual(eqvas_card["latest_score"], Decimal("78.00"))
+
     def test_daily_score_charts_include_every_active_questionnaire_and_use_latest_score(self):
         target_day = self.start_date + timedelta(days=5)
         target_at = self.start_at + timedelta(days=5, hours=8)
@@ -140,6 +183,69 @@ class QuestionnaireDisplayServiceTests(TestCase):
         self.assertEqual(charts[0]["series"][0]["data"], [4.0])
         self.assertEqual(charts[1]["series"][0]["data"], [None])
         self.assertEqual(charts[0]["id"], f"chart-questionnaire-{self.active.id}")
+
+    def test_eq5d5l_daily_chart_uses_health_utility_label_and_fixed_bounds(self):
+        eq5d5l = Questionnaire.objects.create(
+            name="EQ5D5L量表",
+            code="Q_EQ5D5L",
+            is_active=True,
+            sort_order=5,
+        )
+        self._submission(
+            eq5d5l,
+            self.patient,
+            "-0.39",
+            self.start_at + timedelta(days=5),
+        )
+
+        charts = QuestionnaireDisplayService.build_daily_score_charts(
+            patient=self.patient,
+            start_at=self.start_at,
+            end_at=self.end_at,
+            date_list=[self.start_date + timedelta(days=5)],
+        )
+
+        chart = next(
+            item for item in charts if item["questionnaire_id"] == eq5d5l.id
+        )
+        self.assertEqual(chart["y_min"], -0.4)
+        self.assertEqual(chart["y_max"], 1.0)
+        self.assertEqual(chart["series"][0]["name"], "健康效用指数")
+
+    def test_eqvas_archive_records_and_month_chart_use_vas_semantics(self):
+        eqvas = Questionnaire.objects.create(
+            name="EQVAS量表",
+            code="Q_EQVAS",
+            is_active=True,
+            sort_order=5,
+        )
+        self._submission(
+            eqvas,
+            self.patient,
+            "78",
+            self.start_at + timedelta(days=5),
+        )
+
+        records, _, _, _ = QuestionnaireDisplayService.list_patient_submissions(
+            patient=self.patient,
+            questionnaire_id=eqvas.id,
+            start_at=self.start_at,
+            end_at=self.end_at,
+            cursor_month="2026-07",
+            cursor_offset=0,
+            limit=6,
+        )
+        chart = QuestionnaireDisplayService.build_patient_month_score_chart(
+            patient=self.patient,
+            questionnaire=eqvas,
+            start_at=self.start_at,
+            end_at=self.end_at,
+            date_list=[self.start_date + timedelta(days=5)],
+        )
+
+        self.assertEqual(records[0]["data"][0]["label"], "EQ-VAS评分")
+        self.assertEqual(chart["series"][0]["name"], "EQ-VAS评分")
+        self.assertEqual((chart["y_min"], chart["y_max"]), (0.0, 100.0))
 
     def test_monthly_count_charts_include_empty_active_questionnaires(self):
         self._submission(

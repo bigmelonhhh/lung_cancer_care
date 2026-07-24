@@ -72,15 +72,33 @@
             nextBtn.style.display = 'none';
         }
 
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, function(character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[character];
+            });
+        }
+
+        function isEqvasSurvey(data) {
+            const code = String(data && data.code ? data.code : '').toUpperCase();
+            return code === 'Q_EQVAS';
+        }
+
         // Render Function
         function renderSurvey(data) {
             // Scroll to top
             window.scrollTo(0, 0);
+            const eqvasSurvey = isEqvasSurvey(data);
 
             let html = `
                 <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
                     <div class="p-5 border-b border-slate-100 text-center">
-                        <h3 class="text-lg font-bold text-slate-800">${data.name}</h3>
+                        <h3 class="text-lg font-bold text-slate-800">${escapeHtml(data.name)}</h3>
                     </div>
                     <div class="p-5 space-y-8">
             `;
@@ -92,7 +110,7 @@
                 if (q.section && q.section !== lastSection) {
                     html += `
                         <div class="mt-6 mb-4 px-1">
-                            <h4 class="text-sm font-bold text-slate-500 border-l-4 border-blue-500 pl-3">${q.section}</h4>
+                            <h4 class="text-sm font-bold text-slate-500 border-l-4 border-blue-500 pl-3">${escapeHtml(q.section)}</h4>
                         </div>
                     `;
                     lastSection = q.section;
@@ -102,25 +120,52 @@
                 html += `
                     <div class="question-item" data-id="${q.id}" data-type="${q.q_type}" data-required="${q.is_required}">
                         <p class="font-bold text-slate-800 mb-3 text-base">
-                            ${idx + 1}. ${q.text}${requiredMark}
+                            ${idx + 1}. ${escapeHtml(q.text)}${requiredMark}
                         </p>
                         <div class="space-y-3">
                 `;
 
-                q.options.forEach(opt => {
-                    const inputType = (q.q_type == 'SINGLE') ? 'radio' : 'checkbox';
-                    // We use q.id to group radios
-                    const inputName = `question_${q.id}`;
-                    
+                const inputName = `question_${q.id}`;
+                if (q.q_type === 'TEXT') {
+                    if (eqvasSurvey) {
+                        html += `
+                            <input
+                                type="text"
+                                name="${inputName}"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                maxlength="3"
+                                autocomplete="off"
+                                data-eqvas-text-answer="true"
+                                class="w-full rounded-lg border border-slate-300 px-4 py-3 text-base text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                placeholder="请输入0至100的整数"
+                            >
+                            <p class="text-xs text-slate-500">请输入 0 至 100 的整数</p>
+                        `;
+                    } else {
+                        html += `
+                            <textarea
+                                name="${inputName}"
+                                rows="4"
+                                maxlength="2000"
+                                class="w-full resize-y rounded-lg border border-slate-300 px-4 py-3 text-base text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                                placeholder="请输入回答"
+                            ></textarea>
+                        `;
+                    }
+                } else {
+                    q.options.forEach(opt => {
+                        const inputType = (q.q_type === 'SINGLE') ? 'radio' : 'checkbox';
                     html += `
                         <label class="flex items-start gap-3 p-3 rounded-lg border border-transparent hover:bg-slate-50 active:bg-blue-50 transition-colors cursor-pointer">
                             <div class="flex items-center h-5">
                                 <input type="${inputType}" name="${inputName}" value="${opt.id}" class="w-5 h-5 text-blue-600 border-gray-300 focus:ring-blue-500 mt-0.5">
                             </div>
-                            <span class="text-slate-700 text-sm leading-5">${opt.text}</span>
+                            <span class="text-slate-700 text-sm leading-5">${escapeHtml(opt.text)}</span>
                         </label>
                     `;
-                });
+                    });
+                }
 
                 html += `
                         </div>
@@ -134,6 +179,24 @@
             `;
 
             container.innerHTML = html;
+            container.querySelectorAll('[data-eqvas-text-answer="true"]').forEach(input => {
+                input.dataset.lastValidValue = '';
+                input.addEventListener('input', function() {
+                    if (/^[0-9]{0,3}$/.test(this.value)) {
+                        this.dataset.lastValidValue = this.value;
+                        return;
+                    }
+                    this.value = this.dataset.lastValidValue || '';
+                });
+                input.addEventListener('paste', function(event) {
+                    const pastedText = event.clipboardData
+                        ? event.clipboardData.getData('text')
+                        : '';
+                    if (!/^[0-9]{1,3}$/.test(pastedText)) {
+                        event.preventDefault();
+                    }
+                });
+            });
 
             // Update Button Text
             if (currentIndex === totalCount - 1) {
@@ -164,13 +227,35 @@
             const questions = container.querySelectorAll('.question-item');
             for (let qDiv of questions) {
                 const isRequired = qDiv.dataset.required === 'true' || qDiv.dataset.required === 'True';
-                if (!isRequired) continue;
-
                 const qId = qDiv.dataset.id;
+                const questionType = qDiv.dataset.type;
+
+                if (questionType === 'TEXT') {
+                    const input = qDiv.querySelector(`[name="question_${qId}"]`);
+                    const value = input ? input.value : '';
+                    if (isRequired && value.trim() === '') {
+                        alert('请完成所有必填项');
+                        qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        if (input) input.focus();
+                        return false;
+                    }
+                    if (
+                        input &&
+                        input.dataset.eqvasTextAnswer === 'true' &&
+                        value !== '' &&
+                        !/^(?:0|[1-9]|[1-9][0-9]|100)$/.test(value)
+                    ) {
+                        alert('EQ-VAS 自评分请输入 0 至 100 的整数');
+                        qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        input.focus();
+                        return false;
+                    }
+                    continue;
+                }
+
+                if (!isRequired) continue;
                 const inputs = qDiv.querySelectorAll(`input[name="question_${qId}"]:checked`);
                 if (inputs.length === 0) {
-                    // Alert user
-                    // Ideally scroll to the question
                     alert('请完成所有必填项');
                     qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return false;
@@ -186,6 +271,17 @@
             const questions = container.querySelectorAll('.question-item');
             questions.forEach(qDiv => {
                 const qId = qDiv.dataset.id;
+                if (qDiv.dataset.type === 'TEXT') {
+                    const input = qDiv.querySelector(`[name="question_${qId}"]`);
+                    if (input && input.value.trim() !== '') {
+                        answers.push({
+                            question_id: parseInt(qId),
+                            value_text: input.value
+                        });
+                    }
+                    return;
+                }
+
                 const checkedInputs = qDiv.querySelectorAll(`input[name="question_${qId}"]:checked`);
                 
                 checkedInputs.forEach(input => {

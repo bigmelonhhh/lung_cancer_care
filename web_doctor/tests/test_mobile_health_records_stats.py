@@ -168,6 +168,27 @@ class MobileHealthRecordsStatsTests(TestCase):
         self.assertContains(response, f"questionnaire_id={active.id}")
         self.assertContains(response, f"package_id={self.order.id}")
 
+    def test_mobile_eqvas_card_displays_latest_vas_score(self):
+        eqvas = Questionnaire.objects.create(
+            name="EQVAS量表",
+            code="Q_EQVAS",
+            is_active=True,
+            sort_order=1,
+        )
+        self._create_submission(
+            eqvas,
+            "78",
+            self._make_aware(self.order.start_date + timedelta(days=1)),
+        )
+
+        self.client.force_login(self.doctor_user)
+        response = self.client.get(
+            self.doctor_url,
+            {"patient_id": self.patient.id, "package_id": self.order.id},
+        )
+
+        self.assertContains(response, "EQ-VAS评分：78.00")
+
     def test_mobile_health_records_shows_metric_count_and_abnormal(self):
         measured_at = self._make_aware(self.order.start_date, hour=10)
         HealthMetric.objects.create(

@@ -16,6 +16,7 @@ from core.models import (
     QuestionnaireCode,
     QuestionnaireOption,
     QuestionnaireQuestion,
+    PlanItem,
     TreatmentCycle,
     choices as core_choices,
 )
@@ -376,6 +377,175 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         self._open("web_patient:health_calendar")
         expect(self.page.locator("body")).to_contain_text("健康日历")
         expect(self.page.locator("body")).to_contain_text("今日计划")
+
+    def test_daily_survey_renders_text_inputs_and_submits_mixed_answer_payloads(self):
+        today = timezone.localdate()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="EQVAS浏览器测试疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        ordinary = Questionnaire.objects.create(
+            name="普通填空问卷",
+            code="Q_BROWSER_TEXT",
+            is_active=True,
+        )
+        ordinary_text = QuestionnaireQuestion.objects.create(
+            questionnaire=ordinary,
+            text="请补充说明",
+            q_type=core_choices.QuestionType.TEXT,
+            seq=1,
+            is_required=True,
+        )
+        eqvas = Questionnaire.objects.create(
+            name="EQVAS量表",
+            code="Q_EQVAS",
+            is_active=True,
+        )
+        eqvas_text = QuestionnaireQuestion.objects.create(
+            questionnaire=eqvas,
+            text="EQ-VAS自评分",
+            q_type=core_choices.QuestionType.TEXT,
+            seq=1,
+            is_required=True,
+        )
+
+        for questionnaire in (ordinary, eqvas):
+            plan_item = PlanItem.objects.create(
+                cycle=cycle,
+                category=PlanItemCategory.QUESTIONNAIRE,
+                template_id=questionnaire.id,
+                item_name=questionnaire.name,
+                schedule_days=[1],
+                status=core_choices.PlanItemStatus.ACTIVE,
+            )
+            DailyTask.objects.create(
+                patient=self.patient,
+                plan_item=plan_item,
+                task_date=today,
+                task_type=PlanItemCategory.QUESTIONNAIRE,
+                title=questionnaire.name,
+                status=TaskStatus.PENDING,
+            )
+
+        submitted_payloads = []
+
+        def capture_submission(route):
+            submitted_payloads.append(json.loads(route.request.post_data))
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"success": true, "submission_id": 1}',
+            )
+
+        self.page.route("**/p/api/survey/submit/**", capture_submission)
+        self._open(
+            "web_patient:daily_survey",
+            params={"ids": f"{ordinary.id},{eqvas.id}"},
+        )
+
+        ordinary_input = self.page.locator(
+            f'textarea[name="question_{ordinary_text.id}"]'
+        )
+        expect(ordinary_input).to_be_visible()
+        ordinary_input.fill("恢复情况良好")
+        self.page.get_by_role("button", name="下一题").click()
+
+        eqvas_input = self.page.locator(
+            f'input[name="question_{eqvas_text.id}"][inputmode="numeric"]'
+        )
+        expect(eqvas_input).to_be_visible()
+        eqvas_input.fill("1.5")
+        expect(eqvas_input).to_have_value("")
+
+        validation_messages = []
+
+        def capture_validation_message(dialog):
+            validation_messages.append(dialog.message)
+            dialog.accept()
+
+        self.page.once("dialog", capture_validation_message)
+        eqvas_input.fill("101")
+        self.page.get_by_role("button", name="已完成答卷，提交").click()
+        self.page.wait_for_timeout(100)
+        self.assertEqual(
+            validation_messages,
+            ["EQ-VAS 自评分请输入 0 至 100 的整数"],
+        )
+        self.assertEqual(submitted_payloads, [])
+
+        eqvas_input.fill("0")
+        self.page.get_by_role("button", name="已完成答卷，提交").click()
+        self.page.wait_for_timeout(200)
+
+        self.assertEqual(len(submitted_payloads), 2)
+        self.assertEqual(
+            submitted_payloads[0]["answers"],
+            [{"question_id": ordinary_text.id, "value_text": "恢复情况良好"}],
+        )
+        self.assertEqual(
+            submitted_payloads[1]["answers"],
+            [{"question_id": eqvas_text.id, "value_text": "0"}],
+        )
+
+    def test_daily_survey_renders_eq5d5l_as_five_single_choice_questions(self):
+        today = timezone.localdate()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="EQ5D5L浏览器测试疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        questionnaire = Questionnaire.objects.create(
+            name="EQ5D5L量表",
+            code="Q_EQ5D5L",
+            is_active=True,
+        )
+        for seq in range(5):
+            question = QuestionnaireQuestion.objects.create(
+                questionnaire=questionnaire,
+                text=f"维度{seq + 1}",
+                q_type=core_choices.QuestionType.SINGLE,
+                seq=seq,
+                is_required=True,
+            )
+            QuestionnaireOption.objects.create(
+                question=question,
+                text="没有困难",
+                value="1",
+                score=Decimal("1"),
+                seq=1,
+            )
+        plan_item = PlanItem.objects.create(
+            cycle=cycle,
+            category=PlanItemCategory.QUESTIONNAIRE,
+            template_id=questionnaire.id,
+            item_name=questionnaire.name,
+            schedule_days=[1],
+            status=core_choices.PlanItemStatus.ACTIVE,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=plan_item,
+            task_date=today,
+            task_type=PlanItemCategory.QUESTIONNAIRE,
+            title=questionnaire.name,
+            status=TaskStatus.PENDING,
+        )
+
+        self._open(
+            "web_patient:daily_survey",
+            params={"ids": str(questionnaire.id)},
+        )
+
+        expect(self.page.locator('.question-item[data-type="SINGLE"]')).to_have_count(5)
+        expect(self.page.locator('input[type="radio"]')).to_have_count(5)
+        expect(self.page.locator('[data-eqvas-text-answer="true"]')).to_have_count(0)
 
     def test_reports_orders_device_studio_family_and_feedback_pages_load(self):
         self._open("web_patient:report_list")
