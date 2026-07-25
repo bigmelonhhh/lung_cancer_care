@@ -98,3 +98,4 @@ package-lock.json
 deploy.sh
 ecosystem.config.js
 /.qoder
+/.workbuddy

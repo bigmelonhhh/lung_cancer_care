@@ -1,6 +1,7 @@
 
 from datetime import timedelta
 
+from django.templatetags.static import static
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
@@ -95,6 +96,24 @@ class MobileAuthTests(TestCase):
         self.assertContains(response, 'name="phone"', html=False)
         self.assertContains(response, 'name="password"', html=False)
         self.assertContains(response, "使用手机号登录")
+
+    def test_login_page_uses_shared_healthcare_login_branding(self):
+        """医生端登录页与后台登录页保持统一品牌视觉。"""
+        response = self.client.get(self.login_url)
+        content = response.content.decode()
+
+        self.assertContains(response, static("logo-192.png"))
+        self.assertEqual(content.count(static("logo-192.png")), 1)
+        self.assertContains(response, "基于AI与智能硬件的")
+        self.assertContains(response, "慢病数字化康复管理")
+        self.assertContains(
+            response,
+            (
+                "连接患者与医生的数字化桥梁。通过医疗级物联网硬件实现连续体征监测，"
+                "将院外康复由“盲盒”状态转为精细化管理。"
+            ),
+        )
+        self.assertNotContains(response, static("login.webp"))
 
     def test_pc_login_redirects_to_workspace(self):
         """测试PC端医生登录跳转到工作台"""

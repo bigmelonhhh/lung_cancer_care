@@ -1,0 +1,447 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}{% if form.errors %}{% translate "Error:" %} {% endif %}{{ block.super }}{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static "admin/css/login.css" %}">
+{{ form.media }}
+<style>
+  body.admin-login-page {
+    --login-ink: #173f42;
+    --login-teal: #0b675f;
+    --login-teal-dark: #084d4a;
+    --login-mint: #a7ead8;
+    --login-paper: #fffdf8;
+    --login-muted: #6f8586;
+    --login-line: #d9e2df;
+    --login-error: #b64f3d;
+    --login-error-bg: #fff4f0;
+    margin: 0;
+    padding: 0 !important;
+    min-width: 0;
+    min-height: 100vh;
+    overflow-x: hidden;
+    color: var(--login-ink);
+    background: var(--login-paper);
+    font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  }
+
+  body.admin-login-page #container {
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-sizing: border-box;
+  }
+
+  body.admin-login-page .main,
+  body.admin-login-page #content-start,
+  body.admin-login-page #content {
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  body.admin-login-page .main {
+    display: block;
+    flex: none;
+  }
+
+  body.admin-login-page #header,
+  body.admin-login-page nav.breadcrumbs,
+  body.admin-login-page #nav-sidebar,
+  body.admin-login-page .toggle-nav-sidebar,
+  body.admin-login-page #footer,
+  body.admin-login-page #content > br.clear {
+    display: none;
+  }
+
+  body.admin-login-page .admin-login-shell {
+    display: grid;
+    grid-template-columns: minmax(0, 1.08fr) minmax(430px, .92fr);
+    min-height: 100vh;
+  }
+
+  body.admin-login-page .admin-login-brand {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    padding: clamp(56px, 7vw, 112px);
+    color: #fff;
+    background:
+      linear-gradient(145deg, rgba(6, 73, 69, .98), rgba(16, 103, 92, .94)),
+      var(--login-teal-dark);
+  }
+
+  body.admin-login-page .admin-login-brand::before,
+  body.admin-login-page .admin-login-brand::after {
+    position: absolute;
+    border: 1px solid rgba(255, 255, 255, .13);
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
+  }
+
+  body.admin-login-page .admin-login-brand::before {
+    top: -330px;
+    right: -180px;
+    width: 590px;
+    height: 590px;
+  }
+
+  body.admin-login-page .admin-login-brand::after {
+    top: -205px;
+    right: 0;
+    width: 350px;
+    height: 350px;
+  }
+
+  body.admin-login-page .admin-login-brand-content {
+    position: relative;
+    z-index: 1;
+    width: min(680px, 100%);
+    animation: admin-login-enter .65s ease-out both;
+  }
+
+  body.admin-login-page .admin-login-brand h1 {
+    margin: 0 0 28px;
+    color: #fff;
+    font-family: "STSong", "SimSun", serif;
+    font-size: clamp(38px, 4.2vw, 66px);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -.04em;
+  }
+
+  body.admin-login-page .admin-login-brand h1 span {
+    display: block;
+    color: var(--login-mint);
+  }
+
+  body.admin-login-page .admin-login-brand-copy {
+    max-width: 650px;
+    margin: 0;
+    padding-left: 22px;
+    border-left: 3px solid #df7159;
+    color: rgba(255, 255, 255, .78);
+    font-size: clamp(15px, 1.25vw, 19px);
+    line-height: 1.9;
+  }
+
+  body.admin-login-page .admin-login-form-panel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 56px clamp(42px, 6vw, 92px);
+    background:
+      radial-gradient(circle at 92% 8%, rgba(89, 168, 151, .11), transparent 22rem),
+      var(--login-paper);
+  }
+
+  body.admin-login-page .admin-login-form-wrap {
+    width: min(440px, 100%);
+    animation: admin-login-enter .65s .08s ease-out both;
+  }
+
+  body.admin-login-page .admin-login-identity {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    color: #496769;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  body.admin-login-page .admin-login-identity img {
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(23, 63, 66, .1);
+    border-radius: 12px;
+    object-fit: cover;
+    background: #fff;
+  }
+
+  body.admin-login-page .admin-login-form-wrap > h2 {
+    margin: 32px 0 8px;
+    color: var(--login-ink);
+    font-family: "STSong", "SimSun", serif;
+    font-size: 38px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  body.admin-login-page .admin-login-subtitle {
+    margin: 0 0 30px;
+    color: var(--login-muted);
+    font-size: 14px;
+  }
+
+  body.admin-login-page .errornote,
+  body.admin-login-page .admin-login-message {
+    margin: 0 0 18px;
+    padding: 13px 15px;
+    border: 1px solid #efd0c7;
+    border-left: 4px solid #df7159;
+    border-radius: 10px;
+    color: var(--login-error);
+    background: var(--login-error-bg);
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.6;
+  }
+
+  body.admin-login-page #login-form .form-row {
+    padding: 0;
+    border: 0;
+  }
+
+  body.admin-login-page #login-form .form-row + .form-row {
+    margin-top: 19px;
+  }
+
+  body.admin-login-page #login-form label {
+    display: block;
+    margin: 0 0 8px;
+    color: #4a6668;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+
+  body.admin-login-page #login-form input[type="text"],
+  body.admin-login-page #login-form input[type="password"] {
+    width: 100%;
+    height: 50px;
+    padding: 0 15px;
+    border: 1px solid var(--login-line);
+    border-radius: 11px;
+    color: var(--login-ink);
+    background: #fff;
+    box-shadow: 0 1px 0 rgba(23, 63, 66, .02);
+    font: inherit;
+    transition: border-color .2s ease, box-shadow .2s ease;
+  }
+
+  body.admin-login-page #login-form input[type="text"]:focus,
+  body.admin-login-page #login-form input[type="password"]:focus {
+    border-color: var(--login-teal);
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(11, 103, 95, .12);
+  }
+
+  body.admin-login-page #login-form .errorlist {
+    margin: 0 0 8px;
+    padding: 0;
+    color: var(--login-error);
+    font-size: 13px;
+    list-style: none;
+  }
+
+  body.admin-login-page .password-reset-link {
+    margin-top: 14px;
+    text-align: right;
+  }
+
+  body.admin-login-page .password-reset-link a {
+    color: var(--login-teal);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  body.admin-login-page .password-reset-link a:focus-visible,
+  body.admin-login-page .admin-login-submit:focus-visible {
+    outline: 3px solid rgba(11, 103, 95, .24);
+    outline-offset: 3px;
+  }
+
+  body.admin-login-page #login-form .submit-row {
+    margin: 25px 0 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  body.admin-login-page .admin-login-submit {
+    width: 100%;
+    min-height: 50px;
+    border: 0;
+    border-radius: 11px;
+    color: #fff;
+    background: var(--login-teal);
+    box-shadow: 0 13px 28px rgba(11, 103, 95, .2);
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    letter-spacing: .04em;
+    transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease;
+  }
+
+  body.admin-login-page .admin-login-submit:hover {
+    background: #095951;
+    box-shadow: 0 16px 32px rgba(11, 103, 95, .24);
+    transform: translateY(-1px);
+  }
+
+  @keyframes admin-login-enter {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @media (max-width: 900px) {
+    body.admin-login-page .admin-login-shell {
+      grid-template-columns: 1fr;
+    }
+
+    body.admin-login-page .admin-login-brand {
+      min-height: 370px;
+      padding: 58px clamp(28px, 8vw, 72px);
+    }
+
+    body.admin-login-page .admin-login-brand h1 {
+      margin-top: 0;
+      font-size: clamp(34px, 7vw, 52px);
+    }
+
+    body.admin-login-page .admin-login-brand-copy {
+      font-size: 15px;
+    }
+
+    body.admin-login-page .admin-login-form-panel {
+      min-height: 620px;
+    }
+  }
+
+  @media (max-width: 520px) {
+    body.admin-login-page .admin-login-brand {
+      min-height: 330px;
+      padding: 42px 24px;
+    }
+
+    body.admin-login-page .admin-login-brand h1 {
+      margin: 0 0 20px;
+      font-size: clamp(23px, 7.2vw, 32px);
+      letter-spacing: -.03em;
+      white-space: nowrap;
+    }
+
+    body.admin-login-page .admin-login-brand-copy {
+      padding-left: 16px;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+
+    body.admin-login-page .admin-login-form-panel {
+      min-height: 0;
+      padding: 48px 24px 56px;
+    }
+
+    body.admin-login-page .admin-login-form-wrap > h2 {
+      font-size: 33px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body.admin-login-page .admin-login-brand-content,
+    body.admin-login-page .admin-login-form-wrap {
+      animation: none;
+    }
+
+    body.admin-login-page *,
+    body.admin-login-page *::before,
+    body.admin-login-page *::after {
+      scroll-behavior: auto !important;
+      transition-duration: .01ms !important;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} login admin-login-page{% endblock %}
+{% block usertools %}{% endblock %}
+{% block nav-global %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
+{% block nav-breadcrumbs %}{% endblock %}
+
+{% block content %}
+<div class="admin-login-shell">
+  <section class="admin-login-brand" aria-labelledby="admin-login-brand-title">
+    <div class="admin-login-brand-content">
+      <h1 id="admin-login-brand-title">
+        基于AI与智能硬件的
+        <span>慢病数字化康复管理</span>
+      </h1>
+      <p class="admin-login-brand-copy">连接患者与医生的数字化桥梁。通过医疗级物联网硬件实现连续体征监测，将院外康复由“盲盒”状态转为精细化管理。</p>
+    </div>
+  </section>
+
+  <section class="admin-login-form-panel" aria-labelledby="admin-login-heading">
+    <div class="admin-login-form-wrap">
+      <div class="admin-login-identity">
+        <img src="{% static 'logo-192.png' %}" alt="">
+        <span>慢病康复管理系统</span>
+      </div>
+      <h2 id="admin-login-heading">欢迎回来</h2>
+      <p class="admin-login-subtitle">登录慢病康复管理系统后台</p>
+
+      {% if form.errors and not form.non_field_errors %}
+      <p class="errornote">
+        {% blocktranslate count counter=form.errors.items|length %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}
+      </p>
+      {% endif %}
+
+      {% if form.non_field_errors %}
+        {% for error in form.non_field_errors %}
+        <p class="errornote">{{ error }}</p>
+        {% endfor %}
+      {% endif %}
+
+      {% if user.is_authenticated %}
+      <p class="admin-login-message">
+        {% blocktranslate trimmed %}
+          You are authenticated as {{ username }}, but are not authorized to
+          access this page. Would you like to login to a different account?
+        {% endblocktranslate %}
+      </p>
+      {% endif %}
+
+      <form action="{{ app_path }}" method="post" id="login-form">
+        {% csrf_token %}
+        <div class="form-row">
+          {{ form.username.errors }}
+          {{ form.username.label_tag }}
+          {{ form.username }}
+        </div>
+        <div class="form-row">
+          {{ form.password.errors }}
+          {{ form.password.label_tag }}
+          {{ form.password }}
+          <input type="hidden" name="next" value="{{ next }}">
+        </div>
+        {% url 'admin_password_reset' as password_reset_url %}
+        {% if password_reset_url %}
+        <div class="password-reset-link">
+          <a href="{{ password_reset_url }}">{% translate 'Forgotten your login credentials?' %}</a>
+        </div>
+        {% endif %}
+        <div class="submit-row">
+          <button class="admin-login-submit" type="submit">进入管理后台</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}
