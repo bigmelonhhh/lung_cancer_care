@@ -3,99 +3,152 @@
 
 {% block extra_head %}
 <style>
+  /* 强制重置盒模型，确保像素级尺寸对齐 */
+  .portal-login-page,
+  .portal-login-page *,
+  .portal-login-page *::before,
+  .portal-login-page *::after {
+    box-sizing: border-box !important;
+  }
+
   .portal-login-page {
-    --login-ink: #173f42;
-    --login-teal: #0b675f;
-    --login-teal-dark: #084d4a;
-    --login-mint: #a7ead8;
-    --login-paper: #fffdf8;
-    --login-muted: #6f8586;
-    --login-line: #d9e2df;
-    --login-error: #b64f3d;
-    --login-error-bg: #fff4f0;
+    --login-ink: #112829;
+    --login-teal: #0d7d73;
+    --login-teal-hover: #0a665e;
+    --login-teal-dark: #074a44;
+    --login-mint: #86e4ce;
+    --login-mint-light: #e6f7f3;
+    --login-paper: #f4f7f6;
+    --login-card-bg: #ffffff;
+    --login-muted: #5e7577;
+    --login-line: #dbe4e2;
+    --login-error: #c04332;
+    --login-error-bg: #fdf2f0;
+    
     display: grid;
-    grid-template-columns: minmax(0, 1.08fr) minmax(430px, .92fr);
+    /* 与后台登录页网格比例保持完全一致 */
+    grid-template-columns: minmax(0, 1.15fr) minmax(440px, .85fr);
     min-height: 100vh;
     min-height: 100dvh;
     overflow-x: hidden;
     color: var(--login-ink);
     background: var(--login-paper);
-    font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
+  /* 左侧：品牌展示区 */
   .portal-login-brand {
     position: relative;
     overflow: hidden;
     display: flex;
-    align-items: center;
-    padding: clamp(56px, 7vw, 112px);
+    flex-direction: column;
+    justify-content: center;
+    padding: clamp(48px, 6vw, 96px);
     color: #fff;
     background:
-      linear-gradient(145deg, rgba(6, 73, 69, .98), rgba(16, 103, 92, .94)),
-      var(--login-teal-dark);
+      radial-gradient(circle at 10% 20%, rgba(134, 228, 206, .15), transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(13, 125, 115, .25), transparent 50%),
+      linear-gradient(145deg, #074a44, #0b6159);
   }
 
-  .portal-login-brand::before,
-  .portal-login-brand::after {
+  .portal-login-brand::before {
     position: absolute;
-    border: 1px solid rgba(255, 255, 255, .13);
+    top: -240px;
+    right: -160px;
+    width: 520px;
+    height: 520px;
+    border: 1px solid rgba(255, 255, 255, .08);
     border-radius: 50%;
     content: "";
     pointer-events: none;
   }
 
-  .portal-login-brand::before {
-    top: -330px;
-    right: -180px;
-    width: 590px;
-    height: 590px;
-  }
-
   .portal-login-brand::after {
-    top: -205px;
-    right: 0;
-    width: 350px;
-    height: 350px;
+    position: absolute;
+    bottom: -180px;
+    left: -120px;
+    width: 420px;
+    height: 420px;
+    border: 1px solid rgba(134, 228, 206, .12);
+    border-radius: 50%;
+    content: "";
+    pointer-events: none;
   }
 
   .portal-login-brand-content {
     position: relative;
     z-index: 1;
-    width: min(680px, 100%);
-    animation: portal-login-enter .65s ease-out both;
+    width: min(640px, 100%);
+    animation: portal-login-enter .65s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .portal-login-brand-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    padding: 6px 14px;
+    border: 1px solid rgba(134, 228, 206, .3);
+    border-radius: 20px;
+    background: rgba(134, 228, 206, .1);
+    color: var(--login-mint);
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .02em;
   }
 
   .portal-login-brand h1 {
-    margin: 0 0 28px;
+    margin: 0 0 24px;
     color: #fff;
-    font-family: "STSong", "SimSun", serif;
-    font-size: clamp(38px, 4.2vw, 66px);
+    font-size: clamp(32px, 3.8vw, 54px);
     font-weight: 700;
     line-height: 1.25;
-    letter-spacing: -.04em;
+    letter-spacing: -.02em;
   }
 
   .portal-login-brand h1 span {
     display: block;
+    margin-top: 6px;
     color: var(--login-mint);
   }
 
   .portal-login-brand-copy {
-    max-width: 650px;
-    margin: 0;
-    padding-left: 22px;
-    border-left: 3px solid #df7159;
-    color: rgba(255, 255, 255, .78);
-    font-size: clamp(15px, 1.25vw, 19px);
-    line-height: 1.9;
+    max-width: 580px;
+    margin: 0 0 36px;
+    padding-left: 20px;
+    border-left: 3px solid var(--login-mint);
+    color: rgba(255, 255, 255, .82);
+    font-size: clamp(14px, 1.1vw, 17px);
+    line-height: 1.85;
   }
 
+  .portal-login-trust-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .trust-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border: 1px solid rgba(255, 255, 255, .15);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .06);
+    backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, .9);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* 右侧：表单面板与 Stage 调整 */
   .portal-login-access {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto;
     min-width: 0;
     background:
-      radial-gradient(circle at 92% 8%, rgba(89, 168, 151, .11), transparent 22rem),
+      radial-gradient(circle at 90% 10%, rgba(13, 125, 115, .05), transparent 20rem),
       var(--login-paper);
   }
 
@@ -104,50 +157,61 @@
     align-items: center;
     justify-content: center;
     min-height: 0;
-    padding: 56px clamp(42px, 6vw, 92px) 36px;
+    /* 移除左右两侧内边距挤压，交由卡片自身控制 */
+    padding: 48px 24px 32px;
   }
 
+  /* 悬浮卡片：精确对齐宽度与边距 */
   .portal-login-form-wrap {
-    width: min(440px, 100%);
-    animation: portal-login-enter .65s .08s ease-out both;
+    width: 420px;
+    max-width: 100%;
+    padding: 40px 36px;
+    border: 1px solid rgba(219, 228, 226, .8);
+    border-radius: 20px;
+    background: var(--login-card-bg);
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, .02),
+      0 20px 40px -12px rgba(11, 40, 41, .08);
+    animation: portal-login-enter .65s .08s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
   .portal-login-identity {
     display: flex;
     align-items: center;
-    gap: 13px;
-    color: #496769;
+    gap: 12px;
+    margin-bottom: 24px;
+    color: var(--login-ink);
     font-size: 14px;
     font-weight: 700;
   }
 
   .portal-login-identity img {
-    width: 42px;
-    height: 42px;
-    border: 1px solid rgba(23, 63, 66, .1);
-    border-radius: 12px;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--login-line);
+    border-radius: 10px;
     object-fit: cover;
     background: #fff;
   }
 
   .portal-login-form-wrap h2 {
-    margin: 32px 0 8px;
+    margin: 0 0 6px;
     color: var(--login-ink);
-    font-family: "STSong", "SimSun", serif;
-    font-size: 38px;
+    font-size: 28px;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.25;
+    letter-spacing: -.02em;
   }
 
   .portal-login-subtitle {
-    margin: 0 0 30px;
+    margin: 0 0 28px;
     color: var(--login-muted);
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .portal-login-form {
     display: grid;
-    gap: 19px;
+    gap: 18px;
   }
 
   .portal-login-field {
@@ -156,84 +220,94 @@
   }
 
   .portal-login-field label {
-    color: #4a6668;
-    font-size: 14px;
-    font-weight: 700;
+    color: #385052;
+    font-size: 13px;
+    font-weight: 600;
     line-height: 1.4;
   }
 
   .portal-login-field input {
     width: 100%;
-    height: 50px;
-    padding: 0 15px;
+    height: 48px;
+    padding: 0 16px;
     border: 1px solid var(--login-line);
-    border-radius: 11px;
+    border-radius: 10px;
     color: var(--login-ink);
-    background: #fff;
-    box-shadow: 0 1px 0 rgba(23, 63, 66, .02);
+    background: #ffffff;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, .02);
     font: inherit;
-    transition: border-color .2s ease, box-shadow .2s ease;
+    font-size: 14px;
+    transition: border-color .2s ease, box-shadow .2s ease, background-color .2s ease;
+  }
+
+  .portal-login-field input:hover {
+    border-color: #b8c9c6;
   }
 
   .portal-login-field input:focus {
     border-color: var(--login-teal);
+    background: #fff;
     outline: none;
-    box-shadow: 0 0 0 4px rgba(11, 103, 95, .12);
+    box-shadow: 0 0 0 3px rgba(13, 125, 115, .15);
   }
 
   .portal-login-messages {
     display: grid;
     gap: 8px;
     margin: 0;
-    padding: 13px 15px;
-    border: 1px solid #efd0c7;
-    border-left: 4px solid #df7159;
-    border-radius: 10px;
+    padding: 12px 14px;
+    border: 1px solid rgba(192, 67, 50, .2);
+    border-left: 4px solid var(--login-error);
+    border-radius: 8px;
     color: var(--login-error);
     background: var(--login-error-bg);
     font-size: 13px;
     font-weight: 600;
-    line-height: 1.6;
+    line-height: 1.5;
     list-style: none;
   }
 
-  /* hidden 属性必须显式覆盖 display:grid，否则空错误框仍会渲染 */
   .portal-login-messages[hidden] {
     display: none;
   }
 
   .portal-login-submit {
     width: 100%;
-    min-height: 50px;
+    min-height: 48px;
     margin-top: 6px;
     border: 0;
-    border-radius: 11px;
+    border-radius: 10px;
     color: #fff;
-    background: var(--login-teal);
-    box-shadow: 0 13px 28px rgba(11, 103, 95, .2);
+    background: linear-gradient(135deg, var(--login-teal), var(--login-teal-dark));
+    box-shadow: 0 8px 18px -2px rgba(13, 125, 115, .32);
     cursor: pointer;
     font: inherit;
-    font-weight: 700;
-    letter-spacing: .04em;
-    transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    transition: transform .2s ease, box-shadow .2s ease, opacity .2s ease;
   }
 
   .portal-login-submit:hover {
-    background: #095951;
-    box-shadow: 0 16px 32px rgba(11, 103, 95, .24);
-    transform: translateY(-1px);
+    box-shadow: 0 12px 22px -2px rgba(13, 125, 115, .42);
+    opacity: .96;
+    transform: translateY(-1.5px);
+  }
+
+  .portal-login-submit:active {
+    transform: translateY(0);
   }
 
   .portal-login-submit:focus-visible {
-    outline: 3px solid rgba(11, 103, 95, .24);
+    outline: 3px solid rgba(13, 125, 115, .25);
     outline-offset: 3px;
   }
 
   .portal-login-footer {
-    padding: 18px clamp(24px, 4vw, 54px) 22px;
-    color: #879797;
+    padding: 18px clamp(20px, 4vw, 48px) 24px;
+    color: #839698;
     font-size: 11px;
-    line-height: 1.75;
+    line-height: 1.8;
     text-align: center;
   }
 
@@ -242,16 +316,21 @@
   }
 
   .portal-login-footer span {
-    color: #607b7c;
+    color: #557072;
     cursor: pointer;
     text-decoration: underline;
     text-underline-offset: 2px;
+    transition: color .2s ease;
+  }
+
+  .portal-login-footer span:hover {
+    color: var(--login-teal);
   }
 
   @keyframes portal-login-enter {
     from {
       opacity: 0;
-      transform: translateY(12px);
+      transform: translateY(14px);
     }
     to {
       opacity: 1;
@@ -259,59 +338,71 @@
     }
   }
 
-  @media (max-width: 900px) {
+  /* 移动端响应式 */
+  @media (max-width: 960px) {
     .portal-login-page {
       grid-template-columns: 1fr;
     }
 
     .portal-login-brand {
-      min-height: 370px;
-      padding: 58px clamp(28px, 8vw, 72px);
+      min-height: auto;
+      padding: 28px 24px 20px;
+      text-align: center;
+      align-items: center;
+    }
+
+    .portal-login-brand-tag {
+      margin-bottom: 12px;
     }
 
     .portal-login-brand h1 {
-      font-size: clamp(34px, 7vw, 52px);
+      margin-bottom: 10px;
+      font-size: clamp(20px, 5vw, 28px);
+      white-space: normal;
     }
 
-    .portal-login-brand-copy {
-      font-size: 15px;
+    .portal-login-brand h1 span {
+      display: inline;
+      margin-top: 0;
+      margin-left: 6px;
+    }
+
+    .portal-login-brand-copy,
+    .portal-login-trust-group {
+      display: none;
     }
 
     .portal-login-form-stage {
-      min-height: 560px;
+      padding: 20px 16px 24px;
+    }
+
+    .portal-login-form-wrap {
+      width: 100%;
+      padding: 28px 20px;
+      border-radius: 16px;
     }
   }
 
-  @media (max-width: 520px) {
+  @media (max-width: 480px) {
     .portal-login-brand {
-      min-height: 330px;
-      padding: 42px 24px;
+      padding: 20px 16px 14px;
     }
 
-    .portal-login-brand h1 {
-      margin: 0 0 20px;
-      font-size: clamp(23px, 7.2vw, 32px);
-      letter-spacing: -.03em;
-      white-space: nowrap;
-    }
-
-    .portal-login-brand-copy {
-      padding-left: 16px;
-      font-size: 14px;
-      line-height: 1.75;
-    }
-
-    .portal-login-form-stage {
-      min-height: 0;
-      padding: 48px 24px 36px;
+    .portal-login-form-wrap {
+      padding: 24px 16px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .03);
     }
 
     .portal-login-form-wrap h2 {
-      font-size: 33px;
+      font-size: 24px;
+    }
+
+    .portal-login-subtitle {
+      margin-bottom: 20px;
     }
 
     .portal-login-footer {
-      padding: 14px 20px 24px;
+      padding: 12px 16px 20px;
       font-size: 10px;
     }
   }
@@ -336,11 +427,18 @@
 <main class="portal-login-page">
   <section class="portal-login-brand" aria-labelledby="portal-login-brand-title">
     <div class="portal-login-brand-content">
+      <div class="portal-login-brand-tag">ZenCare Digital Health</div>
       <h1 id="portal-login-brand-title">
         基于AI与智能硬件的
         <span>慢病数字化康复管理</span>
       </h1>
       <p class="portal-login-brand-copy">连接患者与医生的数字化桥梁。通过医疗级物联网硬件实现连续体征监测，将院外康复由“盲盒”状态转为精细化管理。</p>
+
+      <div class="portal-login-trust-group">
+        <span class="trust-chip">AI 智能驱动</span>
+        <span class="trust-chip">医疗级 IoT 硬件</span>
+        <span class="trust-chip">连续体征监测</span>
+      </div>
     </div>
   </section>
 
@@ -400,9 +498,8 @@
     </footer>
   </section>
 </main>
+
 <script>
-  // 登录前置校验：手机号格式 + 密码非空，校验通过后才放行 form 同步 POST 提交到后端。
-  // 前端校验只负责 UX 与减少无效请求，安全仍由后端兜底（前端可被绕过）。
   (function () {
     const form = document.getElementById('portal-login-form');
     if (!form) return;
@@ -422,7 +519,6 @@
         clientErrors.appendChild(li);
       });
       clientErrors.hidden = false;
-      // 前端校验触发时，隐藏后端上一次的错误回显，避免两块错误同时出现
       if (serverErrors) serverErrors.hidden = true;
     }
 
@@ -459,7 +555,6 @@
       setFieldInvalid(passwordInput, !!pwdErr);
       if (errors.length) {
         showErrors(errors);
-        // 聚焦到第一个出错的字段，方便键盘用户修正
         (phoneErr ? phoneInput : passwordInput).focus();
         return false;
       }
@@ -467,14 +562,12 @@
       return true;
     }
 
-    // 提交时拦截：校验不过则阻止提交，校验通过则放行让 form 正常 POST
     form.addEventListener('submit', function (e) {
       if (!validateAll()) {
         e.preventDefault();
       }
     });
 
-    // 输入时：手机号仅保留数字并截断到 11 位；若有错误显示则重新校验自动清除
     phoneInput.addEventListener('input', function () {
       phoneInput.value = phoneInput.value.replace(/\D/g, '').slice(0, 11);
       if (!clientErrors.hidden) validateAll();
@@ -485,6 +578,7 @@
     });
   })();
 </script>
+
 <script>
   const miitRecordLink = document.getElementById('miit-record-link');
   if (miitRecordLink) {
