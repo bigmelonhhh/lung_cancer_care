@@ -251,6 +251,66 @@
     box-shadow: 0 0 0 3px rgba(13, 125, 115, .15);
   }
 
+  /* 密码框容器：包裹 input 与显示/隐藏按钮 */
+  .portal-login-input-wrap {
+    position: relative;
+    display: block;
+  }
+
+  .portal-login-input-wrap input {
+    padding-right: 44px;
+  }
+
+  /* 显示/隐藏密码按钮 */
+  .portal-login-pwd-toggle {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--login-muted);
+    cursor: pointer;
+    transition: color .2s ease, background-color .2s ease;
+  }
+
+  .portal-login-pwd-toggle:hover {
+    color: var(--login-teal);
+    background: rgba(13, 125, 115, .06);
+  }
+
+  .portal-login-pwd-toggle:focus-visible {
+    outline: 3px solid rgba(13, 125, 115, .25);
+    outline-offset: 2px;
+  }
+
+  .portal-login-pwd-toggle svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    pointer-events: none;
+  }
+
+  /* 默认显示“眼睛”图标；按下后切换为“眼睛斜杠” */
+  .portal-login-pwd-toggle .pwd-icon-eye-off {
+    display: none;
+  }
+
+  .portal-login-pwd-toggle[aria-pressed="true"] .pwd-icon-eye {
+    display: none;
+  }
+
+  .portal-login-pwd-toggle[aria-pressed="true"] .pwd-icon-eye-off {
+    display: block;
+  }
+
   .portal-login-messages {
     display: grid;
     gap: 8px;
@@ -468,12 +528,30 @@
           </div>
           <div class="portal-login-field">
             <label for="login-password">密码</label>
-            <input id="login-password" type="password" name="password"
-                   required
-                   minlength="6"
-                   autocomplete="current-password"
-                   aria-required="true"
-                   aria-describedby="login-client-errors">
+            <div class="portal-login-input-wrap">
+              <input id="login-password" type="password" name="password"
+                     required
+                     minlength="6"
+                     autocomplete="current-password"
+                     aria-required="true"
+                     aria-describedby="login-client-errors">
+              <button type="button"
+                      class="portal-login-pwd-toggle"
+                      data-target="login-password"
+                      aria-label="显示密码"
+                      aria-pressed="false">
+                <svg class="pwd-icon-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="pwd-icon-eye-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                  <line x1="2" y1="2" x2="22" y2="22"/>
+                </svg>
+              </button>
+            </div>
           </div>
           {% if messages %}
           <ul class="portal-login-messages" role="alert" id="login-server-errors">
@@ -576,6 +654,29 @@
     passwordInput.addEventListener('input', function () {
       if (!clientErrors.hidden) validateAll();
     });
+
+    // 密码显示/隐藏切换
+    const pwdToggle = form.querySelector('.portal-login-pwd-toggle[data-target="login-password"]');
+    if (pwdToggle) {
+      pwdToggle.addEventListener('click', function () {
+        const isShown = pwdToggle.getAttribute('aria-pressed') === 'true';
+        if (isShown) {
+          passwordInput.type = 'password';
+          pwdToggle.setAttribute('aria-pressed', 'false');
+          pwdToggle.setAttribute('aria-label', '显示密码');
+        } else {
+          passwordInput.type = 'text';
+          pwdToggle.setAttribute('aria-pressed', 'true');
+          pwdToggle.setAttribute('aria-label', '隐藏密码');
+        }
+        // 切换 type 后部分浏览器会把光标重置到开头，这里强制保留在末尾
+        const len = passwordInput.value.length;
+        passwordInput.focus();
+        if (passwordInput.setSelectionRange) {
+          try { passwordInput.setSelectionRange(len, len); } catch (e) { /* ignore */ }
+        }
+      });
+    }
   })();
 </script>
 

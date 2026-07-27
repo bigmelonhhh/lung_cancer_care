@@ -305,6 +305,66 @@
     box-shadow: 0 0 0 3px rgba(13, 125, 115, .15);
   }
 
+  /* 密码框容器：包裹 input 与显示/隐藏按钮（JS 动态注入） */
+  body.admin-login-page .admin-login-input-wrap {
+    position: relative;
+    display: block;
+  }
+
+  body.admin-login-page #login-form .admin-login-input-wrap input[type="password"] {
+    padding-right: 44px;
+  }
+
+  /* 显示/隐藏密码按钮 */
+  body.admin-login-page .admin-login-pwd-toggle {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--login-muted);
+    cursor: pointer;
+    transition: color .2s ease, background-color .2s ease;
+  }
+
+  body.admin-login-page .admin-login-pwd-toggle:hover {
+    color: var(--login-teal);
+    background: rgba(13, 125, 115, .06);
+  }
+
+  body.admin-login-page .admin-login-pwd-toggle:focus-visible {
+    outline: 3px solid rgba(13, 125, 115, .25);
+    outline-offset: 2px;
+  }
+
+  body.admin-login-page .admin-login-pwd-toggle svg {
+    width: 20px;
+    height: 20px;
+    display: block;
+    pointer-events: none;
+  }
+
+  /* 默认显示“眼睛”图标；按下后切换为“眼睛斜杠” */
+  body.admin-login-page .admin-login-pwd-toggle .pwd-icon-eye-off {
+    display: none;
+  }
+
+  body.admin-login-page .admin-login-pwd-toggle[aria-pressed="true"] .pwd-icon-eye {
+    display: none;
+  }
+
+  body.admin-login-page .admin-login-pwd-toggle[aria-pressed="true"] .pwd-icon-eye-off {
+    display: block;
+  }
+
   body.admin-login-page #login-form .errorlist {
     margin: 0 0 8px;
     padding: 0;
@@ -571,6 +631,62 @@
     </footer>
   </div>
 </div>
+
+<script>
+  (function () {
+    // Django Admin 的 password 字段由 widget 渲染，HTML 结构无法直接改，
+    // 这里在 DOM 加载后动态把 input 包进 wrap 并注入显示/隐藏按钮。
+    const pwdInput = document.querySelector('#login-form input[type="password"]');
+    if (!pwdInput) return;
+
+    if (!pwdInput.id) pwdInput.id = 'admin-login-password';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'admin-login-input-wrap';
+
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'admin-login-pwd-toggle';
+    toggle.setAttribute('data-target', pwdInput.id);
+    toggle.setAttribute('aria-label', '显示密码');
+    toggle.setAttribute('aria-pressed', 'false');
+    toggle.innerHTML = ''
+      + '<svg class="pwd-icon-eye" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>'
+      + '<circle cx="12" cy="12" r="3"/>'
+      + '</svg>'
+      + '<svg class="pwd-icon-eye-off" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>'
+      + '<path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>'
+      + '<path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>'
+      + '<line x1="2" y1="2" x2="22" y2="22"/>'
+      + '</svg>';
+
+    // 将 input 包进 wrap，并把 toggle 追加到尾部
+    pwdInput.parentNode.insertBefore(wrap, pwdInput);
+    wrap.appendChild(pwdInput);
+    wrap.appendChild(toggle);
+
+    toggle.addEventListener('click', function () {
+      const isShown = toggle.getAttribute('aria-pressed') === 'true';
+      if (isShown) {
+        pwdInput.type = 'password';
+        toggle.setAttribute('aria-pressed', 'false');
+        toggle.setAttribute('aria-label', '显示密码');
+      } else {
+        pwdInput.type = 'text';
+        toggle.setAttribute('aria-pressed', 'true');
+        toggle.setAttribute('aria-label', '隐藏密码');
+      }
+      // 切换 type 后部分浏览器会把光标重置到开头，这里强制保留在末尾
+      const len = pwdInput.value.length;
+      pwdInput.focus();
+      if (pwdInput.setSelectionRange) {
+        try { pwdInput.setSelectionRange(len, len); } catch (e) { /* ignore */ }
+      }
+    });
+  })();
+</script>
 
 <script>
   const miitRecordLink = document.getElementById('miit-record-link');
