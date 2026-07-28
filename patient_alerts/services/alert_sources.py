@@ -63,6 +63,7 @@ class PatientAlertSourceService:
         grade_level: int,
         total_score: Decimal,
         source_payload: dict[str, Any],
+        value_display: str | None = None,
     ) -> PatientAlertSource:
         score_display = cls._format_decimal(total_score)
         questionnaire_name = submission.questionnaire.name
@@ -77,7 +78,10 @@ class PatientAlertSourceService:
             source_id=submission.id,
             source_key=f"questionnaire:{submission.id}",
             source_label=questionnaire_name,
-            value_display=f"总分 {score_display}，分级 {grade_level}级",
+            value_display=(
+                value_display
+                or f"总分 {score_display}，分级 {grade_level}级"
+            ),
             baseline_display="",
             event_level=event_level,
             occurred_at=submission.created_at,

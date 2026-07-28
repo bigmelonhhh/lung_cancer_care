@@ -18,6 +18,19 @@
     </div>
 
     <div class="p-4 space-y-3 pb-8">
+        {% if score_value is not None %}
+        <div class="bg-white rounded-xl shadow-sm p-4">
+            <p class="text-sm text-slate-500">{{ score_label|default:"问卷评分" }}</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-900">{{ score_value|floatformat:2 }}</p>
+            {% if health_state %}
+            <div class="mt-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                <span class="text-slate-500">健康状态编码</span>
+                <span class="font-medium text-slate-900">{{ health_state }}</span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         {% if questions %}
             {% for question in questions %}
             <div class="bg-white rounded-xl shadow-sm p-4">

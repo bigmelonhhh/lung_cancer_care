@@ -2197,6 +2197,9 @@ def questionnaire_submission_detail(
         "questionnaire_name": detail.get("questionnaire_name") or "问卷",
         "submission_id": detail.get("submission_id"),
         "submitted_at": detail.get("submitted_at"),
+        "score_label": detail.get("score_label") or "问卷评分",
+        "score_value": detail.get("score_value"),
+        "health_state": detail.get("health_state"),
         "questions": detail.get("questions") or [],
         "next_url": redirect_target,
     }

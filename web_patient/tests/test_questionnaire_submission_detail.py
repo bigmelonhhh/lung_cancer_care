@@ -333,6 +333,8 @@ class QuestionnaireSubmissionDetailViewTests(TestCase):
         self.assertContains(resp, q1_opt.text)
         self.assertContains(resp, q2_opt1.text)
         self.assertContains(resp, q2_opt2.text)
+        self.assertContains(resp, "问卷评分")
+        self.assertContains(resp, "7.00")
 
     def test_questionnaire_submission_detail_redirects_next_for_unauthorized_submission(self):
         questionnaire = self._get_or_create_questionnaire()

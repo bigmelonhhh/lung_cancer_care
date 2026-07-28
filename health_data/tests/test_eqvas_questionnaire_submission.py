@@ -79,6 +79,35 @@ class Eq5d5lQuestionnaireSubmissionTests(TestCase):
             ).value_main,
             Decimal("0.55"),
         )
+        detail = QuestionnaireSubmissionService.get_submission_detail_for_patient(
+            submission_id=submission.id,
+            patient_id=self.patient.id,
+        )
+        self.assertEqual(detail["score_label"], "健康效用指数")
+        self.assertEqual(detail["score_value"], Decimal("0.55"))
+        self.assertEqual(detail["health_state"], "21324")
+
+    def test_eq5d5l_grade_result_uses_most_severe_dimensions(self):
+        submission = QuestionnaireSubmissionService.submit_questionnaire(
+            patient_id=self.patient.id,
+            questionnaire_id=self.questionnaire.id,
+            answers_data=self._answers(levels=(2, 4, 4, 1, 1)),
+        )
+
+        result = QuestionnaireSubmissionService.get_submission_grade_result(
+            submission.id
+        )
+
+        self.assertEqual(result.grade_level, 4)
+        self.assertEqual(result.rule_version, "EQ5D5L_MAX_DIMENSION_V1")
+        self.assertEqual(result.score_label, "健康效用指数")
+        self.assertEqual(result.details["health_state"], "24411")
+        self.assertEqual(result.details["max_dimension_level"], 4)
+        self.assertEqual(
+            result.details["max_dimensions"],
+            ["自我照顾", "日常活动"],
+        )
+        self.assertEqual(submission.grade_level, 4)
 
     def test_eq5d5l_requires_all_dimensions_even_if_admin_marks_one_optional(self):
         self.dimension_questions[-1].is_required = False
@@ -252,6 +281,15 @@ class EqvasQuestionnaireSubmissionTests(TestCase):
                     ).value_main,
                     Decimal(value),
                 )
+                detail = (
+                    QuestionnaireSubmissionService.get_submission_detail_for_patient(
+                        submission_id=submission.id,
+                        patient_id=self.patient.id,
+                    )
+                )
+                self.assertEqual(detail["score_label"], "EQ-VAS评分")
+                self.assertEqual(detail["score_value"], Decimal(value))
+                self.assertIsNone(detail["health_state"])
 
     def test_eqvas_rejects_invalid_values_without_partial_writes(self):
         task = DailyTask.objects.create(
@@ -326,6 +364,35 @@ class EqvasQuestionnaireSubmissionTests(TestCase):
         )
         task.refresh_from_db()
         self.assertEqual(task.status, choices.TaskStatus.COMPLETED)
+        self.assertIsNone(
+            QuestionnaireSubmissionService.get_submission_grade(submission.id)
+        )
+
+    def test_eqvas_grade_result_uses_confirmed_absolute_boundaries(self):
+        for value_text, expected_grade in (
+            ("80", 1),
+            ("79", 2),
+            ("60", 2),
+            ("59", 3),
+            ("40", 3),
+            ("39", 4),
+            ("0", 4),
+        ):
+            with self.subTest(value_text=value_text):
+                submission = QuestionnaireSubmissionService.submit_questionnaire(
+                    patient_id=self.patient.id,
+                    questionnaire_id=self.questionnaire.id,
+                    answers_data=self._answers(value_text),
+                )
+                result = (
+                    QuestionnaireSubmissionService.get_submission_grade_result(
+                        submission.id
+                    )
+                )
+                self.assertEqual(result.grade_level, expected_grade)
+                self.assertEqual(result.rule_version, "EQVAS_ABSOLUTE_A_V1")
+                self.assertEqual(result.score_label, "EQ-VAS评分")
+                self.assertEqual(result.details["vas_score"], int(value_text))
 
     def test_eqvas_requires_exact_one_text_question(self):
         QuestionnaireQuestion.objects.create(
