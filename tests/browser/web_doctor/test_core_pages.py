@@ -70,7 +70,7 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
             sender_role_snapshot=MessageSenderRole.PATIENT,
             sender_display_name_snapshot="Browser Patient",
             studio_name_snapshot=self.studio.name,
-            text_content="聊天保持回归测试",
+            text_content="短讯",
         )
 
         self.open_doctor_workspace()
@@ -78,8 +78,16 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
 
         expect(self.page.locator("#patient-content")).to_contain_text("概况", timeout=10000)
         expect(self.page.locator("#patient-todo-list")).to_contain_text("Browser Patient的待办", timeout=10000)
-        expect(self.page.locator("#chat-messages-container")).to_contain_text("聊天保持回归测试", timeout=10000)
+        messages = self.page.locator("#chat-messages-container")
+        expect(messages).to_contain_text("短讯", timeout=10000)
         expect(self.page.locator('[data-test="empty-state"]')).to_be_hidden(timeout=10000)
+
+        bubble = messages.locator('[data-test="message-bubble"]').filter(has_text="短讯")
+        expect(bubble).to_have_css("min-width", "72px")
+        expect(bubble).to_have_css("display", "flex")
+        expect(bubble).to_have_css("align-items", "center")
+        expect(bubble).to_have_css("justify-content", "center")
+        expect(bubble.locator("p")).to_have_css("text-align", "start")
 
     def test_patient_workspace_core_tabs_load(self):
         self.open_patient_workspace()

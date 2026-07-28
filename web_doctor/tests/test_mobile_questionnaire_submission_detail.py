@@ -16,6 +16,7 @@ from core.models import (
     choices,
 )
 from health_data.models import HealthMetric, QuestionnaireAnswer, QuestionnaireSubmission
+from market.models import Order, Product
 from users.models import DoctorProfile, PatientProfile
 
 User = get_user_model()
@@ -45,12 +46,26 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
             phone="13800138262",
             doctor=self.doctor_profile,
         )
+        self.tz = timezone.get_current_timezone()
+
+        self.product = Product.objects.create(
+            name="移动端问卷服务包",
+            price=Decimal("199.00"),
+            duration_days=90,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            patient=self.patient,
+            product=self.product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=self._aware_dt(year=2025, month=1, day=1),
+        )
 
         self.client.force_login(self.doctor_user)
         self.record_detail_url = reverse("web_doctor:mobile_health_record_detail")
         self.health_records_url = reverse("web_doctor:mobile_health_records")
         self.mobile_patient_list_url = reverse("web_doctor:mobile_patient_list")
-        self.tz = timezone.get_current_timezone()
 
     def _aware_dt(self, year=2025, month=3, day=10, hour=10, minute=0):
         return timezone.make_aware(datetime(year, month, day, hour, minute), self.tz)
@@ -62,24 +77,200 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
         )
         return questionnaire
 
-    def test_questionnaire_record_shows_detail_button_and_ajax_contains_submission_id(self):
-        questionnaire = self._get_or_create_questionnaire()
-        submission = QuestionnaireSubmission.objects.create(
-            patient=self.patient,
-            questionnaire=questionnaire,
-            total_score=Decimal("5.00"),
+    def _set_submission_time(self, submission, submitted_at):
+        QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+            created_at=submitted_at
         )
-        HealthMetric.objects.create(
-            patient=self.patient,
-            metric_type=QuestionnaireCode.Q_ANXIETY,
-            measured_at=self._aware_dt(),
-            value_main=Decimal("5.00"),
-            source="manual",
-            questionnaire_submission=submission,
+        submission.refresh_from_db()
+        return submission
+
+    def test_dynamic_questionnaire_detail_is_scoped_to_package_and_preserves_parameters(self):
+        questionnaire = Questionnaire.objects.create(
+            name='动态问卷 <script>alert("x")</script>',
+            code="Q_MOBILE_DYNAMIC_DETAIL",
+            is_active=True,
+        )
+        in_range = self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("8.00"),
+            ),
+            self._aware_dt(year=2025, month=3, day=10),
+        )
+        out_of_range = self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("2.00"),
+            ),
+            self._aware_dt(year=2024, month=12, day=20),
+        )
+
+        response = self.client.get(
+            self.record_detail_url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": self.order.id,
+                "source": "survey_list",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["questionnaire_id"], questionnaire.id)
+        self.assertEqual(response.context["package_id"], self.order.id)
+        self.assertEqual(response.context["current_month"], "2025-03")
+        self.assertEqual(
+            [item["questionnaire_submission_id"] for item in response.context["records"]],
+            [in_range.id],
+        )
+        self.assertContains(response, f'data-submission-id="{in_range.id}"')
+        self.assertNotContains(response, f'data-submission-id="{out_of_range.id}"')
+        self.assertContains(response, f'const questionnaireId = "{questionnaire.id}";')
+        self.assertContains(response, f'const packageId = "{self.order.id}";')
+        self.assertContains(response, "&questionnaire_id=${encodeURIComponent(questionnaireId)}")
+        self.assertNotContains(response, '<script>alert("x")</script>')
+
+    def test_dynamic_questionnaire_detail_paginates_across_package_months(self):
+        questionnaire = Questionnaire.objects.create(
+            name="跨月动态问卷",
+            code="Q_MOBILE_DYNAMIC_CROSS_MONTH",
+            is_active=True,
+        )
+        february = self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("2.00"),
+            ),
+            self._aware_dt(year=2025, month=2, day=10),
+        )
+        march = self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("6.00"),
+            ),
+            self._aware_dt(year=2025, month=3, day=10),
+        )
+
+        first_page = self.client.get(
+            self.record_detail_url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": self.order.id,
+                "limit": 1,
+            },
+        )
+
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(
+            [item["questionnaire_submission_id"] for item in first_page.context["records"]],
+            [march.id],
+        )
+        self.assertTrue(first_page.context["has_more"])
+        self.assertEqual(first_page.context["next_cursor_month"], "2025-02")
+
+        second_page = self.client.get(
+            self.record_detail_url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": self.order.id,
+                "month": "2025-03",
+                "cursor_month": "2025-02",
+                "cursor_offset": 0,
+                "limit": 1,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual(
+            [item["questionnaire_submission_id"] for item in second_page.json()["records"]],
+            [february.id],
+        )
+        self.assertFalse(second_page.json()["has_more"])
+
+    def test_dynamic_questionnaire_detail_rejects_another_patients_package(self):
+        other_order = Order.objects.create(
+            patient=self.other_patient,
+            product=self.product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=self._aware_dt(year=2025, month=1, day=1),
+        )
+        questionnaire = Questionnaire.objects.create(
+            name="越权问卷",
+            code="Q_MOBILE_DYNAMIC_FORBIDDEN",
+            is_active=True,
+        )
+
+        response = self.client.get(
+            self.record_detail_url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": other_order.id,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_dynamic_questionnaire_chart_uses_latest_submission_score_of_day(self):
+        questionnaire = Questionnaire.objects.create(
+            name="同日评分问卷",
+            code="Q_MOBILE_DYNAMIC_LATEST",
+            is_active=True,
+        )
+        self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("3.00"),
+            ),
+            self._aware_dt(year=2025, month=3, day=8, hour=9),
+        )
+        self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("9.00"),
+            ),
+            self._aware_dt(year=2025, month=3, day=8, hour=18),
+        )
+
+        response = self.client.get(
+            self.record_detail_url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": self.order.id,
+                "month": "2025-03",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        chart = response.context["chart_payload"]
+        day_index = chart["dates"].index("03-08")
+        self.assertEqual(chart["series"][0]["data"][day_index]["raw_value"], 9.0)
+
+    def test_legacy_questionnaire_type_uses_dynamic_submission_detail(self):
+        questionnaire = self._get_or_create_questionnaire()
+        submission = self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("5.00"),
+            ),
+            self._aware_dt(year=2025, month=3, day=10),
         )
 
         with patch("web_doctor.views.mobile.health_record._is_member", return_value=True):
-            resp = self.client.get(
+            response = self.client.get(
                 self.record_detail_url,
                 {
                     "type": "anxiety",
@@ -88,28 +279,56 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
                     "month": "2025-03",
                 },
             )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["questionnaire_id"], questionnaire.id)
+        self.assertEqual(response.context["package_id"], self.order.id)
+        self.assertEqual(
+            response.context["records"][0]["questionnaire_submission_id"],
+            submission.id,
+        )
+
+    def test_questionnaire_record_shows_detail_button_and_ajax_contains_submission_id(self):
+        questionnaire = self._get_or_create_questionnaire()
+        submission = self._set_submission_time(
+            QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=questionnaire,
+                total_score=Decimal("5.00"),
+            ),
+            self._aware_dt(),
+        )
+
+        resp = self.client.get(
+            self.record_detail_url,
+            {
+                "type": "anxiety",
+                "title": "焦虑评估",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, f'data-submission-id="{submission.id}"')
         self.assertContains(resp, 'role="button"')
         self.assertNotContains(resp, "查看详情")
 
-        with patch("web_doctor.views.mobile.health_record._is_member", return_value=True):
-            ajax_resp = self.client.get(
-                self.record_detail_url,
-                {
-                    "type": "anxiety",
-                    "title": "焦虑评估",
-                    "patient_id": self.patient.id,
-                    "month": "2025-03",
-                },
-                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-            )
+        ajax_resp = self.client.get(
+            self.record_detail_url,
+            {
+                "type": "anxiety",
+                "title": "焦虑评估",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
         self.assertEqual(ajax_resp.status_code, 200)
         payload = ajax_resp.json()
         self.assertTrue(payload["records"])
         self.assertEqual(payload["records"][0]["questionnaire_submission_id"], submission.id)
 
-    def test_questionnaire_record_without_submission_id_shows_disabled_detail_button(self):
+    def test_questionnaire_health_metric_without_submission_is_not_rendered(self):
         self._get_or_create_questionnaire()
         HealthMetric.objects.create(
             patient=self.patient,
@@ -119,19 +338,18 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
             source="manual",
         )
 
-        with patch("web_doctor.views.mobile.health_record._is_member", return_value=True):
-            resp = self.client.get(
-                self.record_detail_url,
-                {
-                    "type": "anxiety",
-                    "title": "焦虑评估",
-                    "patient_id": self.patient.id,
-                    "month": "2025-03",
-                },
-            )
+        resp = self.client.get(
+            self.record_detail_url,
+            {
+                "type": "anxiety",
+                "title": "焦虑评估",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+            },
+        )
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'data-submission-id=""')
-        self.assertContains(resp, 'aria-disabled="true"')
+        self.assertEqual(resp.context["records"], [])
+        self.assertNotContains(resp, 'class="record-item')
         self.assertNotContains(resp, "查看详情")
 
     def test_questionnaire_submission_detail_page_renders_single_and_multiple_answers(self):

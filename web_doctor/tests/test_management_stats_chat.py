@@ -22,7 +22,6 @@ from health_data.models import (
     CheckupResultValue,
     ClinicalEvent,
     HealthMetric,
-    MetricSource,
     MetricType,
     QuestionnaireSubmission,
     ReportImage,
@@ -145,24 +144,64 @@ class TestManagementStatsChatIntegration(TestCase):
         self.assertEqual(len(stats['line_chart']['xAxis']), 0)
 
     def test_generate_charts_data_includes_oral_mucosa_questionnaire(self):
-        HealthMetric.objects.create(
+        questionnaire = Questionnaire.objects.create(
+            code=QuestionnaireCode.Q_KQNMLB,
+            name="口腔黏膜损伤自评量表",
+            is_active=True,
+        )
+        submission = QuestionnaireSubmission.objects.create(
             patient=self.patient,
-            metric_type=QuestionnaireCode.Q_KQNMLB,
-            source=MetricSource.MANUAL,
-            value_main=Decimal("2"),
-            measured_at=timezone.make_aware(datetime(2025, 2, 10, 9, 0)),
+            questionnaire=questionnaire,
+            total_score=Decimal("2"),
+        )
+        QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+            created_at=timezone.make_aware(datetime(2025, 2, 10, 9, 0))
         )
 
-        charts = self.view._generate_charts_data(
+        charts = self.view._generate_questionnaire_count_charts(
             self.patient,
             self.start_date,
             self.end_date,
         )
 
-        self.assertIn("oral_mucosa", charts)
-        self.assertEqual(charts["oral_mucosa"]["dates"], ["2025-01", "2025-02", "2025-03"])
-        self.assertEqual(charts["oral_mucosa"]["series"][0]["data"], [0, 1, 0])
-        self.assertEqual(charts["oral_mucosa"]["title"], "口腔黏膜损伤自评量表统计次数: 1次")
+        self.assertEqual(charts[0]["dates"], ["2025-01", "2025-02", "2025-03"])
+        self.assertEqual(charts[0]["series"][0]["data"], [0, 1, 0])
+        self.assertEqual(charts[0]["title"], "口腔黏膜损伤自评量表统计次数: 1次")
+
+    def test_questionnaire_count_charts_use_active_submission_catalog(self):
+        Questionnaire.objects.update(is_active=False)
+        active = Questionnaire.objects.create(
+            code="Q_DYNAMIC_STATS",
+            name="运营新增问卷 A",
+            is_active=True,
+        )
+        Questionnaire.objects.create(
+            code="Q_DISABLED_STATS",
+            name="停用问卷",
+            is_active=False,
+        )
+        for submitted_at in (
+            datetime(2025, 1, 10, 9, 0),
+            datetime(2025, 1, 20, 9, 0),
+        ):
+            submission = QuestionnaireSubmission.objects.create(
+                patient=self.patient,
+                questionnaire=active,
+                total_score=Decimal("5"),
+            )
+            QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+                created_at=timezone.make_aware(submitted_at)
+            )
+
+        charts = self.view._generate_questionnaire_count_charts(
+            self.patient,
+            self.start_date,
+            self.end_date,
+        )
+
+        self.assertEqual([item["questionnaire_id"] for item in charts], [active.id])
+        self.assertEqual(charts[0]["series"][0]["data"], [2, 0, 0])
+        self.assertEqual(charts[0]["submission_count"], 2)
 
     def test_get_context_data_uses_actual_overview_counts_for_selected_package(self):
         product = Product.objects.create(
@@ -456,11 +495,21 @@ class TestManagementStatsChatIntegration(TestCase):
             ]
         }
         charts["oral_mucosa"]["title"] = "口腔黏膜损伤自评量表统计次数: 0次"
+        questionnaire_chart = {
+            **charts["oral_mucosa"],
+            "questionnaire_id": 99,
+            "code": QuestionnaireCode.Q_KQNMLB,
+            "name": "口腔黏膜损伤自评量表",
+            "icon_key": "oral_mucosa",
+            "color": "#14B8A6",
+            "data_script_id": "questionnaire-count-chart-data-99",
+        }
 
         html = render_to_string(
             "web_doctor/partials/management_stats/stats_details.html",
             {
                 "charts": charts,
+                "questionnaire_count_charts": [questionnaire_chart],
                 "followup_review_charts": [
                     {
                         **chart,

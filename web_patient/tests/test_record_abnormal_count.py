@@ -3,8 +3,8 @@ from django.contrib.auth.models import AnonymousUser
 from users.models import CustomUser, PatientProfile
 from users.choices import UserType
 from patient_alerts.models import PatientAlert, AlertEventType, AlertLevel
-from health_data.models import HealthMetric, MetricType
-from core.models import QuestionnaireCode
+from health_data.models import MetricType, QuestionnaireSubmission
+from core.models import Questionnaire, QuestionnaireCode
 from django.utils import timezone
 from datetime import timedelta
 from web_patient.views.record import health_records
@@ -44,8 +44,8 @@ class HealthRecordsAbnormalCountTest(TestCase):
         # 模拟登录
         self.client.force_login(self.user)
 
-    def test_abnormal_count_normal(self):
-        """测试正常情况下的异常统计"""
+    def test_metric_abnormal_count_does_not_create_questionnaire_card(self):
+        """问卷预警本身不会创建动态问卷档案卡片。"""
         # 创建一个体温异常报警 (MetricType.BODY_TEMPERATURE)
         PatientAlert.objects.create(
             patient=self.patient,
@@ -91,18 +91,24 @@ class HealthRecordsAbnormalCountTest(TestCase):
         # 未配置且无异常的项目不应展示，避免给患者心理暗示
         self.assertFalse(any(item['type'] == 'bp' for item in context['health_stats']))
         
-        # 检查咳嗽问卷异常数
-        cough_stat = next(item for item in context['health_survey_stats'] if item['type'] == 'cough')
-        self.assertEqual(cough_stat['abnormal'], 1)
+        self.assertEqual(context['health_survey_stats'], [])
 
-    def test_oral_mucosa_questionnaire_count_and_abnormal(self):
+    def test_oral_mucosa_questionnaire_displays_submission_and_abnormal_counts(self):
         measured_at = timezone.now()
-        HealthMetric.objects.create(
+        questionnaire, _ = Questionnaire.objects.update_or_create(
+            code=QuestionnaireCode.Q_KQNMLB,
+            defaults={
+                "name": "口腔黏膜损伤自评量表",
+                "is_active": True,
+            },
+        )
+        submission = QuestionnaireSubmission.objects.create(
             patient=self.patient,
-            metric_type=QuestionnaireCode.Q_KQNMLB,
-            source="manual",
-            value_main=Decimal("4.00"),
-            measured_at=measured_at,
+            questionnaire=questionnaire,
+            total_score=Decimal("4.00"),
+        )
+        QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+            created_at=measured_at,
         )
         PatientAlert.objects.create(
             patient=self.patient,
@@ -122,11 +128,13 @@ class HealthRecordsAbnormalCountTest(TestCase):
         self.assertEqual(response.status_code, 200)
         oral_stat = next(
             item for item in response.context['health_survey_stats']
-            if item['type'] == 'oral_mucosa'
+            if item['questionnaire_id'] == questionnaire.id
         )
         self.assertEqual(oral_stat['count'], 1)
         self.assertEqual(oral_stat['abnormal'], 1)
         self.assertContains(response, "口腔黏膜损伤自评量表")
+        self.assertContains(response, "异常：")
+        self.assertNotContains(response, "问卷评分：")
 
     def test_abnormal_count_inactive(self):
         """测试已处理（非激活）的报警不计入统计"""

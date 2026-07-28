@@ -56,14 +56,13 @@
                             <p class="text-xs text-gray-500 mb-2">已上传图片：</p>
                             <div class="grid grid-cols-3 gap-3 pb-2" id="existing-container-{{ item.id }}">
                                 {% for img in item.existing_images %}
-                                <div class="relative group rounded-lg overflow-hidden border border-gray-200 w-full aspect-square" id="existing-img-{{ img.id }}">
-                                    <img src="{{ img.url }}" class="w-full h-full object-cover">
+                                <div class="relative group w-full aspect-square" id="existing-img-{{ img.id }}">
+                                    {% include "components/ui/privacy_image.html" with src=img.url size_class="w-full" alt=item.name aria_label="查看已上传复查原图" extra_class="cursor-pointer" attrs='onclick="viewImage(this.children[0].src)"' %}
                                     <button type="button" 
-                                            onclick="deleteExistingImage({{ img.id }}, '{{ item.id }}')"
-                                            class="absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10">
-                                        <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                        </svg>
+                                            onclick="event.stopPropagation(); deleteExistingImage({{ img.id }}, '{{ item.id }}')"
+                                            aria-label="删除{{ item.name }}图片"
+                                            class="absolute inset-x-0 bottom-0 z-10 flex h-8 items-center justify-center rounded-b-2xl bg-slate-700/70 px-2 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-slate-700/80 active:bg-slate-800/80">
+                                        删除
                                     </button>
                                 </div>
                                 {% endfor %}
@@ -83,7 +82,7 @@
                         </div>
                         
                         <!-- Hidden Input -->
-                        <input type="file" id="file-input-{{ item.id }}" hidden accept="image/*" onchange="handleFileChange(event, '{{ item.id }}')">
+                        <input type="file" id="file-input-{{ item.id }}" hidden accept=".jpg,.jpeg,.png,image/jpeg,image/png" onchange="handleFileChange(event, '{{ item.id }}')">
                         
                         <!-- Error Message -->
                         <p id="error-{{ item.id }}" class="text-red-500 text-xs mt-2 hidden">请上传{{ item.name }}的检查报告照片</p>
@@ -171,13 +170,100 @@
 
 </div>
 
+<!-- 清晰原图预览：隐私模糊效果仅应用于复查图片缩略图。 -->
+<div id="checkup-image-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/90 p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-label="复查原图预览"
+     onclick="closeImage()">
+    <img id="checkup-modal-image"
+         src=""
+         alt="复查报告原图"
+         class="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+         onclick="event.stopPropagation()">
+    <button type="button"
+            aria-label="关闭复查原图预览"
+            class="absolute right-4 top-4 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            onclick="event.stopPropagation(); closeImage();">
+        <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+</div>
+
+<template id="record-checkup-privacy-image-template">
+    {% include "components/ui/privacy_image.html" with src="" size_class="w-full" alt="待上传的复查图片" aria_label="查看待上传复查原图" extra_class="cursor-pointer" %}
+</template>
+
 <script src="{% static 'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}"></script>
-<script src="{% static 'web_patient/image_compression.js' %}"></script>
+<script src="{% static 'web_patient/image_compression.js' %}?v=clinical-readability-v2"
+        data-worker-lib-url="{% static 'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}"></script>
 <script>
 // State to store uploaded files per item
 const uploads = {};
-const compressQueue = [];
-let compressActiveCount = 0;
+let selectionValidationChain = Promise.resolve();
+let validationInFlight = 0;
+let pendingSelectionError = '';
+let selectionErrorHoldUntil = 0;
+let compressionQueue = null;
+let compressionInitializationError = null;
+const COMPRESSION_API_VERSION = 'clinical-readability-v2';
+const compressionApi = window.LCCImageCompression;
+
+function setCompressionInitializationError(code, message, cause) {
+    const error = new Error(message);
+    error.code = code;
+    if (cause) error.cause = cause;
+    compressionInitializationError = error;
+    return error;
+}
+
+function compressionUnavailableMessage() {
+    if (compressionInitializationError && compressionInitializationError.code === 'library_unavailable') {
+        return compressionInitializationError.message;
+    }
+    return '图片处理组件加载失败，请刷新页面后重试';
+}
+
+const hasCompatibleCompressionApi = compressionApi
+    && compressionApi.API_VERSION === COMPRESSION_API_VERSION
+    && typeof compressionApi.inspectImage === 'function'
+    && typeof compressionApi.validateSelection === 'function'
+    && typeof compressionApi.compressOne === 'function'
+    && typeof compressionApi.createQueue === 'function'
+    && typeof compressionApi.isQueueContract === 'function';
+
+if (hasCompatibleCompressionApi) {
+    try {
+        const candidateQueue = compressionApi.createQueue({
+            concurrency: 1,
+            compressOptions: { timeoutMs: 30_000 },
+            onStateChange(id, state) {
+                const entry = getAllUploads().find(item => item.id === id);
+                if (!entry) return;
+                entry.status = state;
+                updatePreviewState(entry);
+                refreshCompressionStatus();
+            },
+        });
+        if (!compressionApi.isQueueContract(candidateQueue)) {
+            if (candidateQueue && typeof candidateQueue.destroy === 'function') candidateQueue.destroy();
+            throw setCompressionInitializationError(
+                'incompatible_api',
+                '图片处理队列接口不完整'
+            );
+        }
+        compressionQueue = candidateQueue;
+    } catch (error) {
+        if (!compressionInitializationError) {
+            compressionInitializationError = error;
+        }
+        console.error('Image compression queue initialization failed:', error);
+    }
+} else {
+    setCompressionInitializationError('incompatible_api', '图片处理组件版本不兼容');
+}
 const HOME_CHECKUP_URL = "{% url 'web_patient:patient_home' %}?checkup_completed=true";
 const HOME_URL = "{% url 'web_patient:patient_home' %}";
 
@@ -360,10 +446,6 @@ function triggerUpload(itemId) {
     document.getElementById(`file-input-${itemId}`).click();
 }
 
-const formatBytes = (window.LCCImageCompression && window.LCCImageCompression.formatBytes)
-    ? window.LCCImageCompression.formatBytes
-    : (bytes) => `${bytes || 0}B`;
-
 function updateCompressStatus(text) {
     const el = document.getElementById('status-message');
     if (!el) return;
@@ -377,164 +459,279 @@ function updateCompressStatus(text) {
     el.textContent = text;
 }
 
-function isOriginalUploadEnabled() { return false; }
-
-function runCompressQueue() {
-    if (compressActiveCount >= 2) return;
-    const task = compressQueue.shift();
-    if (!task) return;
-    compressActiveCount += 1;
-    task()
-        .catch(() => {})
-        .finally(() => {
-            compressActiveCount -= 1;
-            if (compressQueue.length === 0 && compressActiveCount === 0) {
-                updateCompressStatus('');
-            }
-            runCompressQueue();
-        });
+function getAllUploads() {
+    return Object.values(uploads).flat();
 }
 
-function enqueueCompressTask(fn) {
-    compressQueue.push(fn);
-    runCompressQueue();
+function refreshCompressionStatus() {
+    if (!compressionQueue) {
+        showStatus(compressionUnavailableMessage(), 'error');
+        return;
+    }
+    if (validationInFlight > 0) {
+        updateCompressStatus('正在检查图片，请稍候...');
+    } else if (compressionQueue.hasPending()) {
+        updateCompressStatus('正在处理图片，请稍候...');
+    } else if (getAllUploads().some(entry => entry.status === 'failed')) {
+        return;
+    } else if (pendingSelectionError) {
+        const message = pendingSelectionError;
+        pendingSelectionError = '';
+        selectionErrorHoldUntil = Date.now() + 3000;
+        showStatus(message, 'error');
+    } else if (Date.now() >= selectionErrorHoldUntil) {
+        updateCompressStatus('');
+    }
+}
+
+function compressionErrorMessage(error, fileName) {
+    const prefix = fileName ? `图片 ${fileName}` : '图片';
+    const messages = {
+        invalid_image: `${prefix} 内容无效，请选择真实的JPG/PNG图片`,
+        too_large: `${prefix} 超过上传限制`,
+        too_many_pixels: `${prefix} 分辨率过高，请选择不超过4000万像素的图片`,
+        timeout: `${prefix} 处理超时，请点击重试`,
+        cancelled: `${prefix} 已取消处理`,
+        library_unavailable: (error && error.message) || '图片处理组件加载失败，请刷新页面后重试',
+        compress_failed: `${prefix} 处理失败，请重试或删除`,
+    };
+    return messages[error && error.code] || messages.compress_failed;
 }
 
 function handleFileChange(event, itemId) {
     const fileList = event.target.files;
     if (!fileList || fileList.length === 0) return;
-    
-    // Convert to array IMMEDIATELY to preserve references before resetting input
     const files = Array.from(fileList);
-    
-    // Reset input value so same file can be selected again
     event.target.value = '';
-
-    // Initialize array for this item if not exists
-    if (!uploads[itemId]) {
-        uploads[itemId] = [];
+    if (!compressionQueue || !compressionApi || typeof compressionApi.validateSelection !== 'function') {
+        showStatus(compressionUnavailableMessage(), 'error');
+        return;
     }
-    
-    updateCompressStatus('正在压缩图片...');
+    if (!uploads[itemId]) uploads[itemId] = [];
+    validationInFlight += 1;
+    refreshCompressionStatus();
 
-    files.forEach((file, idx) => {
-        if (!file.type || !file.type.startsWith('image/')) {
-            showStatus(`文件 ${file.name} 格式不支持，请上传图片`, 'error');
-            return;
-        }
-        const lowerName = (file.name || '').toLowerCase();
-        const isJpeg = file.type === 'image/jpeg' || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg');
-        const isPng = file.type === 'image/png' || lowerName.endsWith('.png');
-        if (!isJpeg && !isPng) {
-            showStatus(`文件 ${file.name} 格式不支持，请上传JPG/PNG图片`, 'error');
-            return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-            showStatus(`文件 ${file.name} 超过10MB限制`, 'error');
-            return;
-        }
-
-        const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        const originalUrl = URL.createObjectURL(file);
-        const originalUpload = false;
-        uploads[itemId].push({ id: fileId, file, originalSize: file.size, compressedSize: file.size, fileName: file.name, usedOriginal: originalUpload, policy: null, networkInfo: null });
-        addPreviewElement(itemId, originalUrl, fileId, { originalSize: file.size, compressedSize: file.size, statusText: '压缩中...' });
-        const errorEl = document.getElementById(`error-${itemId}`);
-        if (errorEl) errorEl.classList.add('hidden');
-
-        enqueueCompressTask(async () => {
-            let progress = 0;
-            const onProgress = (p) => {
-                progress = p;
-                updateCompressStatus(`正在压缩图片...(${Math.min(99, Math.max(0, Math.floor(p)))}%)`);
-            };
-            try {
-                const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                const result = await window.LCCImageCompression.compressOne(file, { allowOriginal: true, timeoutMs: 30_000, onProgress, preScaleTo1080p: true });
-                const outFile = result.file;
-                const usedOriginal = !!result.usedOriginal;
-                const durationMs = result.durationMs || Math.round((((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - startedAt));
-                const compressedSize = outFile.size;
-                const entry = uploads[itemId].find(x => x.id === fileId);
-                if (entry) {
-                    entry.file = outFile;
-                    entry.compressedSize = compressedSize;
-                    entry.usedOriginal = usedOriginal;
-                    entry.durationMs = durationMs;
-                    entry.policy = result.policy || null;
-                    entry.networkInfo = result.networkInfo || null;
-                }
-                const wrapper = document.getElementById(`preview-${fileId}`);
-                if (wrapper) {
-                    const img = wrapper.querySelector('img');
-                    if (img && img.src) URL.revokeObjectURL(img.src);
-                    const newUrl = URL.createObjectURL(outFile);
-                    if (img) img.src = newUrl;
-                }
-                if (!usedOriginal && compressedSize > 500 * 1024) {
-                    showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
-                }
-            } catch (err) {
-                const entry = uploads[itemId].find(x => x.id === fileId);
-                if (entry) entry.failed = true;
-                const wrapper = document.getElementById(`preview-${fileId}`);
-                if (err && err.message === 'compress_timeout') {
-                    showStatus(`图片 ${file.name} 压缩超时(30秒)，将使用原图上传`, 'error');
-                } else {
-                    showStatus(`图片 ${file.name} 压缩失败，将使用原图上传`, 'error');
-                }
-            } finally {
-                if (progress >= 99) updateCompressStatus('正在压缩图片...');
+    const selectionTask = selectionValidationChain.then(async () => {
+        const validation = await window.LCCImageCompression.validateSelection(getAllUploads(), files);
+        if (validation.rejected.length > 0) {
+            const first = validation.rejected[0];
+            pendingSelectionError = compressionErrorMessage(first, first.file && first.file.name);
+            if (validation.rejected.length > 1) {
+                pendingSelectionError += `，另有${validation.rejected.length - 1}张图片未加入`;
             }
+        }
+
+        validation.accepted.forEach(({ file, inspection }) => {
+            const entry = {
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 11),
+                itemId,
+                sourceFile: file,
+                file: null,
+                originalSize: file.size,
+                compressedSize: 0,
+                fileName: file.name,
+                usedOriginal: false,
+                policy: null,
+                networkInfo: null,
+                durationMs: 0,
+                inspection,
+                status: 'queued',
+                error: null,
+                previewUrl: URL.createObjectURL(file),
+            };
+            uploads[itemId].push(entry);
+            addPreviewElement(entry);
+            const errorEl = document.getElementById(`error-${itemId}`);
+            if (errorEl) errorEl.classList.add('hidden');
+            processUpload(entry);
         });
     });
+    selectionValidationChain = selectionTask.catch(error => {
+        pendingSelectionError = compressionErrorMessage(error);
+    }).finally(() => {
+        validationInFlight -= 1;
+        refreshCompressionStatus();
+    });
+    return selectionValidationChain;
 }
 
-function addPreviewElement(itemId, url, fileId, meta) {
-    const container = document.getElementById(`preview-container-${itemId}`);
-    // Create preview wrapper
+function processUpload(entry) {
+    entry.status = 'queued';
+    entry.error = null;
+    updatePreviewState(entry);
+    compressionQueue.enqueue({
+        id: entry.id,
+        file: entry.sourceFile,
+        inspection: entry.inspection,
+    }).then(result => {
+        const current = getAllUploads().find(item => item.id === entry.id);
+        if (!current) return;
+        current.file = result.file;
+        current.compressedSize = result.outputBytes;
+        current.durationMs = result.durationMs;
+        current.policy = result.policy;
+        current.networkInfo = result.networkInfo;
+        current.status = 'ready';
+        replacePreviewUrl(current, result.file);
+        updatePreviewState(current);
+    }).catch(error => {
+        const current = getAllUploads().find(item => item.id === entry.id);
+        if (!current || (error && error.code === 'cancelled')) return;
+        current.status = 'failed';
+        current.error = error;
+        updatePreviewState(current);
+        showStatus(compressionErrorMessage(error, current.fileName), 'error');
+    }).finally(refreshCompressionStatus);
+}
+
+function retryUpload(fileId) {
+    const entry = getAllUploads().find(item => item.id === fileId);
+    if (!entry || entry.status !== 'failed') return;
+    processUpload(entry);
+}
+
+function replacePreviewUrl(entry, file) {
+    const wrapper = document.getElementById(`preview-${entry.id}`);
+    if (!wrapper) return;
+    const img = wrapper.querySelector('img');
+    const previousUrl = img ? img.src : '';
+    const newUrl = URL.createObjectURL(file);
+    if (img) img.src = newUrl;
+    const modalImage = document.getElementById('checkup-modal-image');
+    if (modalImage && modalImage.src === previousUrl) modalImage.src = newUrl;
+    if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    entry.previewUrl = newUrl;
+}
+
+function addPreviewElement(entry) {
+    const container = document.getElementById(`preview-container-${entry.itemId}`);
     const wrapper = document.createElement('div');
-    wrapper.id = `preview-${fileId}`;
-    wrapper.className = 'relative group rounded-lg overflow-hidden border border-gray-200 w-full aspect-square';
-    
-    // Image
-    const img = document.createElement('img');
-    img.src = url;
-    img.className = 'w-full h-full object-cover';
-    wrapper.appendChild(img);
+    wrapper.id = `preview-${entry.id}`;
+    wrapper.className = 'relative group w-full aspect-square';
 
-    // Delete Button (UI spec: 20x20, red, top-right 10px - using absolute positioning relative to wrapper)
-    const deleteBtn = document.createElement('button');
-    deleteBtn.className = 'absolute top-2 right-2 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10';
-    deleteBtn.innerHTML = '<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
-    deleteBtn.onclick = function(e) {
-        e.stopPropagation(); // Prevent bubbling
-        removeFile(itemId, fileId);
-    };
-    wrapper.appendChild(deleteBtn);
-    
-    // Insert before the last element (which is the add button)
+    const privacyImageTemplate = document.getElementById('record-checkup-privacy-image-template');
+    const privacyImage = privacyImageTemplate.content.firstElementChild.cloneNode(true);
+    const img = privacyImage.querySelector('img');
+    img.src = entry.previewUrl;
+    privacyImage.addEventListener('click', function() {
+        viewImage(img.src);
+    });
+    wrapper.appendChild(privacyImage);
+    const statusBadge = document.createElement('span');
+    statusBadge.dataset.role = 'processing-status';
+    wrapper.appendChild(statusBadge);
+    const actions = document.createElement('div');
+    actions.dataset.role = 'upload-actions';
+    wrapper.appendChild(actions);
     container.insertBefore(wrapper, container.lastElementChild);
+    updatePreviewState(entry);
 }
+
+function updatePreviewState(entry) {
+    const wrapper = document.getElementById(`preview-${entry.id}`);
+    if (!wrapper) return;
+    const failed = entry.status === 'failed';
+    wrapper.classList.toggle('ring-2', failed);
+    wrapper.classList.toggle('ring-red-400', failed);
+
+    const badge = wrapper.querySelector('[data-role="processing-status"]');
+    if (badge) {
+        const statusText = entry.status === 'queued' ? '等待处理' : entry.status === 'processing' ? '处理中' : entry.status === 'failed' ? '处理失败' : '';
+        badge.textContent = statusText;
+        badge.className = statusText
+            ? `absolute left-1 top-1 z-20 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white ${failed ? 'bg-red-600' : 'bg-slate-700/80'}`
+            : 'hidden';
+    }
+
+    const actions = wrapper.querySelector('[data-role="upload-actions"]');
+    if (!actions) return;
+    actions.className = 'absolute inset-x-0 bottom-0 z-20 flex h-8 overflow-hidden rounded-b-2xl bg-slate-700/70 text-xs font-medium text-white backdrop-blur-sm';
+    actions.replaceChildren();
+
+    if (failed) {
+        const retryButton = document.createElement('button');
+        retryButton.type = 'button';
+        retryButton.className = 'flex-1 border-r border-white/30 bg-red-600/90 transition-colors active:bg-red-700';
+        retryButton.textContent = '重试';
+        retryButton.setAttribute('aria-label', '重试处理复查图片');
+        retryButton.onclick = function(event) {
+            event.stopPropagation();
+            retryUpload(entry.id);
+        };
+        actions.appendChild(retryButton);
+    }
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'flex-1 transition-colors hover:bg-slate-700/80 active:bg-slate-800/80';
+    deleteButton.textContent = '删除';
+    deleteButton.setAttribute('aria-label', '删除待上传的复查图片');
+    deleteButton.onclick = function(event) {
+        event.stopPropagation();
+        removeFile(entry.itemId, entry.id);
+    };
+    actions.appendChild(deleteButton);
+}
+
+let imagePreviewTrigger = null;
+
+function viewImage(url) {
+    if (!url) return;
+
+    const modal = document.getElementById('checkup-image-modal');
+    const modalImage = document.getElementById('checkup-modal-image');
+    if (!modal || !modalImage) return;
+
+    imagePreviewTrigger = document.activeElement;
+    modalImage.src = url;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    const closeButton = modal.querySelector('[aria-label="关闭复查原图预览"]');
+    if (closeButton) closeButton.focus();
+}
+
+function closeImage() {
+    const modal = document.getElementById('checkup-image-modal');
+    const modalImage = document.getElementById('checkup-modal-image');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    if (modalImage) modalImage.src = '';
+
+    if (imagePreviewTrigger && typeof imagePreviewTrigger.focus === 'function') {
+        imagePreviewTrigger.focus();
+    }
+    imagePreviewTrigger = null;
+}
+
+document.addEventListener('keydown', function(event) {
+    const modal = document.getElementById('checkup-image-modal');
+    if (event.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeImage();
+    }
+});
 
 function removeFile(itemId, fileId) {
     if (confirm("确定要移除这张待上传的图片吗？")) {
-        // Remove from state
+        const entry = uploads[itemId] ? uploads[itemId].find(item => item.id === fileId) : null;
+        if (compressionQueue) compressionQueue.cancel(fileId);
         if (uploads[itemId]) {
             uploads[itemId] = uploads[itemId].filter(item => item.id !== fileId);
         }
-        
-        // Remove from DOM
+
         const wrapper = document.getElementById(`preview-${fileId}`);
         if (wrapper) {
-            // Revoke ObjectURL to free memory
             const img = wrapper.querySelector('img');
-            if (img && img.src) {
-                URL.revokeObjectURL(img.src);
+            const modalImage = document.getElementById('checkup-modal-image');
+            if (img && modalImage && modalImage.src === img.src) {
+                closeImage();
             }
             wrapper.remove();
         }
-        console.log(`Removed preview file ${fileId} from item ${itemId}`);
+        if (entry && entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+        refreshCompressionStatus();
     }
 }
 
@@ -559,6 +756,11 @@ function deleteExistingImage(imageId, itemId) {
         if (data.status === 'success') {
             const wrapper = document.getElementById(`existing-img-${imageId}`);
             if (wrapper) {
+                const img = wrapper.querySelector('img');
+                const modalImage = document.getElementById('checkup-modal-image');
+                if (img && modalImage && modalImage.src === img.src) {
+                    closeImage();
+                }
                 wrapper.remove();
             }
             showStatus("图片删除成功", "success");
@@ -584,8 +786,17 @@ function submitCheckup() {
     const i18nEl = document.getElementById('i18n-texts');
     const T = (key, fallback) => (i18nEl?.dataset?.[key] || fallback);
 
-    if (compressActiveCount > 0 || (compressQueue && compressQueue.length > 0)) {
-        showStatus(T('waitCompress', '请等待图片压缩完成后再提交'), 'info');
+    if (!compressionQueue) {
+        showStatus(compressionUnavailableMessage(), 'error');
+        return;
+    }
+
+    if (validationInFlight > 0 || compressionQueue.hasPending() || getAllUploads().some(entry => ['queued', 'processing'].includes(entry.status))) {
+        showStatus(T('waitCompress', '请等待图片处理完成后再提交'), 'info');
+        return;
+    }
+    if (getAllUploads().some(entry => entry.status === 'failed')) {
+        showStatus('存在处理失败的图片，请先重试或删除后再提交', 'error');
         return;
     }
 
@@ -609,7 +820,7 @@ function submitCheckup() {
     items.forEach(el => {
         const dateStr = el.getAttribute('data-date');
         const itemId = el.getAttribute('data-id');
-        const queue = uploads[itemId] || [];
+        const queue = (uploads[itemId] || []).filter(entry => entry.status === 'ready');
         if (!queue.length) return;
         if (!batches[dateStr]) batches[dateStr] = [];
         batches[dateStr].push({ itemId, files: queue });
@@ -661,7 +872,7 @@ function submitCheckup() {
             });
             const meta = {
                 page: 'record_checkup',
-                strategy: 'tiered_network_v1',
+                strategy: 'clinical_readability_v2',
                 batch_date: dateStr,
                 original_upload: false,
                 network: networkInfo,
@@ -711,6 +922,17 @@ function submitCheckup() {
         }
     })();
 }
+
+function cleanupUploadTasks() {
+    if (compressionQueue) compressionQueue.destroy();
+    getAllUploads().forEach(entry => {
+        if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    });
+}
+
+window.addEventListener('pagehide', function(event) {
+    if (!event.persisted) cleanupUploadTasks();
+});
 
 // 近7天完成度查询并通知首页
 function getEntrySource() {

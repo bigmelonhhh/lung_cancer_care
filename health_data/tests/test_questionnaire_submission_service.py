@@ -13,6 +13,7 @@ from core.models import (
     QuestionnaireQuestion,
     choices,
 )
+from core.models.choices import QuestionType
 from health_data.models import (
     HealthMetric,
     MetricSource,
@@ -180,6 +181,90 @@ class QuestionnaireSubmissionServiceTest(TestCase):
         metric = metrics.first()
         self.assertEqual(metric.value_main, Decimal("5"))
         self.assertEqual(metric.source, MetricSource.MANUAL)
+
+    def test_submit_ordinary_text_answer_saves_text_without_adding_score(self):
+        text_question = QuestionnaireQuestion.objects.create(
+            questionnaire=self.questionnaire,
+            text="补充说明",
+            q_type=QuestionType.TEXT,
+            is_required=True,
+            seq=3,
+        )
+
+        submission = QuestionnaireSubmissionService.submit_questionnaire(
+            patient_id=self.patient.id,
+            questionnaire_id=self.questionnaire.id,
+            answers_data=[
+                {"option_id": self.q1_opt2.id},
+                {"option_id": self.q2_opt1.id},
+                {"question_id": text_question.id, "value_text": "恢复情况良好"},
+            ],
+        )
+
+        self.assertEqual(submission.total_score, Decimal("5"))
+        text_answer = submission.answers.get(question=text_question)
+        self.assertIsNone(text_answer.option_id)
+        self.assertEqual(text_answer.value_text, "恢复情况良好")
+
+    def test_optional_text_answer_may_be_omitted(self):
+        QuestionnaireQuestion.objects.create(
+            questionnaire=self.questionnaire,
+            text="可选补充说明",
+            q_type=QuestionType.TEXT,
+            is_required=False,
+            seq=3,
+        )
+
+        submission = QuestionnaireSubmissionService.submit_questionnaire(
+            patient_id=self.patient.id,
+            questionnaire_id=self.questionnaire.id,
+            answers_data=[
+                {"option_id": self.q1_opt2.id},
+                {"option_id": self.q2_opt1.id},
+            ],
+        )
+
+        self.assertEqual(submission.total_score, Decimal("5"))
+        self.assertEqual(submission.answers.count(), 2)
+
+    def test_required_text_answer_rejects_blank_and_overlong_values(self):
+        text_question = QuestionnaireQuestion.objects.create(
+            questionnaire=self.questionnaire,
+            text="补充说明",
+            q_type=QuestionType.TEXT,
+            is_required=True,
+            seq=3,
+        )
+
+        for value in ("", " " * 3, "x" * 2001):
+            with self.subTest(value_length=len(value)), self.assertRaises(
+                ValidationError
+            ):
+                QuestionnaireSubmissionService.submit_questionnaire(
+                    patient_id=self.patient.id,
+                    questionnaire_id=self.questionnaire.id,
+                    answers_data=[
+                        {"option_id": self.q1_opt2.id},
+                        {"option_id": self.q2_opt1.id},
+                        {"question_id": text_question.id, "value_text": value},
+                    ],
+                )
+
+        self.assertEqual(QuestionnaireSubmission.objects.count(), 0)
+
+    def test_single_question_rejects_multiple_selected_options(self):
+        with self.assertRaises(ValidationError):
+            QuestionnaireSubmissionService.submit_questionnaire(
+                patient_id=self.patient.id,
+                questionnaire_id=self.questionnaire.id,
+                answers_data=[
+                    {"option_id": self.q1_opt1.id},
+                    {"option_id": self.q1_opt2.id},
+                    {"option_id": self.q2_opt1.id},
+                ],
+            )
+
+        self.assertEqual(QuestionnaireSubmission.objects.count(), 0)
 
     def test_get_submission_dates_returns_unique_dates_desc(self):
         """

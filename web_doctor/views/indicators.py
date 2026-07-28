@@ -20,6 +20,7 @@ from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
 from health_data.models import CheckupResultValue, QuestionnaireSubmission
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
+from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from users.models import PatientProfile
 
 logger = logging.getLogger(__name__)
@@ -1035,6 +1036,11 @@ def build_indicators_context(
         dynamic_y_max=False,
         dynamic_y_fallback=None,
     ):
+        # Legacy callers below are retained only to keep the surrounding chart
+        # assembly stable. Questionnaire modules are built in one batch by
+        # QuestionnaireDisplayService and overwrite these compatibility slots.
+        return {}
+
         submission_dates = None
         try:
             submission_times = QuestionnaireSubmission.objects.filter(
@@ -1182,6 +1188,28 @@ def build_indicators_context(
         dynamic_y_fallback=4,
     )
 
+    questionnaire_charts = QuestionnaireDisplayService.build_daily_score_charts(
+        patient=patient,
+        start_at=start_dt,
+        end_at=end_dt,
+        date_list=date_list,
+    )
+    legacy_questionnaire_keys = {
+        QuestionnaireCode.Q_PHYSICAL: "physical",
+        QuestionnaireCode.Q_BREATH: "breath",
+        QuestionnaireCode.Q_COUGH: "cough",
+        QuestionnaireCode.Q_APPETITE: "appetite",
+        QuestionnaireCode.Q_PAIN: "pain",
+        QuestionnaireCode.Q_SLEEP: "sleep",
+        QuestionnaireCode.Q_DEPRESSIVE: "psych",
+        QuestionnaireCode.Q_ANXIETY: "anxiety",
+        QuestionnaireCode.Q_KQNMLB: "oral_mucosa",
+    }
+    for questionnaire_chart in questionnaire_charts:
+        legacy_key = legacy_questionnaire_keys.get(questionnaire_chart["code"])
+        if legacy_key:
+            charts[legacy_key] = questionnaire_chart
+
     review_catalog, mapping_meta, all_mapping_ids = build_followup_review_catalog()
     raw_selected_mappings = (
         get_saved_followup_review_mapping_ids(patient)
@@ -1315,6 +1343,7 @@ def build_indicators_context(
             "compliance_display": compliance_display,
         },
         "charts": charts,
+        "questionnaire_charts": questionnaire_charts,
         "cough_table": cough_table,
         "treatment_cycles": treatment_cycles,
         "dates": date_strs,

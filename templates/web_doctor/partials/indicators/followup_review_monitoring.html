@@ -29,11 +29,9 @@
            return this.catalog.length ? this.catalog[0].checkup_id : null;
          },
          cleanupStaleModalLayers: function() {
-           var visibleLayers = Array.from(document.querySelectorAll('[data-followup-review-modal-layer]')).filter(function(layer) {
-             return !!(layer.offsetWidth || layer.offsetHeight || layer.getClientRects().length);
-           });
-           var keepLayer = visibleLayers.length ? visibleLayers[visibleLayers.length - 1] : null;
-           document.querySelectorAll('[data-followup-review-modal-layer]').forEach(function(layer) {
+           var layers = Array.from(document.querySelectorAll('[data-followup-review-modal-layer]'));
+           var keepLayer = layers.length ? layers[layers.length - 1] : null;
+           layers.forEach(function(layer) {
              if (keepLayer && layer === keepLayer) return;
              layer.remove();
            });

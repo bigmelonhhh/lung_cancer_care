@@ -1,6 +1,7 @@
 """问卷提交业务逻辑服务。"""
 
 import logging
+import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -16,9 +17,15 @@ from core.models import (
     QuestionnaireOption,
     QuestionnaireQuestion,
 )
+from core.models.choices import QuestionType
 from core.service import tasks as task_service
 from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.questionnaire_scoring import (
+    Eq5d5lChinaCalculator,
+    is_eq5d5l_code,
+    is_eqvas_code,
+)
 from patient_alerts.services.questionnaire_alerts import QuestionnaireAlertService
 
 logger = logging.getLogger(__name__)
@@ -29,7 +36,12 @@ if TYPE_CHECKING:
 
 class QuestionnaireSubmissionService:
     """处理问卷提交、算分及指标落库。"""
+
     COUGH_BLOOD_QUESTION_ID = 40
+    MAX_TEXT_ANSWER_LENGTH = 2000
+    EQ5D5L_QUESTION_COUNT = 5
+    EQVAS_QUESTION_COUNT = 1
+    EQVAS_VAS_PATTERN = re.compile(r"(?:0|[1-9]|[1-9][0-9]|100)", re.ASCII)
     SLEEP_T_SCORE_MAP = {
         8: Decimal("30.5"),
         9: Decimal("35.3"),
@@ -76,145 +88,176 @@ class QuestionnaireSubmissionService:
         task_id: int | None = None,
     ) -> QuestionnaireSubmission:
         """
-        提交问卷答案（仅选择题），并完成完整性校验、总分计算及（可选）指标落库。
+        校验并保存一次问卷提交。
 
-        【功能说明】
-        - 根据传入的问卷编码和选项答案，完成一次问卷提交；
-        - 校验所有题目是否都已作答，否则抛出 ValidationError；
-        - 在当前仅支持选择题场景下，对所有选中选项的 score 做简单累加，得到 total_score；
-        - 将答题明细保存到 QuestionnaireAnswer，将总分冗余到 QuestionnaireSubmission.total_score；
-        - 提交成功后写入一条 HealthMetric 记录（metric_type 使用问卷 code）。
-        - 提交成功后同步更新患者当天的问卷任务状态。
-
-        【参数说明】
-        :param patient_id: 患者ID（users.PatientProfile 的主键）
-        :param questionnaire_id: 问卷ID，对应 core.Questionnaire.id
-        :param answers_data: 答案列表，目前仅支持选择题，格式示例：
-               [
-                   {"option_id": 10},
-                   {"option_id": 12},
-                   {"option_id": 13}
-               ]
-               - 多选题：同一题目会传多条记录（不同 option_id）；
-               - 预留字段：将来如需文本补充，可在 item 中增加 "value_text"。
-        :param task_id: 关联的任务ID (可选)，用于与任务系统打通（例如随访任务），不传则为空。
-
-        【返回值说明】
-        :return: 创建好的 QuestionnaireSubmission 实例，包含：
-                 - patient/questionnaire/task 等基础信息；
-                 - total_score：本次提交的总得分（按问卷计分策略计算，当前为简单累加）。
-                 具体答题明细可通过 submission.answers 反向查询 QuestionnaireAnswer。
-
-        【异常说明】
-        - 若当前问卷未配置任何题目：抛出 ValidationError("当前问卷未配置题目。")
-        - 若 answers_data 为空：抛出 ValidationError("答案列表不能为空。")
-        - 若某个答案项缺少 option_id：抛出 ValidationError("答案项缺少 option_id。")
-        - 若存在无效的 option_id：抛出 ValidationError("存在无效的选项，请检查填写内容。")
-        - 若答案中包含不属于该问卷的选项：
-              ValidationError("答案中包含不属于该问卷的选项。")
-        - 若用户未答完所有题目：
-              ValidationError("问卷未全部作答，请完成所有题目后再提交。")
-
-        【使用示例】
-        >>> from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
-        >>> submission = QuestionnaireSubmissionService.submit_questionnaire(
-        ...     patient_id=1,
-        ...     questionnaire_id=1,
-        ...     answers_data=[
-        ...         {"option_id": 10},
-        ...         {"option_id": 12},
-        ...         {"option_id": 13},
-        ...     ],
-        ...     task_id=12345,
-        ... )
-        >>> submission.total_score
-        Decimal('21.00')
-        >>> list(submission.answers.all())  # doctest: +ELLIPSIS
-        [...]
+        选择题答案使用 ``option_id``，填空题答案使用
+        ``question_id + value_text``。普通 ``SUM`` 问卷只累加选项分；
+        ``Q_EQ5D5L`` 使用中国大陆价值集计分，``Q_EQVAS`` 直接使用
+        患者填写的 0 至 100 整数。
+        所有业务校验均在创建提交记录前完成。
         """
-        # 1. 获取问卷模板
-        questionnaire = Questionnaire.objects.get(id=questionnaire_id)
+        if not isinstance(answers_data, list):
+            raise ValidationError("答案列表格式错误。")
 
-        # 1.1 加载该问卷下的所有题目，用于“是否全部作答”的校验
+        questionnaire = Questionnaire.objects.get(id=questionnaire_id)
         questions = list(
-            QuestionnaireQuestion.objects.filter(questionnaire=questionnaire).only("id")
+            QuestionnaireQuestion.objects.filter(questionnaire=questionnaire)
+            .only("id", "questionnaire_id", "q_type", "is_required", "seq")
+            .order_by("seq", "id")
         )
         if not questions:
             raise ValidationError("当前问卷未配置题目。")
-
-        # 1.2 从答案中收集所有 option_id，并做基础校验
-        if not answers_data:
+        if not answers_data and not is_eqvas_code(questionnaire.code):
             raise ValidationError("答案列表不能为空。")
 
+        questions_map = {question.id: question for question in questions}
         option_ids: list[int] = []
+        text_answers_by_question: dict[int, str] = {}
         for item in answers_data:
-            opt_id = item.get("option_id")
-            if not opt_id:
-                raise ValidationError("答案项缺少 option_id。")
-            option_ids.append(opt_id)
+            if not isinstance(item, dict):
+                raise ValidationError("答案项格式错误。")
 
-        # 1.3 预加载所有选项，并校验：
-        #   - 选项是否存在
-        #   - 选项是否属于当前问卷
+            has_option = item.get("option_id") not in (None, "")
+            has_text_fields = "question_id" in item or "value_text" in item
+            if has_option == has_text_fields:
+                raise ValidationError("答案项必须且只能包含选项答案或文本答案。")
+
+            if has_option:
+                option_id = item["option_id"]
+                if isinstance(option_id, bool):
+                    raise ValidationError("选项ID格式错误。")
+                try:
+                    option_id = int(option_id)
+                except (TypeError, ValueError) as exc:
+                    raise ValidationError("选项ID格式错误。") from exc
+                if option_id <= 0:
+                    raise ValidationError("选项ID格式错误。")
+                option_ids.append(option_id)
+                continue
+
+            question_id = item.get("question_id")
+            if isinstance(question_id, bool):
+                raise ValidationError("题目ID格式错误。")
+            try:
+                question_id = int(question_id)
+            except (TypeError, ValueError) as exc:
+                raise ValidationError("文本答案缺少有效的题目ID。") from exc
+            question = questions_map.get(question_id)
+            if question is None:
+                raise ValidationError("文本答案中包含不属于该问卷的题目。")
+            if question.q_type != QuestionType.TEXT:
+                raise ValidationError("只有问答/填空题可以提交文本答案。")
+            if question_id in text_answers_by_question:
+                raise ValidationError("同一道问答/填空题不能重复提交。")
+
+            value_text = item.get("value_text")
+            if not isinstance(value_text, str):
+                raise ValidationError("问答/填空题答案必须为文本。")
+            if len(value_text) > cls.MAX_TEXT_ANSWER_LENGTH:
+                raise ValidationError(
+                    f"问答/填空题答案不能超过 {cls.MAX_TEXT_ANSWER_LENGTH} 个字符。"
+                )
+            text_answers_by_question[question_id] = value_text
+
+        if len(option_ids) != len(set(option_ids)):
+            raise ValidationError("同一选项不能重复提交。")
+
         options_qs = (
             QuestionnaireOption.objects.select_related("question")
             .filter(id__in=option_ids)
+            .order_by("question__seq", "question_id", "seq", "id")
         )
         options_map = {opt.id: opt for opt in options_qs}
+        if len(options_map) != len(option_ids):
+            raise ValidationError("存在无效的选项，请检查填写内容。")
 
-        if len(options_map) != len(set(option_ids)):
-            missing_ids = {oid for oid in option_ids if oid not in options_map}
-            if missing_ids:
-                raise ValidationError("存在无效的选项，请检查填写内容。")
-
-        # 校验选项是否都属于当前问卷，并按题目分组
         answers_by_question: dict[int, list[QuestionnaireOption]] = {}
         for opt_id in option_ids:
             option = options_map[opt_id]
             if option.question.questionnaire_id != questionnaire.id:
                 raise ValidationError("答案中包含不属于该问卷的选项。")
-            q_id = option.question_id
-            answers_by_question.setdefault(q_id, []).append(option)
+            question = questions_map[option.question_id]
+            if question.q_type == QuestionType.TEXT:
+                raise ValidationError("问答/填空题不能提交选项答案。")
+            answers_by_question.setdefault(question.id, []).append(option)
 
-        # 1.4 校验是否所有题目都已作答（业务要求：必须答完所有题目）
-        question_ids = {q.id for q in questions}
-        answered_question_ids = set(answers_by_question.keys())
-        missing_question_ids = question_ids - answered_question_ids
-        if missing_question_ids:
-            raise ValidationError("问卷未全部作答，请完成所有题目后再提交。")
+        for question in questions:
+            selected_options = answers_by_question.get(question.id, [])
+            text_value = text_answers_by_question.get(question.id)
+            has_text_answer = bool(text_value and text_value.strip())
 
-        # 2. 创建提交记录
+            if question.q_type == QuestionType.SINGLE and len(selected_options) > 1:
+                raise ValidationError("单选题只能选择一个选项。")
+            if question.q_type == QuestionType.TEXT:
+                if selected_options:
+                    raise ValidationError("问答/填空题不能提交选项答案。")
+                if text_value is not None and not has_text_answer:
+                    if question.is_required:
+                        raise ValidationError("请完成所有必填题目后再提交。")
+                    text_answers_by_question.pop(question.id, None)
+            elif question.q_type not in (
+                QuestionType.SINGLE,
+                QuestionType.MULTIPLE,
+            ):
+                raise ValidationError("问卷包含不支持的题目类型。")
+
+            is_answered = (
+                has_text_answer
+                if question.q_type == QuestionType.TEXT
+                else bool(selected_options)
+            )
+            if question.is_required and not is_answered:
+                raise ValidationError("请完成所有必填题目后再提交。")
+
+        if is_eq5d5l_code(questionnaire.code):
+            total_score = cls._calculate_eq5d5l_score(
+                questions=questions,
+                answers_by_question=answers_by_question,
+            )
+        elif is_eqvas_code(questionnaire.code):
+            total_score = cls._calculate_eqvas_score(
+                questions=questions,
+                text_answers_by_question=text_answers_by_question,
+            )
+        else:
+            total_score = Decimal("0.00")
+            if questionnaire.calculation_strategy == "SUM":
+                total_score = sum(
+                    (
+                        option.score
+                        for selected_options in answers_by_question.values()
+                        for option in selected_options
+                    ),
+                    Decimal("0.00"),
+                )
+
         submission = QuestionnaireSubmission.objects.create(
             patient_id=patient_id,
             questionnaire=questionnaire,
             task_id=task_id,
         )
 
-        # 3. 保存答案明细并计算总分
-        total_score = Decimal("0.00")
-
         answers_to_create = []
-        for item in answers_data:
-            opt_id = item.get("option_id")
-            option = options_map[opt_id]  # 前面已校验存在
-
-            answer = QuestionnaireAnswer(
-                submission=submission,
-                question=option.question,
-                option=option,
-                value_text=item.get("value_text"),
-            )
-
-            # 简单累加策略：直接加选项分
-            if questionnaire.calculation_strategy == "SUM":
-                total_score += option.score
-
-            answers_to_create.append(answer)
+        for question in questions:
+            for option in answers_by_question.get(question.id, []):
+                answers_to_create.append(
+                    QuestionnaireAnswer(
+                        submission=submission,
+                        question=question,
+                        option=option,
+                    )
+                )
+            if question.id in text_answers_by_question:
+                answers_to_create.append(
+                    QuestionnaireAnswer(
+                        submission=submission,
+                        question=question,
+                        option=None,
+                        value_text=text_answers_by_question[question.id],
+                    )
+                )
 
         QuestionnaireAnswer.objects.bulk_create(answers_to_create)
-
-        # 4. 更新总分
-        
         submission.total_score = total_score
         submission.save(update_fields=["total_score"])
         _, resolved_task_id = task_service.complete_daily_questionnaire_tasks(
@@ -225,26 +268,14 @@ class QuestionnaireSubmissionService:
             submission.task_id = resolved_task_id
             submission.save(update_fields=["task_id"])
 
-        # 5. 将问卷总分落库到 HealthMetric：
-        #    - metric_type 使用问卷的 code，例如 Q_SLEEP、Q_PAIN 等；
-        #    - value_main 存放本次问卷总分；
-        #    - source 固定为手动录入；
-        #    - questionnaire_submission 关联当前提交记录，便于后续串联查询。
-        try:
-            HealthMetricService.save_manual_metric(
-                patient_id=patient_id,
-                metric_type=questionnaire.code,
-                measured_at=submission.created_at,
-                value_main=total_score,
-                questionnaire_submission_id=submission.id,
-                task_id=submission.task_id,
-            )
-        except Exception:
-            logger.exception(
-                "问卷 %s 提交成功，但同步 HealthMetric 失败。submission_id=%s",
-                questionnaire.name,
-                submission.id,
-            )
+        HealthMetricService.save_manual_metric(
+            patient_id=patient_id,
+            metric_type=questionnaire.code,
+            measured_at=submission.created_at,
+            value_main=total_score,
+            questionnaire_submission_id=submission.id,
+            task_id=submission.task_id,
+        )
 
         try:
             QuestionnaireAlertService.process_submission(submission)
@@ -256,6 +287,76 @@ class QuestionnaireSubmissionService:
             )
 
         return submission
+
+    @classmethod
+    def _calculate_eq5d5l_score(
+        cls,
+        *,
+        questions: list[QuestionnaireQuestion],
+        answers_by_question: dict[int, list[QuestionnaireOption]],
+    ) -> Decimal:
+        """校验固定五维配置，并计算 EQ-5D-5L 中国大陆健康效用指数。"""
+        if len(questions) != cls.EQ5D5L_QUESTION_COUNT:
+            raise ValidationError("EQ-5D-5L 问卷必须恰好配置五道题。")
+
+        if any(
+            question.q_type != QuestionType.SINGLE
+            for question in questions
+        ):
+            raise ValidationError("EQ-5D-5L 五个健康维度必须均为单选题。")
+
+        configured_values_by_question: dict[int, list[str]] = {}
+        for question_id, value in QuestionnaireOption.objects.filter(
+            question_id__in=[question.id for question in questions]
+        ).values_list("question_id", "value"):
+            configured_values_by_question.setdefault(question_id, []).append(value)
+
+        expected_values = {"1", "2", "3", "4", "5"}
+        for question in questions:
+            configured_values = configured_values_by_question.get(question.id, [])
+            if (
+                len(configured_values) != len(expected_values)
+                or set(configured_values) != expected_values
+            ):
+                raise ValidationError(
+                    "EQ-5D-5L 每个健康维度必须完整配置 1 至 5 五个等级。"
+                )
+
+        levels: list[int] = []
+        for question in questions:
+            selected_options = answers_by_question.get(question.id, [])
+            if len(selected_options) != 1:
+                raise ValidationError("EQ-5D-5L 五个健康维度必须各选择一个选项。")
+            option_value = selected_options[0].value
+            if option_value not in {"1", "2", "3", "4", "5"}:
+                raise ValidationError(
+                    "EQ-5D-5L 健康维度选项值必须为 1 至 5 的整数。"
+                )
+            levels.append(int(option_value))
+
+        return Eq5d5lChinaCalculator.calculate(levels)
+
+    @classmethod
+    def _calculate_eqvas_score(
+        cls,
+        *,
+        questions: list[QuestionnaireQuestion],
+        text_answers_by_question: dict[int, str],
+    ) -> Decimal:
+        """校验单题配置，并返回 EQ-VAS 的 0 至 100 整数评分。"""
+        if len(questions) != cls.EQVAS_QUESTION_COUNT:
+            raise ValidationError("EQ-VAS 问卷必须恰好配置一道题。")
+
+        question = questions[0]
+        if question.q_type != QuestionType.TEXT:
+            raise ValidationError("EQ-VAS 问卷题目必须为问答/填空题。")
+
+        vas_value = text_answers_by_question.get(question.id)
+        if vas_value is None:
+            return Decimal("0.00")
+        if cls.EQVAS_VAS_PATTERN.fullmatch(vas_value) is None:
+            raise ValidationError("EQ-VAS 自评分必须为 0 至 100 的整数。")
+        return Decimal(vas_value)
 
     @classmethod
     def get_submission_dates(

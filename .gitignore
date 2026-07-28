@@ -97,3 +97,5 @@ package-lock.json
 /.cursor
 deploy.sh
 ecosystem.config.js
+/.qoder
+/.workbuddy

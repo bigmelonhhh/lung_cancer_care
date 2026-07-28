@@ -1,7 +1,5 @@
 from datetime import datetime
 from decimal import Decimal
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
@@ -9,7 +7,8 @@ from django.utils import timezone
 
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
-from health_data.models import HealthMetric, MetricType
+from health_data.models import HealthMetric, MetricType, QuestionnaireSubmission
+from market.models import Order, Product
 from users.models import DoctorProfile, PatientProfile
 
 User = get_user_model()
@@ -33,6 +32,19 @@ class MobileHealthRecordDetailChartTests(TestCase):
             name="患者图表",
             phone="13800138241",
             doctor=self.doctor_profile,
+        )
+        self.product = Product.objects.create(
+            name="问卷图表服务包",
+            price=Decimal("199.00"),
+            duration_days=90,
+            is_active=True,
+        )
+        self.order = Order.objects.create(
+            patient=self.patient,
+            product=self.product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=timezone.make_aware(datetime(2025, 1, 1), timezone.get_current_timezone()),
         )
 
         self.client.force_login(self.doctor_user)
@@ -62,6 +74,17 @@ class MobileHealthRecordDetailChartTests(TestCase):
             value_sub=Decimal(str(value_sub)) if value_sub is not None else None,
             source="manual",
         )
+
+    def _create_submission(self, questionnaire, score, submitted_at):
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal(str(score)),
+        )
+        QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+            created_at=submitted_at
+        )
+        return submission
 
     def test_temperature_page_has_chart_context_and_switch(self):
         response = self.client.get(
@@ -173,54 +196,31 @@ class MobileHealthRecordDetailChartTests(TestCase):
         self.assertEqual(payload["series"][0]["data"][missing_idx], 0)
         self.assertEqual(payload["series"][1]["data"][missing_idx], 0)
 
-    def test_questionnaire_chart_marks_no_task_days(self):
-        Questionnaire.objects.get_or_create(
+    def test_questionnaire_chart_uses_submissions_without_task_day_markers(self):
+        questionnaire, _ = Questionnaire.objects.get_or_create(
             code=QuestionnaireCode.Q_ANXIETY,
             defaults={"name": "焦虑评估", "is_active": True},
         )
-
-        self._create_metric(
-            metric_type=QuestionnaireCode.Q_ANXIETY,
-            year=2025,
-            month=3,
-            day=2,
-            hour=9,
-            value_main="0",
+        self._create_submission(
+            questionnaire,
+            "0",
+            self._aware_dt(2025, 3, 2, 9),
         )
-        self._create_metric(
-            metric_type=QuestionnaireCode.Q_ANXIETY,
-            year=2025,
-            month=3,
-            day=3,
-            hour=10,
-            value_main="5",
+        self._create_submission(
+            questionnaire,
+            "5",
+            self._aware_dt(2025, 3, 3, 10),
         )
 
-        DailyTask.objects.create(
-            patient=self.patient,
-            task_date=datetime(2025, 3, 2).date(),
-            task_type=PlanItemCategory.QUESTIONNAIRE,
-            title="焦虑评估",
-            interaction_payload={"questionnaire_code": QuestionnaireCode.Q_ANXIETY},
+        response = self.client.get(
+            self.url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": self.order.id,
+                "month": "2025-03",
+            },
         )
-        DailyTask.objects.create(
-            patient=self.patient,
-            task_date=datetime(2025, 3, 3).date(),
-            task_type=PlanItemCategory.QUESTIONNAIRE,
-            title="焦虑评估",
-            interaction_payload={"questionnaire_code": QuestionnaireCode.Q_ANXIETY},
-        )
-
-        with patch("web_doctor.views.mobile.health_record._is_member", return_value=True):
-            response = self.client.get(
-                self.url,
-                {
-                    "type": "anxiety",
-                    "title": "焦虑评估",
-                    "patient_id": self.patient.id,
-                    "month": "2025-03",
-                },
-            )
         self.assertEqual(response.status_code, 200)
         payload = response.context["chart_payload"]
         series_data = payload["series"][0]["data"]
@@ -231,7 +231,7 @@ class MobileHealthRecordDetailChartTests(TestCase):
 
         self.assertEqual(series_data[day_1_idx]["value"], 0)
         self.assertIsNone(series_data[day_1_idx]["raw_value"])
-        self.assertTrue(series_data[day_1_idx]["is_no_task"])
+        self.assertFalse(series_data[day_1_idx]["is_no_task"])
 
         self.assertEqual(series_data[day_2_idx]["value"], 0.0)
         self.assertEqual(series_data[day_2_idx]["raw_value"], 0.0)
@@ -241,54 +241,31 @@ class MobileHealthRecordDetailChartTests(TestCase):
         self.assertEqual(series_data[day_3_idx]["raw_value"], 5.0)
         self.assertFalse(series_data[day_3_idx]["is_no_task"])
 
-    def test_oral_mucosa_questionnaire_chart_marks_no_task_days(self):
-        Questionnaire.objects.get_or_create(
+    def test_oral_mucosa_questionnaire_chart_uses_submission_scores(self):
+        questionnaire, _ = Questionnaire.objects.get_or_create(
             code=QuestionnaireCode.Q_KQNMLB,
             defaults={"name": "口腔黏膜损伤自评量表", "is_active": True},
         )
-
-        self._create_metric(
-            metric_type=QuestionnaireCode.Q_KQNMLB,
-            year=2025,
-            month=3,
-            day=2,
-            hour=9,
-            value_main="0",
+        self._create_submission(
+            questionnaire,
+            "0",
+            self._aware_dt(2025, 3, 2, 9),
         )
-        self._create_metric(
-            metric_type=QuestionnaireCode.Q_KQNMLB,
-            year=2025,
-            month=3,
-            day=3,
-            hour=10,
-            value_main="4",
+        self._create_submission(
+            questionnaire,
+            "4",
+            self._aware_dt(2025, 3, 3, 10),
         )
 
-        DailyTask.objects.create(
-            patient=self.patient,
-            task_date=datetime(2025, 3, 2).date(),
-            task_type=PlanItemCategory.QUESTIONNAIRE,
-            title="口腔黏膜损伤自评量表",
-            interaction_payload={"questionnaire_code": QuestionnaireCode.Q_KQNMLB},
+        response = self.client.get(
+            self.url,
+            {
+                "patient_id": self.patient.id,
+                "questionnaire_id": questionnaire.id,
+                "package_id": self.order.id,
+                "month": "2025-03",
+            },
         )
-        DailyTask.objects.create(
-            patient=self.patient,
-            task_date=datetime(2025, 3, 3).date(),
-            task_type=PlanItemCategory.QUESTIONNAIRE,
-            title="口腔黏膜损伤自评量表",
-            interaction_payload={"questionnaire_code": QuestionnaireCode.Q_KQNMLB},
-        )
-
-        with patch("web_doctor.views.mobile.health_record._is_member", return_value=True):
-            response = self.client.get(
-                self.url,
-                {
-                    "type": "oral_mucosa",
-                    "title": "口腔黏膜损伤自评量表",
-                    "patient_id": self.patient.id,
-                    "month": "2025-03",
-                },
-            )
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["is_questionnaire_type"])
         payload = response.context["chart_payload"]
@@ -300,7 +277,7 @@ class MobileHealthRecordDetailChartTests(TestCase):
 
         self.assertEqual(series_data[day_1_idx]["value"], 0)
         self.assertIsNone(series_data[day_1_idx]["raw_value"])
-        self.assertTrue(series_data[day_1_idx]["is_no_task"])
+        self.assertFalse(series_data[day_1_idx]["is_no_task"])
 
         self.assertEqual(series_data[day_2_idx]["value"], 0.0)
         self.assertEqual(series_data[day_2_idx]["raw_value"], 0.0)

@@ -1,0 +1,13 @@
+{% if display_only %}
+<div class="relative {{ size_class|default:'w-44' }} aspect-square max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm{% if extra_class %} {{ extra_class }}{% endif %}"
+     {{ attrs|default:''|safe }}>
+    {% include "components/ui/_privacy_image_content.html" %}
+</div>
+{% else %}
+<button type="button"
+        class="relative {{ size_class|default:'w-44' }} aspect-square max-w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2{% if extra_class %} {{ extra_class }}{% endif %}"
+        aria-label="{{ aria_label|default:'打开原图预览' }}"
+        {{ attrs|default:''|safe }}>
+    {% include "components/ui/_privacy_image_content.html" %}
+</button>
+{% endif %}

@@ -1,8 +1,10 @@
 import logging
 import time
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.core.cache import cache
 from django.http import HttpRequest, HttpResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -241,6 +243,39 @@ def _build_daily_plans(summary_list):
     return daily_plans
 
 
+def _build_home_task_action_url(plan, task_url_mapping, patient_id):
+    """Build a progressive-enhancement URL for a patient-home task action."""
+    plan_type = plan.get("type")
+    if not plan_type or plan_type == "medication":
+        return ""
+
+    url_base = plan.get("url") or task_url_mapping.get(plan_type) or ""
+    if not url_base:
+        return ""
+
+    url_parts = urlsplit(url_base)
+    query_pairs = [
+        (key, value)
+        for key, value in parse_qsl(url_parts.query, keep_blank_values=True)
+        if key not in {"patient_id", "source"}
+    ]
+    query_pairs.extend(
+        [
+            ("patient_id", str(patient_id or "")),
+            ("source", "home"),
+        ]
+    )
+    return urlunsplit(
+        (
+            url_parts.scheme,
+            url_parts.netloc,
+            url_parts.path,
+            urlencode(query_pairs),
+            url_parts.fragment,
+        )
+    )
+
+
 def _get_metric_value(metric_key, data):
     if not metric_key or not data:
         return None
@@ -409,6 +444,30 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "followup": reverse("web_patient:daily_survey"),
         "checkup": reverse("web_patient:record_checkup"),
     }
+    for plan in daily_plans:
+        plan["action_url"] = _build_home_task_action_url(
+            plan,
+            task_url_mapping,
+            patient_id,
+        )
+
+    buy_url = generate_menu_auth_url("market:product_buy")
+    patient_home_config = {
+        "isMember": is_member,
+        "buyUrl": buy_url,
+        "unreadChatCount": unread_chat_count,
+        "patientId": patient_id or "",
+        "menuUrl": task_url_mapping,
+        "csrfToken": get_token(request),
+        "unreadRefreshIntervalMs": 15000,
+        "urls": {
+            "submitMedication": reverse("web_patient:submit_medication"),
+            "patientHome": reverse("web_patient:patient_home"),
+            "queryLastMetric": reverse("web_patient:query_last_metric"),
+            "chatUnreadCount": reverse("web_patient:chat_api_unread_count"),
+            "chatResetUnread": reverse("web_patient:chat_api_reset_unread"),
+        },
+    }
 
     context = {
         "patient": patient,
@@ -416,9 +475,10 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "is_member": is_member,
         "service_days": service_days,
         "daily_plans": daily_plans,
-        "buy_url": generate_menu_auth_url("market:product_buy"),
+        "buy_url": buy_url,
         "patient_id": patient_id,
         "menuUrl": task_url_mapping,
+        "patient_home_config": patient_home_config,
         "step_count": step_count,
         "baseline_steps": baseline_steps,
         "has_baseline_steps": has_baseline_steps,

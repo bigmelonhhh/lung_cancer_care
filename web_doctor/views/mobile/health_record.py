@@ -4,7 +4,8 @@ import json
 from datetime import datetime, timedelta
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Max, Q
+from django.contrib import messages
+from django.db.models import Max
 from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -13,8 +14,14 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
-from health_data.models import HealthMetric, MetricType, ReportImage
+from health_data.models import (
+    HealthMetric,
+    MetricType,
+    QuestionnaireSubmission,
+    ReportImage,
+)
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from market.service.order import get_paid_orders_for_patient
 from patient_alerts.services.todo_list import TodoListService
@@ -52,7 +59,6 @@ RECORD_TYPE_METRIC_MAP = {
     "weight": MetricType.WEIGHT,
     "step": MetricType.STEPS,
     "heart": MetricType.HEART_RATE,
-    **QUESTIONNAIRE_RECORD_TYPE_MAP,
 }
 
 QUESTIONNAIRE_RECORD_TYPES = set(QUESTIONNAIRE_RECORD_TYPE_MAP.keys())
@@ -90,6 +96,7 @@ def health_records(request: HttpRequest) -> HttpResponse:
         return HttpResponseBadRequest("参数错误")
 
     patient_id = patient.id or None
+
     is_member = _is_member(patient)
     selected_package_id = request.GET.get("package_id")
     entry_source = request.GET.get("source")
@@ -207,108 +214,21 @@ def health_records(request: HttpRequest) -> HttpResponse:
 
     health_survey_stats = []
     checkup_stats = []
+    if is_member and selected_package and patient_id:
+        tz = timezone.get_current_timezone()
+        survey_start_at = timezone.make_aware(
+            datetime.combine(start_date, datetime.min.time()), tz
+        )
+        survey_end_at = timezone.make_aware(
+            datetime.combine(end_date + timedelta(days=1), datetime.min.time()), tz
+        )
+        health_survey_stats = QuestionnaireDisplayService.build_patient_archive_cards(
+            patient=patient,
+            start_at=survey_start_at,
+            end_at=survey_end_at,
+        )
+
     if is_member:
-        health_survey_stats = [
-            {
-                "type": "physical",
-                "title": "体能评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "physical",
-            },
-            {
-                "type": "breath",
-                "title": "呼吸评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "breath",
-            },
-            {
-                "type": "cough",
-                "title": "咳嗽与痰色评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "cough",
-            },
-            {
-                "type": "appetite",
-                "title": "食欲评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "appetite",
-            },
-            {
-                "type": "pain",
-                "title": "身体疼痛评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "pain",
-            },
-            {
-                "type": "sleep",
-                "title": "睡眠质量评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "sleep",
-            },
-            {
-                "type": "psych",
-                "title": "抑郁评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "psych",
-            },
-            {
-                "type": "anxiety",
-                "title": "焦虑评估",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "anxiety",
-            },
-            {
-                "type": "oral_mucosa",
-                "title": "口腔黏膜损伤自评量表",
-                "count": 0,
-                "abnormal": 0,
-                "icon": "oral_mucosa",
-            },
-        ]
-
-        metric_type_map = {
-            "physical": QuestionnaireCode.Q_PHYSICAL,
-            "breath": QuestionnaireCode.Q_BREATH,
-            "cough": QuestionnaireCode.Q_COUGH,
-            "appetite": QuestionnaireCode.Q_APPETITE,
-            "pain": QuestionnaireCode.Q_PAIN,
-            "sleep": QuestionnaireCode.Q_SLEEP,
-            "psych": QuestionnaireCode.Q_PSYCH,
-            "anxiety": QuestionnaireCode.Q_ANXIETY,
-            "oral_mucosa": QuestionnaireCode.Q_KQNMLB,
-        }
-
-        for item in health_survey_stats:
-            m_type = metric_type_map.get(item["type"])
-            if m_type:
-                try:
-                    page_obj = HealthMetricService.query_metrics_by_type(
-                        patient_id=int(patient_id),
-                        metric_type=m_type,
-                        page=1,
-                        page_size=1,
-                        start_date=start_dt,
-                        end_date=end_dt,
-                    )
-                    item["count"] = page_obj.paginator.count
-
-                    item["abnormal"] = TodoListService.count_abnormal_events(
-                        patient=patient,
-                        start_date=start_date,
-                        end_date=end_date,
-                        type_code=m_type,
-                    )
-                except Exception as e:
-                    logging.error(f"查询随访问卷统计失败 type={item['type']}: {e}")
-
         from health_data.services.report_service import ReportUploadService
 
         library = get_active_checkup_library()
@@ -803,33 +723,9 @@ def _build_line_chart_payload(
         "heart": "#f97316",
         "step": "#22c55e",
         "bp": "#2563eb",
-        "oral_mucosa": "#ef4444",
     }
     day_set = set(month_days)
     latest_map = {}
-    questionnaire_task_dates = set()
-
-    if record_type in QUESTIONNAIRE_RECORD_TYPES and month_days:
-        questionnaire_code = QUESTIONNAIRE_RECORD_TYPE_MAP.get(record_type)
-        questionnaire_id = (
-            Questionnaire.objects.filter(code=questionnaire_code)
-            .values_list("id", flat=True)
-            .first()
-        )
-        task_filters = Q(interaction_payload__questionnaire_code=questionnaire_code)
-        if questionnaire_id:
-            task_filters = task_filters | Q(plan_item__template_id=questionnaire_id)
-
-        questionnaire_task_dates = set(
-            DailyTask.objects.filter(
-                patient_id=patient_id,
-                task_type=PlanItemCategory.QUESTIONNAIRE,
-                task_date__gte=month_days[0],
-                task_date__lt=end_date_exclusive.date(),
-            )
-            .filter(task_filters)
-            .values_list("task_date", flat=True)
-        )
 
     metrics = (
         HealthMetric.objects.filter(
@@ -881,42 +777,6 @@ def _build_line_chart_payload(
             ],
         }
 
-    if record_type in QUESTIONNAIRE_RECORD_TYPES:
-        series_data = []
-        for day in month_days:
-            has_task = day in questionnaire_task_dates
-            day_score = latest_map.get(day)
-            if not has_task:
-                series_data.append(
-                    {
-                        "value": 0,
-                        "raw_value": None,
-                        "is_no_task": True,
-                    }
-                )
-                continue
-
-            normalized_score = day_score if day_score is not None else 0
-            series_data.append(
-                {
-                    "value": normalized_score,
-                    "raw_value": normalized_score,
-                    "is_no_task": False,
-                }
-            )
-
-        return {
-            "dates": dates,
-            "full_dates": full_dates,
-            "series": [
-                {
-                    "name": title,
-                    "data": series_data,
-                    "color": color_map.get(record_type, "#3b82f6"),
-                }
-            ],
-        }
-
     series_data = [latest_map.get(day, 0) for day in month_days]
     return {
         "dates": dates,
@@ -929,6 +789,142 @@ def _build_line_chart_payload(
             }
         ],
     }
+
+
+def _dynamic_questionnaire_record_detail(
+    request: HttpRequest,
+    *,
+    patient,
+    questionnaire_id: int,
+) -> HttpResponse:
+    """Render package-scoped questionnaire submissions for doctor mobile."""
+    questionnaire = Questionnaire.objects.filter(pk=questionnaire_id).first()
+    package_id_raw = request.GET.get("package_id")
+    try:
+        package_id = int(package_id_raw) if package_id_raw else None
+    except (TypeError, ValueError):
+        package_id = None
+
+    packages = get_paid_orders_for_patient(patient)
+    selected_package = next(
+        (item for item in packages if package_id and item.id == package_id),
+        None,
+    )
+    if package_id is None and packages:
+        selected_package = packages[0]
+
+    if questionnaire is None or selected_package is None:
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {"success": False, "message": "问卷或服务包不存在"},
+                status=404,
+            )
+        messages.error(request, "问卷或服务包不存在。")
+        return redirect(
+            f"{reverse('web_doctor:mobile_health_records')}?patient_id={patient.id}"
+        )
+
+    tz = timezone.get_current_timezone()
+    package_start_at = timezone.make_aware(
+        datetime.combine(selected_package.start_date, datetime.min.time()), tz
+    )
+    package_end_at = timezone.make_aware(
+        datetime.combine(
+            selected_package.end_date + timedelta(days=1), datetime.min.time()
+        ),
+        tz,
+    )
+    submissions = QuestionnaireSubmission.objects.filter(
+        patient=patient,
+        questionnaire=questionnaire,
+        created_at__gte=package_start_at,
+        created_at__lt=package_end_at,
+    )
+    latest_submission = submissions.order_by("-created_at", "-id").first()
+    default_month = (
+        timezone.localtime(latest_submission.created_at).strftime("%Y-%m")
+        if latest_submission
+        else selected_package.end_date.strftime("%Y-%m")
+    )
+    current_month, month_start, month_end_exclusive, days_in_month = (
+        _resolve_month_window(request.GET.get("month") or default_month)
+    )
+    cursor_month = request.GET.get("cursor_month") or current_month
+    month_start_at = timezone.make_aware(month_start, tz)
+    month_end_at = timezone.make_aware(month_end_exclusive, tz)
+
+    try:
+        cursor_offset = max(0, int(request.GET.get("cursor_offset", 0)))
+    except (TypeError, ValueError):
+        cursor_offset = 0
+    is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+    default_limit = days_in_month if is_ajax else RECORD_BATCH_SIZE
+    try:
+        limit = int(request.GET.get("limit", default_limit))
+    except (TypeError, ValueError):
+        limit = default_limit
+    limit = max(1, min(limit, days_in_month))
+
+    records, has_more, next_cursor_month, next_offset = (
+        QuestionnaireDisplayService.list_patient_submissions(
+            patient=patient,
+            questionnaire_id=questionnaire.id,
+            start_at=package_start_at,
+            end_at=package_end_at,
+            cursor_month=cursor_month,
+            cursor_offset=cursor_offset,
+            limit=limit,
+        )
+    )
+    if is_ajax:
+        return JsonResponse(
+            {
+                "records": records,
+                "has_more": has_more,
+                "next_cursor_month": next_cursor_month,
+                "next_cursor_offset": next_offset,
+                "batch_size": limit,
+            }
+        )
+
+    month_days = [
+        month_start.date() + timedelta(days=index) for index in range(days_in_month)
+    ]
+    chart_start_at = max(package_start_at, month_start_at)
+    chart_end_at = min(package_end_at, month_end_at)
+    chart_payload = QuestionnaireDisplayService.build_patient_month_score_chart(
+        patient=patient,
+        questionnaire=questionnaire,
+        start_at=chart_start_at,
+        end_at=chart_end_at,
+        date_list=month_days,
+    )
+    context = {
+        "record_type": "questionnaire",
+        "is_questionnaire_type": True,
+        "questionnaire_id": questionnaire.id,
+        "package_id": selected_package.id,
+        "title": questionnaire.name,
+        "records": records,
+        "has_records": bool(records),
+        "current_month": current_month,
+        "patient_id": patient.id,
+        "has_more": has_more,
+        "next_cursor_month": next_cursor_month,
+        "next_cursor_offset": next_offset,
+        "batch_size": limit,
+        "checkup_id": None,
+        "source": request.GET.get("source"),
+        "show_operation_controls": False,
+        "show_add_button": False,
+        "days_in_month": days_in_month,
+        "chart_mode": "line",
+        "chart_available": True,
+        "chart_payload": chart_payload,
+        "chart_payload_json": json.dumps(chart_payload, ensure_ascii=False),
+        "chart_canvas_width": max(days_in_month * 48, 640),
+    }
+    return render(request, "web_doctor/mobile/health_record_detail.html", context)
 
 
 @login_required
@@ -958,6 +954,34 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         return HttpResponseBadRequest("参数错误")
 
     patient_id = patient.id or None
+
+    questionnaire_id_raw = request.GET.get("questionnaire_id")
+    if questionnaire_id_raw:
+        try:
+            questionnaire_id = int(questionnaire_id_raw)
+        except (TypeError, ValueError):
+            questionnaire_id = 0
+        return _dynamic_questionnaire_record_detail(
+            request,
+            patient=patient,
+            questionnaire_id=questionnaire_id,
+        )
+
+    if record_type in QUESTIONNAIRE_RECORD_TYPES:
+        legacy_questionnaire_id = (
+            Questionnaire.objects.filter(
+                code=QUESTIONNAIRE_RECORD_TYPE_MAP[record_type],
+                is_active=True,
+            )
+            .values_list("id", flat=True)
+            .first()
+        )
+        return _dynamic_questionnaire_record_detail(
+            request,
+            patient=patient,
+            questionnaire_id=legacy_questionnaire_id or 0,
+        )
+
     is_member = _is_member(patient)
 
     general_record_types = {

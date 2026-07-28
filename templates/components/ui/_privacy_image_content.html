@@ -1,0 +1,9 @@
+<img {% if x_src %}:src="{{ x_src }}"{% else %}src="{{ src }}"{% endif %}
+     alt="{{ alt|default:'' }}"
+     class="h-full w-full scale-[1.03] object-cover blur-[2px]"
+     {{ image_attrs|default:''|safe }}>
+<span class="pointer-events-none absolute inset-0 bg-white/10" aria-hidden="true"></span>
+<span class="pointer-events-none absolute right-0 top-0 inline-flex items-center gap-1 rounded-t-lg rounded-bl-lg bg-white px-2 py-1 text-[11px] font-medium text-blue-600 shadow-sm">
+    <svg t="1784208334415" class="icon w-4 h-4" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2032" width="48" height="48"><path d="M805.44 333.14c19.78 17.8 22.45 47.53 6.93 68.49l-3.12 3.82-221.14 245.71c-54.09 60.1-145.1 67.71-208.29 18.64l-5.84-4.77-148.11-126.96c-21.47-18.4-23.96-50.72-5.56-72.19 17.32-20.21 46.97-23.6 68.3-8.58l3.9 3.03 148.11 126.95c19.86 17.02 49.09 16.21 67.96-1.17l3.42-3.45 221.14-245.71c18.91-21.02 51.28-22.72 72.3-3.81z m-293.45-206.2C411.87 203.88 291.38 255.64 160 272.76L159.99 576c0 194.4 157.6 352 352 352s352-157.6 352-352l0.01-303.24c-126.13-16.43-242.22-64.8-339.91-136.72l-12.1-9.1zM512.01 0l9.71 9.33c111.15 104.5 259.67 169.72 423.38 173.46l14.92 0.17-0.03 393.04c0 247.42-200.58 448-448 448s-448-200.58-448-448V182.97c174.43 0 332.57-69.79 448.02-182.97z" fill="#2563eb" p-id="2033"></path></svg>
+    <span>{{ label|default:'隐私保护' }}</span>
+</span>
