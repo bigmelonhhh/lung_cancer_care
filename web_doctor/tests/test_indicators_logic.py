@@ -149,11 +149,80 @@ class IndicatorsLogicTests(TestCase):
         self.assertEqual(context["dates"][0], default_start.strftime("%m-%d"))
         self.assertEqual(len(context["dates"]), 30)
 
-    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
-    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_questionnaire_scores", return_value=[])
     @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
     @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
-    def test_default_view_questionnaire_queries_recent_30_days(self, _mock_query, _mock_adherence, mock_scores, _mock_hemoptysis):
+    def test_questionnaire_charts_are_database_driven_and_keep_latest_daily_score(self, *_mocks):
+        Questionnaire.objects.update(is_active=False)
+        active = Questionnaire.objects.create(
+            code="Q_DYNAMIC_INDICATOR",
+            name="新增问卷 A <script>",
+            is_active=True,
+            sort_order=1,
+        )
+        Questionnaire.objects.create(
+            code="Q_DISABLED_INDICATOR",
+            name="已停用问卷",
+            is_active=False,
+        )
+        first = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=active,
+            total_score=Decimal("3"),
+        )
+        last = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=active,
+            total_score=Decimal("8"),
+        )
+        submitted_at = timezone.make_aware(
+            datetime.combine(self.today, datetime.min.time())
+        )
+        QuestionnaireSubmission.objects.filter(pk=first.pk).update(
+            created_at=submitted_at
+        )
+        QuestionnaireSubmission.objects.filter(pk=last.pk).update(
+            created_at=submitted_at + timedelta(hours=1)
+        )
+
+        context = build_indicators_context(
+            self.patient,
+            start_date_str=self.today.isoformat(),
+            end_date_str=self.today.isoformat(),
+            filter_type="date",
+        )
+
+        charts = context["questionnaire_charts"]
+        self.assertEqual([item["questionnaire_id"] for item in charts], [active.id])
+        self.assertEqual(charts[0]["series"][0]["data"], [8.0])
+        html = render_to_string(
+            "web_doctor/partials/indicators/questionnaire_monitoring.html",
+            {**context, "patient": self.patient},
+        )
+        self.assertIn("新增问卷 A &lt;script&gt;", html)
+        self.assertNotIn("已停用问卷", html)
+
+    def test_questionnaire_loading_overlay_is_hidden_until_htmx_request(self):
+        html = render_to_string(
+            "web_doctor/partials/indicators/questionnaire_monitoring.html",
+            {
+                "patient": self.patient,
+                "questionnaire_charts": [],
+                "cough_table": {"rows": []},
+            },
+        )
+
+        self.assertIn("#questionnaire-loading {", html)
+        self.assertIn("opacity: 0;", html)
+        self.assertIn("pointer-events: none;", html)
+        self.assertIn("#questionnaire-loading.htmx-request {", html)
+        self.assertIn("opacity: 1;", html)
+        self.assertIn("pointer-events: auto;", html)
+
+    @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
+    @patch("web_doctor.views.indicators.QuestionnaireDisplayService.build_daily_score_charts", return_value=[])
+    @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
+    @patch("web_doctor.views.indicators.HealthMetricService.query_metrics_by_type", return_value=SimpleNamespace(object_list=[]))
+    def test_default_view_questionnaire_queries_recent_30_days(self, _mock_query, _mock_adherence, mock_charts, _mock_hemoptysis):
         """测试默认视图下问卷查询参数为最近30天"""
         context = build_indicators_context(self.patient)
         expected_start = self.today - timedelta(days=29)
@@ -161,10 +230,13 @@ class IndicatorsLogicTests(TestCase):
 
         self.assertEqual(context["current_start_date"], expected_start.isoformat())
         self.assertEqual(context["current_end_date"], expected_end.isoformat())
-        self.assertGreaterEqual(mock_scores.call_count, 1)
-        for _, kwargs in mock_scores.call_args_list:
-            self.assertEqual(kwargs["start_date"], expected_start)
-            self.assertEqual(kwargs["end_date"], expected_end)
+        mock_charts.assert_called_once()
+        kwargs = mock_charts.call_args.kwargs
+        self.assertEqual(timezone.localtime(kwargs["start_at"]).date(), expected_start)
+        self.assertEqual(
+            timezone.localtime(kwargs["end_at"]).date(),
+            expected_end + timedelta(days=1),
+        )
 
     def test_medication_data_future_logic(self):
         """测试服药记录数据结构及未来日期逻辑"""
@@ -427,11 +499,11 @@ class IndicatorsLogicTests(TestCase):
         self.assertIn("type: 'line'", html)
         self.assertIn("connectNulls: true", html)
         self.assertIn("symbolSize: 8", html)
-        self.assertIn("data: [0.0, null, null]", html)
-        self.assertIn("? '-' : value", html)
+        self.assertIn('"data": [0.0, null, null]', html)
+        self.assertIn("data: series.data", html)
         oral_series = context["charts"]["oral_mucosa"]["series"][0]
         self.assertEqual(len(oral_series["missing"]), 3)
-        self.assertEqual(context["charts"]["oral_mucosa"]["y_max"], 4)
+        self.assertEqual(context["charts"]["oral_mucosa"]["y_max"], 10)
 
     @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
     @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])

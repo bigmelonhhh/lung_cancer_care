@@ -61,6 +61,15 @@ class FollowupReviewTemplateTests(TestCase):
         self.assertNotIn("data-followup-review-modal-root", html)
         self.assertIn("data-followup-review-modal-layer", html)
         self.assertIn("cleanupStaleModalLayers", html)
+        self.assertIn(
+            "var layers = Array.from(document.querySelectorAll('[data-followup-review-modal-layer]'))",
+            html,
+        )
+        self.assertIn(
+            "var keepLayer = layers.length ? layers[layers.length - 1] : null",
+            html,
+        )
+        self.assertNotIn("var visibleLayers", html)
         self.assertNotIn("window.__followupReviewModalActiveOwner", html)
         self.assertIn("window.htmx.process($el)", html)
         self.assertIn('style="display: none; z-index: 10050;"', html)

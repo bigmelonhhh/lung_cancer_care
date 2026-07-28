@@ -243,6 +243,82 @@ class TodoListServiceTests(TestCase):
 
         self.assertEqual(count, 1)
 
+    def test_count_questionnaire_abnormal_events_counts_dynamic_sources_in_range(self):
+        start_at = timezone.now() - timedelta(days=1)
+        end_at = timezone.now() + timedelta(days=1)
+        dynamic_code = "Q_DYNAMIC_RECOVERY"
+        alert = PatientAlert.objects.create(
+            patient=self.patient,
+            doctor=self.doctor_profile,
+            event_type=AlertEventType.QUESTIONNAIRE,
+            event_level=AlertLevel.MODERATE,
+            event_title="动态问卷异常",
+            event_content="动态问卷异常",
+            event_time=timezone.now(),
+            source_type="questionnaire",
+            source_payload={"questionnaire_code": dynamic_code},
+        )
+        for source_id, occurred_at in (
+            (1, timezone.now() - timedelta(hours=2)),
+            (2, timezone.now() - timedelta(hours=1)),
+            (3, start_at - timedelta(seconds=1)),
+        ):
+            PatientAlertSource.objects.create(
+                alert=alert,
+                patient=self.patient,
+                source_type="questionnaire",
+                source_id=source_id,
+                source_key=f"questionnaire:{source_id}",
+                source_label="动态问卷",
+                value_display="3级",
+                baseline_display="",
+                event_level=AlertLevel.MODERATE,
+                occurred_at=occurred_at,
+                source_payload={"questionnaire_code": dynamic_code},
+            )
+
+        counts = TodoListService.count_questionnaire_abnormal_events(
+            patient=self.patient,
+            start_at=start_at,
+            end_at=end_at,
+            questionnaire_codes=[dynamic_code, "Q_DYNAMIC_NORMAL"],
+        )
+
+        self.assertEqual(
+            counts,
+            {
+                dynamic_code: 2,
+                "Q_DYNAMIC_NORMAL": 0,
+            },
+        )
+
+    def test_count_questionnaire_abnormal_events_falls_back_to_active_alerts(self):
+        start_at = timezone.now() - timedelta(days=1)
+        end_at = timezone.now() + timedelta(days=1)
+        dynamic_code = "Q_DYNAMIC_ALERT_ONLY"
+        for is_active in (True, False):
+            PatientAlert.objects.create(
+                patient=self.patient,
+                doctor=self.doctor_profile,
+                event_type=AlertEventType.QUESTIONNAIRE,
+                event_level=AlertLevel.MODERATE,
+                event_title=f"动态问卷异常-{is_active}",
+                event_content="动态问卷异常",
+                event_time=timezone.now(),
+                source_type="questionnaire",
+                source_payload={"questionnaire_code": dynamic_code},
+                is_active=is_active,
+            )
+
+        counts = TodoListService.count_questionnaire_abnormal_events(
+            patient=self.patient,
+            start_at=start_at,
+            end_at=end_at,
+            questionnaire_codes=[dynamic_code],
+        )
+
+        self.assertEqual(counts, {dynamic_code: 1})
+
     def test_count_abnormal_events_end_date_inclusive(self):
         end_date = timezone.localdate()
         end_dt = timezone.make_aware(datetime.combine(end_date, datetime.max.time()))

@@ -40,7 +40,7 @@
                         <svg class="w-8 h-8 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                         </svg>
-                        <input type="file" id="file-input" multiple accept="image/*" class="hidden" onchange="handleFileChange(event)">
+                        <input type="file" id="file-input" multiple accept=".jpg,.jpeg,.png,image/jpeg,image/png" class="hidden" onchange="handleFileChange(event)">
                     </label>
                 </div>
                 <p class="text-xs text-gray-400 mt-3">支持上传多张图片，每张不超过 10MB</p>
@@ -56,19 +56,100 @@
     </form>
 </div>
 
+<!-- 清晰原图预览：隐私模糊效果仅应用于上传列表缩略图。 -->
+<div id="image-modal"
+     class="fixed inset-0 z-50 hidden items-center justify-center bg-black/90 p-4"
+     role="dialog"
+     aria-modal="true"
+     aria-label="报告原图预览"
+     onclick="closeImage()">
+    <img id="modal-image"
+         src=""
+         alt="报告原图"
+         class="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+         onclick="event.stopPropagation()">
+    <button type="button"
+            aria-label="关闭原图预览"
+            class="absolute right-4 top-4 rounded-full bg-black/40 p-2 text-white transition-colors hover:bg-black/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            onclick="event.stopPropagation(); closeImage();">
+        <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+</div>
+
+<template id="report-upload-privacy-image-template">
+    {% include "components/ui/privacy_image.html" with src="" size_class="w-full" alt="待上传的检查报告" aria_label="查看待上传报告原图" extra_class="cursor-pointer" %}
+</template>
+
 <script src="{% static 'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}"></script>
-<script src="{% static 'web_patient/image_compression.js' %}"></script>
+<script src="{% static 'web_patient/image_compression.js' %}?v=clinical-readability-v2"
+        data-worker-lib-url="{% static 'vendor/browser-image-compression/2.0.2/browser-image-compression.js' %}"></script>
 <script>
 // State to store uploaded files
 let uploads = [];
-const compressQueue = [];
-let compressActiveCount = 0;
+let selectionValidationChain = Promise.resolve();
+let validationInFlight = 0;
+let pendingSelectionError = '';
+let selectionErrorHoldUntil = 0;
+let compressionQueue = null;
+let compressionInitializationError = null;
+const COMPRESSION_API_VERSION = 'clinical-readability-v2';
+const compressionApi = window.LCCImageCompression;
 
-const formatBytes = (window.LCCImageCompression && window.LCCImageCompression.formatBytes)
-    ? window.LCCImageCompression.formatBytes
-    : (bytes) => `${bytes || 0}B`;
+function setCompressionInitializationError(code, message, cause) {
+    const error = new Error(message);
+    error.code = code;
+    if (cause) error.cause = cause;
+    compressionInitializationError = error;
+    return error;
+}
 
-function isOriginalUploadEnabled() { return false; }
+function compressionUnavailableMessage() {
+    if (compressionInitializationError && compressionInitializationError.code === 'library_unavailable') {
+        return compressionInitializationError.message;
+    }
+    return '图片处理组件加载失败，请刷新页面后重试';
+}
+
+const hasCompatibleCompressionApi = compressionApi
+    && compressionApi.API_VERSION === COMPRESSION_API_VERSION
+    && typeof compressionApi.inspectImage === 'function'
+    && typeof compressionApi.validateSelection === 'function'
+    && typeof compressionApi.compressOne === 'function'
+    && typeof compressionApi.createQueue === 'function'
+    && typeof compressionApi.isQueueContract === 'function';
+
+if (hasCompatibleCompressionApi) {
+    try {
+        const candidateQueue = compressionApi.createQueue({
+            concurrency: 1,
+            compressOptions: { timeoutMs: 30_000 },
+            onStateChange(id, state) {
+                const entry = uploads.find(item => item.id === id);
+                if (!entry) return;
+                entry.status = state;
+                updatePreviewState(entry);
+                refreshCompressionStatus();
+            },
+        });
+        if (!compressionApi.isQueueContract(candidateQueue)) {
+            if (candidateQueue && typeof candidateQueue.destroy === 'function') candidateQueue.destroy();
+            throw setCompressionInitializationError(
+                'incompatible_api',
+                '图片处理队列接口不完整'
+            );
+        }
+        compressionQueue = candidateQueue;
+    } catch (error) {
+        if (!compressionInitializationError) {
+            compressionInitializationError = error;
+        }
+        console.error('Image compression queue initialization failed:', error);
+    }
+} else {
+    setCompressionInitializationError('incompatible_api', '图片处理组件版本不兼容');
+}
 
 function updateCompressStatus(text) {
     if (!text) {
@@ -79,176 +160,283 @@ function updateCompressStatus(text) {
     showStatus(text, 'info');
 }
 
-function runCompressQueue() {
-    if (compressActiveCount >= 2) return;
-    const task = compressQueue.shift();
-    if (!task) return;
-    compressActiveCount += 1;
-    task()
-        .catch(() => {})
-        .finally(() => {
-            compressActiveCount -= 1;
-            if (compressQueue.length === 0 && compressActiveCount === 0) {
-                updateCompressStatus('');
-            }
-            runCompressQueue();
-        });
+function refreshCompressionStatus() {
+    if (!compressionQueue) {
+        showStatus(compressionUnavailableMessage(), 'error');
+        return;
+    }
+    if (validationInFlight > 0) {
+        updateCompressStatus('正在检查图片，请稍候...');
+    } else if (compressionQueue.hasPending()) {
+        updateCompressStatus('正在处理图片，请稍候...');
+    } else if (uploads.some(entry => entry.status === 'failed')) {
+        return;
+    } else if (pendingSelectionError) {
+        const message = pendingSelectionError;
+        pendingSelectionError = '';
+        selectionErrorHoldUntil = Date.now() + 3000;
+        showStatus(message, 'error');
+    } else if (Date.now() >= selectionErrorHoldUntil) {
+        updateCompressStatus('');
+    }
 }
 
-function enqueueCompressTask(fn) {
-    compressQueue.push(fn);
-    runCompressQueue();
+function compressionErrorMessage(error, fileName) {
+    const prefix = fileName ? `图片 ${fileName}` : '图片';
+    const messages = {
+        invalid_image: `${prefix} 内容无效，请选择真实的JPG/PNG图片`,
+        too_large: `${prefix} 超过上传限制`,
+        too_many_pixels: `${prefix} 分辨率过高，请选择不超过4000万像素的图片`,
+        timeout: `${prefix} 处理超时，请点击重试`,
+        cancelled: `${prefix} 已取消处理`,
+        library_unavailable: (error && error.message) || '图片处理组件加载失败，请刷新页面后重试',
+        compress_failed: `${prefix} 处理失败，请重试或删除`,
+    };
+    return messages[error && error.code] || messages.compress_failed;
 }
 
 function handleFileChange(event) {
     const fileList = event.target.files;
     if (!fileList || fileList.length === 0) return;
-    
     const files = Array.from(fileList);
-    event.target.value = ''; // Reset input
-    
-    updateCompressStatus('正在压缩图片...');
+    event.target.value = '';
+    if (!compressionQueue || !compressionApi || typeof compressionApi.validateSelection !== 'function') {
+        showStatus(compressionUnavailableMessage(), 'error');
+        return;
+    }
+    validationInFlight += 1;
+    refreshCompressionStatus();
 
-    files.forEach((file) => {
-        if (!file.type || !file.type.startsWith('image/')) {
-            showStatus(`文件 ${file.name} 格式不支持，请上传图片`, 'error');
-            return;
-        }
-        const lowerName = (file.name || '').toLowerCase();
-        const isJpeg = file.type === 'image/jpeg' || lowerName.endsWith('.jpg') || lowerName.endsWith('.jpeg');
-        const isPng = file.type === 'image/png' || lowerName.endsWith('.png');
-        if (!isJpeg && !isPng) {
-            showStatus(`文件 ${file.name} 格式不支持，请上传JPG/PNG图片`, 'error');
-            return;
-        }
-        if (file.size > 10 * 1024 * 1024) {
-            showStatus(`文件 ${file.name} 超过10MB限制`, 'error');
-            return;
-        }
-
-        const fileId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-        const originalUrl = URL.createObjectURL(file);
-        const originalUpload = false;
-        uploads.push({
-            id: fileId,
-            file: file,
-            originalSize: file.size,
-            compressedSize: file.size,
-            fileName: file.name,
-            usedOriginal: originalUpload,
-            policy: null,
-            networkInfo: null,
-        });
-        addPreviewElement(originalUrl, fileId, { originalSize: file.size, compressedSize: file.size, statusText: '压缩中...' });
-
-        enqueueCompressTask(async () => {
-            let progress = 0;
-            const onProgress = (p) => {
-                progress = p;
-                updateCompressStatus(`正在压缩图片...(${Math.min(99, Math.max(0, Math.floor(p)))}%)`);
-            };
-            try {
-                const result = await window.LCCImageCompression.compressOne(file, { allowOriginal: true, timeoutMs: 30_000, onProgress, preScaleTo1080p: true });
-                const outFile = result.file;
-                const usedOriginal = !!result.usedOriginal;
-                const compressedSize = outFile.size;
-                const entry = uploads.find(x => x.id === fileId);
-                if (entry) {
-                    entry.file = outFile;
-                    entry.compressedSize = compressedSize;
-                    entry.usedOriginal = usedOriginal;
-                    entry.policy = result.policy || null;
-                    entry.networkInfo = result.networkInfo || null;
-                }
-                const wrapper = document.getElementById(`preview-${fileId}`);
-                if (wrapper) {
-                    const img = wrapper.querySelector('img');
-                    if (img && img.src) URL.revokeObjectURL(img.src);
-                    const newUrl = URL.createObjectURL(outFile);
-                    if (img) img.src = newUrl;
-                    const sizeEl = wrapper.querySelector('[data-role="size"]');
-                    if (sizeEl) sizeEl.textContent = `${formatBytes(file.size)} → ${formatBytes(compressedSize)}`;
-                    const statusEl = wrapper.querySelector('[data-role="status"]');
-                    if (statusEl) statusEl.textContent = usedOriginal ? '未压缩' : (compressedSize <= 500 * 1024 ? '已压缩' : '已压缩(>阈值)');
-                }
-                if (!usedOriginal && compressedSize > 500 * 1024) {
-                    showStatus(`图片 ${file.name} 压缩后仍超过500KB，已尽力压缩`, 'info');
-                }
-            } catch (err) {
-                const entry = uploads.find(x => x.id === fileId);
-                if (entry) entry.failed = true;
-                const wrapper = document.getElementById(`preview-${fileId}`);
-                if (wrapper) {
-                    const statusEl = wrapper.querySelector('[data-role="status"]');
-                    if (statusEl) statusEl.textContent = '压缩失败';
-                }
-                if (err && err.message === 'compress_timeout') {
-                    showStatus(`图片 ${file.name} 压缩超时(30秒)，将使用原图上传`, 'error');
-                } else {
-                    showStatus(`图片 ${file.name} 压缩失败，将使用原图上传`, 'error');
-                }
-            } finally {
-                if (progress >= 99) updateCompressStatus('正在压缩图片...');
+    const selectionTask = selectionValidationChain.then(async () => {
+        const validation = await window.LCCImageCompression.validateSelection(uploads, files);
+        if (validation.rejected.length > 0) {
+            const first = validation.rejected[0];
+            pendingSelectionError = compressionErrorMessage(first, first.file && first.file.name);
+            if (validation.rejected.length > 1) {
+                pendingSelectionError += `，另有${validation.rejected.length - 1}张图片未加入`;
             }
+        }
+
+        validation.accepted.forEach(({ file, inspection }) => {
+            const entry = {
+                id: Date.now() + '-' + Math.random().toString(36).slice(2, 11),
+                sourceFile: file,
+                file: null,
+                originalSize: file.size,
+                compressedSize: 0,
+                fileName: file.name,
+                usedOriginal: false,
+                policy: null,
+                networkInfo: null,
+                durationMs: 0,
+                inspection,
+                status: 'queued',
+                error: null,
+                previewUrl: URL.createObjectURL(file),
+            };
+            uploads.push(entry);
+            addPreviewElement(entry);
+            processUpload(entry);
         });
     });
+    selectionValidationChain = selectionTask.catch(error => {
+        pendingSelectionError = compressionErrorMessage(error);
+    }).finally(() => {
+        validationInFlight -= 1;
+        refreshCompressionStatus();
+    });
+    return selectionValidationChain;
 }
 
-function addPreviewElement(url, fileId, meta) {
+function processUpload(entry) {
+    entry.status = 'queued';
+    entry.error = null;
+    updatePreviewState(entry);
+    compressionQueue.enqueue({
+        id: entry.id,
+        file: entry.sourceFile,
+        inspection: entry.inspection,
+    }).then(result => {
+        const current = uploads.find(item => item.id === entry.id);
+        if (!current) return;
+        current.file = result.file;
+        current.compressedSize = result.outputBytes;
+        current.durationMs = result.durationMs;
+        current.policy = result.policy;
+        current.networkInfo = result.networkInfo;
+        current.status = 'ready';
+        replacePreviewUrl(current, result.file);
+        updatePreviewState(current);
+    }).catch(error => {
+        const current = uploads.find(item => item.id === entry.id);
+        if (!current || (error && error.code === 'cancelled')) return;
+        current.status = 'failed';
+        current.error = error;
+        updatePreviewState(current);
+        showStatus(compressionErrorMessage(error, current.fileName), 'error');
+    }).finally(refreshCompressionStatus);
+}
+
+function retryUpload(fileId) {
+    const entry = uploads.find(item => item.id === fileId);
+    if (!entry || entry.status !== 'failed') return;
+    processUpload(entry);
+}
+
+function replacePreviewUrl(entry, file) {
+    const wrapper = document.getElementById(`preview-${entry.id}`);
+    if (!wrapper) return;
+    const img = wrapper.querySelector('img');
+    const previousUrl = img ? img.src : '';
+    const newUrl = URL.createObjectURL(file);
+    if (img) img.src = newUrl;
+    const modalImage = document.getElementById('modal-image');
+    if (modalImage && modalImage.src === previousUrl) modalImage.src = newUrl;
+    if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    entry.previewUrl = newUrl;
+}
+
+function addPreviewElement(entry) {
     const container = document.getElementById('image-preview-container');
     const uploadBtn = document.getElementById('upload-btn');
-    
     const div = document.createElement('div');
-    div.id = `preview-${fileId}`;
-    div.className = 'aspect-square bg-gray-100 rounded-xl overflow-hidden relative group border border-gray-200';
-    
-    const img = document.createElement('img');
-    img.src = url;
-    img.className = 'w-full h-full object-cover';
+    div.id = `preview-${entry.id}`;
+    div.className = 'relative group w-full aspect-square';
 
-    const badge = document.createElement('div');
-    badge.className = 'absolute left-2 bottom-2 right-2 bg-black/60 text-white text-[10px] leading-tight px-2 py-1 rounded';
-    const sizeText = (meta && (meta.originalSize || meta.originalSize === 0))
-        ? `${formatBytes(meta.originalSize)} → ${formatBytes(meta.compressedSize)}`
-        : '';
-    const statusText = meta && meta.statusText ? meta.statusText : '';
-    badge.innerHTML = `
-        <div data-role="size">${sizeText}</div>
-        <div data-role="status">${statusText}</div>
-    `;
-    
-    // Delete Button
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'absolute top-2 right-2 w-6 h-6 bg-red-600 text-white rounded-full flex items-center justify-center opacity-90 hover:opacity-100 hover:scale-110 transition-all shadow-md z-10';
-    deleteBtn.innerHTML = '<svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>';
-    deleteBtn.onclick = function(e) {
-        e.stopPropagation();
-        removeFile(fileId);
-    };
-    
-    div.appendChild(img);
-    div.appendChild(badge);
-    div.appendChild(deleteBtn);
-    
+    const privacyImageTemplate = document.getElementById('report-upload-privacy-image-template');
+    const privacyImage = privacyImageTemplate.content.firstElementChild.cloneNode(true);
+    const img = privacyImage.querySelector('img');
+    img.src = entry.previewUrl;
+    privacyImage.addEventListener('click', function() {
+        viewImage(img.src);
+    });
+    div.appendChild(privacyImage);
+    const statusBadge = document.createElement('span');
+    statusBadge.dataset.role = 'processing-status';
+    div.appendChild(statusBadge);
+    const actions = document.createElement('div');
+    actions.dataset.role = 'upload-actions';
+    div.appendChild(actions);
     container.insertBefore(div, uploadBtn);
+    updatePreviewState(entry);
 }
+
+function updatePreviewState(entry) {
+    const wrapper = document.getElementById(`preview-${entry.id}`);
+    if (!wrapper) return;
+    const failed = entry.status === 'failed';
+    wrapper.classList.toggle('ring-2', failed);
+    wrapper.classList.toggle('ring-red-400', failed);
+
+    const badge = wrapper.querySelector('[data-role="processing-status"]');
+    if (badge) {
+        const statusText = entry.status === 'queued' ? '等待处理' : entry.status === 'processing' ? '处理中' : entry.status === 'failed' ? '处理失败' : '';
+        badge.textContent = statusText;
+        badge.className = statusText
+            ? `absolute left-1 top-1 z-20 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white ${failed ? 'bg-red-600' : 'bg-slate-700/80'}`
+            : 'hidden';
+    }
+
+    const actions = wrapper.querySelector('[data-role="upload-actions"]');
+    if (!actions) return;
+    actions.className = 'absolute inset-x-0 bottom-0 z-20 flex h-8 overflow-hidden rounded-b-2xl bg-slate-700/70 text-xs font-medium text-white backdrop-blur-sm';
+    actions.replaceChildren();
+
+    if (failed) {
+        const retryButton = document.createElement('button');
+        retryButton.type = 'button';
+        retryButton.className = 'flex-1 border-r border-white/30 bg-red-600/90 transition-colors active:bg-red-700';
+        retryButton.textContent = '重试';
+        retryButton.setAttribute('aria-label', '重试处理报告图片');
+        retryButton.onclick = function(event) {
+            event.stopPropagation();
+            retryUpload(entry.id);
+        };
+        actions.appendChild(retryButton);
+    }
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'flex-1 transition-colors hover:bg-slate-700/80 active:bg-slate-800/80';
+    deleteButton.textContent = '删除';
+    deleteButton.setAttribute('aria-label', '删除待上传的报告图片');
+    deleteButton.onclick = function(event) {
+        event.stopPropagation();
+        removeFile(entry.id);
+    };
+    actions.appendChild(deleteButton);
+}
+
+let imagePreviewTrigger = null;
+
+function viewImage(url) {
+    if (!url) return;
+
+    const modal = document.getElementById('image-modal');
+    const modalImage = document.getElementById('modal-image');
+    if (!modal || !modalImage) return;
+
+    imagePreviewTrigger = document.activeElement;
+    modalImage.src = url;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+
+    const closeButton = modal.querySelector('[aria-label="关闭原图预览"]');
+    if (closeButton) closeButton.focus();
+}
+
+function closeImage() {
+    const modal = document.getElementById('image-modal');
+    const modalImage = document.getElementById('modal-image');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+    if (modalImage) modalImage.src = '';
+
+    if (imagePreviewTrigger && typeof imagePreviewTrigger.focus === 'function') {
+        imagePreviewTrigger.focus();
+    }
+    imagePreviewTrigger = null;
+}
+
+document.addEventListener('keydown', function(event) {
+    const modal = document.getElementById('image-modal');
+    if (event.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeImage();
+    }
+});
 
 function removeFile(fileId) {
     if (confirm("确定要移除这张图片吗？")) {
+        const entry = uploads.find(item => item.id === fileId);
+        if (compressionQueue) compressionQueue.cancel(fileId);
         uploads = uploads.filter(item => item.id !== fileId);
         const wrapper = document.getElementById(`preview-${fileId}`);
         if (wrapper) {
             const img = wrapper.querySelector('img');
-            if (img && img.src) URL.revokeObjectURL(img.src);
+            const modalImage = document.getElementById('modal-image');
+            if (img && modalImage && modalImage.src === img.src) {
+                closeImage();
+            }
             wrapper.remove();
         }
+        if (entry && entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+        refreshCompressionStatus();
     }
 }
 
 function submitReport() {
-    if (compressActiveCount > 0 || (compressQueue && compressQueue.length > 0)) {
-        showStatus('请等待图片压缩完成后再提交', 'info');
+    if (!compressionQueue) {
+        showStatus(compressionUnavailableMessage(), 'error');
+        return;
+    }
+    if (validationInFlight > 0 || compressionQueue.hasPending() || uploads.some(entry => ['queued', 'processing'].includes(entry.status))) {
+        showStatus('请等待图片处理完成后再提交', 'info');
+        return;
+    }
+    if (uploads.some(entry => entry.status === 'failed')) {
+        showStatus('存在处理失败的图片，请先重试或删除后再提交', 'error');
         return;
     }
 
@@ -266,14 +454,14 @@ function submitReport() {
     const formData = new FormData();
     formData.append('report_date', reportDate);
     
-    uploads.forEach(u => {
+    uploads.filter(u => u.status === 'ready').forEach(u => {
         formData.append('images', u.file);
     });
     try {
         const networkInfo = window.LCCImageCompression ? window.LCCImageCompression.getNetworkInfo() : {};
         const meta = {
             page: 'my_report_upload',
-            strategy: 'tiered_network_v1',
+            strategy: 'clinical_readability_v2',
             original_upload: false,
             network: networkInfo,
             files: uploads.map(u => ({
@@ -332,6 +520,17 @@ function submitReport() {
         submitBtn.innerText = originalText;
     });
 }
+
+function cleanupUploadTasks() {
+    if (compressionQueue) compressionQueue.destroy();
+    uploads.forEach(entry => {
+        if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+    });
+}
+
+window.addEventListener('pagehide', function(event) {
+    if (!event.persisted) cleanupUploadTasks();
+});
 
 function showStatus(message, type) {
     const statusEl = document.getElementById('status-message');

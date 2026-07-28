@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -15,6 +15,7 @@ from core.models import (
     choices,
 )
 from health_data.models import HealthMetric, QuestionnaireAnswer, QuestionnaireSubmission
+from market.models import Order, Product
 from users.models import CustomUser, PatientProfile
 
 
@@ -101,6 +102,176 @@ class QuestionnaireSubmissionDetailViewTests(TestCase):
         self.assertContains(resp, 'data-submission-id=""')
         self.assertContains(resp, 'aria-disabled="true"')
         self.assertNotContains(resp, "查看详情")
+
+    def test_dynamic_questionnaire_records_are_scoped_to_selected_service_package(self):
+        product = Product.objects.create(
+            name="问卷服务包",
+            price=Decimal("199.00"),
+            duration_days=30,
+        )
+        order = Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("199.00"),
+            status=Order.Status.PAID,
+            paid_at=self._aware_dt(year=2025, month=3, day=1),
+        )
+        questionnaire = Questionnaire.objects.create(
+            name='动态康复评估 <script>alert("x")</script>',
+            code="Q_DYNAMIC_DETAIL",
+            is_active=True,
+        )
+        in_range = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("8.00"),
+        )
+        out_of_range = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("2.00"),
+        )
+        QuestionnaireSubmission.objects.filter(pk=in_range.pk).update(
+            created_at=timezone.make_aware(
+                datetime.combine(order.start_date + timedelta(days=2), datetime.min.time()),
+                self.tz,
+            )
+        )
+        QuestionnaireSubmission.objects.filter(pk=out_of_range.pk).update(
+            created_at=timezone.make_aware(
+                datetime.combine(order.end_date + timedelta(days=2), datetime.min.time()),
+                self.tz,
+            )
+        )
+
+        with patch("web_patient.views.record._is_member", return_value=True):
+            response = self.client.get(
+                self.record_detail_url,
+                {
+                    "questionnaire_id": questionnaire.id,
+                    "package_id": order.id,
+                    "source": "survey_list",
+                },
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["title"], questionnaire.name)
+        self.assertEqual(response.context["questionnaire_id"], questionnaire.id)
+        self.assertEqual(response.context["package_id"], order.id)
+        self.assertEqual(len(response.context["records"]), 1)
+        self.assertEqual(
+            response.context["records"][0]["questionnaire_submission_id"],
+            in_range.id,
+        )
+        self.assertEqual(response.context["records"][0]["score"], Decimal("8.00"))
+        self.assertContains(response, f'data-submission-id="{in_range.id}"')
+        self.assertNotContains(response, f'data-submission-id="{out_of_range.id}"')
+        self.assertNotContains(response, '<script>alert("x")</script>')
+
+    def test_dynamic_questionnaire_rejects_another_patients_package(self):
+        product = Product.objects.create(
+            name="其他患者服务包",
+            price=Decimal("99.00"),
+            duration_days=30,
+        )
+        other_patient = PatientProfile.objects.create(
+            name="其他患者",
+            phone="13800000029",
+        )
+        other_order = Order.objects.create(
+            patient=other_patient,
+            product=product,
+            amount=Decimal("99.00"),
+            status=Order.Status.PAID,
+            paid_at=self._aware_dt(year=2025, month=3, day=1),
+        )
+        questionnaire = Questionnaire.objects.create(
+            name="动态问卷",
+            code="Q_DYNAMIC_PACKAGE_GUARD",
+            is_active=True,
+        )
+
+        response = self.client.get(
+            self.record_detail_url,
+            {
+                "questionnaire_id": questionnaire.id,
+                "package_id": other_order.id,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_dynamic_questionnaire_pagination_continues_to_previous_month(self):
+        product = Product.objects.create(
+            name="跨月问卷服务包",
+            price=Decimal("299.00"),
+            duration_days=90,
+        )
+        order = Order.objects.create(
+            patient=self.patient,
+            product=product,
+            amount=Decimal("299.00"),
+            status=Order.Status.PAID,
+            paid_at=self._aware_dt(year=2025, month=1, day=1),
+        )
+        questionnaire = Questionnaire.objects.create(
+            name="跨月动态问卷",
+            code="Q_DYNAMIC_CROSS_MONTH",
+            is_active=True,
+        )
+        february = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("2.00"),
+        )
+        march = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("6.00"),
+        )
+        QuestionnaireSubmission.objects.filter(pk=february.pk).update(
+            created_at=self._aware_dt(year=2025, month=2, day=10)
+        )
+        QuestionnaireSubmission.objects.filter(pk=march.pk).update(
+            created_at=self._aware_dt(year=2025, month=3, day=10)
+        )
+
+        first_page = self.client.get(
+            self.record_detail_url,
+            {
+                "questionnaire_id": questionnaire.id,
+                "package_id": order.id,
+                "limit": 1,
+            },
+        )
+
+        self.assertEqual(first_page.status_code, 200)
+        self.assertEqual(
+            [item["questionnaire_submission_id"] for item in first_page.context["records"]],
+            [march.id],
+        )
+        self.assertTrue(first_page.context["has_more"])
+        self.assertEqual(first_page.context["next_cursor_month"], "2025-02")
+        self.assertEqual(first_page.context["next_cursor_offset"], 0)
+
+        second_page = self.client.get(
+            self.record_detail_url,
+            {
+                "questionnaire_id": questionnaire.id,
+                "package_id": order.id,
+                "month": "2025-03",
+                "cursor_month": "2025-02",
+                "cursor_offset": 0,
+                "limit": 1,
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+        self.assertEqual(second_page.status_code, 200)
+        self.assertEqual(
+            [item["questionnaire_submission_id"] for item in second_page.json()["records"]],
+            [february.id],
+        )
 
     def test_questionnaire_submission_detail_page_renders_single_and_multiple_answers(self):
         questionnaire = self._get_or_create_questionnaire()

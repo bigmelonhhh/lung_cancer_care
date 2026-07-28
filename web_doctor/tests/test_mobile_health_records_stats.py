@@ -6,8 +6,15 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import CheckupLibrary, QuestionnaireCode
-from health_data.models import HealthMetric, MetricSource, MetricType, ReportImage, UploadSource
+from core.models import CheckupLibrary, Questionnaire, QuestionnaireCode
+from health_data.models import (
+    HealthMetric,
+    MetricSource,
+    MetricType,
+    QuestionnaireSubmission,
+    ReportImage,
+    UploadSource,
+)
 from health_data.services.report_service import ReportUploadService
 from market.models import Order, Product
 from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
@@ -98,6 +105,97 @@ class MobileHealthRecordsStatsTests(TestCase):
             source_payload={"questionnaire_code": questionnaire_code},
         )
 
+    def _create_submission(self, questionnaire, score, submitted_at):
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal(score),
+        )
+        QuestionnaireSubmission.objects.filter(pk=submission.pk).update(
+            created_at=submitted_at
+        )
+        return submission
+
+    def test_mobile_health_records_uses_dynamic_active_questionnaires_in_selected_package(self):
+        active = Questionnaire.objects.create(
+            name='生活质量评估 <script>alert("x")</script>',
+            code="Q_MOBILE_DYNAMIC_ACTIVE",
+            is_active=True,
+            sort_order=1,
+        )
+        Questionnaire.objects.create(
+            name="启用但无记录问卷",
+            code="Q_MOBILE_DYNAMIC_EMPTY",
+            is_active=True,
+            sort_order=2,
+        )
+        inactive = Questionnaire.objects.create(
+            name="停用问卷",
+            code="Q_MOBILE_DYNAMIC_OFF",
+            is_active=False,
+            sort_order=3,
+        )
+        self._create_submission(
+            active,
+            "8",
+            self._make_aware(self.order.start_date + timedelta(days=1)),
+        )
+        self._create_questionnaire_alert(
+            active.code,
+            self._make_aware(self.order.start_date + timedelta(days=1), hour=10),
+        )
+        self._create_submission(
+            active,
+            "3",
+            self._make_aware(self.order.start_date - timedelta(days=1)),
+        )
+        self._create_submission(
+            inactive,
+            "5",
+            self._make_aware(self.order.start_date + timedelta(days=2)),
+        )
+
+        self.client.force_login(self.doctor_user)
+        response = self.client.get(
+            self.doctor_url,
+            {"patient_id": self.patient.id, "package_id": self.order.id},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        cards = response.context["health_survey_stats"]
+        self.assertEqual([item["questionnaire_id"] for item in cards], [active.id])
+        self.assertEqual(cards[0]["count"], 1)
+        self.assertEqual(cards[0]["latest_score"], Decimal("8.00"))
+        self.assertEqual(cards[0]["abnormal"], 1)
+        self.assertContains(response, "生活质量评估 &lt;script&gt;")
+        self.assertContains(response, "异常：")
+        self.assertNotContains(response, "问卷评分：")
+        self.assertNotContains(response, "启用但无记录问卷")
+        self.assertNotContains(response, "停用问卷")
+        self.assertContains(response, f"questionnaire_id={active.id}")
+        self.assertContains(response, f"package_id={self.order.id}")
+
+    def test_mobile_eqvas_card_does_not_display_latest_vas_score(self):
+        eqvas = Questionnaire.objects.create(
+            name="EQVAS量表",
+            code="Q_EQVAS",
+            is_active=True,
+            sort_order=1,
+        )
+        self._create_submission(
+            eqvas,
+            "78",
+            self._make_aware(self.order.start_date + timedelta(days=1)),
+        )
+
+        self.client.force_login(self.doctor_user)
+        response = self.client.get(
+            self.doctor_url,
+            {"patient_id": self.patient.id, "package_id": self.order.id},
+        )
+
+        self.assertNotContains(response, "EQ-VAS评分：78.00")
+
     def test_mobile_health_records_shows_metric_count_and_abnormal(self):
         measured_at = self._make_aware(self.order.start_date, hour=10)
         HealthMetric.objects.create(
@@ -158,18 +256,15 @@ class MobileHealthRecordsStatsTests(TestCase):
             self.assertNotContains(response, "血压")
             self.assertNotContains(response, "抑郁评估")
 
-    def test_mobile_health_records_shows_questionnaire_count_and_abnormal(self):
-        measured_at = self._make_aware(self.order.start_date, hour=12)
-        HealthMetric.objects.create(
-            patient=self.patient,
-            metric_type=QuestionnaireCode.Q_COUGH,
-            source=MetricSource.MANUAL,
-            value_main=Decimal("6.00"),
-            measured_at=measured_at,
+    def test_mobile_health_records_shows_questionnaire_submission_count(self):
+        questionnaire, _ = Questionnaire.objects.get_or_create(
+            code=QuestionnaireCode.Q_COUGH,
+            defaults={"name": "咳嗽与痰色评估", "is_active": True},
         )
-        self._create_questionnaire_alert(
-            QuestionnaireCode.Q_COUGH,
-            self._make_aware(self.order.start_date, hour=13),
+        self._create_submission(
+            questionnaire,
+            "6",
+            self._make_aware(self.order.start_date, hour=12),
         )
 
         self.client.force_login(self.doctor_user)
@@ -177,23 +272,23 @@ class MobileHealthRecordsStatsTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         cough_stat = next(
-            item for item in response.context["health_survey_stats"] if item["type"] == "cough"
+            item
+            for item in response.context["health_survey_stats"]
+            if item["questionnaire_id"] == questionnaire.id
         )
         self.assertEqual(cough_stat["count"], 1)
-        self.assertEqual(cough_stat["abnormal"], 1)
+        self.assertEqual(cough_stat["abnormal"], 0)
+        self.assertNotContains(response, "异常：")
 
-    def test_mobile_health_records_shows_oral_mucosa_questionnaire_count_and_abnormal(self):
-        measured_at = self._make_aware(self.order.start_date, hour=16)
-        HealthMetric.objects.create(
-            patient=self.patient,
-            metric_type=QuestionnaireCode.Q_KQNMLB,
-            source=MetricSource.MANUAL,
-            value_main=Decimal("4.00"),
-            measured_at=measured_at,
+    def test_mobile_health_records_shows_oral_mucosa_questionnaire_submission(self):
+        questionnaire, _ = Questionnaire.objects.get_or_create(
+            code=QuestionnaireCode.Q_KQNMLB,
+            defaults={"name": "口腔黏膜损伤自评量表", "is_active": True},
         )
-        self._create_questionnaire_alert(
-            QuestionnaireCode.Q_KQNMLB,
-            self._make_aware(self.order.start_date, hour=17),
+        self._create_submission(
+            questionnaire,
+            "4",
+            self._make_aware(self.order.start_date, hour=16),
         )
 
         self.client.force_login(self.doctor_user)
@@ -203,10 +298,10 @@ class MobileHealthRecordsStatsTests(TestCase):
         oral_stat = next(
             item
             for item in response.context["health_survey_stats"]
-            if item["type"] == "oral_mucosa"
+            if item["questionnaire_id"] == questionnaire.id
         )
         self.assertEqual(oral_stat["count"], 1)
-        self.assertEqual(oral_stat["abnormal"], 1)
+        self.assertEqual(oral_stat["abnormal"], 0)
         self.assertContains(response, "口腔黏膜损伤自评量表")
 
     def test_mobile_health_records_counts_checkup_only_within_service_package_range(self):
@@ -284,22 +379,19 @@ class MobileHealthRecordsStatsTests(TestCase):
             value_main=Decimal("38.00"),
             measured_at=measured_at,
         )
-        HealthMetric.objects.create(
-            patient=self.patient,
-            metric_type=QuestionnaireCode.Q_COUGH,
-            source=MetricSource.MANUAL,
-            value_main=Decimal("5.00"),
-            measured_at=self._make_aware(self.order.start_date, hour=14),
+        questionnaire, _ = Questionnaire.objects.get_or_create(
+            code=QuestionnaireCode.Q_COUGH,
+            defaults={"name": "咳嗽与痰色评估", "is_active": True},
+        )
+        self._create_submission(
+            questionnaire,
+            "5",
+            self._make_aware(self.order.start_date, hour=14),
         )
         self._create_metric_alert(
             MetricType.BODY_TEMPERATURE,
             self._make_aware(self.order.start_date, hour=10),
         )
-        self._create_questionnaire_alert(
-            QuestionnaireCode.Q_COUGH,
-            self._make_aware(self.order.start_date, hour=15),
-        )
-
         self.client.force_login(self.doctor_user)
         doctor_response = self.client.get(f"{self.doctor_url}?patient_id={self.patient.id}")
         self.assertEqual(doctor_response.status_code, 200)
@@ -319,11 +411,11 @@ class MobileHealthRecordsStatsTests(TestCase):
         self.assertEqual(doctor_general, patient_general)
 
         doctor_survey = {
-            item["type"]: (item["count"], item["abnormal"])
+            item["questionnaire_id"]: (item["count"], item["abnormal"])
             for item in doctor_response.context["health_survey_stats"]
         }
         patient_survey = {
-            item["type"]: (item["count"], item["abnormal"])
+            item["questionnaire_id"]: (item["count"], item["abnormal"])
             for item in patient_response.context["health_survey_stats"]
         }
         self.assertEqual(doctor_survey, patient_survey)

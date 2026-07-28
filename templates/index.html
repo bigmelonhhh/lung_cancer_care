@@ -6,15 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>智医康 - 基于AI与智能硬件的慢病数字化康复管理</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icon32.png' %}" />
-      <style>
+    <style>
         /* 
-         * Organic Tech Design System (Balanced)
-         * Primary: #0891B2 (Cyan 600) - Precision Tech
-         * Secondary: #10B981 (Emerald 500) - Vitality/Nature
-         * Accent: #14B8A6 (Teal 500) - Healing
-         * Background: #F0FDFA (Slate/Cyan Tint) - Organic Mist
-         * Text Main: #134E4A (Teal 900) - Deep, Natural
-         * Text Muted: #334155 (Slate 700)
+         * Organic Tech Design System (Balanced & Performance Optimized)
+         * Primary: #0891B2 (Cyan 600)
+         * Secondary: #10B981 (Emerald 500)
+         * Accent: #14B8A6 (Teal 500)
+         * Background: #F0FDFA
+         * Text Main: #134E4A
+         * Text Muted: #334155
          */
         :root {
             --primary: #0891B2;
@@ -34,13 +34,11 @@
             --shadow-sm: 0 4px 6px -1px rgba(8, 145, 178, 0.05), 0 2px 4px -1px rgba(8, 145, 178, 0.03);
             --shadow-md: 0 10px 15px -3px rgba(8, 145, 178, 0.08), 0 4px 6px -2px rgba(8, 145, 178, 0.04);
             --shadow-lg: 0 20px 25px -5px rgba(8, 145, 178, 0.1), 0 10px 10px -5px rgba(8, 145, 178, 0.04);
-            --shadow-organic: 0 25px 50px -12px rgba(16, 185, 129, 0.15);
             
             --radius-md: 1rem;
             --radius-lg: 1.5rem;
             --radius-xl: 2.5rem;
             --radius-full: 9999px;
-            --radius-blob: 60% 40% 30% 70% / 60% 30% 70% 40%;
         }
 
         /* Global Reset */
@@ -50,8 +48,9 @@
             padding: 0;
         }
 
-        html {
-            scroll-behavior: smooth;
+        html, body {
+            overflow-x: hidden;
+            width: 100%;
         }
 
         body {
@@ -60,7 +59,6 @@
             color: var(--text-main);
             line-height: 1.6;
             -webkit-font-smoothing: antialiased;
-            overflow-x: hidden;
         }
 
         /* Typography */
@@ -71,9 +69,7 @@
             color: var(--text-main);
         }
 
-        p {
-            margin-bottom: 1rem;
-        }
+        p { margin-bottom: 1rem; }
 
         a {
             color: inherit;
@@ -81,7 +77,6 @@
             transition: color 0.2s;
         }
 
-        /* Focus States for Accessibility */
         :focus-visible {
             outline: 3px solid var(--secondary);
             outline-offset: 2px;
@@ -95,14 +90,16 @@
             left: 5%;
             right: 5%;
             width: 90%;
+            max-width: 1200px;
+            margin: 0 auto;
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 0.75rem 2rem;
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
             border-radius: var(--radius-full);
             z-index: 1000;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -111,7 +108,7 @@
 
         nav.scrolled {
             top: 0.5rem;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             box-shadow: var(--shadow-md);
         }
 
@@ -137,9 +134,7 @@
             position: relative;
         }
 
-        .nav-links a:hover, .nav-links a:focus {
-            color: var(--primary);
-        }
+        .nav-links a:hover, .nav-links a:focus { color: var(--primary); }
 
         .nav-links a::after {
             content: '';
@@ -152,9 +147,7 @@
             transition: width 0.3s;
         }
 
-        .nav-links a:hover::after {
-            width: 100%;
-        }
+        .nav-links a:hover::after { width: 100%; }
 
         /* Buttons */
         .btn {
@@ -177,10 +170,6 @@
             background-color: var(--cta-hover);
             transform: translateY(-2px);
             box-shadow: var(--shadow-lg);
-        }
-
-        .btn:active {
-            transform: translateY(0);
         }
 
         /* Sections */
@@ -212,18 +201,18 @@
         /* Hero Section */
         .hero {
             min-height: 100vh;
-            padding-top: 10rem; /* Account for fixed nav */
+            padding-top: 10rem;
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 4rem;
+            gap: 3rem;
             align-items: center;
             background: radial-gradient(circle at top right, rgba(16, 185, 129, 0.1), transparent 40%),
                         radial-gradient(circle at bottom left, rgba(8, 145, 178, 0.1), transparent 40%);
             overflow: hidden;
             position: relative;
+            width: 100%;
         }
 
-        /* Organic Background Shapes */
         .hero::before {
             content: '';
             position: absolute;
@@ -235,35 +224,24 @@
             border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
             z-index: 0;
             animation: float 8s ease-in-out infinite;
-            filter: blur(40px);
-        }
-
-        .hero::after {
-            content: '';
-            position: absolute;
-            bottom: -10%;
-            left: -10%;
-            width: 500px;
-            height: 500px;
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(8, 145, 178, 0.05));
-            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-            z-index: 0;
-            animation: float 10s ease-in-out infinite reverse;
+            will-change: transform;
             filter: blur(40px);
         }
 
         .hero-content {
             z-index: 2;
             position: relative;
+            width: 100%;
         }
 
         .hero-content h1 {
-            font-size: 4rem;
+            font-size: 3.5rem;
             margin-bottom: 1.5rem;
-            letter-spacing: -0.03em;
+            letter-spacing: -0.02em;
             color: var(--text-main);
             font-weight: 700;
-            line-height: 1.1;
+            line-height: 1.2;
+            word-break: break-word;
         }
 
         .hero-content p {
@@ -280,800 +258,383 @@
             100% { transform: translate(0, 0) rotate(0deg); }
         }
 
+        /* ================= 性能优化版 3D HUD 视觉 CSS ================= */
         .hero-visual {
             position: relative;
             display: flex;
             justify-content: center;
             align-items: center;
+            width: 100%;
+            height: 100%;
+            min-height: 520px;
+            perspective: 1000px;
         }
 
-        /* Enhanced Hero Visual */
-        .medical-ai-visual {
+        /* 性能优化：当离屏时自动暂停全部动画 */
+        .hero-visual.anim-paused *,
+        .hero-visual.anim-paused *::before,
+        .hero-visual.anim-paused *::after {
+            animation-play-state: paused !important;
+        }
+
+        .med-hud-stage {
             position: relative;
-            width: 400px;
-            height: 400px;
+            width: 480px;
+            height: 480px;
             display: flex;
             justify-content: center;
             align-items: center;
+            transform-style: preserve-3d;
         }
 
-        .ai-core {
-            width: 120px;
-            height: 120px;
-            background: radial-gradient(circle at 30% 30%, var(--secondary), var(--primary));
+        /* 1. HUD 背景网格 */
+        .hud-background-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0.4;
+        }
+
+        .crosshair {
+            position: absolute;
+            font-family: monospace;
+            font-size: 13px;
+            color: var(--primary);
+            font-weight: 400;
+        }
+
+        .crosshair.top-left { top: 5px; left: 5px; }
+        .crosshair.top-right { top: 5px; right: 5px; }
+        .crosshair.bottom-left { bottom: 5px; left: 5px; }
+        .crosshair.bottom-right { bottom: 5px; right: 5px; }
+
+        .radar-ticks {
+            position: absolute;
+            top: 50%; left: 50%;
+            width: 420px; height: 420px;
+            transform: translate(-50%, -50%) rotateX(60deg);
+            border: 1px dashed rgba(8, 145, 178, 0.2);
             border-radius: 50%;
-            box-shadow: 0 0 30px rgba(20, 184, 166, 0.4);
+            background: repeating-conic-gradient(from 0deg, transparent 0deg 29deg, rgba(8, 145, 178, 0.12) 30deg);
+            mask-image: radial-gradient(circle, transparent 48%, black 82%);
+            -webkit-mask-image: radial-gradient(circle, transparent 48%, black 82%);
+        }
+
+        /* 2. 环境科技光晕 */
+        .med-ambient-glow {
+            position: absolute;
+            width: 360px;
+            height: 360px;
+            background: radial-gradient(circle, rgba(16, 185, 129, 0.22) 0%, rgba(8, 145, 178, 0.15) 50%, transparent 70%);
+            filter: blur(35px);
+            border-radius: 50%;
+            animation: med-glow-pulse 5s ease-in-out infinite alternate;
+            will-change: transform, opacity;
+        }
+
+        /* 3. 3D 旋转科技环 */
+        .med-ring {
+            position: absolute;
+            border-radius: 50%;
+            top: 50%; left: 50%;
+            transform-style: preserve-3d;
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .ring-outer-hud {
+            width: 420px; height: 420px;
+            border: 1px dashed rgba(8, 145, 178, 0.28);
+            transform: translate(-50%, -50%) rotateX(65deg) rotateY(-15deg);
+            animation: spin-hud-cw 32s linear infinite;
+        }
+
+        .ring-mid-tech {
+            width: 330px; height: 330px;
+            border: 1.5px solid rgba(16, 185, 129, 0.25);
+            border-top-color: #10B981;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.12);
+            transform: translate(-50%, -50%) rotateX(45deg) rotateY(45deg);
+            animation: spin-hud-ccw 22s linear infinite;
+        }
+
+        .ring-inner-pulse {
+            width: 240px; height: 240px;
+            border: 1px solid rgba(8, 145, 178, 0.35);
+            transform: translate(-50%, -50%) rotateX(-35deg) rotateZ(20deg);
+            animation: spin-hud-cw 15s linear infinite;
+        }
+
+        /* 4. 6大体征动态芯片节点 */
+        .hud-chip-node {
+            position: absolute;
+            z-index: 12;
+            background: rgba(255, 255, 255, 0.94);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border: 1px solid var(--border-light);
+            box-shadow: 0 4px 14px rgba(8, 145, 178, 0.12);
+            padding: 5px 12px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            pointer-events: none;
+            will-change: transform;
+        }
+
+        .chip-text {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .chip-num {
+            font-weight: 800;
+            color: var(--primary);
+            font-size: 0.82rem;
+            transition: all 0.4s ease;
+        }
+
+        .chip-pulse {
+            width: 7px; height: 7px;
+            border-radius: 50%;
+            background: #EF4444;
+            box-shadow: 0 0 6px #EF4444;
+            animation: chip-blink 1.2s infinite;
+        }
+
+        .chip-pulse.red { background: #EF4444; box-shadow: 0 0 6px #EF4444; }
+        .chip-pulse.green { background: #10B981; box-shadow: 0 0 6px #10B981; }
+        .chip-pulse.blue { background: #0891B2; box-shadow: 0 0 6px #0891B2; }
+        .chip-pulse.purple { background: #8B5CF6; box-shadow: 0 0 6px #8B5CF6; }
+        .chip-pulse.amber { background: #F59E0B; box-shadow: 0 0 6px #F59E0B; }
+        .chip-pulse.teal { background: #14B8A6; box-shadow: 0 0 6px #14B8A6; }
+
+        /* 节点定位 */
+        .chip-hr { top: 5%; left: 8%; animation: float-node-1 4s ease-in-out infinite alternate; }
+        .chip-bp { top: 10%; right: 4%; animation: float-node-2 4.5s ease-in-out infinite alternate-reverse; }
+        .chip-spo2 { top: 45%; right: -6%; animation: float-node-3 5s ease-in-out infinite alternate; }
+        .chip-glu { bottom: 12%; right: 6%; animation: float-node-4 4.2s ease-in-out infinite alternate-reverse; }
+        .chip-wt { bottom: 8%; left: 8%; animation: float-node-5 4.8s ease-in-out infinite alternate; }
+        .chip-steps { top: 45%; left: -6%; animation: float-node-6 5.2s ease-in-out infinite alternate-reverse; }
+
+        /* 5. 6条串联矢量连线 */
+        .stream-svg-layer {
+            position: absolute;
+            width: 480px; height: 480px;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .stream-base-path {
+            fill: none;
+            stroke: rgba(8, 145, 178, 0.16);
+            stroke-width: 1.2;
+            stroke-dasharray: 4 4;
+        }
+
+        .stream-laser-path {
+            fill: none;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+            stroke-dasharray: 25 175;
+            animation: laser-flow-in 2.2s linear infinite;
+            will-change: stroke-dashoffset;
+        }
+
+        .laser-hr { stroke: #EF4444; animation-delay: 0s; }
+        .laser-bp { stroke: #10B981; animation-delay: 0.35s; }
+        .laser-spo2 { stroke: #0891B2; animation-delay: 0.7s; }
+        .laser-glu { stroke: #8B5CF6; animation-delay: 1.05s; }
+        .laser-wt { stroke: #F59E0B; animation-delay: 1.4s; }
+        .laser-steps { stroke: #14B8A6; animation-delay: 1.75s; }
+
+        /* 6. 中央 AI 智慧数字内核 */
+        .med-ai-core {
             position: relative;
+            width: 110px; height: 110px;
             z-index: 10;
-            animation: core-pulse 3s infinite ease-in-out;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .ai-core svg {
-            width: 60px;
-            height: 60px;
+        .core-fluid-mesh {
+            position: absolute;
+            width: 86px; height: 86px;
+            background: linear-gradient(135deg, #0891B2 0%, #10B981 100%);
+            border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.5);
+            animation: mesh-morph 7s ease-in-out infinite alternate;
+            will-change: border-radius, transform;
+        }
+
+        .core-medical-icon {
+            position: relative;
+            z-index: 2;
             color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .core-medical-icon svg {
+            width: 46px; height: 46px;
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
         }
 
-        .ai-ring {
+        .core-pulse-ring {
             position: absolute;
-            border: 1px solid rgba(14, 165, 233, 0.2);
+            width: 100%; height: 100%;
+            border: 1.5px solid var(--secondary);
             border-radius: 50%;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            opacity: 0.8;
+            animation: pulse-expand 2.8s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+            will-change: transform, opacity;
         }
 
-        .ai-ring:nth-child(2) { width: 260px; height: 260px; border-color: rgba(20, 184, 166, 0.3); animation: spin 20s linear infinite; }
-        .ai-ring:nth-child(3) { width: 380px; height: 380px; border-style: dashed; animation: spin-reverse 30s linear infinite; }
+        .core-pulse-ring.p2 { animation-delay: 1.4s; }
 
-        .ai-node {
+        .data-particle {
             position: absolute;
-            width: 12px;
-            height: 12px;
-            background: var(--bg-white);
-            border: 2px solid var(--primary);
+            width: 5px; height: 5px;
+            background: #10B981;
             border-radius: 50%;
-            top: 50%;
-            left: 100%; /* On the ring edge */
-            transform: translate(-50%, -50%);
-            box-shadow: 0 0 10px var(--secondary);
+            box-shadow: 0 0 6px #10B981;
         }
+
+        .dp1 { top: 90px; left: 120px; animation: particle-float 4s ease-in-out infinite alternate; }
+        .dp2 { bottom: 100px; right: 100px; animation: particle-float 6s ease-in-out infinite alternate-reverse; }
+        .dp3 { top: 220px; right: 70px; animation: particle-float 5s ease-in-out infinite alternate; }
+
+        /* 关键帧定义 */
+        @keyframes spin-hud-cw { 100% { transform: translate(-50%, -50%) rotateX(65deg) rotateY(-15deg) rotateZ(360deg); } }
+        @keyframes spin-hud-ccw { 100% { transform: translate(-50%, -50%) rotateX(45deg) rotateY(45deg) rotateZ(-360deg); } }
+        @keyframes med-glow-pulse { 0% { transform: scale(0.9); opacity: 0.5; } 100% { transform: scale(1.1); opacity: 0.85; } }
         
-        /* Positioning nodes on rings */
-        .ai-ring:nth-child(2) .ai-node:nth-child(1) { top: 0; left: 50%; }
-        .ai-ring:nth-child(2) .ai-node:nth-child(2) { top: 100%; left: 50%; }
-        .ai-ring:nth-child(3) .ai-node:nth-child(1) { top: 50%; left: 0; }
-        .ai-ring:nth-child(3) .ai-node:nth-child(2) { top: 14.6%; left: 85.4%; } /* approx 45deg */
-
-        @keyframes core-pulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(20, 184, 166, 0.4); }
-            50% { transform: scale(1.05); box-shadow: 0 0 50px rgba(20, 184, 166, 0.6); }
+        @keyframes mesh-morph {
+            0% { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+            50% { border-radius: 30% 60% 70% 30% / 50% 60% 30% 60%; }
+            100% { border-radius: 70% 30% 50% 50% / 30% 40% 60% 70%; }
         }
 
-        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
-        @keyframes spin-reverse { 100% { transform: translate(-50%, -50%) rotate(-360deg); } }
+        @keyframes pulse-expand {
+            0% { transform: scale(0.85); opacity: 0.8; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
 
-        /* Device Placeholders */
-        .device-watch {
+        @keyframes laser-flow-in {
+            0% { stroke-dashoffset: 200; opacity: 0.2; }
+            50% { opacity: 1; }
+            100% { stroke-dashoffset: 0; opacity: 0.2; }
+        }
+
+        @keyframes chip-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+        @keyframes particle-float { 0% { transform: translateY(0); opacity: 0.3; } 100% { transform: translateY(-15px); opacity: 0.9; } }
+
+        @keyframes float-node-1 { 0% { transform: translateY(0); } 100% { transform: translateY(-8px); } }
+        @keyframes float-node-2 { 0% { transform: translateY(0); } 100% { transform: translateY(-10px); } }
+        @keyframes float-node-3 { 0% { transform: translateY(0); } 100% { transform: translateY(-7px); } }
+        @keyframes float-node-4 { 0% { transform: translateY(0); } 100% { transform: translateY(-9px); } }
+        @keyframes float-node-5 { 0% { transform: translateY(0); } 100% { transform: translateY(-6px); } }
+        @keyframes float-node-6 { 0% { transform: translateY(0); } 100% { transform: translateY(-10px); } }
+
+        /* 其它通用模块 */
+        .device-watch, .device-box {
             position: relative;
-            width: 100%;
-            height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--bg-light);
-            border-radius: var(--radius-md);
-            margin-bottom: 1.5rem;
+            width: 100%; height: 200px;
+            display: flex; align-items: center; justify-content: center;
+            background: var(--bg-light); border-radius: var(--radius-md); margin-bottom: 1.5rem;
         }
 
-        .watch-body {
-            width: 80px;
-            height: 96px;
-            background: #1E293B;
-            border-radius: 16px;
-            position: relative;
-            z-index: 2;
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
-            border: 2px solid #334155;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-        
-        .watch-screen {
-            width: 70px;
-            height: 86px;
-            background: black;
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-        }
-
-        .watch-strap {
-            position: absolute;
-            width: 44px;
-            height: 140px;
-            background: #94A3B8;
-            border-radius: 8px;
-            z-index: 1;
-        }
-        
-        .watch-pulse {
-             width: 50px;
-             height: 30px;
-        }
-        
-        .watch-pulse path {
-            stroke: var(--secondary);
-            stroke-width: 2;
-            fill: none;
-            stroke-dasharray: 100;
-            stroke-dashoffset: 100;
-            animation: dash 2s linear infinite;
-        }
-
-        .device-box {
-            position: relative;
-            width: 100%;
-            height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--bg-light);
-            border-radius: var(--radius-md);
-            margin-bottom: 1.5rem;
-        }
-        
-        .box-body {
-            position: relative;
-            width: 140px;
-            height: 100px;
-            background: white;
-            border: 1px solid var(--border-light);
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 10px;
-        }
-        
-        .box-screen {
-            width: 100%;
-            height: 40px;
-            background: #EEF2FF;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: monospace;
-            font-size: 1.2rem;
-            color: var(--text-main);
-            letter-spacing: 2px;
-            font-weight: 700;
-        }
-        
-        .box-buttons {
-            display: flex;
-            gap: 12px;
-        }
-        
-        .box-btn {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: var(--border-light);
-            border: 1px solid #CBD5E1;
-        }
-        
-        .box-btn.primary { background: var(--primary); border-color: var(--primary); }
-
-        /* Mockups */
-        .mockup-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            min-width: 0;
-        }
-
-        .mockup-monitor {
-            width: 100%;
-            height: 100%;
-            background: #1E293B;
-            border-radius: 8px;
-            border: 8px solid #334155;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
-        }
-        
-        .monitor-stand {
-            width: 120px;
-            height: 40px;
-            background: #334155;
-            margin: 0 auto;
-            border-radius: 0 0 8px 8px;
-            position: relative;
-            top: 0;
-            z-index: 1;
-        }
-        
-        .monitor-stand::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: -40px;
-            width: 200px;
-            height: 10px;
-            background: #334155;
-            border-radius: 4px;
-        }
-
-        .monitor-screen {
-            flex: 1;
-            background: #0F172A;
-            padding: 15px;
-            display: grid;
-            grid-template-columns: 60px 1fr;
-            gap: 15px;
-        }
-        
-        .monitor-sidebar {
-            background: #1E293B;
-            border-radius: 4px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 8px;
-        }
-        
-        .sidebar-item { height: 6px; width: 100%; background: #475569; border-radius: 2px; }
-        .sidebar-item.active { background: var(--secondary); width: 60%; }
-        
-        .monitor-content {
-            display: grid;
-            grid-template-rows: 20px 1fr 1fr;
-            gap: 10px;
-        }
-        
-        .monitor-header { background: #1E293B; border-radius: 4px; }
-        
-        .monitor-charts {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 10px;
-        }
-        
-        .chart-box { background: #1E293B; border-radius: 4px; position: relative; overflow: hidden; }
-        .chart-line {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            right: 10px;
-            height: 30px;
-            border-bottom: 2px solid var(--primary);
-        }
-        .chart-line::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to top, rgba(14, 165, 233, 0.2), transparent);
-        }
-        .chart-bar {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            width: 10px;
-            height: 20px;
-            background: var(--cta);
-        }
-        .chart-bar:nth-child(2) { left: 25px; height: 30px; }
-        .chart-bar:nth-child(3) { left: 40px; height: 15px; }
-        .chart-bar:nth-child(4) { left: 55px; height: 35px; }
-
-        .mockup-phone {
-            width: 180px;
-            height: 320px;
-            background: #1E293B;
-            border-radius: 24px;
-            border: 6px solid #334155;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
-            margin: 0 auto;
-        }
-        
-        .phone-notch {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 60px;
-            height: 18px;
-            background: #334155;
-            border-radius: 0 0 8px 8px;
-            z-index: 10;
-        }
-        
-        .phone-screen {
-            width: 100%;
-            height: 100%;
-            background: #FFFFFF;
-            padding: 25px 12px 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .phone-header {
-            height: 40px;
-            background: var(--bg-light);
-            border-radius: 8px;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            padding: 0 10px;
-        }
-        
-        .phone-header-circle { width: 24px; height: 24px; border-radius: 50%; background: var(--primary); opacity: 0.2; }
-        
-        .phone-item {
-            height: 30px;
-            border: 1px solid var(--border-light);
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            padding: 0 8px;
-            gap: 6px;
-        }
-        
-        .phone-icon { width: 16px; height: 16px; background: var(--secondary); border-radius: 4px; opacity: 0.5; }
-        .phone-text { height: 4px; width: 60%; background: #E2E8F0; border-radius: 2px; }
-
-        @keyframes dash {
-            to { stroke-dashoffset: 0; }
-        }
-
-        /* Service Carrier Section */
-        .section-carrier {
-            background: #FFFFFF;
-        }
-
-        .carrier-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2.5rem;
-        }
+        .section-carrier { background: #FFFFFF; }
+        .carrier-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2.5rem; }
 
         .carrier-card {
             background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-light);
-            border-radius: var(--radius-lg);
-            padding: 2.5rem;
-            box-shadow: var(--shadow-sm);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
+            backdrop-filter: blur(12px); border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg); padding: 2.5rem;
+            box-shadow: var(--shadow-sm); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; overflow: hidden;
         }
 
-        .carrier-card:hover {
-            transform: translateY(-10px);
-            box-shadow: var(--shadow-lg);
-            border-color: var(--secondary);
-        }
+        .carrier-card:hover { transform: translateY(-10px); box-shadow: var(--shadow-lg); border-color: var(--secondary); }
+        .carrier-card h3 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--primary); }
+        .carrier-card p { color: var(--text-muted); margin-bottom: 1.5rem; }
 
-        .carrier-card::before {
-            content: '';
-            position: absolute;
-            top: -50px;
-            right: -50px;
-            width: 150px;
-            height: 150px;
-            background: linear-gradient(135deg, rgba(8, 145, 178, 0.1), transparent);
-            border-radius: 50%;
-            z-index: 0;
-            transition: all 0.5s ease;
-        }
+        .carrier-card ul { list-style: none; padding: 0; }
+        .carrier-card li { padding-left: 1.5rem; position: relative; margin-bottom: 0.75rem; color: var(--text-muted); }
+        .carrier-card li::before { content: "✓"; position: absolute; left: 0; color: var(--cta); font-weight: bold; }
 
-        .carrier-card:hover::before {
-            transform: scale(1.5);
-        }
-
-        .carrier-card h3 {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-            color: var(--primary);
-        }
-
-        .carrier-card p {
-            color: var(--text-muted);
-            margin-bottom: 1.5rem;
-        }
-
-        .device-placeholder {
-            background: var(--bg-light);
-            border: 2px dashed var(--secondary);
-            border-radius: var(--radius-md);
-            height: 200px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--primary);
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-            opacity: 0.8;
-        }
-
-        .carrier-card ul {
-            list-style: none;
-            padding: 0;
-        }
-
-        .carrier-card li {
-            padding-left: 1.5rem;
-            position: relative;
-            margin-bottom: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        .carrier-card li::before {
-            content: "✓";
-            position: absolute;
-            left: 0;
-            color: var(--cta);
-            font-weight: bold;
-        }
-
-        /* DTx Section */
-        .section-dtx {
-            background: var(--bg-light);
-        }
-
-        .dtx-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 2rem;
-        }
+        .section-dtx { background: var(--bg-light); }
+        .dtx-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2rem; }
 
         .dtx-item {
-            background: rgba(255, 255, 255, 0.9);
-            border-radius: var(--radius-lg);
-            padding: 2rem;
-            border: 1px solid rgba(8, 145, 178, 0.05);
-            box-shadow: var(--shadow-sm);
+            background: rgba(255, 255, 255, 0.9); border-radius: var(--radius-lg); padding: 2rem;
+            border: 1px solid rgba(8, 145, 178, 0.05); box-shadow: var(--shadow-sm);
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        .dtx-item:hover {
-            box-shadow: var(--shadow-md);
-            border-color: var(--secondary);
-            transform: translateY(-5px);
-        }
+        .dtx-item:hover { box-shadow: var(--shadow-md); border-color: var(--secondary); transform: translateY(-5px); }
+        .dtx-item h4 { font-size: 1.25rem; margin-bottom: 1rem; color: var(--primary); display: flex; align-items: center; gap: 0.75rem; }
+        .dtx-item ul { list-style: none; padding: 0; }
+        .dtx-item li { padding-left: 1rem; position: relative; margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.95rem; }
+        .dtx-item li::before { content: "•"; position: absolute; left: 0; color: var(--secondary); font-weight: bold; }
 
-        .dtx-item h4 {
-            font-size: 1.25rem;
-            margin-bottom: 1rem;
-            color: var(--primary);
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        
-        .dtx-icon {
-            font-size: 1.5rem;
-        }
+        .system-display { display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin-top: 4rem; }
+        .mockup-container { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-width: 0; }
 
-        .dtx-item ul {
-            list-style: none;
-            padding: 0;
-        }
+        .patient-screens { display: flex; gap: 8px; width: 100%; justify-content: center; overflow: visible; }
+        .patient-screens img { width: 32%; height: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); flex: 0 0 32%; }
+        .doctor-screen { width: 100%; max-width: 100%; height: auto; display: block; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
 
-        .dtx-item li {
-            padding-left: 1rem;
-            position: relative;
-            margin-bottom: 0.5rem;
-            color: var(--text-muted);
-            font-size: 0.95rem;
-        }
+        footer { background: #1B4332; color: #fff; padding: 5rem 8% 3rem; text-align: center; font-size: 0.9rem; position: relative; }
+        footer p { margin-bottom: 0.75rem; opacity: 0.9; }
 
-        .dtx-item li::before {
-            content: "•";
-            position: absolute;
-            left: 0;
-            color: var(--secondary);
-            font-weight: bold;
-        }
+        .hamburger { display: none; cursor: pointer; width: 30px; height: 24px; flex-direction: column; justify-content: space-between; z-index: 1001; }
+        .hamburger span { display: block; height: 3px; width: 100%; background-color: var(--primary); border-radius: 3px; transition: all 0.3s ease; }
 
-        /* System Section */
-        .section-system {
-            background: #1E293B; /* Deep Slate */
-            color: white;
-            padding-bottom: 8rem;
-        }
-
-        .section-system h2 {
-            color: var(--text-main);
-        }
-
-        .section-system p {
-            color: var(--text-muted);
-        }
-
-        .system-display {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 2rem;
-            margin-top: 4rem;
-        }
-
-        .mockup {
-            background: #1E293B; /* Slate 800 */
-            border: 1px solid #334155; /* Slate 700 */
-            border-radius: var(--radius-lg);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #94A3B8;
-            font-family: monospace;
-            padding: 2rem;
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-        }
-
-        .mockup-main {
-            height: 450px;
-        }
-
-        .mockup-side {
-            height: 450px;
-        }
-
-        .patient-screens {
-            display: flex;
-            gap: 8px;
-            width: 100%;
-            justify-content: center;
-            overflow: visible;
-        }
-
-        .patient-screens img {
-            width: 32%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            flex: 0 0 32%;
-        }
-
-        .doctor-screen {
-            width: 100%;
-            max-width: 100%;
-            height: auto;
-            display: block;
-            border-radius: 8px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Footer */
-        footer {
-            background: #F8FAFC;
-            color: var(--text-muted);
-            padding: 5rem 8% 3rem;
-            text-align: center;
-            font-size: 0.9rem;
-            position: relative;
-            border-top: 1px solid var(--border-light);
-        }
-
-        footer::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            background: linear-gradient(90deg, transparent, var(--primary), transparent);
-            opacity: 0.3;
-        }
-
-        footer p {
-            margin-bottom: 0.75rem;
-            opacity: 0.9;
-        }
-
-        /* Responsive Design */
         @media (max-width: 1024px) {
-            .hero {
-                grid-template-columns: 1fr;
-                text-align: center;
-                padding-top: 10rem;
-                gap: 3rem;
-            }
-
-            .hero-content p {
-                margin-left: auto;
-                margin-right: auto;
-            }
-            
-            .system-display {
-                grid-template-columns: 1fr;
-            }
-            
-            .mockup {
-                height: 300px;
-            }
-
-            .dtx-grid {
-                grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-        }
-
-        /* Hamburger Menu */
-        .hamburger {
-            display: none;
-            cursor: pointer;
-            width: 30px;
-            height: 24px;
-            flex-direction: column;
-            justify-content: space-between;
-            z-index: 1001;
-        }
-        
-        .hamburger span {
-            display: block;
-            height: 3px;
-            width: 100%;
-            background-color: var(--primary);
-            border-radius: 3px;
-            transition: all 0.3s ease;
+            .hero { grid-template-columns: 1fr; text-align: center; padding-top: 8.5rem; gap: 2rem; }
+            .hero-content p { margin-left: auto; margin-right: auto; }
+            .system-display { grid-template-columns: 1fr; }
+            .dtx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         }
 
         @media (max-width: 768px) {
-            nav {
-                padding: 0.75rem 1.5rem;
-            }
-            
-            .hamburger {
-                display: flex;
-            }
-            
+            nav { padding: 0.65rem 1.25rem; top: 0.8rem; width: 92%; left: 4%; right: 4%; }
+            .hamburger { display: flex; }
             .nav-links {
-                display: flex;
-                position: absolute;
-                top: calc(100% + 1rem);
-                left: 0;
-                right: 0;
-                background: rgba(255, 255, 255, 0.95);
-                backdrop-filter: blur(20px);
-                -webkit-backdrop-filter: blur(20px);
-                flex-direction: column;
-                align-items: center;
-                gap: 1.5rem;
-                padding: 2rem;
-                border-radius: var(--radius-lg);
-                border: 1px solid rgba(255, 255, 255, 0.5);
-                box-shadow: var(--shadow-lg);
-                
-                /* Hidden state */
-                opacity: 0;
-                transform: translateY(-10px);
-                pointer-events: none;
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                display: flex; position: absolute; top: calc(100% + 0.8rem); left: 0; right: 0;
+                background: rgba(255, 255, 255, 0.96); backdrop-filter: blur(20px);
+                flex-direction: column; align-items: center; gap: 1.25rem; padding: 1.5rem;
+                border-radius: var(--radius-lg); border: 1px solid rgba(255, 255, 255, 0.6);
+                box-shadow: var(--shadow-lg); opacity: 0; transform: translateY(-10px);
+                pointer-events: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
-            
-            .nav-links.active {
-                opacity: 1;
-                transform: translateY(0);
-                pointer-events: all;
-            }
-            
-            .nav-links a {
-                font-size: 1.1rem;
-                width: 100%;
-                text-align: center;
-                padding: 0.5rem 0;
-            }
+            .nav-links.active { opacity: 1; transform: translateY(0); pointer-events: all; }
+            .nav-links a { font-size: 1.05rem; width: 100%; text-align: center; }
 
-            /* Hamburger Animation */
-            .hamburger.active span:nth-child(1) {
-                transform: translateY(10.5px) rotate(45deg);
-            }
-            .hamburger.active span:nth-child(2) {
-                opacity: 0;
-            }
-            .hamburger.active span:nth-child(3) {
-                transform: translateY(-10.5px) rotate(-45deg);
-            }
-            
-            .hero-content h1 {
-                font-size: 2.2rem;
-            }
+            .hamburger.active span:nth-child(1) { transform: translateY(10.5px) rotate(45deg); }
+            .hamburger.active span:nth-child(2) { opacity: 0; }
+            .hamburger.active span:nth-child(3) { transform: translateY(-10.5px) rotate(-45deg); }
 
-            section {
-                padding: 4rem 1.5rem;
-            }
-            
-            /* Hero Visual Mobile Adaptation */
-            .hero {
-                padding-top: 8rem;
-                padding-left: 1.5rem;
-                padding-right: 1.5rem;
-                overflow: hidden; /* Ensure no horizontal scroll */
-            }
+            section { padding: 3.5rem 1.25rem; }
+            .hero { padding-top: 7.5rem; padding-left: 1.25rem; padding-right: 1.25rem; }
+            .hero-content h1 { font-size: 2.1rem; line-height: 1.25; margin-bottom: 1rem; }
+            .hero-content p { font-size: 1rem; margin-bottom: 1.8rem; }
 
-            .hero::before {
-                width: 300px;
-                height: 300px;
-                right: -50px;
-                top: 50px;
-            }
+            .hero-visual { min-height: 350px; overflow: hidden; }
+            .med-hud-stage { transform: scale(0.65); margin: -25px auto; }
+            .chip-spo2 { right: 2%; }
+            .chip-steps { left: 2%; }
 
-            .hero::after {
-                width: 250px;
-                height: 250px;
-                left: -50px;
-                bottom: 50px;
-            }
-
-            .medical-ai-visual {
-                width: 280px;
-                height: 280px;
-            }
-
-            .ai-core {
-                width: 80px;
-                height: 80px;
-            }
-
-            .ai-core svg {
-                width: 40px;
-                height: 40px;
-            }
-
-            .ai-ring:nth-child(2) {
-                width: 180px;
-                height: 180px;
-            }
-
-            .ai-ring:nth-child(3) {
-                width: 260px;
-                height: 260px;
-            }
-            
-            .carrier-grid, .dtx-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .patient-screens {
-                justify-content: flex-start;
-                overflow-x: auto;
-                overflow-y: hidden;
-                scroll-snap-type: x mandatory;
-                -webkit-overflow-scrolling: touch;
-                padding: 0 0.25rem 0.5rem;
-            }
-
-            .patient-screens img {
-                width: 68vw;
-                max-width: 260px;
-                flex: 0 0 68vw;
-                scroll-snap-align: start;
-            }
+            .carrier-grid, .dtx-grid { grid-template-columns: 1fr; }
+            .patient-screens { justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 0.25rem 0.5rem; }
+            .patient-screens img { width: 68vw; max-width: 260px; flex: 0 0 68vw; scroll-snap-align: start; }
         }
     </style>
 </head>
@@ -1081,7 +642,7 @@
 
     <nav>
         <div class="logo">
-            <img src="{% static 'website1.webp' %}" alt="智医康科技 Logo" height="40">
+            <img src="{% static 'website1.webp' %}" alt="智医康科技 Logo" height="40" width="160" fetchpriority="high">
         </div>
         <div class="nav-links">
             <a href="#home">首页</a>
@@ -1102,25 +663,96 @@
             <p>连接患者与医生的数字化桥梁。通过医疗级物联网硬件实现连续体征监测，将院外康复由“盲盒”状态转为精细化管理。</p>
             <a href="#carrier" class="btn">了解详情</a>
         </div>
+
+        <!-- 右侧：6大核心体征与AI核心光纤串联全息阵列 -->
         <div class="hero-visual">
-            <div class="medical-ai-visual">
-                <div class="ai-core">
-                    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                    </svg>
+            <div class="med-hud-stage">
+
+                <div class="hud-background-grid">
+                    <div class="crosshair top-left">+</div>
+                    <div class="crosshair top-right">+</div>
+                    <div class="crosshair bottom-left">+</div>
+                    <div class="crosshair bottom-right">+</div>
+                    <div class="radar-ticks"></div>
                 </div>
-                <div class="ai-ring">
-                    <div class="ai-node"></div>
-                    <div class="ai-node"></div>
+
+                <div class="med-ambient-glow"></div>
+
+                <div class="med-ring ring-outer-hud"></div>
+                <div class="med-ring ring-mid-tech"></div>
+                <div class="med-ring ring-inner-pulse"></div>
+
+                <!-- 6大体征微数据芯片节点 -->
+                <div class="hud-chip-node chip-hr">
+                    <span class="chip-pulse red"></span>
+                    <span class="chip-text">心率 <strong class="chip-num">72</strong> BPM</span>
                 </div>
-                <div class="ai-ring">
-                    <div class="ai-node"></div>
-                    <div class="ai-node"></div>
+
+                <div class="hud-chip-node chip-bp">
+                    <span class="chip-pulse green"></span>
+                    <span class="chip-text">血压 <strong class="chip-num">118/78</strong></span>
                 </div>
+
+                <div class="hud-chip-node chip-spo2">
+                    <span class="chip-pulse blue"></span>
+                    <span class="chip-text">血氧 <strong class="chip-num">98%</strong></span>
+                </div>
+
+                <div class="hud-chip-node chip-glu">
+                    <span class="chip-pulse purple"></span>
+                    <span class="chip-text">血糖 <strong class="chip-num">5.6</strong> mmol/L</span>
+                </div>
+
+                <div class="hud-chip-node chip-wt">
+                    <span class="chip-pulse amber"></span>
+                    <span class="chip-text">体重 <strong class="chip-num">65.2</strong> kg</span>
+                </div>
+
+                <div class="hud-chip-node chip-steps">
+                    <span class="chip-pulse teal"></span>
+                    <span class="chip-text">步数 <strong class="chip-num">6,842</strong> 步</span>
+                </div>
+
+                <!-- 6条向中心汇聚的数据激光束 -->
+                <svg class="stream-svg-layer" viewBox="0 0 480 480">
+                    <path class="stream-base-path" d="M 110,50 Q 170,120 240,240" />
+                    <path class="stream-base-path" d="M 370,75 Q 310,130 240,240" />
+                    <path class="stream-base-path" d="M 430,240 Q 330,220 240,240" />
+                    <path class="stream-base-path" d="M 370,400 Q 310,350 240,240" />
+                    <path class="stream-base-path" d="M 110,410 Q 170,350 240,240" />
+                    <path class="stream-base-path" d="M 50,240 Q 150,220 240,240" />
+
+                    <path class="stream-laser-path laser-hr" d="M 110,50 Q 170,120 240,240" />
+                    <path class="stream-laser-path laser-bp" d="M 370,75 Q 310,130 240,240" />
+                    <path class="stream-laser-path laser-spo2" d="M 430,240 Q 330,220 240,240" />
+                    <path class="stream-laser-path laser-glu" d="M 370,400 Q 310,350 240,240" />
+                    <path class="stream-laser-path laser-wt" d="M 110,410 Q 170,350 240,240" />
+                    <path class="stream-laser-path laser-steps" d="M 50,240 Q 150,220 240,240" />
+                </svg>
+
+                <div class="med-ai-core">
+                    <div class="core-fluid-mesh"></div>
+                    <div class="core-pulse-ring p1"></div>
+                    <div class="core-pulse-ring p2"></div>
+                    
+                    <div class="core-medical-icon">
+                        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor">
+                            <circle cx="16" cy="16" r="14" stroke-opacity="0.25" stroke-width="1.5" stroke-dasharray="4 2"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M5 16h4.5l2-5 3.5 11 3-8 2 4 1.5-2H27"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div class="data-particle dp1"></div>
+                <div class="data-particle dp2"></div>
+                <div class="data-particle dp3"></div>
+
             </div>
         </div>
     </section>
 
+    <!-- 下方模块图片增加 loading="lazy" 防 CLS 布局抖动 -->
     <section class="section-carrier" id="carrier">
         <div class="title-group">
             <h2>服务载体</h2>
@@ -1131,7 +763,7 @@
                 <h3>智能腕表 (Smart Watch)</h3>
                 <p>核心中枢，内置4G模组可独立通讯。支持动态血压、心率、血氧饱和度实时监测。</p>
                 <div class="device-watch">
-                    <img src="{% static 'website2.webp' %}" alt="智能腕表" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="{% static 'website2.webp' %}" alt="智能腕表" loading="lazy" width="300" height="200" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <ul>
                     <li>无感采集体征数据</li>
@@ -1143,7 +775,7 @@
                 <h3>医疗级物联网外设</h3>
                 <p>实时监测，异常报警。集成智能血压计、血氧计、血糖仪、体重秤，自动同步数据至云端。</p>
                 <div class="device-box">
-                    <img src="{% static 'website3.webp' %}" alt="医疗级物联网外设" style="width: 100%; height: 100%; object-fit: contain;">
+                    <img src="{% static 'website3.webp' %}" alt="医疗级物联网外设" loading="lazy" width="300" height="200" style="width: 100%; height: 100%; object-fit: contain;">
                 </div>
                 <ul>
                     <li>上臂式医疗级精准测量</li>
@@ -1219,14 +851,14 @@
         </div>
         <div class="system-display">
             <div class="mockup-container">
-                <img src="{% static 'website4.webp' %}" alt="医生驾驶舱" class="doctor-screen">
+                <img src="{% static 'website4.webp' %}" alt="医生驾驶舱" loading="lazy" width="800" height="450" class="doctor-screen">
             </div>
             
             <div class="mockup-container">
                 <div class="patient-screens">
-                    <img src="{% static 'website5.webp' %}" alt="患者端1">
-                    <img src="{% static 'website6.webp' %}" alt="患者端2">
-                    <img src="{% static 'website7.webp' %}" alt="患者端3">
+                    <img src="{% static 'website5.webp' %}" alt="患者端1" loading="lazy" width="260" height="520">
+                    <img src="{% static 'website6.webp' %}" alt="患者端2" loading="lazy" width="260" height="520">
+                    <img src="{% static 'website7.webp' %}" alt="患者端3" loading="lazy" width="260" height="520">
                 </div>
             </div>
         </div>
@@ -1243,7 +875,7 @@
         </p>
     </section>
 
-    <footer style="background:  #1B4332;color: #fff;">
+    <footer>
         <p>
             © 2026 上海智医康科技有限公司 |
             <span id="miit-record-link" style="cursor:pointer;text-decoration:underline;">沪ICP备2024092528号-4</span> |
@@ -1253,7 +885,70 @@
     </footer>
 
     <script>
-        // Navbar scroll effect
+        // 性能优化 1：使用 IntersectionObserver 监听离屏自动暂停 Hero 动画，省电降温
+        const heroVisual = document.querySelector('.hero-visual');
+        if (heroVisual && 'IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        heroVisual.classList.remove('anim-paused');
+                    } else {
+                        heroVisual.classList.add('anim-paused');
+                    }
+                });
+            }, { threshold: 0.05 });
+            observer.observe(heroVisual);
+        }
+
+        // 性能优化 2：体征“差异化活化”跳动脚本（符合医疗常识与实时监测逻辑）
+
+        // 1. 心率：高频律动 (3.5s 微变 71~74 BPM)
+        const hrVal = document.querySelector('.chip-hr .chip-num');
+        if (hrVal) {
+            setInterval(() => {
+                hrVal.textContent = 71 + Math.floor(Math.random() * 4);
+            }, 3500);
+        }
+
+        // 2. 步数：实时累加 (4.5s 微增 1~2 步)
+        const stepsVal = document.querySelector('.chip-steps .chip-num');
+        if (stepsVal) {
+            let currentSteps = 6842;
+            setInterval(() => {
+                currentSteps += Math.floor(Math.random() * 2) + 1;
+                stepsVal.textContent = currentSteps.toLocaleString();
+            }, 4500);
+        }
+
+        // 3. 血压：超低频微变 (12s 微调 117/78 ~ 119/78 mmHg)
+        const bpVal = document.querySelector('.chip-bp .chip-num');
+        if (bpVal) {
+            setInterval(() => {
+                const sys = 117 + Math.floor(Math.random() * 3);
+                bpVal.textContent = `${sys}/78`;
+            }, 12000);
+        }
+
+        // 4. 血氧：超低频微变 (15s 微调 98% ~ 99%)
+        const spo2Val = document.querySelector('.chip-spo2 .chip-num');
+        if (spo2Val) {
+            setInterval(() => {
+                spo2Val.textContent = (98 + Math.floor(Math.random() * 2)) + '%';
+            }, 15000);
+        }
+
+        // 5. 血糖：超低频微变 (18s 模拟 CGMS 动态血糖微漂 5.5 ~ 5.7 mmol/L)
+        const gluVal = document.querySelector('.chip-glu .chip-num');
+        if (gluVal) {
+            setInterval(() => {
+                const glu = (5.5 + Math.random() * 0.2).toFixed(1);
+                gluVal.textContent = glu;
+            }, 18000);
+        }
+
+        // 6. 体重：保持 65.2 kg 静态（符合单次测量常识，建立严谨医疗信任感）
+
+        // Navbar 滚动效果
         window.addEventListener('scroll', () => {
             const nav = document.querySelector('nav');
             if (window.scrollY > 20) {
@@ -1263,7 +958,7 @@
             }
         });
 
-        // Mobile Menu Toggle
+        // 移动端菜单
         const hamburger = document.querySelector('.hamburger');
         const navLinks = document.querySelector('.nav-links');
         const navLinksItems = document.querySelectorAll('.nav-links a');
@@ -1282,6 +977,7 @@
             });
         }
 
+        // 备案链接跳转
         const miitRecordLink = document.getElementById('miit-record-link');
         if (miitRecordLink) {
             miitRecordLink.addEventListener('click', () => {

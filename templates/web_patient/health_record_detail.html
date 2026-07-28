@@ -199,12 +199,14 @@
   let isChartMode = false;
   const hasRecords = {{ has_records|yesno:"true,false" }};
   let hasAnyRecords = hasRecords;
-  const currentType = "{{ record_type }}";
-  const currentTitle = "{{ title }}";
-  const patientId = "{{ patient_id }}";
-  const currentMonth = "{{ current_month }}";
-  const currentCheckupId = "{{ checkup_id|default:'' }}";
-  const currentSource = "{{ source|default:'' }}";
+  const currentType = "{{ record_type|escapejs }}";
+  const currentTitle = "{{ title|escapejs }}";
+  const patientId = "{{ patient_id|escapejs }}";
+  const currentMonth = "{{ current_month|escapejs }}";
+  const currentCheckupId = "{{ checkup_id|default:''|escapejs }}";
+  const currentSource = "{{ source|default:''|escapejs }}";
+  const questionnaireId = "{{ questionnaire_id|default:''|escapejs }}";
+  const packageId = "{{ package_id|default:''|escapejs }}";
   const showOperationControls = {{ show_operation_controls|yesno:"true,false" }};
   const chartAvailable = {{ chart_available|yesno:"true,false" }};
   const currentChartMode = "{{ chart_mode }}";
@@ -222,10 +224,10 @@
   const recordsData = [
     {% for record in records %}
     {
-      id: "{{ record.id }}",
+      id: "{{ record.id|escapejs }}",
       data: [
         {% for field in record.data %}
-        { label: "{{ field.label }}", value: "{{ field.value }}", key: "{{ field.key }}" },
+        { label: "{{ field.label|escapejs }}", value: "{{ field.value|escapejs }}", key: "{{ field.key|escapejs }}" },
         {% endfor %}
       ]
     },
@@ -454,7 +456,8 @@
     const checkupParam = currentType === 'review_record' && currentCheckupId ? `&checkup_id=${encodeURIComponent(currentCheckupId)}` : '';
     const sourceParam = currentSource ? `&source=${encodeURIComponent(currentSource)}` : '';
     const cursorMonthParam = cursorMonth || currentMonth;
-    const url = `?type=${encodeURIComponent(currentType)}&title=${encodeURIComponent(currentTitle)}&patient_id=${encodeURIComponent(patientId)}&month=${encodeURIComponent(currentMonth)}&cursor_month=${encodeURIComponent(cursorMonthParam)}&cursor_offset=${encodeURIComponent(cursorOffset)}&limit=${encodeURIComponent(batchSize)}${checkupParam}${sourceParam}`;
+    const questionnaireParam = questionnaireId ? `&questionnaire_id=${encodeURIComponent(questionnaireId)}&package_id=${encodeURIComponent(packageId)}` : '';
+    const url = `?type=${encodeURIComponent(currentType)}&title=${encodeURIComponent(currentTitle)}&patient_id=${encodeURIComponent(patientId)}&month=${encodeURIComponent(currentMonth)}&cursor_month=${encodeURIComponent(cursorMonthParam)}&cursor_offset=${encodeURIComponent(cursorOffset)}&limit=${encodeURIComponent(batchSize)}${checkupParam}${sourceParam}${questionnaireParam}`;
 
     fetch(url, {
       headers: {
@@ -642,7 +645,8 @@
     document.getElementById('month-display').innerText = input.value;
     const checkupParam = currentType === 'review_record' && currentCheckupId ? `&checkup_id=${encodeURIComponent(currentCheckupId)}` : '';
     const sourceParam = currentSource ? `&source=${encodeURIComponent(currentSource)}` : '';
-    const newUrl = `?type=${encodeURIComponent(currentType)}&title=${encodeURIComponent(currentTitle)}&patient_id=${encodeURIComponent(patientId)}&month=${encodeURIComponent(input.value)}${checkupParam}${sourceParam}`;
+    const questionnaireParam = questionnaireId ? `&questionnaire_id=${encodeURIComponent(questionnaireId)}&package_id=${encodeURIComponent(packageId)}` : '';
+    const newUrl = `?type=${encodeURIComponent(currentType)}&title=${encodeURIComponent(currentTitle)}&patient_id=${encodeURIComponent(patientId)}&month=${encodeURIComponent(input.value)}${checkupParam}${sourceParam}${questionnaireParam}`;
     window.location.replace(newUrl);
   }
 

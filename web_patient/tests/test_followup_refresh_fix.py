@@ -4,17 +4,21 @@ from decimal import Decimal
 import json
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from django.conf import settings
+from django.core.cache import cache
 from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import escape
 
 from core.models import DailyTask, PlanItem, Questionnaire, TreatmentCycle
 from core.models import choices as core_choices
 from market.models import Order, Product
 from users import choices as user_choices
 from users.models import CustomUser, PatientProfile
+from web_patient.views import home as home_views
 
 
 class FollowupPlanCompletionTests(TestCase):
@@ -193,6 +197,41 @@ class FollowupPlanCompletionTests(TestCase):
         self.assertIn("no-cache", metric_cache_control)
         self.assertIn("no-store", metric_cache_control)
 
+    @patch("web_patient.views.home.get_daily_plan_summary")
+    @patch("web_patient.views.home.generate_menu_auth_url")
+    def test_patient_home_json_config_and_quoted_task_title_are_script_safe(
+        self, mock_menu_auth_url, mock_daily_plan_summary
+    ):
+        dangerous_value = (
+            '/buy/?next="quoted"&label=single\'\\&payload=</script>'
+            '<script>window.injected=true</script>'
+        )
+        dangerous_title = (
+            '复查 "特殊" \'标题 </script>'
+            '<script>window.taskInjected=true</script>'
+        )
+        mock_menu_auth_url.return_value = dangerous_value
+        mock_daily_plan_summary.return_value = [
+            {
+                "title": dangerous_title,
+                "status": core_choices.TaskStatus.PENDING,
+            }
+        ]
+        cache.clear()
+
+        response = self.client.get(reverse("web_patient:patient_home"))
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode("utf-8")
+        config_start = '<script id="patient-home-config" type="application/json">'
+        config_payload = content.split(config_start, 1)[1].split("</script>", 1)[0]
+        config = json.loads(config_payload)
+
+        self.assertEqual(config["buyUrl"], dangerous_value)
+        self.assertIn(str(escape(dangerous_title)), content)
+        self.assertNotIn("<script>window.injected=true</script>", content)
+        self.assertNotIn("<script>window.taskInjected=true</script>", content)
+        self.assertNotIn('onclick="handleTaskClick(', content)
+
     @patch("web_patient.views.followup.invalidate_patient_home_plan_cache")
     @patch("web_patient.views.followup.QuestionnaireSubmissionService.submit_questionnaire")
     def test_submit_surveys_invalidates_home_plan_cache(self, mock_submit, mock_invalidate):
@@ -219,6 +258,61 @@ class FollowupPlanCompletionTests(TestCase):
 
 
 class FollowupRefreshTemplateTests(SimpleTestCase):
+    def test_home_task_action_url_preserves_existing_query_and_fragment(self):
+        builder = getattr(home_views, "_build_home_task_action_url", None)
+        self.assertTrue(callable(builder), "patient home must expose an action URL builder")
+
+        action_url = builder(
+            {
+                "type": "followup",
+                "url": "/p/followup/daily/?ids=3%2C5&label=%E9%97%AE%E5%8D%B7+A#pending",
+            },
+            {"followup": "/p/followup/daily/"},
+            "患者 7",
+        )
+        parsed = urlsplit(action_url)
+        query = parse_qs(parsed.query)
+
+        self.assertEqual(parsed.path, "/p/followup/daily/")
+        self.assertEqual(parsed.fragment, "pending")
+        self.assertEqual(query["ids"], ["3,5"])
+        self.assertEqual(query["label"], ["问卷 A"])
+        self.assertEqual(query["patient_id"], ["患者 7"])
+        self.assertEqual(query["source"], ["home"])
+
+    def test_home_task_action_url_uses_mapping_and_skips_medication(self):
+        builder = getattr(home_views, "_build_home_task_action_url", None)
+        self.assertTrue(callable(builder), "patient home must expose an action URL builder")
+
+        action_url = builder(
+            {"type": "bp_hr"},
+            {"bp_hr": "/p/record/bp/?source=calendar&patient_id=old"},
+            42,
+        )
+        query = parse_qs(urlsplit(action_url).query)
+
+        self.assertEqual(query["patient_id"], ["42"])
+        self.assertEqual(query["source"], ["home"])
+        self.assertEqual(builder({"type": "medication"}, {}, 42), "")
+
+    def test_patient_home_uses_progressive_task_actions(self):
+        template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / "patient_home.html"
+        content = template_path.read_text(encoding="utf-8")
+        script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
+        script_content = script_path.read_text(encoding="utf-8")
+
+        self.assertIn('json_script:"patient-home-config"', content)
+        self.assertIn(
+            '<script src="{% static \'web_patient/patient_home.js\' %}" defer></script>',
+            content,
+        )
+        self.assertIn('href="{{ plan.action_url }}"', content)
+        self.assertIn('data-home-task-action="medication"', content)
+        self.assertNotIn('onclick="handleTaskClick(', content)
+        self.assertNotIn("window.handleTaskClick = handleTaskClick;", script_content)
+        self.assertIn("function handleHomeTaskAction(event)", script_content)
+        self.assertIn("document.addEventListener('click', handleHomeTaskAction);", script_content)
+
     def test_patient_home_uses_single_pageshow_refresh_entry(self):
         template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / "patient_home.html"
         content = template_path.read_text(encoding="utf-8")
@@ -317,12 +411,13 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
         self.assertNotIn("checkup_all_completed", content)
         self.assertNotIn("CHECKUP_COMPLETION_UPDATED", content)
 
-    def test_patient_home_task_click_marks_every_task_as_home_source(self):
+    def test_patient_home_dynamic_task_links_mark_every_task_as_home_source(self):
         script_path = Path(settings.BASE_DIR) / "static" / "web_patient" / "patient_home.js"
         content = script_path.read_text(encoding="utf-8")
 
-        self.assertIn("finalUrl = finalUrl + sep2 + 'source=home';", content)
-        self.assertNotIn("if (type === 'checkup') {", content)
+        self.assertIn("taskUrl.searchParams.set('source', 'home');", content)
+        self.assertIn("taskUrl.searchParams.set('patient_id', PATIENT_ID);", content)
+        self.assertNotIn("function handleTaskClick(", content)
 
     def test_metric_record_pages_replace_home_for_home_source(self):
         cases = {

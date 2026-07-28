@@ -99,7 +99,10 @@ def submit_surveys(request: HttpRequest) -> JsonResponse:
     Payload: {
         "patient_id": 1,
         "questionnaire_id": 1,
-        "answers": [{"option_id": 10}, ...]
+        "answers": [
+            {"option_id": 10},
+            {"question_id": 79, "value_text": "78"}
+        ]
     }
     """
     try:

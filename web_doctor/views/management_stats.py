@@ -1,15 +1,14 @@
 import logging
 from typing import Any, Dict, Optional, List
 from datetime import date
-import random
 from django.db.models import Count
-from django.db.models.functions import TruncMonth
 from django.utils import timezone
 import datetime
 
 from market.service.order import get_paid_orders_for_patient
 from core.service.tasks import get_adherence_metrics, MONITORING_ADHERENCE_ALL
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from core.models.choices import PlanItemCategory
 from health_data.models import (
     CheckupResultValue,
@@ -61,6 +60,9 @@ class ManagementStatsView:
 
         # 生成图表数据
         charts = self._generate_charts_data(patient, start_date, end_date)
+        questionnaire_count_charts = self._generate_questionnaire_count_charts(
+            patient, start_date, end_date
+        )
 
         # 生成复查指标统计
         followup_review_charts = self._generate_followup_review_charts(patient, start_date, end_date)
@@ -80,6 +82,7 @@ class ManagementStatsView:
             "service_packages": service_packages,
             "stats_overview": stats_overview,
             "charts": charts,
+            "questionnaire_count_charts": questionnaire_count_charts,
             "followup_review_charts": followup_review_charts,
             "query_stats": query_stats,
         }
@@ -221,15 +224,6 @@ class ManagementStatsView:
             ("hr", "心率统计次数", "次", "#EFA244", MetricType.HEART_RATE),
             ("weight", "体重统计次数", "次", "#06B6D4", MetricType.WEIGHT),
             ("step", "步数统计次数", "次", "#09D406", MetricType.STEPS),
-            ("stamina", "体能评分统计次数", "次", "#5CC3F6", "Q_PHYSICAL"),
-            ("dyspnea", "呼吸困难统计次数", "次", "#8B5CF6", "Q_BREATH"),
-            ("cough", "咳嗽与痰色统计次数", "次", "#F59E0B", "Q_COUGH"),
-            ("sputum", "食欲统计次数", "次", "#10B981", "Q_APPETITE"), 
-            ("pain", "身体疼痛统计次数", "次", "#EC4899", "Q_PAIN"),
-            ("sleep", "睡眠质量统计次数", "次", "#82E608", "Q_SLEEP"),
-            ("depressed", "抑郁评估统计次数", "次", "#4861EC", "Q_DEPRESSIVE"),
-            ("anxiety", "焦虑统计次数", "次", "#48B8EC", "Q_ANXIETY"),
-            ("oral_mucosa", "口腔黏膜损伤自评量表统计次数", "次", "#14B8A6", "Q_KQNMLB"),
         ]
 
         charts = {}
@@ -293,6 +287,20 @@ class ManagementStatsView:
             }
         
         return charts
+
+    def _generate_questionnaire_count_charts(
+        self,
+        patient: Any,
+        start_date: date | None,
+        end_date: date | None,
+    ) -> list[Dict[str, Any]]:
+        """Return database-driven monthly counts for all enabled questionnaires."""
+        return QuestionnaireDisplayService.build_monthly_count_charts(
+            patient=patient,
+            start_date=start_date,
+            end_date=end_date,
+            month_labels=self._build_month_labels(start_date, end_date),
+        )
 
     def _generate_followup_review_charts(self, patient: Any, start_date: date | None, end_date: date | None) -> list[Dict[str, Any]]:
         """

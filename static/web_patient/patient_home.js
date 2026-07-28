@@ -6,7 +6,20 @@
   }
   window.__PATIENT_HOME_BOOTED__ = true;
 
-  const config = window.__PATIENT_HOME_CONFIG__ || {};
+  function readPatientHomeConfig() {
+    const configElement = document.getElementById('patient-home-config');
+    if (!configElement) {
+      return {};
+    }
+    try {
+      return JSON.parse(configElement.textContent || '{}');
+    } catch (error) {
+      console.error('Invalid patient home config:', error);
+      return {};
+    }
+  }
+
+  const config = readPatientHomeConfig();
   const IS_MEMBER = Boolean(config.isMember);
   const BUY_URL = config.buyUrl || '';
   const PATIENT_ID = config.patientId || '';
@@ -215,37 +228,37 @@
       });
   }
 
-  function handleTaskClick(title, type, specificUrl) {
+  function buildTaskActionUrl(type, specificUrl) {
+    const fallbackUrl = MENU_URLS[type];
+    const urlBase = specificUrl || fallbackUrl;
+    if (!urlBase) {
+      console.error('未找到对应类型的跳转链接:', type);
+      return '';
+    }
+
+    const taskUrl = new URL(urlBase, window.location.href);
+    taskUrl.searchParams.set('source', 'home');
+    taskUrl.searchParams.set('patient_id', PATIENT_ID);
+    if (taskUrl.origin === window.location.origin) {
+      return taskUrl.pathname + taskUrl.search + taskUrl.hash;
+    }
+    return taskUrl.toString();
+  }
+
+  function handleHomeTaskAction(event) {
+    const action = event.target.closest('[data-home-task-action]');
+    if (!action || action.dataset.homeTaskAction !== 'medication') {
+      return;
+    }
+    event.preventDefault();
     if (!IS_MEMBER) {
       showMemberOnlyModal('该功能为会员专属，请先开通会员', BUY_URL);
       return;
     }
-
-    if ((title || '').includes('用药提醒')) {
-      openMedicationModal();
-      return;
-    }
-
-    const fallbackUrl = MENU_URLS[type];
-    const urlBase = specificUrl || fallbackUrl;
-
-    if (!urlBase) {
-      console.error('未找到对应类型的跳转链接:', type);
-      return;
-    }
-
-    const separator = urlBase.includes('?') ? '&' : '?';
-    let finalUrl = urlBase + separator + 'patient_id=' + encodeURIComponent(PATIENT_ID);
-
-    if (!/[?&]source=/.test(finalUrl)) {
-      const sep2 = finalUrl.includes('?') ? '&' : '?';
-      finalUrl = finalUrl + sep2 + 'source=home';
-    }
-
-    window.location.href = finalUrl;
+    openMedicationModal();
   }
 
-  const PLAN_ACTION_BUTTON_CLASS = 'bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap';
+  const PLAN_ACTION_CONTROL_CLASS = 'bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap';
 
   function setPlanActionState(type, status, plan) {
     const actionEl = document.getElementById('plan-action-' + type);
@@ -254,9 +267,6 @@
     }
 
     const planData = plan || {};
-    if (typeof planData.title === 'string' && planData.title.length > 0) {
-      actionEl.dataset.planTitle = planData.title;
-    }
     if (typeof planData.action_text === 'string' && planData.action_text.length > 0) {
       actionEl.dataset.actionText = planData.action_text;
     }
@@ -270,18 +280,28 @@
     }
 
     const actionText = actionEl.dataset.actionText || '去完成';
-    const planTitle = actionEl.dataset.planTitle || '';
     const specificUrl = actionEl.dataset.planUrl || '';
 
     actionEl.innerHTML = '';
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = PLAN_ACTION_BUTTON_CLASS;
-    button.textContent = actionText;
-    button.addEventListener('click', function () {
-      handleTaskClick(planTitle, type, specificUrl);
-    });
-    actionEl.appendChild(button);
+    if (type === 'medication') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.homeTaskAction = 'medication';
+      button.className = PLAN_ACTION_CONTROL_CLASS;
+      button.textContent = actionText;
+      actionEl.appendChild(button);
+      return;
+    }
+
+    const actionUrl = buildTaskActionUrl(type, specificUrl);
+    if (!actionUrl) {
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = actionUrl;
+    link.className = PLAN_ACTION_CONTROL_CLASS;
+    link.textContent = actionText;
+    actionEl.appendChild(link);
   }
 
   function setPlanCardState(type, status, subtitle, plan) {
@@ -619,6 +639,7 @@
   window.addEventListener('pagehide', handleHomePageHide);
   window.addEventListener('beforeunload', handleHomeBeforeUnload);
   document.addEventListener('visibilitychange', handleHomeVisibilityChange);
+  document.addEventListener('click', handleHomeTaskAction);
 
   window.showMemberOnlyModal = showMemberOnlyModal;
   window.closeMemberOnlyModal = closeMemberOnlyModal;
@@ -627,7 +648,6 @@
   window.openMedicationModal = openMedicationModal;
   window.closeMedicationModal = closeMedicationModal;
   window.submitMedication = submitMedication;
-  window.handleTaskClick = handleTaskClick;
   window.handleConsultationEntry = handleConsultationEntry;
   window.writeHomePlanRefreshMarker = writeHomePlanRefreshMarker;
 })();

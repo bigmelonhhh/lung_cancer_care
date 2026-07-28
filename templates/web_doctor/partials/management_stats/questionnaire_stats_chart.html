@@ -1,0 +1,52 @@
+<div class="rounded-lg border border-slate-100 bg-white p-4 shadow-sm">
+  <div class="mb-4 flex items-center gap-2">
+    {% include "components/ui/questionnaire_icon.html" with icon_key=chart.icon_key color=chart.color size_class="w-5 h-5" %}
+    <h3 class="text-sm font-bold text-gray-800">{{ chart.title }}</h3>
+  </div>
+  <div id="{{ chart.id }}" style="width: 100%; height: 200px;"></div>
+</div>
+{{ chart|json_script:chart.data_script_id }}
+<script>
+  (function () {
+    const node = document.getElementById('{{ chart.data_script_id|escapejs }}');
+    if (!node) return;
+    const config = JSON.parse(node.textContent);
+    let retryCount = 0;
+    function initChart() {
+      if (typeof echarts === 'undefined') {
+        if (window.LCCCharts && typeof window.LCCCharts.ensureEcharts === 'function') {
+          window.LCCCharts.ensureEcharts().then(initChart).catch(function () {});
+        } else if (retryCount++ < 20) {
+          setTimeout(initChart, 100);
+        }
+        return;
+      }
+      const element = document.getElementById(config.id);
+      if (!element) return;
+      const existing = echarts.getInstanceByDom(element);
+      if (existing) existing.dispose();
+      const chartInstance = echarts.init(element);
+      chartInstance.setOption({
+        tooltip: { trigger: 'axis' },
+        grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+        xAxis: { type: 'category', boundaryGap: false, data: config.dates },
+        yAxis: { type: 'value', min: config.y_min, max: config.y_max },
+        series: (config.series || []).map(function (series) {
+          return {
+            name: series.name,
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            itemStyle: { color: series.color },
+            lineStyle: { width: 2 },
+            areaStyle: { opacity: 0.1, color: series.color },
+            data: series.data
+          };
+        })
+      });
+      window.addEventListener('resize', function () { chartInstance.resize(); });
+    }
+    initChart();
+  })();
+</script>

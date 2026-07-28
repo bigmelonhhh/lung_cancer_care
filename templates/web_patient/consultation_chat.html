@@ -85,8 +85,13 @@
                         </div>
                     </template>
 
-                    <!-- Image Content -->
-                    <template x-if="msg.content_type === 'image'">
+                    <!-- Patient/Family Image Content -->
+                    <template x-if="msg.content_type === 'image' && isSelf(msg)">
+                        {% include "components/ui/privacy_image.html" with x_src="msg.image_url" attrs='@click="previewImage(msg.image_url)"' image_attrs='@load="handleMessageImageLoad(msg)"' %}
+                    </template>
+
+                    <!-- Doctor Image Content -->
+                    <template x-if="msg.content_type === 'image' && !isSelf(msg)">
                         <img :src="msg.image_url" class="max-w-full rounded-lg cursor-pointer" @load="handleMessageImageLoad(msg)" @click="previewImage(msg.image_url)">
                     </template>
 

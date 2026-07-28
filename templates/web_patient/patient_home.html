@@ -23,6 +23,9 @@
 {% endblock %}
 
 {% block body %}
+{{ patient_home_config|json_script:"patient-home-config" }}
+<script src="{% static 'web_patient/patient_home.js' %}" defer></script>
+
 <div class="min-h-screen bg-white pb-24 relative font-sans">
   <div
     class="bg-gradient-to-b from-[#0F4C81] to-[#1E6FAD] pt-safe-top pb-20 px-5 relative rounded-b-[2rem] shadow-md"
@@ -560,19 +563,26 @@
           <div
             id="plan-action-{{ plan.type }}"
             data-plan-type="{{ plan.type }}"
-            data-plan-title="{{ plan.title|escape }}"
             data-plan-url="{{ plan.url|default:''|escape }}"
             data-action-text="{{ plan.action_text|escape }}"
           >
           {% if plan.status != 'completed' %}
-
-          <button
-            onclick="handleTaskClick('{{ plan.title }}', '{{ plan.type }}', '{{ plan.url|default:'' }}')"
-            class="bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap"
-          >
-            {{ plan.action_text }}
-          </button>
-
+            {% if plan.type == 'medication' %}
+            <button
+              type="button"
+              data-home-task-action="medication"
+              class="bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap"
+            >
+              {{ plan.action_text }}
+            </button>
+            {% else %}
+            <a
+              href="{{ plan.action_url }}"
+              class="bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap"
+            >
+              {{ plan.action_text }}
+            </a>
+            {% endif %}
           {% endif %}
           </div>
         </div>
@@ -622,7 +632,7 @@
   <div
     id="medication-modal"
     class="fixed inset-0 z-50"
-    style="display: none; background: rgba(0, 0, 0, 0.9)"
+    style="display: none; background: rgba(0, 0, 0, 0.7)"
   >
     <div
       class="relative min-h-screen flex flex-col items-center justify-center p-4"
@@ -734,23 +744,4 @@
   </div>
 </div>
 
-<script>
-  window.__PATIENT_HOME_CONFIG__ = {
-    isMember: {{ is_member|yesno:"true,false" }},
-    buyUrl: "{{ buy_url|escapejs }}",
-    unreadChatCount: {{ unread_chat_count|default:0 }},
-    patientId: "{{ patient_id|default:''|escapejs }}",
-    menuUrl: {{ menuUrl|safe }},
-    csrfToken: "{{ csrf_token|escapejs }}",
-    unreadRefreshIntervalMs: 15000,
-    urls: {
-      submitMedication: "{% url 'web_patient:submit_medication' %}",
-      patientHome: "{% url 'web_patient:patient_home' %}",
-      queryLastMetric: "{% url 'web_patient:query_last_metric' %}",
-      chatUnreadCount: "{% url 'web_patient:chat_api_unread_count' %}",
-      chatResetUnread: "{% url 'web_patient:chat_api_reset_unread' %}"
-    }
-  };
-</script>
-<script src="{% static 'web_patient/patient_home.js' %}" defer></script>
 {% endblock %}
