@@ -13,6 +13,11 @@ from health_data.services.health_metric import HealthMetricService
 from users.models import PatientProfile
 
 
+METRIC_BLOOD_GLUCOSE = "M_GLU"
+METRIC_BLOOD_KETONE = "M_KETONE"
+METRIC_URIC_ACID = "M_UA"
+
+
 class HealthMetricServiceTest(TestCase):
     def setUp(self):
         # 模拟数据
@@ -392,6 +397,29 @@ class HealthMetricServiceTest(TestCase):
         self.assertEqual(result.id, metric.id)
         self.assertIsNone(result.questionnaire_submission_id)
         self.assertEqual(result.display_value, "66.5 kg")
+
+    def test_metabolic_metric_display_values_include_units(self):
+        patient = PatientProfile.objects.create(phone="13800138006")
+        self.assertIn((METRIC_BLOOD_GLUCOSE, "血糖"), MetricType.choices)
+        self.assertIn((METRIC_BLOOD_KETONE, "血酮"), MetricType.choices)
+        self.assertIn((METRIC_URIC_ACID, "尿酸"), MetricType.choices)
+        cases = [
+            (METRIC_BLOOD_GLUCOSE, Decimal("6.10"), "6.1 mmol/L"),
+            (METRIC_BLOOD_KETONE, Decimal("1.20"), "1.2 mmol/L"),
+            (METRIC_URIC_ACID, Decimal("420.00"), "420 umol/L"),
+        ]
+
+        for metric_type, value, expected_display in cases:
+            with self.subTest(metric_type=metric_type):
+                metric = HealthMetric.objects.create(
+                    patient=patient,
+                    metric_type=metric_type,
+                    measured_at=timezone.now(),
+                    source=MetricSource.DEVICE,
+                    value_main=value,
+                )
+
+                self.assertEqual(metric.display_value, expected_display)
 
     @patch("health_data.models.HealthMetric.objects.get")
     def test_update_manual_metric_success_partial_fields(self, mock_get):

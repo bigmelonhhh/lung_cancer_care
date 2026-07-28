@@ -17,6 +17,19 @@ logger = logging.getLogger(__name__)
 
 
 @csrf_exempt
+def iwown_alarm_upload_callback(request):
+    """Acknowledge IWOWN alarm uploads without processing them for now."""
+    adapter = IwownHealthDataAdapter()
+    return adapter.success_response()
+
+
+@csrf_exempt
+def iwown_sleep_result_callback(request):
+    """Return a no-data sleep result until IWOWN sleep processing is supported."""
+    return JsonResponse({"ReturnCode": 10404})
+
+
+@csrf_exempt
 def iwown_device_info_callback(request):
     """Receive and log IWOWN device-information uploads."""
     adapter = IwownDeviceInfoAdapter()
