@@ -21,6 +21,10 @@ from health_data.models import (
     ReportImage,
 )
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.monitoring_catalog import (
+    get_monitoring_definitions,
+    resolve_monitoring_definition,
+)
 from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from market.service.order import get_paid_orders_for_patient
@@ -53,12 +57,10 @@ QUESTIONNAIRE_RECORD_TYPE_MAP = {
 
 RECORD_TYPE_METRIC_MAP = {
     "medical": MetricType.USE_MEDICATED,
-    "temperature": MetricType.BODY_TEMPERATURE,
-    "bp": MetricType.BLOOD_PRESSURE,
-    "spo2": MetricType.BLOOD_OXYGEN,
-    "weight": MetricType.WEIGHT,
-    "step": MetricType.STEPS,
-    "heart": MetricType.HEART_RATE,
+    **{
+        definition.slug: definition.metric_type
+        for definition in get_monitoring_definitions()
+    },
 }
 
 QUESTIONNAIRE_RECORD_TYPES = set(QUESTIONNAIRE_RECORD_TYPE_MAP.keys())
@@ -176,6 +178,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
         },
         {"type": "heart", "title": "心率", "count": 0, "abnormal": 0, "icon": "heart"},
         {"type": "step", "title": "步数", "count": 0, "abnormal": 0, "icon": "step"},
+        {"type": "glucose", "title": "血糖", "count": 0, "abnormal": 0, "icon": "glucose"},
+        {"type": "ketone", "title": "血酮", "count": 0, "abnormal": 0, "icon": "ketone"},
+        {"type": "uric_acid", "title": "尿酸", "count": 0, "abnormal": 0, "icon": "uric_acid"},
     ]
 
     if patient_id:
@@ -187,6 +192,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
             "weight": MetricType.WEIGHT,
             "heart": MetricType.HEART_RATE,
             "step": MetricType.STEPS,
+            "glucose": MetricType.BLOOD_GLUCOSE,
+            "ketone": MetricType.BLOOD_KETONE,
+            "uric_acid": MetricType.URIC_ACID,
         }
 
         for item in health_stats:
@@ -373,6 +381,25 @@ def _build_metric_record(
                 "key": "medicated",
             }
         ]
+    elif record_type in {"glucose", "ketone", "uric_acid"}:
+        definition = resolve_monitoring_definition(metric_type=metric.metric_type)
+        data_fields.append(
+            {
+                "label": definition.title,
+                "value": metric.display_value,
+                "is_large": True,
+                "key": record_type,
+            }
+        )
+        if record_type == "glucose":
+            data_fields.append(
+                {
+                    "label": "测量场景",
+                    "value": metric.get_measurement_context_display() or "未记录",
+                    "is_large": False,
+                    "key": "measurement_context",
+                }
+            )
     else:
         data_fields.append(
             {
@@ -723,6 +750,9 @@ def _build_line_chart_payload(
         "heart": "#f97316",
         "step": "#22c55e",
         "bp": "#2563eb",
+        "glucose": "#f472b6",
+        "ketone": "#2563eb",
+        "uric_acid": "#ff5858",
     }
     day_set = set(month_days)
     latest_map = {}
@@ -993,10 +1023,11 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "step",
         "heart",
         "bp_hr",
+        "glucose",
+        "ketone",
+        "uric_acid",
     }
-    show_operation_controls = bool(
-        source == "health_records" and record_type in general_record_types
-    )
+    show_operation_controls = False
     show_add_button = False
     if record_type == "medical":
         show_operation_controls = False
@@ -1031,6 +1062,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "step",
         "heart",
         "bp_hr",
+        "glucose",
+        "ketone",
+        "uric_acid",
         "physical",
         "breath",
         "cough",

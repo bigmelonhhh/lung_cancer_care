@@ -329,6 +329,9 @@ class PatientServiceTests(TestCase):
             "baseline_blood_pressure_dbp": 80,
             "baseline_heart_rate": 72,
             "baseline_steps": 6000,
+            "baseline_blood_glucose": Decimal("6.2"),
+            "baseline_blood_ketone": Decimal("0.6"),
+            "baseline_uric_acid": 420,
         }
 
         updated_profile = self.service.save_patient_profile(
@@ -347,3 +350,6 @@ class PatientServiceTests(TestCase):
         self.assertEqual(self.patient_profile.baseline_blood_pressure_dbp, 80)
         self.assertEqual(self.patient_profile.baseline_heart_rate, 72)
         self.assertEqual(self.patient_profile.baseline_steps, 6000)
+        self.assertEqual(self.patient_profile.baseline_blood_glucose, Decimal("6.2"))
+        self.assertEqual(self.patient_profile.baseline_blood_ketone, Decimal("0.6"))
+        self.assertEqual(self.patient_profile.baseline_uric_acid, 420)

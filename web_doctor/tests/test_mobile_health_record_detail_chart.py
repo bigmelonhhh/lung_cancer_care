@@ -99,6 +99,35 @@ class MobileHealthRecordDetailChartTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["chart_available"])
         self.assertEqual(response.context["chart_mode"], "line")
+
+    def test_glucose_detail_is_read_only_and_uses_real_metric_label(self):
+        metric = self._create_metric(
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            year=2025,
+            month=3,
+            day=2,
+            hour=9,
+            value_main="6.2",
+        )
+        metric.measurement_context = "fasting"
+        metric.save(update_fields=["measurement_context"])
+
+        response = self.client.get(
+            self.url,
+            {
+                "type": "glucose",
+                "title": "血糖",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+                "source": "health_records",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["chart_available"])
+        self.assertFalse(response.context["show_operation_controls"])
+        self.assertEqual(response.context["records"][0]["data"][0]["label"], "血糖")
+        self.assertContains(response, "(测量场景：空腹)")
         self.assertContains(response, "切换图表")
         self.assertContains(response, 'id="record-chart-wrapper"')
 

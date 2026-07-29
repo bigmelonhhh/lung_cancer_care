@@ -483,6 +483,9 @@ class TestManagementStatsChatIntegration(TestCase):
                 "hr",
                 "weight",
                 "step",
+                "glucose",
+                "ketone",
+                "uric_acid",
                 "stamina",
                 "dyspnea",
                 "cough",
@@ -523,3 +526,28 @@ class TestManagementStatsChatIntegration(TestCase):
         self.assertIn("口腔黏膜损伤自评量表统计次数", html)
         self.assertIn("复查指标", html)
         self.assertIn("复查指标-血常规-白细胞计数统计次数", html)
+
+    def test_generate_charts_data_contains_new_general_monitoring_metrics(self):
+        self.patient.baseline_blood_glucose = Decimal("6.2")
+        self.patient.baseline_blood_ketone = Decimal("0.5")
+        self.patient.baseline_uric_acid = 380
+        self.patient.save(
+            update_fields=[
+                "baseline_blood_glucose",
+                "baseline_blood_ketone",
+                "baseline_uric_acid",
+            ]
+        )
+        charts = self.view._generate_charts_data(
+            self.patient,
+            self.start_date,
+            self.end_date,
+        )
+
+        self.assertIn("glucose", charts)
+        self.assertIn("ketone", charts)
+        self.assertIn("uric_acid", charts)
+        self.assertEqual(charts["glucose"]["title"], "血糖统计次数: 0次")
+        self.assertNotIn("baseline", charts["glucose"]["series"][0])
+        self.assertNotIn("baseline", charts["ketone"]["series"][0])
+        self.assertNotIn("baseline", charts["uric_acid"]["series"][0])

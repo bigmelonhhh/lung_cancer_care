@@ -56,7 +56,7 @@
         
         <div class="flex-1 px-5 pb-4 flex flex-col">
             <div class="flex-1 space-y-3 overflow-y-auto">
-                <div class="grid grid-cols-1 gap-y-2 text-sm">
+                <div class="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                     {# 血氧 #}
                     <div class="flex items-center">
                         <span class="text-slate-500 shrink-0 text-right mr-3">血氧：</span>
@@ -133,8 +133,38 @@
                     <div class="flex items-center">
                         <span class="text-slate-500  shrink-0 text-right mr-3">步数：</span>
                         <span class="text-slate-800 font-medium" data-metric="steps" data-value="{{ patient.baseline_steps|default:'' }}">
-                            {% if patient.baseline_steps %}
+                            {% if patient.baseline_steps is not None %}
                                 {{ patient.baseline_steps }} 步
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-slate-500 shrink-0 text-right mr-3">血糖：</span>
+                        <span class="text-slate-800 font-medium" data-metric="blood_glucose" data-value="{{ patient.baseline_blood_glucose|default:'' }}">
+                            {% if patient.baseline_blood_glucose is not None %}
+                                {{ patient.baseline_blood_glucose }} mmol/L
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-slate-500 shrink-0 text-right mr-3">血酮：</span>
+                        <span class="text-slate-800 font-medium" data-metric="blood_ketone" data-value="{{ patient.baseline_blood_ketone|default:'' }}">
+                            {% if patient.baseline_blood_ketone is not None %}
+                                {{ patient.baseline_blood_ketone }} mmol/L
+                            {% else %}
+                                <span class="text-slate-400">未设置</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="flex items-center">
+                        <span class="text-slate-500 shrink-0 text-right mr-3">尿酸：</span>
+                        <span class="text-slate-800 font-medium" data-metric="uric_acid" data-value="{{ patient.baseline_uric_acid|default:'' }}">
+                            {% if patient.baseline_uric_acid is not None %}
+                                {{ patient.baseline_uric_acid }} μmol/L
                             {% else %}
                                 <span class="text-slate-400">未设置</span>
                             {% endif %}
@@ -260,6 +290,30 @@
                                placeholder="舒张压" 
                                class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
                     </div>
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">血糖 (mmol/L)</label>
+                    <input type="number" step="0.1" name="blood_glucose" min="0"
+                           value="{{ patient.baseline_blood_glucose|default:'' }}"
+                           placeholder="请输入血糖基线值"
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
+                <div class="space-y-1">
+                    <label class="block text-sm font-medium text-slate-700">血酮 (mmol/L)</label>
+                    <input type="number" step="0.1" name="blood_ketone" min="0"
+                           value="{{ patient.baseline_blood_ketone|default:'' }}"
+                           placeholder="请输入血酮基线值"
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
+                </div>
+
+                <div class="space-y-1 md:col-span-2">
+                    <label class="block text-sm font-medium text-slate-700">尿酸 (μmol/L)</label>
+                    <input type="number" step="1" name="uric_acid" min="0"
+                           value="{{ patient.baseline_uric_acid|default:'' }}"
+                           placeholder="请输入尿酸基线值"
+                           class="border border-[#999999] p-2 w-full rounded-lg text-sm focus:border-[#6366f1] focus:outline-none">
                 </div>
 
                 {# 体重 #}

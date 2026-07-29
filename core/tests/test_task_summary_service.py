@@ -120,6 +120,7 @@ class TaskSummaryServiceTest(TestCase):
                 "task_type": int(choices.PlanItemCategory.MONITORING),
                 "status": int(choices.TaskStatus.PENDING),
                 "title": "测量体温",
+                "metric_type": "M_TEMP",
             },
         )
         self.assertEqual(
@@ -128,6 +129,7 @@ class TaskSummaryServiceTest(TestCase):
                 "task_type": int(choices.PlanItemCategory.MONITORING),
                 "status": int(choices.TaskStatus.COMPLETED),
                 "title": "测量血氧",
+                "metric_type": "M_SPO2",
             },
         )
 

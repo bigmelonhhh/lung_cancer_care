@@ -1,9 +1,12 @@
 from django import forms
+from django.utils import timezone
+from datetime import datetime
 
 from business_support.service.sms import SMSService
 from business_support.models import Feedback
 from users import choices
 from users.models import PatientProfile
+from health_data.models import MetricMeasurementContext, MetricType
 
 
 BASE_INPUT_CLASS = (
@@ -13,6 +16,63 @@ BASE_INPUT_CLASS = (
 INLINE_INPUT_CLASS = (
     "text-right placeholder-slate-400 focus:outline-none bg-transparent w-full text-slate-900"
 )
+
+
+class GeneralMonitoringMetricForm(forms.Form):
+    value = forms.DecimalField(
+        label="监测值",
+        min_value=0,
+        max_digits=10,
+        decimal_places=2,
+    )
+    measurement_context = forms.ChoiceField(
+        label="测量场景",
+        required=False,
+        choices=(("", "请选择"), *MetricMeasurementContext.choices),
+    )
+    record_time = forms.DateTimeField(
+        required=False,
+        input_formats=("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M"),
+    )
+    record_time_touched = forms.CharField(required=False)
+    selected_date = forms.DateField(required=False, input_formats=("%Y-%m-%d",))
+
+    def __init__(self, *args, metric_definition, **kwargs):
+        self.metric_definition = metric_definition
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        context = cleaned_data.get("measurement_context") or None
+        if self.metric_definition.metric_type == MetricType.BLOOD_GLUCOSE:
+            if context not in MetricMeasurementContext.values:
+                self.add_error("measurement_context", "请选择血糖测量场景")
+        else:
+            cleaned_data["measurement_context"] = None
+
+        now_local = timezone.localtime(timezone.now())
+        if (
+            cleaned_data.get("record_time_touched") == "1"
+            and cleaned_data.get("record_time")
+        ):
+            measured_at = cleaned_data["record_time"]
+            if timezone.is_naive(measured_at):
+                measured_at = timezone.make_aware(
+                    measured_at,
+                    timezone.get_current_timezone(),
+                )
+        else:
+            measured_at = now_local
+
+        selected_date = cleaned_data.get("selected_date")
+        if selected_date:
+            local_time = timezone.localtime(measured_at).time().replace(tzinfo=None)
+            measured_at = timezone.make_aware(
+                datetime.combine(selected_date, local_time),
+                timezone.get_current_timezone(),
+            )
+        cleaned_data["measured_at"] = measured_at
+        return cleaned_data
 
 
 class PatientEntryVerificationForm(forms.Form):

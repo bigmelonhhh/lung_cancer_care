@@ -17,6 +17,7 @@ from .home import patient_home
 from .plan import management_plan, my_medication
 from .record import (
     record_temperature,
+    record_general_monitoring,
     record_bp,
     record_spo2,
     record_weight,
@@ -62,6 +63,7 @@ __all__ = [
     "management_plan",
     "my_medication",
     "record_temperature",
+    "record_general_monitoring",
     "record_bp",
     "record_spo2",
     "record_weight",

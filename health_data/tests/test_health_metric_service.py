@@ -7,7 +7,12 @@ from django.utils import timezone
 
 from core.models import Questionnaire, QuestionnaireCode
 from core.service import tasks as task_service
-from health_data.models import HealthMetric, MetricSource, MetricType
+from health_data.models import (
+    HealthMetric,
+    MetricMeasurementContext,
+    MetricSource,
+    MetricType,
+)
 from health_data.models import QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
 from users.models import PatientProfile
@@ -406,7 +411,7 @@ class HealthMetricServiceTest(TestCase):
         cases = [
             (METRIC_BLOOD_GLUCOSE, Decimal("6.10"), "6.1 mmol/L"),
             (METRIC_BLOOD_KETONE, Decimal("1.20"), "1.2 mmol/L"),
-            (METRIC_URIC_ACID, Decimal("420.00"), "420 umol/L"),
+            (METRIC_URIC_ACID, Decimal("420.00"), "420 μmol/L"),
         ]
 
         for metric_type, value, expected_display in cases:
@@ -420,6 +425,57 @@ class HealthMetricServiceTest(TestCase):
                 )
 
                 self.assertEqual(metric.display_value, expected_display)
+
+    def test_save_manual_glucose_requires_and_persists_measurement_context(self):
+        patient = PatientProfile.objects.create(phone="13800138991")
+
+        with self.assertRaisesRegex(ValueError, "血糖测量场景"):
+            HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=MetricType.BLOOD_GLUCOSE,
+                measured_at=self.measured_at,
+                value_main=Decimal("6.2"),
+            )
+
+        metric = HealthMetricService.save_manual_metric(
+            patient_id=patient.id,
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            measured_at=self.measured_at,
+            value_main=Decimal("6.2"),
+            measurement_context=MetricMeasurementContext.FASTING,
+        )
+
+        self.assertEqual(metric.measurement_context, MetricMeasurementContext.FASTING)
+
+    def test_update_and_delete_metric_enforce_patient_ownership_and_manual_source(self):
+        owner = PatientProfile.objects.create(phone="13800138992")
+        other = PatientProfile.objects.create(phone="13800138993")
+        manual_metric = HealthMetric.objects.create(
+            patient=owner,
+            metric_type=MetricType.BLOOD_KETONE,
+            measured_at=self.measured_at,
+            source=MetricSource.MANUAL,
+            value_main=Decimal("0.6"),
+        )
+        device_metric = HealthMetric.objects.create(
+            patient=owner,
+            metric_type=MetricType.URIC_ACID,
+            measured_at=self.measured_at,
+            source=MetricSource.DEVICE,
+            value_main=Decimal("421"),
+        )
+
+        with self.assertRaises(HealthMetric.DoesNotExist):
+            HealthMetricService.update_manual_metric(
+                manual_metric.id,
+                patient_id=other.id,
+                value_main=Decimal("0.7"),
+            )
+        with self.assertRaises(ValueError):
+            HealthMetricService.delete_metric(device_metric.id, patient_id=owner.id)
+
+        deleted = HealthMetricService.delete_metric(manual_metric.id, patient_id=owner.id)
+        self.assertFalse(deleted.is_active)
 
     @patch("health_data.models.HealthMetric.objects.get")
     def test_update_manual_metric_success_partial_fields(self, mock_get):
@@ -473,8 +529,9 @@ class HealthMetricServiceTest(TestCase):
         # 设备数据不应被保存
         mock_metric.save.assert_not_called()
 
+    @patch("health_data.services.health_metric.MetricAlertService.remove_metric")
     @patch("health_data.models.HealthMetric.objects.get")
-    def test_delete_metric_soft_delete(self, mock_get):
+    def test_delete_metric_soft_delete(self, mock_get, mock_remove_alert):
         """
         测试 delete_metric 软删除行为：
         - 只标记 is_active=False。
@@ -483,6 +540,7 @@ class HealthMetricServiceTest(TestCase):
         mock_metric = MagicMock(spec=HealthMetric)
         mock_metric.id = 3
         mock_metric.is_active = True
+        mock_metric.source = MetricSource.MANUAL
         mock_get.return_value = mock_metric
 
         result = HealthMetricService.delete_metric(metric_id=3)
@@ -490,6 +548,7 @@ class HealthMetricServiceTest(TestCase):
         self.assertIs(result, mock_metric)
         self.assertFalse(mock_metric.is_active)
         mock_metric.save.assert_called_once_with(update_fields=["is_active"])
+        mock_remove_alert.assert_called_once_with(mock_metric)
 
     def test_count_metric_uploads_single_type_inclusive_range(self):
         """

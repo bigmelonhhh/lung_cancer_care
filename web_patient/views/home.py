@@ -14,6 +14,10 @@ from core.models import choices as core_choices
 from core.service.tasks import get_daily_plan_summary
 from health_data.models import MetricType
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.monitoring_catalog import (
+    get_monitoring_definitions,
+    resolve_monitoring_definition,
+)
 from users.decorators import auto_wechat_login, check_patient
 from web_patient.services.home_cache import (
     HOME_CACHE_TTL_SECONDS,
@@ -32,6 +36,9 @@ HOME_SUCCESS_PARAM_TASK_MAP = {
     "bp_hr": "bp_hr",
     "spo2": "spo2",
     "weight": "weight",
+    "glucose": "glucose",
+    "ketone": "ketone",
+    "uric_acid": "uric_acid",
     "breath_val": "breath",
     "sputum_val": "sputum",
     "pain_val": "pain",
@@ -86,6 +93,23 @@ PLAN_METRIC_MAPPING = {
         "name": "复查",
         "format_func": lambda x: "已完成" if x else "未完成",
     },
+    "血糖": {
+        "key": MetricType.BLOOD_GLUCOSE,
+        "name": "血糖",
+        "format_func": lambda x: (
+            f"{x.get('measurement_context_display')} {x['value_display']}".strip()
+        ),
+    },
+    "血酮": {
+        "key": MetricType.BLOOD_KETONE,
+        "name": "血酮",
+        "format_func": lambda x: x["value_display"],
+    },
+    "尿酸": {
+        "key": MetricType.URIC_ACID,
+        "name": "尿酸",
+        "format_func": lambda x: x["value_display"],
+    },
 }
 
 PLAN_TYPE_METRIC_MAPPING = {
@@ -96,6 +120,9 @@ PLAN_TYPE_METRIC_MAPPING = {
     "medication": PLAN_METRIC_MAPPING["用药提醒"],
     "followup": PLAN_METRIC_MAPPING["随访"],
     "checkup": PLAN_METRIC_MAPPING["复查"],
+    "glucose": PLAN_METRIC_MAPPING["血糖"],
+    "ketone": PLAN_METRIC_MAPPING["血酮"],
+    "uric_acid": PLAN_METRIC_MAPPING["尿酸"],
 }
 
 PLAN_SORT_ORDER = {
@@ -104,11 +131,22 @@ PLAN_SORT_ORDER = {
     "bp_hr": 3,
     "weight": 4,
     "temperature": 5,
-    "checkup": 6,
-    "followup": 7,
+    "glucose": 6,
+    "ketone": 7,
+    "uric_acid": 8,
+    "checkup": 9,
+    "followup": 10,
 }
 
-MEASURE_PLAN_TYPES = {"temperature", "bp_hr", "spo2", "weight"}
+MEASURE_PLAN_TYPES = {
+    "temperature",
+    "bp_hr",
+    "spo2",
+    "weight",
+    "glucose",
+    "ketone",
+    "uric_acid",
+}
 OPTIMISTIC_COMPLETED_TASK_TYPES = MEASURE_PLAN_TYPES | {"medication"}
 
 
@@ -153,10 +191,46 @@ def _build_daily_plans(summary_list):
             "icon_class": "bg-blue-100 text-blue-600",
         }
 
-        if "步数" in title_val:
+        definition = resolve_monitoring_definition(
+            metric_type=item.get("metric_type"),
+            title=title_val or "",
+        )
+        if definition and not definition.show_in_home_list:
             continue
 
-        if "用药" in title_val:
+        if definition:
+            if definition.home_type == "bp_hr":
+                if has_bp_hr_plan:
+                    continue
+                has_bp_hr_plan = True
+                plan_data.update(
+                    {
+                        "type": "bp_hr",
+                        "title": "血压/心率监测",
+                        "subtitle": item.get("subtitle")
+                        or definition.home_subtitle,
+                        "action_text": "去填写",
+                    }
+                )
+            else:
+                plan_data.update(
+                    {
+                        "type": definition.home_type,
+                        "title": (
+                            definition.monitoring_name
+                            if definition.metric_type
+                            in {
+                                MetricType.BLOOD_GLUCOSE,
+                                MetricType.BLOOD_KETONE,
+                                MetricType.URIC_ACID,
+                            }
+                            else title_val
+                        ),
+                        "subtitle": item.get("subtitle") or definition.home_subtitle,
+                        "action_text": "去填写",
+                    }
+                )
+        elif "用药" in title_val:
             plan_data.update(
                 {
                     "type": "medication",
@@ -437,13 +511,19 @@ def patient_home(request: HttpRequest) -> HttpResponse:
                 plan["status"] = "pending"
 
     task_url_mapping = {
-        "temperature": reverse("web_patient:record_temperature"),
-        "bp_hr": reverse("web_patient:record_bp"),
-        "spo2": reverse("web_patient:record_spo2"),
-        "weight": reverse("web_patient:record_weight"),
         "followup": reverse("web_patient:daily_survey"),
         "checkup": reverse("web_patient:record_checkup"),
     }
+    for definition in get_monitoring_definitions():
+        if not definition.record_route_name:
+            continue
+        route_args = (
+            [definition.record_route_slug] if definition.record_route_slug else None
+        )
+        task_url_mapping[definition.home_type] = reverse(
+            definition.record_route_name,
+            args=route_args,
+        )
     for plan in daily_plans:
         plan["action_url"] = _build_home_task_action_url(
             plan,

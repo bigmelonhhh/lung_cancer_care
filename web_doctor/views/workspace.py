@@ -43,6 +43,7 @@ from health_data.services.health_metric import HealthMetricService, MetricType
 from core.service.plan_item import PlanItemService
 from core.service.china_calendar import ChinaCalendarService
 from web_doctor.services.current_user import get_user_display_name
+from web_doctor.forms import PatientHealthBaselineForm
 from users.services.patient import PatientService
 from web_doctor.views.home import build_home_context
 from patient_alerts.services.todo_list import TodoListService
@@ -1710,9 +1711,13 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
     if patient is None:
         raise Http404("未找到患者")
     
-    # 构造数据字典
-    # 注意：PatientService.save_patient_profile 接口要求的基线数据字段名为 baseline_xxx
-    # 因此需要将前端传来的简写字段名映射为接口定义的完整字段名
+    form = PatientHealthBaselineForm(request.POST)
+    if not form.is_valid():
+        message = next(iter(form.errors.values()))[0]
+        response = HttpResponse(message, status=400)
+        response["HX-Trigger"] = '{"plan-error": {"message": "%s"}}' % message.replace('"', '\\"')
+        return response
+
     data = {
         "name": patient.name,
         "phone": patient.phone,
@@ -1725,31 +1730,14 @@ def patient_health_metrics_update(request: HttpRequest, patient_id: int) -> Http
         "ec_relation": getattr(patient, "ec_relation", "") or "",
         "ec_phone": getattr(patient, "ec_phone", "") or "",
         "remark": getattr(patient, "remark", "") or "", 
-        "baseline_blood_oxygen": request.POST.get("blood_oxygen"),
-        "baseline_blood_pressure_sbp": request.POST.get("sbp"),
-        "baseline_blood_pressure_dbp": request.POST.get("dbp"),
-        "baseline_heart_rate": request.POST.get("heart_rate"),
-        "baseline_weight": request.POST.get("weight"),
-        "baseline_height": request.POST.get("height"),
-        "baseline_body_temperature": request.POST.get("temperature"),
-        "baseline_steps": request.POST.get("steps"),
+        **{
+            profile_field: form.cleaned_data[profile_field]
+            for profile_field in form._PROFILE_FIELD_BY_INPUT.values()
+        },
     }
-    
-    # 清理空值，避免传递空字符串给 Decimal/Int 字段导致错误
-    cleaned_data = {}
-    for k, v in data.items():
-        if v and str(v).strip():
-            cleaned_data[k] = v.strip()
-        else:
-            # 对于非必填的基线字段，如果为空则传 None
-            if k not in ["name", "phone"]:
-                cleaned_data[k] = None
-            else:
-                # name/phone 必填，保留原值（虽然上面已取值，这里防守一下）
-                cleaned_data[k] = v
 
     try:
-        PatientService().save_patient_profile(request.user, cleaned_data, profile_id=patient.id)
+        PatientService().save_patient_profile(request.user, data, profile_id=patient.id)
         logger.info(f"Successfully updated health baselines for patient {patient_id}.")
         # 强制刷新以获取最新数据
         patient.refresh_from_db()

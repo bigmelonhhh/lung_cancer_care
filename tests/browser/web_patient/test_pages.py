@@ -12,6 +12,7 @@ from business_support.models import SystemDocument
 from core.models import (
     CheckupLibrary,
     DailyTask,
+    MonitoringTemplate,
     Questionnaire,
     QuestionnaireCode,
     QuestionnaireOption,
@@ -23,6 +24,7 @@ from core.models import (
 from core.models.choices import CheckupCategory, PlanItemCategory, ReportType, TaskStatus
 from health_data.models import (
     HealthMetric,
+    MetricMeasurementContext,
     MetricType,
     QuestionnaireAnswer,
     QuestionnaireSubmission,
@@ -283,6 +285,87 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         )
         expect(self.page.locator("body")).to_contain_text("血常规")
         expect(self.page.locator("body")).to_contain_text("暂无数据")
+
+    def test_general_monitoring_record_archive_and_detail_flow(self):
+        today = timezone.localdate()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="一般监测浏览器测试疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        template, _ = MonitoringTemplate.objects.get_or_create(
+            code=MetricType.BLOOD_GLUCOSE,
+            defaults={
+                "name": "血糖监测",
+                "metric_type": MetricType.BLOOD_GLUCOSE,
+                "is_active": True,
+            },
+        )
+        plan_item = PlanItem.objects.create(
+            cycle=cycle,
+            category=PlanItemCategory.MONITORING,
+            template_id=template.id,
+            item_name=template.name,
+            schedule_days=[1],
+            status=core_choices.PlanItemStatus.ACTIVE,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=plan_item,
+            task_date=today,
+            task_type=PlanItemCategory.MONITORING,
+            title=template.name,
+            status=TaskStatus.PENDING,
+        )
+
+        self._open("web_patient:patient_home")
+        action = self.page.locator("#plan-action-glucose a")
+        expect(action).to_be_visible()
+        self.assertIn(
+            reverse("web_patient:record_general_monitoring", args=["glucose"]),
+            action.get_attribute("href") or "",
+        )
+        action.click()
+        self.page.wait_for_load_state("domcontentloaded")
+        expect(self.page.locator("body")).to_contain_text("当前血糖")
+        self.page.locator("#measurement-context").select_option(
+            MetricMeasurementContext.FASTING
+        )
+        self.page.locator("#metric-value").fill("6.2")
+        self.page.locator("#submit-button").click()
+        self.page.wait_for_url("**/p/home/**", timeout=10000)
+
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_KETONE,
+            measured_at=timezone.now(),
+            value_main=Decimal("0.5"),
+            source="manual",
+        )
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.URIC_ACID,
+            measured_at=timezone.now(),
+            value_main=Decimal("380"),
+            source="manual",
+        )
+
+        self._open("web_patient:health_records")
+        expect(self.page.locator("body")).to_contain_text("血糖")
+        expect(self.page.locator("body")).to_contain_text("血酮")
+        expect(self.page.locator("body")).to_contain_text("尿酸")
+
+        self._open(
+            "web_patient:health_record_detail",
+            params={"type": "glucose", "title": "血糖"},
+        )
+        expect(self.page.locator("body")).to_contain_text("血糖")
+        expect(self.page.locator("body")).to_contain_text("6.2 mmol/L")
+        expect(self.page.locator("body")).to_contain_text("空腹")
+        expect(self.page.locator("body")).not_to_contain_text("评分")
 
     def test_record_checkup_upload_image_opens_clear_preview(self):
         self._create_checkup_task()

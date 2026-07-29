@@ -224,6 +224,9 @@ class ManagementStatsView:
             ("hr", "心率统计次数", "次", "#EFA244", MetricType.HEART_RATE),
             ("weight", "体重统计次数", "次", "#06B6D4", MetricType.WEIGHT),
             ("step", "步数统计次数", "次", "#09D406", MetricType.STEPS),
+            ("glucose", "血糖统计次数", "次", "#F472B6", MetricType.BLOOD_GLUCOSE),
+            ("ketone", "血酮统计次数", "次", "#2563EB", MetricType.BLOOD_KETONE),
+            ("uric_acid", "尿酸统计次数", "次", "#FF5858", MetricType.URIC_ACID),
         ]
 
         charts = {}

@@ -1,12 +1,17 @@
 from django.shortcuts import render, redirect
 from django.urls import reverse
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.db.models import Max, Q
 from django.views.decorators.cache import never_cache
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
+from health_data.services.monitoring_catalog import (
+    get_monitoring_definition_by_slug,
+    get_monitoring_definitions,
+    resolve_monitoring_definition,
+)
 from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from health_data.models import (
@@ -22,6 +27,7 @@ from core.service.tasks import get_daily_plan_summary
 from core.service.checkup import get_active_checkup_library
 from market.service.order import get_paid_orders_for_patient
 from web_patient.services.home_cache import invalidate_patient_home_plan_cache
+from web_patient.forms import GeneralMonitoringMetricForm
 from wx.services.oauth import generate_menu_auth_url
 import calendar
 import json
@@ -96,12 +102,10 @@ QUESTIONNAIRE_RECORD_TYPE_MAP = {
 
 RECORD_TYPE_METRIC_MAP = {
     "medical": MetricType.USE_MEDICATED,
-    "temperature": MetricType.BODY_TEMPERATURE,
-    "bp": MetricType.BLOOD_PRESSURE,
-    "spo2": MetricType.BLOOD_OXYGEN,
-    "weight": MetricType.WEIGHT,
-    "step": MetricType.STEPS,
-    "heart": MetricType.HEART_RATE,
+    **{
+        definition.slug: definition.metric_type
+        for definition in get_monitoring_definitions()
+    },
     **QUESTIONNAIRE_RECORD_TYPE_MAP,
 }
 
@@ -174,11 +178,13 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         # 映射 type
         # 简单映射逻辑，需与 patient_home 保持一致
         plan_type = "unknown"
-        if "用药" in title: plan_type = "medication"
-        elif "体温" in title: plan_type = "temperature"
-        elif "血压" in title or "心率" in title: plan_type = "bp_hr"
-        elif "血氧" in title: plan_type = "spo2"
-        elif "体重" in title: plan_type = "weight"
+        definition = resolve_monitoring_definition(
+            metric_type=item.get("metric_type"),
+            title=title,
+        )
+        if definition:
+            plan_type = definition.home_type
+        elif "用药" in title: plan_type = "medication"
         elif "随访" in title or "问卷" in title: plan_type = "followup"
         elif "复查" in title: plan_type = "checkup"
         
@@ -201,6 +207,8 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
             default_subtitle = "请记录今日血氧饱和度"
         elif plan_type == "weight":
             default_subtitle = "请记录今日体重"
+        elif plan_type in {"glucose", "ketone", "uric_acid"}:
+            default_subtitle = definition.home_subtitle
         elif plan_type == "followup":
             default_subtitle = "请及时完成您的随访任务" if not is_completed else "已完成随访任务"
         elif plan_type == "checkup":
@@ -237,6 +245,13 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
                 info = last_metrics[MetricType.WEIGHT]
                 if is_target_date(info):
                     plan_data["subtitle"] = f"今日已记录：{info['value_display']}"
+
+            elif definition and definition.metric_type in last_metrics:
+                info = last_metrics.get(definition.metric_type)
+                if info and is_target_date(info):
+                    context_display = info.get("measurement_context_display") or ""
+                    prefix = f"{context_display} " if context_display else ""
+                    plan_data["subtitle"] = f"今日已记录：{prefix}{info['value_display']}"
             
             elif plan_type == "medication":
                  plan_data["subtitle"] = "今日已服药"
@@ -376,6 +391,105 @@ def record_temperature(request: HttpRequest) -> HttpResponse:
         "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
     }
     return render(request, "web_patient/record_temperature.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def record_general_monitoring(request: HttpRequest, slug: str) -> HttpResponse:
+    """血糖、血酮、尿酸通用手工录入页面。"""
+    try:
+        definition = get_monitoring_definition_by_slug(slug)
+    except KeyError as exc:
+        raise Http404("不支持的监测指标") from exc
+    if slug not in {"glucose", "ketone", "uric_acid"}:
+        raise Http404("不支持的监测指标")
+
+    patient = request.patient
+    selected_date_str = request.GET.get("selected_date") or request.POST.get("selected_date")
+    selected_date = None
+    if selected_date_str:
+        try:
+            selected_date = datetime.strptime(selected_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            selected_date = None
+
+    if request.method == "POST":
+        form = GeneralMonitoringMetricForm(
+            request.POST,
+            metric_definition=definition,
+        )
+        if form.is_valid():
+            metric = HealthMetricService.save_manual_metric(
+                patient_id=patient.id,
+                metric_type=definition.metric_type,
+                measured_at=form.cleaned_data["measured_at"],
+                value_main=form.cleaned_data["value"],
+                measurement_context=form.cleaned_data["measurement_context"],
+            )
+            _invalidate_home_plan_cache_after_record(
+                patient.id,
+                selected_date=selected_date,
+                record_time=metric.measured_at,
+            )
+            if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                return JsonResponse(
+                    {
+                        "status": "success",
+                        "refresh_flag": True,
+                        "metric_type": definition.metric_type,
+                        "plan_type": definition.home_type,
+                        "value_display": metric.display_value,
+                        "measurement_context": metric.measurement_context,
+                        "measurement_context_display": (
+                            metric.get_measurement_context_display()
+                            if metric.measurement_context
+                            else ""
+                        ),
+                        **_build_saved_record_time_payload(metric.measured_at),
+                    }
+                )
+            next_url = request.GET.get("next") or request.POST.get("next")
+            if next_url and url_has_allowed_host_and_scheme(
+                next_url,
+                allowed_hosts={request.get_host()},
+                require_https=request.is_secure(),
+            ):
+                return redirect(next_url)
+            messages.success(request, f"{definition.title}记录成功")
+            return redirect(request.path)
+
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "message": next(iter(form.errors.values()))[0],
+                    "errors": form.errors.get_json_data(),
+                },
+                status=400,
+            )
+    else:
+        form = GeneralMonitoringMetricForm(metric_definition=definition)
+
+    now_local = timezone.localtime(timezone.now())
+    if selected_date:
+        now_local = now_local.replace(
+            year=selected_date.year,
+            month=selected_date.month,
+            day=selected_date.day,
+        )
+    return render(
+        request,
+        "web_patient/record_general_monitoring.html",
+        {
+            "form": form,
+            "metric": definition,
+            "patient_id": patient.id,
+            "default_time": now_local.strftime("%Y/%m/%d %H:%M"),
+            "now_obj": now_local,
+            "selected_date": selected_date_str or "",
+        },
+        status=400 if request.method == "POST" else 200,
+    )
 
 
 @auto_wechat_login
@@ -798,6 +912,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
         },
         {"type": "heart", "title": "心率", "count": 0, "abnormal": 0, "icon": "heart"},
         {"type": "step", "title": "步数", "count": 0, "abnormal": 0, "icon": "step"},
+        {"type": "glucose", "title": "血糖", "count": 0, "abnormal": 0, "icon": "glucose"},
+        {"type": "ketone", "title": "血酮", "count": 0, "abnormal": 0, "icon": "ketone"},
+        {"type": "uric_acid", "title": "尿酸", "count": 0, "abnormal": 0, "icon": "uric_acid"},
     ]
 
     # 动态获取各项指标的总数
@@ -810,6 +927,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
             "weight": MetricType.WEIGHT,
             "heart": MetricType.HEART_RATE,
             "step": MetricType.STEPS,
+            "glucose": MetricType.BLOOD_GLUCOSE,
+            "ketone": MetricType.BLOOD_KETONE,
+            "uric_acid": MetricType.URIC_ACID,
         }
 
         for item in health_stats:
@@ -1285,6 +1405,25 @@ def _build_metric_record(
                 "key": "medicated",
             }
         ]
+    elif record_type in {"glucose", "ketone", "uric_acid"}:
+        definition = resolve_monitoring_definition(metric_type=metric.metric_type)
+        data_fields.append(
+            {
+                "label": definition.title,
+                "value": metric.display_value,
+                "is_large": True,
+                "key": record_type,
+            }
+        )
+        if record_type == "glucose":
+            data_fields.append(
+                {
+                    "label": "测量场景",
+                    "value": metric.get_measurement_context_display() or "未记录",
+                    "is_large": False,
+                    "key": "measurement_context",
+                }
+            )
     else:
         data_fields.append(
             {
@@ -1305,6 +1444,7 @@ def _build_metric_record(
         "is_manual": metric.source == "manual",
         "can_edit": metric.source == "manual" and dt.date() == timezone.localdate(),
         "can_operate": can_operate,
+        "measurement_context": metric.measurement_context,
         "questionnaire_submission_id": (
             metric.questionnaire_submission_id if is_questionnaire_type else None
         ),
@@ -1635,6 +1775,9 @@ def _build_line_chart_payload(
         "heart": "#f97316",
         "step": "#22c55e",
         "bp": "#2563eb",
+        "glucose": "#f472b6",
+        "ketone": "#2563eb",
+        "uric_acid": "#ff5858",
         "oral_mucosa": "#ef4444",
     }
     day_set = set(month_days)
@@ -1946,8 +2089,20 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "step",
         "heart",
         "bp_hr",
+        "glucose",
+        "ketone",
+        "uric_acid",
     }
-    add_record_types = {"temperature", "weight", "spo2", "bp", "bp_hr"}
+    add_record_types = {
+        "temperature",
+        "weight",
+        "spo2",
+        "bp",
+        "bp_hr",
+        "glucose",
+        "ketone",
+        "uric_acid",
+    }
     show_operation_controls = bool(
         source == "health_records" and record_type in general_record_types
     )
@@ -1986,6 +2141,9 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "step",
         "heart",
         "bp_hr",
+        "glucose",
+        "ketone",
+        "uric_acid",
         "physical",
         "breath",
         "cough",

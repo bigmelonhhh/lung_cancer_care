@@ -1,0 +1,142 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}当前{{ metric.title }}{% endblock %}
+
+{% block body %}
+<div class="min-h-screen bg-[#F5F5F5] font-sans">
+  <div class="sticky top-0 z-30 bg-white shadow-sm">
+    <div class="pt-safe-top">
+      <div class="relative flex h-12 items-center px-4">
+        <a href="javascript:history.back()" class="absolute left-4 -ml-2 p-2 text-slate-600 active:opacity-60" aria-label="返回">
+          <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+        </a>
+        <h1 class="w-full pl-8 text-lg font-bold text-slate-800">当前{{ metric.title }}</h1>
+      </div>
+    </div>
+  </div>
+
+  <div class="px-4 pt-6">
+    <form method="post" id="monitoring-form" class="rounded-xl bg-white p-5 shadow-sm">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.GET.next }}">
+      <input type="hidden" name="selected_date" value="{{ selected_date }}">
+      <input type="hidden" name="record_time_touched" id="record-time-touched" value="0">
+
+      <div class="mb-5">
+        <label class="mb-2 block font-bold text-slate-700">测量时间</label>
+        <label class="flex cursor-pointer items-center justify-between border-b border-slate-200 pb-3">
+          <input type="datetime-local" id="date-picker" name="record_time"
+                 class="absolute h-0 w-0 opacity-0"
+                 value="{{ now_obj|date:'Y-m-d\TH:i' }}">
+          <span class="text-lg font-medium text-slate-500" id="time-display">{{ default_time }}</span>
+          <svg class="h-5 w-5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+          </svg>
+        </label>
+      </div>
+
+      {% if metric.metric_type == "M_GLU" %}
+      <div class="mb-5">
+        <label for="measurement-context" class="mb-2 block font-bold text-slate-700">测量场景</label>
+        <select id="measurement-context" name="measurement_context"
+                class="w-full rounded-xl border border-slate-200 px-3 py-3 text-slate-800 focus:border-blue-500 focus:outline-none">
+          <option value="">请选择</option>
+          <option value="fasting">空腹</option>
+          <option value="postprandial_2h">餐后2小时</option>
+          <option value="random">随机</option>
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="mb-6">
+        <label for="metric-value" class="mb-3 block text-lg font-bold text-slate-800">{{ metric.title }}</label>
+        <div class="flex items-end gap-2 border-b border-slate-200 pb-2">
+          <input type="number" min="0" step="{% if metric.decimal_places %}0.1{% else %}1{% endif %}"
+                 id="metric-value" name="value" required
+                 class="w-full bg-transparent text-xl font-medium text-slate-800 outline-none placeholder:text-slate-300"
+                 placeholder="点此录入">
+          <span class="mb-1 shrink-0 font-medium text-slate-500">{{ metric.unit }}</span>
+        </div>
+      </div>
+
+      <p id="error-msg" class="hidden text-sm text-red-500">请完整填写有效的监测数据</p>
+      <div class="mt-6 text-sm leading-relaxed text-slate-500">
+        请按照设备说明完成测量，并确认数值和测量时间准确。
+      </div>
+    </form>
+
+    <button type="button" id="submit-button"
+            class="mt-8 w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-md shadow-blue-200 active:scale-[0.98]">
+      确定提交{{ metric.title }}
+    </button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const form = document.getElementById('monitoring-form');
+  const submitButton = document.getElementById('submit-button');
+  const datePicker = document.getElementById('date-picker');
+  const errorMessage = document.getElementById('error-msg');
+
+  datePicker.addEventListener('change', () => {
+    document.getElementById('record-time-touched').value = '1';
+    if (datePicker.value) {
+      document.getElementById('time-display').textContent = datePicker.value.replace('T', ' ');
+    }
+  });
+
+  submitButton.addEventListener('click', async () => {
+    const data = new FormData(form);
+    if (!data.get('value') || ('{{ metric.metric_type }}' === 'M_GLU' && !data.get('measurement_context'))) {
+      errorMessage.classList.remove('hidden');
+      return;
+    }
+    errorMessage.classList.add('hidden');
+    submitButton.disabled = true;
+    submitButton.textContent = '提交中...';
+    try {
+      const response = await fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': data.get('csrfmiddlewaretoken')
+        },
+        body: data
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.status !== 'success') {
+        throw new Error(payload.message || '提交失败');
+      }
+      try {
+        localStorage.setItem('refresh_flag', 'true');
+        const markerKey = 'home_plan_refresh_marker';
+        const marker = JSON.parse(localStorage.getItem(markerKey) || '{}');
+        const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
+        if (!completedTypes.includes(payload.plan_type)) completedTypes.push(payload.plan_type);
+        localStorage.setItem(markerKey, JSON.stringify({
+          completedTypes,
+          date: new Date().toISOString().slice(0, 10),
+          expiresAt: Date.now() + 10 * 60 * 1000
+        }));
+      } catch (error) {}
+      const source = new URLSearchParams(window.location.search).get('source');
+      if (source === 'home') {
+        window.location.replace("{% url 'web_patient:patient_home' %}?" + encodeURIComponent(payload.plan_type) + "=true");
+      } else if (document.referrer && document.referrer.includes(window.location.host)) {
+        history.back();
+      } else {
+        window.location.href = "{% url 'web_patient:patient_home' %}";
+      }
+    } catch (error) {
+      errorMessage.textContent = error.message || '提交失败，请重试';
+      errorMessage.classList.remove('hidden');
+      submitButton.disabled = false;
+      submitButton.textContent = '确定提交{{ metric.title }}';
+    }
+  });
+})();
+</script>
+{% endblock %}

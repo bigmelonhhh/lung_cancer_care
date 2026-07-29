@@ -89,7 +89,10 @@ def delete_health_metric(request: HttpRequest) -> JsonResponse:
         return JsonResponse({'success': False, 'message': '参数错误'})
         
     try:
-        HealthMetricService.delete_metric(int(metric_id))
+        HealthMetricService.delete_metric(
+            int(metric_id),
+            patient_id=request.patient.id,
+        )
         return JsonResponse({'success': True, 'message': '删除成功'})
     except Exception as e:
         logger.error(f"删除健康指标失败: {e}")
@@ -112,6 +115,7 @@ def update_health_metric(request: HttpRequest) -> JsonResponse:
         # 获取需要更新的字段
         value_main = request.POST.get('value_main')
         value_sub = request.POST.get('value_sub')
+        measurement_context = request.POST.get("measurement_context")
         
         # 构造更新参数
         kwargs = {}
@@ -119,8 +123,14 @@ def update_health_metric(request: HttpRequest) -> JsonResponse:
             kwargs['value_main'] = Decimal(value_main)
         if value_sub is not None:
             kwargs['value_sub'] = Decimal(value_sub)
+        if measurement_context is not None:
+            kwargs["measurement_context"] = measurement_context
             
-        metric = HealthMetricService.update_manual_metric(int(metric_id), **kwargs)
+        metric = HealthMetricService.update_manual_metric(
+            int(metric_id),
+            patient_id=request.patient.id,
+            **kwargs,
+        )
         
         # 返回更新后的数据供前端刷新
         return JsonResponse({
@@ -129,7 +139,13 @@ def update_health_metric(request: HttpRequest) -> JsonResponse:
             'data': {
                 'value_display': metric.display_value,
                 'value_main': metric.value_main,
-                'value_sub': metric.value_sub
+                'value_sub': metric.value_sub,
+                "measurement_context": metric.measurement_context,
+                "measurement_context_display": (
+                    metric.get_measurement_context_display()
+                    if metric.measurement_context
+                    else ""
+                ),
             }
         })
     except Exception as e:

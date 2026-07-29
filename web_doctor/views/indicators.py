@@ -911,6 +911,77 @@ def build_indicators_context(
         "y_max": steps_y_max 
     }
 
+    glucose_data, glucose_values = get_daily_values(MetricType.BLOOD_GLUCOSE)
+    glucose_y_max = _calc_dynamic_y_max(
+        glucose_values,
+        default_max=20,
+        y_min=0,
+        baselines=[patient.baseline_blood_glucose],
+        decimals=1,
+    )
+    charts["glucose"] = {
+        "id": "chart-glucose",
+        "title": "血糖 (mmol/L)",
+        "dates": date_strs,
+        "series": [{
+            "name": "血糖",
+            "data": glucose_data,
+            "data_json": json.dumps(glucose_data, ensure_ascii=False),
+            "color": "#f472b6",
+            "baseline": patient.baseline_blood_glucose,
+        }],
+        "y_min": 0,
+        "y_max": glucose_y_max,
+    }
+
+    ketone_data, ketone_values = get_daily_values(MetricType.BLOOD_KETONE)
+    ketone_y_max = _calc_dynamic_y_max(
+        ketone_values,
+        default_max=5,
+        y_min=0,
+        baselines=[patient.baseline_blood_ketone],
+        decimals=1,
+    )
+    charts["ketone"] = {
+        "id": "chart-ketone",
+        "title": "血酮 (mmol/L)",
+        "dates": date_strs,
+        "series": [{
+            "name": "血酮",
+            "data": ketone_data,
+            "data_json": json.dumps(ketone_data, ensure_ascii=False),
+            "color": "#2563eb",
+            "baseline": patient.baseline_blood_ketone,
+        }],
+        "y_min": 0,
+        "y_max": ketone_y_max,
+    }
+
+    uric_acid_data, uric_acid_values = get_daily_values(MetricType.URIC_ACID)
+    uric_acid_data = [int(value) if value is not None else None for value in uric_acid_data]
+    uric_acid_values = [int(value) for value in uric_acid_values]
+    uric_acid_y_max = _calc_dynamic_y_max(
+        uric_acid_values,
+        default_max=800,
+        y_min=0,
+        baselines=[patient.baseline_uric_acid],
+        decimals=0,
+    )
+    charts["uric_acid"] = {
+        "id": "chart-uric-acid",
+        "title": "尿酸 (μmol/L)",
+        "dates": date_strs,
+        "series": [{
+            "name": "尿酸",
+            "data": uric_acid_data,
+            "data_json": json.dumps(uric_acid_data, ensure_ascii=False),
+            "color": "#ff5858",
+            "baseline": patient.baseline_uric_acid,
+        }],
+        "y_min": 0,
+        "y_max": uric_acid_y_max,
+    }
+
     # 3. 服药记录
     # 口径说明：
     # 1) 当天无用药任务 -> 显示“无”
@@ -976,7 +1047,10 @@ def build_indicators_context(
         'hr': MetricType.HEART_RATE,
         'weight': MetricType.WEIGHT,
         'temp': MetricType.BODY_TEMPERATURE,
-        'steps': MetricType.STEPS
+        'steps': MetricType.STEPS,
+        'glucose': MetricType.BLOOD_GLUCOSE,
+        'ketone': MetricType.BLOOD_KETONE,
+        'uric_acid': MetricType.URIC_ACID,
     }
     
     # 用药依从性使用 PlanItemCategory.MEDICATION

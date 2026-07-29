@@ -18,7 +18,12 @@ from django.db.models import Count
 from django.db.models.functions import TruncMonth
 from django.core.paginator import Paginator, Page
 
-from health_data.models import HealthMetric, MetricSource, MetricType
+from health_data.models import (
+    HealthMetric,
+    MetricMeasurementContext,
+    MetricSource,
+    MetricType,
+)
 from core.service import tasks as task_service
 from core.utils.sentinel import UNSET
 from patient_alerts.services.metric_alerts import MetricAlertService
@@ -38,6 +43,9 @@ _MONITORING_TASK_TYPES = {
     MetricType.HEART_RATE,
     MetricType.STEPS,
     MetricType.WEIGHT,
+    MetricType.BLOOD_GLUCOSE,
+    MetricType.BLOOD_KETONE,
+    MetricType.URIC_ACID,
 }
 
 class HealthMetricService:
@@ -318,6 +326,10 @@ class HealthMetricService:
                 "value_display": cls._format_display_value(metric),
                 "measured_at": metric.measured_at,
                 "source": metric.source,
+                "measurement_context": metric.measurement_context,
+                "measurement_context_display": metric.get_measurement_context_display()
+                if metric.measurement_context
+                else "",
             }
 
         return result
@@ -363,6 +375,10 @@ class HealthMetricService:
                 "value_display": cls._format_display_value(metric),
                 "measured_at": metric.measured_at,
                 "source": metric.source,
+                "measurement_context": metric.measurement_context,
+                "measurement_context_display": metric.get_measurement_context_display()
+                if metric.measurement_context
+                else "",
             }
 
         return result
@@ -436,7 +452,7 @@ class HealthMetricService:
 
         【功能说明】
         - 统计指定指标在时间区间内的上传记录条数；
-        - 支持 MONITORING_ADHERENCE_ALL 统计六项监测指标的综合上传次数；
+        - 支持 MONITORING_ADHERENCE_ALL 统计九项监测指标的综合上传次数；
         - 日期范围为闭区间 [start_date, end_date]。
 
         【使用方法】
@@ -613,6 +629,7 @@ class HealthMetricService:
         value_sub: Optional[Decimal] = None,
         questionnaire_submission_id: int | None = None,
         task_id: int | None = None,
+        measurement_context: str | None = None,
     ) -> HealthMetric:
         """
         手动录入健康指标数据的通用入口。
@@ -686,6 +703,17 @@ class HealthMetricService:
 
         if measured_at is None:
             raise ValueError("measured_at 不能为空。")
+        if metric_type in {
+            MetricType.BLOOD_GLUCOSE,
+            MetricType.BLOOD_KETONE,
+            MetricType.URIC_ACID,
+        } and (value_main is None or Decimal(str(value_main)) < 0):
+            raise ValueError("监测值必须为非负数。")
+        if metric_type == MetricType.BLOOD_GLUCOSE:
+            if measurement_context not in MetricMeasurementContext.values:
+                raise ValueError("血糖测量场景不能为空。")
+        else:
+            measurement_context = None
 
         resolved_task_id = task_id
         if metric_type in _MONITORING_TASK_TYPES:
@@ -706,6 +734,7 @@ class HealthMetricService:
             source=MetricSource.MANUAL,
             questionnaire_submission_id=questionnaire_submission_id,
             task_id=resolved_task_id,
+            measurement_context=measurement_context,
         )
         MetricAlertService.process_metric(metric)
         return metric
@@ -721,6 +750,8 @@ class HealthMetricService:
         value_main=UNSET,
         value_sub=UNSET,
         measured_at=UNSET,
+        measurement_context=UNSET,
+        patient_id: int | None = None,
     ) -> HealthMetric:
         """
         更新一条“手动录入”的健康指标记录。
@@ -753,14 +784,32 @@ class HealthMetricService:
         >>> metric.display_value
         '37.5 °C'
         """
-        metric = HealthMetric.objects.get(id=metric_id)
+        filters = {"id": metric_id}
+        if patient_id is not None:
+            filters["patient_id"] = patient_id
+        metric = HealthMetric.objects.get(**filters)
 
         if metric.source != MetricSource.MANUAL:
             raise ValueError("只能修改手动录入的健康指标记录")
+        if patient_id is not None:
+            measured_at = metric.measured_at
+            if timezone.is_naive(measured_at):
+                measured_at = timezone.make_aware(
+                    measured_at,
+                    timezone.get_current_timezone(),
+                )
+            if timezone.localtime(measured_at).date() != timezone.localdate():
+                raise ValueError("只能修改当天手动录入的健康指标记录")
 
         fields_to_update: list[str] = []
 
         if value_main is not UNSET:
+            if metric.metric_type in {
+                MetricType.BLOOD_GLUCOSE,
+                MetricType.BLOOD_KETONE,
+                MetricType.URIC_ACID,
+            } and (value_main is None or Decimal(str(value_main)) < 0):
+                raise ValueError("监测值必须为非负数。")
             metric.value_main = value_main
             fields_to_update.append("value_main")
 
@@ -772,13 +821,32 @@ class HealthMetricService:
             metric.measured_at = measured_at
             fields_to_update.append("measured_at")
 
+        if measurement_context is not UNSET:
+            if (
+                metric.metric_type == MetricType.BLOOD_GLUCOSE
+                and measurement_context not in MetricMeasurementContext.values
+            ):
+                raise ValueError("血糖测量场景不能为空。")
+            metric.measurement_context = (
+                measurement_context
+                if metric.metric_type == MetricType.BLOOD_GLUCOSE
+                else None
+            )
+            fields_to_update.append("measurement_context")
+
         if fields_to_update:
             metric.save(update_fields=fields_to_update)
+            MetricAlertService.process_metric(metric)
 
         return metric
 
     @classmethod
-    def delete_metric(cls, metric_id: int) -> HealthMetric:
+    def delete_metric(
+        cls,
+        metric_id: int,
+        *,
+        patient_id: int | None = None,
+    ) -> HealthMetric:
         """
         软删除一条健康指标记录：仅将 is_active 标记为 False，不做物理删除。
 
@@ -796,9 +864,15 @@ class HealthMetricService:
         【错误情况】
         - 若记录不存在（或已被软删除）：会抛出 HealthMetric.DoesNotExist 异常。
         """
-        metric = HealthMetric.objects.get(id=metric_id)
+        filters = {"id": metric_id}
+        if patient_id is not None:
+            filters["patient_id"] = patient_id
+        metric = HealthMetric.objects.get(**filters)
+        if metric.source != MetricSource.MANUAL:
+            raise ValueError("只能删除手动录入的健康指标记录")
         metric.is_active = False
         metric.save(update_fields=["is_active"])
+        MetricAlertService.remove_metric(metric)
         return metric
 
     # ============
@@ -814,6 +888,7 @@ class HealthMetricService:
         value_sub: Optional[Decimal] = None,
         questionnaire_submission_id: int | None = None,
         task_id: int | None = None,
+        measurement_context: str | None = None,
     ) -> HealthMetric:
         data = {
             "patient_id": patient_id,
@@ -827,6 +902,8 @@ class HealthMetricService:
             data["questionnaire_submission_id"] = questionnaire_submission_id
         if task_id is not None:
             data["task_id"] = task_id
+        if measurement_context is not None:
+            data["measurement_context"] = measurement_context
         return HealthMetric.objects.create(**data)
 
     @staticmethod

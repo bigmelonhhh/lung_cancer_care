@@ -137,7 +137,7 @@ class PatientAlertSourceService:
         occurred_at: datetime,
         source_payload: dict[str, Any],
     ) -> PatientAlertSource:
-        source, _ = PatientAlertSource.objects.get_or_create(
+        source, _ = PatientAlertSource.objects.update_or_create(
             source_key=source_key,
             defaults={
                 "alert": alert,
@@ -153,6 +153,14 @@ class PatientAlertSourceService:
             },
         )
         return source
+
+    @staticmethod
+    def get_metric_source(metric_id: int) -> PatientAlertSource | None:
+        return (
+            PatientAlertSource.objects.select_related("alert")
+            .filter(source_key=f"metric:{metric_id}")
+            .first()
+        )
 
     @classmethod
     def get_serialized_sources(cls, alert: PatientAlert) -> list[dict[str, str]]:

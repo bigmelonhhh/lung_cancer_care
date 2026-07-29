@@ -22,6 +22,11 @@ urlpatterns = [
     ),
     path("health/review/record/detail/", views.review_record_detail, name="review_record_detail"),
     path("record/temperature/", views.record_temperature, name="record_temperature"),
+    path(
+        "record/monitoring/<slug:slug>/",
+        views.record_general_monitoring,
+        name="record_general_monitoring",
+    ),
     path("record/bp/", views.record_bp, name="record_bp"),
     path("record/spo2/", views.record_spo2, name="record_spo2"),
     path("record/weight/", views.record_weight, name="record_weight"),

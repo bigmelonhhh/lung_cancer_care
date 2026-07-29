@@ -218,6 +218,28 @@ class PatientProfile(TimeStampedModel):
         blank=True,
         help_text="【业务说明】患者日常活动步数参考值；【用法】由医生在管理端配置；【示例】6000；【参数】int；【返回值】int",
     )
+    baseline_blood_glucose = models.DecimalField(
+        "血糖基线(mmol/L)",
+        max_digits=5,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="患者稳定状态下的血糖参考值，由医生在管理端配置。",
+    )
+    baseline_blood_ketone = models.DecimalField(
+        "血酮基线(mmol/L)",
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+        help_text="患者稳定状态下的血酮参考值，由医生在管理端配置。",
+    )
+    baseline_uric_acid = models.PositiveIntegerField(
+        "尿酸基线(μmol/L)",
+        null=True,
+        blank=True,
+        help_text="患者稳定状态下的尿酸参考值，由医生在管理端配置。",
+    )
     indicator_preferences = models.JSONField(
         "指标配置偏好",
         default=dict,

@@ -1,4 +1,9 @@
-from .health_metric import HealthMetric, MetricType, MetricSource
+from .health_metric import (
+    HealthMetric,
+    MetricMeasurementContext,
+    MetricSource,
+    MetricType,
+)
 from .checkup_result import (
     CheckupOrphanField,
     CheckupResultAbnormalFlag,
@@ -16,6 +21,7 @@ __all__ = [
     "HealthMetric",
     "MetricType",
     "MetricSource",
+    "MetricMeasurementContext",
     "CheckupResultValue",
     "CheckupOrphanField",
     "CheckupResultAbnormalFlag",

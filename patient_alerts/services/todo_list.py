@@ -50,6 +50,9 @@ _MONITORING_TASK_TYPES = {
     MetricType.WEIGHT,
     MetricType.STEPS,
     MetricType.USE_MEDICATED,
+    MetricType.BLOOD_GLUCOSE,
+    MetricType.BLOOD_KETONE,
+    MetricType.URIC_ACID,
 }
 
 
