@@ -258,7 +258,7 @@
     openMedicationModal();
   }
 
-  const PLAN_ACTION_CONTROL_CLASS = 'bg-white border border-slate-200 text-slate-600 text-sm font-bold px-3 py-1.5 rounded-full shadow-sm hover:border-blue-400 hover:text-blue-600 active:bg-blue-50 transition whitespace-nowrap';
+  const PLAN_ACTION_CONTROL_CLASS = 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-bold px-3.5 py-1.5 rounded-full shadow-sm transition whitespace-nowrap';
 
   function setPlanActionState(type, status, plan) {
     const actionEl = document.getElementById('plan-action-' + type);

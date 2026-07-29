@@ -230,6 +230,10 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
 
         action = self.page.locator("#plan-action-checkup a")
         expect(action).to_be_visible()
+        action_classes = action.get_attribute("class") or ""
+        self.assertIn("bg-blue-600", action_classes)
+        self.assertIn("text-white", action_classes)
+        self.assertNotIn("bg-white", action_classes.split())
         href = action.get_attribute("href") or ""
         self.assertIn("ids=3%2C5", href)
         self.assertIn("label=%E5%A4%8D%E6%9F%A5+A", href)
