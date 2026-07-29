@@ -135,6 +135,19 @@ class TemplateAssetLoadingTests(SimpleTestCase):
         self.assertIn("finally {", row_template)
         self.assertIn("this.loadingDetail = false;", row_template)
 
+    def test_reports_history_loading_indicator_avoids_nested_x_show_race(self):
+        row_template = self._read("templates/web_doctor/partials/reports_history/_record_row.html")
+
+        self.assertNotIn('x-show="loadingDetail"', row_template)
+        self.assertIn(
+            ':class="{ \'hidden\': !loadingDetail }"',
+            row_template,
+        )
+        self.assertIn(
+            'class="hidden py-6 text-sm text-slate-500">详情加载中...</div>',
+            row_template,
+        )
+
     def test_doctor_workspace_loads_reports_history_script_from_stable_shell(self):
         workspace = self._read("templates/web_doctor/index.html")
 
