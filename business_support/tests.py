@@ -18,6 +18,11 @@ from health_data.models import HealthMetric, MetricSource, MetricType
 from users.models import PatientProfile
 
 
+METRIC_BLOOD_GLUCOSE = "M_GLU"
+METRIC_BLOOD_KETONE = "M_KETONE"
+METRIC_URIC_ACID = "M_UA"
+
+
 def _signed_headers(body: bytes, app_secret: str, curtime: str = "1765348624") -> dict:
     body_md5 = hashlib.md5(body).hexdigest()
     checksum = hashlib.sha1(f"{app_secret}{body_md5}{curtime}".encode("utf-8")).hexdigest()
@@ -132,6 +137,73 @@ def _iwown_five_metric_body(device_id: str) -> bytes:
         _iwown_packet(0x80, health_notification),
         _iwown_packet(0x80, weight_notification),
     )
+
+
+def _iwown_scaled_weight_body(device_id: str, weight: int) -> bytes:
+    measured_at = datetime(2026, 7, 18, 10, 32, 0)
+    scale = (
+        _proto_fixed32_field(1, weight)
+        + _proto_fixed32_field(2, 500)
+        + _proto_fixed32_field(3, 0)
+        + _proto_fixed32_field(4, 22)
+        + _proto_message_field(5, _iwown_datetime_payload(measured_at))
+    )
+    third_party_health = (
+        _proto_message_field(1, b"IWOWN SCALE")
+        + _proto_message_field(2, b"AA:BB:CC:DD:EE:FF")
+        + _proto_fixed32_field(3, 1)
+        + _proto_fixed32_field(4, 1)
+        + _proto_message_field(6, scale)
+    )
+    third_party = _proto_message_field(1, third_party_health)
+    weight_history = _proto_fixed32_field(1, 24) + _proto_message_field(
+        16, third_party
+    )
+    weight_notification = _proto_varint_field(1, 14) + _proto_message_field(
+        4, weight_history
+    )
+    return _iwown_body(device_id, _iwown_packet(0x80, weight_notification))
+
+
+def _iwown_historical_metabolic_body(device_id: str) -> bytes:
+    measured_at = datetime(2026, 7, 18, 10, 33, 0)
+    blood_sugar = _proto_fixed32_field(1, 61)
+    uric_acid = _proto_fixed32_field(1, 420)
+    health = (
+        _proto_message_field(1, _iwown_datetime_payload(measured_at))
+        + _proto_message_field(18, blood_sugar)
+        + _proto_message_field(21, uric_acid)
+    )
+    history_data = _proto_fixed32_field(1, 25) + _proto_message_field(3, health)
+    notification = _proto_varint_field(1, 0) + _proto_message_field(
+        4, history_data
+    )
+    return _iwown_body(device_id, _iwown_packet(0x80, notification))
+
+
+def _iwown_third_party_metabolic_body(device_id: str) -> bytes:
+    measured_at = datetime(2026, 7, 18, 10, 34, 0)
+    date_time = _iwown_datetime_payload(measured_at)
+    glucose = _proto_fixed32_field(1, 62) + _proto_message_field(2, date_time)
+    ketone = _proto_fixed32_field(1, 12) + _proto_message_field(2, date_time)
+    uric_acid = _proto_fixed32_field(1, 410) + _proto_message_field(2, date_time)
+    third_party_health = (
+        _proto_message_field(1, b"IWOWN METABOLIC")
+        + _proto_message_field(2, b"AA:BB:CC:DD:EE:11")
+        + _proto_fixed32_field(3, 2)
+        + _proto_fixed32_field(4, 1)
+        + _proto_message_field(9, glucose)
+        + _proto_message_field(10, ketone)
+        + _proto_message_field(11, uric_acid)
+    )
+    third_party = _proto_message_field(1, third_party_health)
+    history_data = _proto_fixed32_field(1, 26) + _proto_message_field(
+        16, third_party
+    )
+    notification = _proto_varint_field(1, 14) + _proto_message_field(
+        4, history_data
+    )
+    return _iwown_body(device_id, _iwown_packet(0x80, notification))
 
 
 class HrtDeviceProviderAdminTests(TestCase):
@@ -524,6 +596,61 @@ class IwownHealthDataAdapterTests(TestCase):
         self.assertEqual(len(event_ids), 1)
         self.assertTrue(next(iter(event_ids)).startswith("0x80:14:18:"))
 
+    def test_parse_historical_health_maps_glucose_and_uric_acid(self):
+        from business_support.services.device_integrations.iwown import (
+            IwownHealthDataAdapter,
+        )
+
+        result = IwownHealthDataAdapter().parse_body(
+            _iwown_historical_metabolic_body(self.device_id)
+        )
+
+        readings = {reading.metric_type: reading for reading in result.readings}
+        self.assertSetEqual(set(readings), {METRIC_BLOOD_GLUCOSE, METRIC_URIC_ACID})
+        self.assertEqual(
+            readings[METRIC_BLOOD_GLUCOSE].value_main,
+            Decimal("6.10"),
+        )
+        self.assertEqual(readings[METRIC_URIC_ACID].value_main, Decimal("420"))
+        self.assertEqual(
+            readings[METRIC_BLOOD_GLUCOSE].raw_payload["metric"],
+            {"blood_sugar": 61},
+        )
+        event_ids = {reading.external_event_id for reading in result.readings}
+        self.assertEqual(len(event_ids), 1)
+        self.assertTrue(next(iter(event_ids)).startswith("0x80:0:25:"))
+
+    def test_parse_third_party_packet_maps_glucose_ketone_and_uric_acid(self):
+        from business_support.services.device_integrations.iwown import (
+            IwownHealthDataAdapter,
+        )
+
+        result = IwownHealthDataAdapter().parse_body(
+            _iwown_third_party_metabolic_body(self.device_id)
+        )
+
+        readings = {reading.metric_type: reading for reading in result.readings}
+        self.assertSetEqual(
+            set(readings),
+            {
+                METRIC_BLOOD_GLUCOSE,
+                METRIC_BLOOD_KETONE,
+                METRIC_URIC_ACID,
+            },
+        )
+        self.assertEqual(
+            readings[METRIC_BLOOD_GLUCOSE].value_main,
+            Decimal("6.20"),
+        )
+        self.assertEqual(
+            readings[METRIC_BLOOD_KETONE].value_main,
+            Decimal("1.20"),
+        )
+        self.assertEqual(readings[METRIC_URIC_ACID].value_main, Decimal("410"))
+        event_ids = {reading.external_event_id for reading in result.readings}
+        self.assertEqual(len(event_ids), 1)
+        self.assertTrue(next(iter(event_ids)).startswith("0x80:14:26:"))
+
 
 class IwownHealthDataCallbackTests(TestCase):
     device_id = "860132060872223"
@@ -764,6 +891,78 @@ class IwownHealthDataCallbackTests(TestCase):
         self.assertNotIn(self.device_id, log_text)
         self.assertIn(hashlib.sha256(self.device_id.encode()).hexdigest(), log_text)
         self.assertIn("2223", log_text)
+
+    def test_alarm_upload_acknowledges_without_processing(self):
+        upload_url = reverse("iwown_alarm_upload")
+        body = _iwown_body(self.device_id, _iwown_packet(0x12, b""))
+
+        response = self.client.post(
+            upload_url,
+            data=body,
+            content_type="application/x-www-form-urlencoded",
+        )
+
+        self.assertEqual(upload_url, "/deviceupload/iwown/alarm/upload")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"\x00")
+        self.assertFalse(HealthMetric.objects.filter(patient=self.patient).exists())
+
+    def test_sleep_endpoint_returns_no_data_without_processing(self):
+        upload_url = reverse("iwown_sleep_result")
+
+        response = self.client.get(
+            upload_url,
+            data={"deviceid": self.device_id, "sleep_date": "2026-07-21"},
+        )
+
+        self.assertEqual(upload_url, "/deviceupload/iwown/health/sleep")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ReturnCode": 10404})
+        self.assertFalse(HealthMetric.objects.filter(patient=self.patient).exists())
+
+    def test_pb_upload_persists_centigram_scaled_iwown_weight(self):
+        response = self.client.post(
+            reverse("iwown_health_data_upload"),
+            data=_iwown_scaled_weight_body(self.device_id, 7950),
+            content_type="application/x-www-form-urlencoded",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"\x00")
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.WEIGHT,
+        )
+        self.assertEqual(metric.value_main, Decimal("79.50"))
+
+    def test_pb_upload_persists_iwown_metabolic_metrics_from_both_sources(self):
+        body = (
+            _iwown_historical_metabolic_body(self.device_id)
+            + _iwown_third_party_metabolic_body(self.device_id)[15:]
+        )
+
+        response = self.client.post(
+            reverse("iwown_health_data_upload"),
+            data=body,
+            content_type="application/x-www-form-urlencoded",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"\x00")
+        metrics = {
+            (metric.metric_type, metric.value_main)
+            for metric in HealthMetric.objects.filter(patient=self.patient)
+        }
+        self.assertSetEqual(
+            metrics,
+            {
+                (METRIC_BLOOD_GLUCOSE, Decimal("6.10")),
+                (METRIC_URIC_ACID, Decimal("420")),
+                (METRIC_BLOOD_GLUCOSE, Decimal("6.20")),
+                (METRIC_BLOOD_KETONE, Decimal("1.20")),
+                (METRIC_URIC_ACID, Decimal("410")),
+            },
+        )
 
 
 class DeviceMetricIngestionTests(TestCase):

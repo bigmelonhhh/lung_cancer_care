@@ -8,6 +8,9 @@ class MetricType(models.TextChoices):
     STEPS = "M_STEPS", "步数"
     WEIGHT = "M_WEIGHT", "体重"
     BODY_TEMPERATURE = "M_TEMP", "体温"
+    BLOOD_GLUCOSE = "M_GLU", "血糖"
+    BLOOD_KETONE = "M_KETONE", "血酮"
+    URIC_ACID = "M_UA", "尿酸"
     USE_MEDICATED = "M_USE_MEDICATED", "用药情况"
     CHECKUP = "M_CHECKUP", "复查"
 
@@ -134,6 +137,15 @@ class HealthMetric(models.Model):
 
         if m_type == MetricType.STEPS:
             return f"{int(val_main)} 步"
+
+        if m_type == MetricType.BLOOD_GLUCOSE:
+            return f"{float(val_main):g} mmol/L"
+
+        if m_type == MetricType.BLOOD_KETONE:
+            return f"{float(val_main):g} mmol/L"
+
+        if m_type == MetricType.URIC_ACID:
+            return f"{float(val_main):g} umol/L"
 
         # 2. 默认情况
         return str(val_main)

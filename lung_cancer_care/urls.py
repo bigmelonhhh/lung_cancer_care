@@ -24,8 +24,10 @@ from django.urls import include, path
 from django.views.generic import TemplateView
 
 from business_support.views import (
+    iwown_alarm_upload_callback,
     iwown_device_info_callback,
     iwown_health_data_callback,
+    iwown_sleep_result_callback,
     smartwatch_data_callback,
 )
 
@@ -76,6 +78,16 @@ urlpatterns += [
         'deviceupload/iwown/pb/upload',
         iwown_health_data_callback,
         name='iwown_health_data_upload',
+    ),
+    path(
+        'deviceupload/iwown/alarm/upload',
+        iwown_alarm_upload_callback,
+        name='iwown_alarm_upload',
+    ),
+    path(
+        'deviceupload/iwown/health/sleep',
+        iwown_sleep_result_callback,
+        name='iwown_sleep_result',
     ),
     path('deviceupload/<str:provider>/', smartwatch_data_callback, name='device_upload_provider'),
     path('deviceupload', smartwatch_data_callback, name='device_upload_root'),

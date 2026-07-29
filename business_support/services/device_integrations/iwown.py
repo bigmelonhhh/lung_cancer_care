@@ -360,6 +360,41 @@ class IwownHealthDataAdapter:
                     )
                 )
 
+        blood_sugar_payload = _first_field(health, 18, 2)
+        if isinstance(blood_sugar_payload, bytes):
+            blood_sugar = _parse_protobuf_fields(blood_sugar_payload)
+            sugar = _first_field(blood_sugar, 1, 5)
+            glucose = self._normalize_tenths_mmol_per_l(sugar)
+            if glucose is not None:
+                readings.append(
+                    self._build_reading(
+                        device_no,
+                        measured_at,
+                        MetricType.BLOOD_GLUCOSE,
+                        glucose,
+                        sequence=sequence,
+                        external_event_id=external_event_id,
+                        raw_values={"blood_sugar": sugar},
+                    )
+                )
+
+        uric_acid_payload = _first_field(health, 21, 2)
+        if isinstance(uric_acid_payload, bytes):
+            uric_acid = _parse_protobuf_fields(uric_acid_payload)
+            value = _first_field(uric_acid, 1, 5)
+            if isinstance(value, int):
+                readings.append(
+                    self._build_reading(
+                        device_no,
+                        measured_at,
+                        MetricType.URIC_ACID,
+                        value,
+                        sequence=sequence,
+                        external_event_id=external_event_id,
+                        raw_values={"uric_acid": value},
+                    )
+                )
+
         return readings
 
     def _parse_third_party_data(
@@ -420,7 +455,8 @@ class IwownHealthDataAdapter:
             scale = _parse_protobuf_fields(scale_payload)
             weight = _first_field(scale, 1, 5)
             units = _first_field(scale, 3, 5)
-            if isinstance(weight, int) and units == 0 and 10 <= weight <= 500:
+            weight_kg = self._normalize_scale_weight_kg(weight, units)
+            if weight_kg is not None:
                 readings.append(
                     self._build_reading(
                         device_no,
@@ -429,10 +465,10 @@ class IwownHealthDataAdapter:
                             required=True,
                         ),
                         MetricType.WEIGHT,
-                        weight,
+                        weight_kg,
                         sequence=sequence,
                         external_event_id=external_event_id,
-                        raw_values={"weight_kg": weight},
+                        raw_values={"weight": weight, "units": units},
                     )
                 )
             elif isinstance(weight, int):
@@ -481,19 +517,112 @@ class IwownHealthDataAdapter:
                         )
                     )
 
+        glucose_payload = _first_field(health, 9, 2)
+        if isinstance(glucose_payload, bytes):
+            glucose_data = _parse_protobuf_fields(glucose_payload)
+            glucose = self._normalize_tenths_mmol_per_l(
+                _first_field(glucose_data, 1, 5)
+            )
+            if glucose is not None:
+                readings.append(
+                    self._build_reading(
+                        device_no,
+                        self._parse_datetime(
+                            _first_field(glucose_data, 2, 2),
+                            required=True,
+                        ),
+                        MetricType.BLOOD_GLUCOSE,
+                        glucose,
+                        sequence=sequence,
+                        external_event_id=external_event_id,
+                        raw_values={
+                            "glucose": _first_field(glucose_data, 1, 5),
+                        },
+                    )
+                )
+
+        ketone_payload = _first_field(health, 10, 2)
+        if isinstance(ketone_payload, bytes):
+            ketone_data = _parse_protobuf_fields(ketone_payload)
+            ketone = self._normalize_tenths_mmol_per_l(
+                _first_field(ketone_data, 1, 5)
+            )
+            if ketone is not None:
+                readings.append(
+                    self._build_reading(
+                        device_no,
+                        self._parse_datetime(
+                            _first_field(ketone_data, 2, 2),
+                            required=True,
+                        ),
+                        MetricType.BLOOD_KETONE,
+                        ketone,
+                        sequence=sequence,
+                        external_event_id=external_event_id,
+                        raw_values={
+                            "blood_ketones": _first_field(ketone_data, 1, 5),
+                        },
+                    )
+                )
+
+        uric_acid_payload = _first_field(health, 11, 2)
+        if isinstance(uric_acid_payload, bytes):
+            uric_acid_data = _parse_protobuf_fields(uric_acid_payload)
+            uric_acid = _first_field(uric_acid_data, 1, 5)
+            if isinstance(uric_acid, int):
+                readings.append(
+                    self._build_reading(
+                        device_no,
+                        self._parse_datetime(
+                            _first_field(uric_acid_data, 2, 2),
+                            required=True,
+                        ),
+                        MetricType.URIC_ACID,
+                        uric_acid,
+                        sequence=sequence,
+                        external_event_id=external_event_id,
+                        raw_values={"uric_acid": uric_acid},
+                    )
+                )
+
         return readings
+
+    @staticmethod
+    def _normalize_scale_weight_kg(
+        weight: object,
+        units: object,
+    ) -> Decimal | None:
+        """Normalize IWOWN scale weight to kg for supported unit encodings."""
+        if not isinstance(weight, int) or units != 0:
+            return None
+
+        candidates = [Decimal(weight)]
+        if weight > 500:
+            candidates.append(Decimal(weight) / Decimal("100"))
+
+        for candidate in candidates:
+            if Decimal("10") <= candidate <= Decimal("500"):
+                return candidate
+        return None
+
+    @staticmethod
+    def _normalize_tenths_mmol_per_l(value: object) -> Decimal | None:
+        """Normalize IWOWN fixed32 mmol/L values encoded with one decimal place."""
+        if not isinstance(value, int):
+            return None
+        return Decimal(value) / Decimal("10")
 
     def _build_reading(
         self,
         device_no: str,
         measured_at: datetime,
         metric_type: str,
-        value_main: int,
+        value_main: int | Decimal,
         *,
         value_sub: int | None = None,
         sequence: int,
         external_event_id: str,
-        raw_values: dict[str, int],
+        raw_values: dict[str, int | None],
     ) -> DeviceMetricReading:
         raw_payload: dict[str, Any] = {
             "option": "0x80",
