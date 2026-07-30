@@ -110,21 +110,31 @@
       if (!response.ok || payload.status !== 'success') {
         throw new Error(payload.message || '提交失败');
       }
+      const source = new URLSearchParams(window.location.search).get('source');
       try {
         localStorage.setItem('refresh_flag', 'true');
-        const markerKey = 'home_plan_refresh_marker';
-        const marker = JSON.parse(localStorage.getItem(markerKey) || '{}');
-        const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
-        if (!completedTypes.includes(payload.plan_type)) completedTypes.push(payload.plan_type);
-        localStorage.setItem(markerKey, JSON.stringify({
-          completedTypes,
-          date: new Date().toISOString().slice(0, 10),
-          expiresAt: Date.now() + 10 * 60 * 1000
-        }));
       } catch (error) {}
-      const source = new URLSearchParams(window.location.search).get('source');
       if (source === 'home') {
+        try {
+          const markerKey = 'home_plan_refresh_marker';
+          const marker = JSON.parse(localStorage.getItem(markerKey) || '{}');
+          const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
+          if (!completedTypes.includes(payload.plan_type)) completedTypes.push(payload.plan_type);
+          localStorage.setItem(markerKey, JSON.stringify({
+            completedTypes,
+            date: new Date().toISOString().slice(0, 10),
+            expiresAt: Date.now() + 10 * 60 * 1000
+          }));
+        } catch (error) {}
         window.location.replace("{% url 'web_patient:patient_home' %}?" + encodeURIComponent(payload.plan_type) + "=true");
+      } else if (source === 'calendar') {
+        const selectedDate = data.get('selected_date');
+        const calendarUrl = "{% url 'web_patient:health_calendar' %}";
+        window.location.replace(
+          selectedDate
+            ? calendarUrl + "?date=" + encodeURIComponent(selectedDate)
+            : calendarUrl
+        );
       } else if (document.referrer && document.referrer.includes(window.location.host)) {
         history.back();
       } else {

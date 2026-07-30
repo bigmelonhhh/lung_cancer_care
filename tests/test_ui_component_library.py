@@ -103,6 +103,22 @@ class UiComponentLibraryTests(SimpleTestCase):
         self.assertNotIn("<svg", monitoring_icon_markup)
         self.assertNotIn("<img", monitoring_icon_markup)
 
+    def test_patient_health_calendar_uses_medical_icon_component(self):
+        calendar_partial = (
+            Path(settings.BASE_DIR)
+            / "templates/web_patient/partials/_daily_plan_list.html"
+        ).read_text(encoding="utf-8")
+        loop_start = calendar_partial.index("{% for plan in daily_plans %}")
+        title_start = calendar_partial.index("{{ plan.title }}", loop_start)
+        task_icon_markup = calendar_partial[loop_start:title_start]
+
+        self.assertIn(
+            '{% include "components/medical_icon.html" with type=plan.type class="w-5 h-5" %}',
+            task_icon_markup,
+        )
+        self.assertNotIn("<svg", task_icon_markup)
+        self.assertNotIn("<img", task_icon_markup)
+
     def test_privacy_image_component_renders_static_source_with_defaults(self):
         html = render_to_string(
             "components/ui/privacy_image.html",

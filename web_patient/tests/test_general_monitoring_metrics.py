@@ -1,6 +1,8 @@
 from datetime import timedelta
 from decimal import Decimal
+from pathlib import Path
 
+from django.conf import settings
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -107,6 +109,39 @@ class GeneralMonitoringMetricViewTests(TestCase):
             metric_type=MetricType.BLOOD_KETONE,
         )
         self.assertIsNone(metric.measurement_context)
+
+    def test_calendar_source_returns_selected_date_without_home_optimistic_marker(
+        self,
+    ):
+        template_source = (
+            Path(settings.BASE_DIR)
+            / "templates/web_patient/record_general_monitoring.html"
+        ).read_text(encoding="utf-8")
+
+        source_branch = template_source[
+            template_source.index(
+                "const source = new URLSearchParams(window.location.search).get('source');"
+            ) :
+        ]
+        home_branch = source_branch[
+            source_branch.index("if (source === 'home')") :
+            source_branch.index("if (source === 'calendar')")
+        ]
+        calendar_branch = source_branch[
+            source_branch.index("if (source === 'calendar')") :
+            source_branch.index(
+                "} else if (document.referrer",
+                source_branch.index("if (source === 'calendar')"),
+            )
+        ]
+
+        self.assertIn("home_plan_refresh_marker", home_branch)
+        self.assertNotIn("home_plan_refresh_marker", calendar_branch)
+        self.assertIn("data.get('selected_date')", calendar_branch)
+        self.assertIn(
+            "{% url 'web_patient:health_calendar' %}",
+            calendar_branch,
+        )
 
     def test_glucose_detail_uses_real_label_and_context(self):
         HealthMetric.objects.create(
