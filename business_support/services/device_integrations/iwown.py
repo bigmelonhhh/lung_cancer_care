@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import logging
@@ -24,11 +25,35 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 _MAX_DEVICE_INFO_BODY_BYTES = 64 * 1024
+_MAX_POST_LOG_BODY_BYTES = 1024 * 1024
 _DEVICE_INFO_LOG_FIELDS = (
     "model",
     "version",
     "watch_event",
 )
+
+
+def log_iwown_post_body(
+    *,
+    endpoint: str,
+    body: bytes,
+    content_type: str,
+) -> None:
+    """Log the exact IWOWN POST body as bounded, reversible Base64."""
+    logged_body = body[:_MAX_POST_LOG_BODY_BYTES]
+    logger.info(
+        {
+            "event": "iwown_post_body_received",
+            "provider": "IWOWN",
+            "endpoint": endpoint,
+            "content_type": content_type,
+            "body_bytes": len(body),
+            "post_body_logged_bytes": len(logged_body),
+            "post_body_base64": base64.b64encode(logged_body).decode("ascii"),
+            "post_body_truncated": len(logged_body) != len(body),
+            "post_body_sha256": hashlib.sha256(body).hexdigest(),
+        }
+    )
 
 
 def build_iwown_device_log_fields(device_id: object) -> dict[str, str | None]:
@@ -197,7 +222,23 @@ class IwownHealthDataAdapter:
         created_count: int,
         skipped_count: int,
     ) -> None:
-        """Log a bounded health-upload summary without raw binary health data."""
+        """Log a readable summary of the decoded health upload."""
+        parsed_readings = [
+            {
+                "device_no": reading.device_no,
+                "measured_at": reading.measured_at.isoformat(),
+                "metric_type": reading.metric_type,
+                "value_main": str(reading.value_main),
+                "value_sub": (
+                    str(reading.value_sub)
+                    if reading.value_sub is not None
+                    else None
+                ),
+                "raw_payload": reading.raw_payload,
+                "external_event_id": reading.external_event_id,
+            }
+            for reading in payload.readings
+        ]
         logger.info(
             {
                 "event": "iwown_health_data_received",
@@ -209,6 +250,7 @@ class IwownHealthDataAdapter:
                 "reading_count": len(payload.readings),
                 "created_count": created_count,
                 "skipped_count": skipped_count,
+                "parsed_readings": parsed_readings,
             }
         )
 
@@ -710,6 +752,7 @@ class IwownDeviceInfoAdapter:
                 "watch_event": payload.get("watch_event"),
                 "device_info": device_info,
                 "payload_keys": sorted(payload),
+                "post_payload": payload,
             }
         )
 
