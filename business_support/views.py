@@ -9,6 +9,7 @@ from business_support.services.device_integrations.iwown import (
     IwownHealthDataAdapter,
     IwownPacketHeaderError,
     build_iwown_device_log_fields,
+    log_iwown_post_body,
 )
 from business_support.services.device_integrations.registry import get_device_provider_adapter
 from health_data.services.device_metric_ingestion import DeviceMetricIngestionService
@@ -20,12 +21,24 @@ logger = logging.getLogger(__name__)
 def iwown_alarm_upload_callback(request):
     """Acknowledge IWOWN alarm uploads without processing them for now."""
     adapter = IwownHealthDataAdapter()
+    if request.method == "POST":
+        log_iwown_post_body(
+            endpoint="alarm/upload",
+            body=request.body,
+            content_type=request.content_type or "",
+        )
     return adapter.success_response()
 
 
 @csrf_exempt
 def iwown_sleep_result_callback(request):
     """Return a no-data sleep result until IWOWN sleep processing is supported."""
+    if request.method == "POST":
+        log_iwown_post_body(
+            endpoint="health/sleep",
+            body=request.body,
+            content_type=request.content_type or "",
+        )
     return JsonResponse({"ReturnCode": 10404})
 
 
@@ -36,6 +49,11 @@ def iwown_device_info_callback(request):
     if request.method != "POST":
         return adapter.invalid_response(status=405)
     body = request.body
+    log_iwown_post_body(
+        endpoint="deviceinfo/upload",
+        body=body,
+        content_type=request.content_type or "",
+    )
     try:
         payload = adapter.parse_body(body)
     except DeviceCallbackParseError as exc:
@@ -62,6 +80,11 @@ def iwown_health_data_callback(request):
 
     body = request.body
     content_type = request.content_type or ""
+    log_iwown_post_body(
+        endpoint="pb/upload",
+        body=body,
+        content_type=content_type,
+    )
     try:
         payload = adapter.parse_body(body)
     except IwownPacketHeaderError as exc:

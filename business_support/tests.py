@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import json
 import struct
@@ -354,6 +355,7 @@ class IwownDeviceInfoCallbackTests(TestCase):
         self.assertNotIn("imsi", log_record.msg["device_info"])
         self.assertNotIn("sim1_iccid", log_record.msg["device_info"])
         self.assertEqual(log_record.msg["payload_keys"], sorted(payload))
+        self.assertEqual(log_record.msg["post_payload"], payload)
 
     def test_device_info_upload_rejects_non_post_method(self):
         response = self.client.get(reverse("iwown_device_info_upload"))
@@ -406,6 +408,38 @@ class IwownDeviceInfoCallbackTests(TestCase):
         self.assertEqual(log_record.msg["body_sha256"], hashlib.sha256(body).hexdigest())
         self.assertNotIn("body_text_preview", log_record.msg)
         self.assertNotIn("body_hex_preview", log_record.msg)
+
+
+class IwownPostBodyLoggingTests(TestCase):
+    def test_raw_post_log_caps_oversized_body_and_hashes_the_complete_request(self):
+        from business_support.services.device_integrations.iwown import (
+            log_iwown_post_body,
+        )
+
+        body = b"x" * (1024 * 1024 + 17)
+
+        with self.assertLogs(
+            "business_support.services.device_integrations.iwown",
+            level="INFO",
+        ) as captured:
+            log_iwown_post_body(
+                endpoint="pb/upload",
+                body=body,
+                content_type="application/x-www-form-urlencoded",
+            )
+
+        log_record = captured.records[-1]
+        self.assertEqual(log_record.msg["body_bytes"], len(body))
+        self.assertEqual(log_record.msg["post_body_logged_bytes"], 1024 * 1024)
+        self.assertEqual(
+            len(base64.b64decode(log_record.msg["post_body_base64"])),
+            1024 * 1024,
+        )
+        self.assertTrue(log_record.msg["post_body_truncated"])
+        self.assertEqual(
+            log_record.msg["post_body_sha256"],
+            hashlib.sha256(body).hexdigest(),
+        )
 
 
 class IwownHealthDataAdapterTests(TestCase):
@@ -734,6 +768,60 @@ class IwownHealthDataCallbackTests(TestCase):
         self.assertEqual(log_record.msg["created_count"], 5)
         self.assertEqual(log_record.msg["skipped_count"], 0)
         self.assertNotIn("body", log_record.msg)
+        raw_body_log = next(
+            record
+            for record in captured.records
+            if record.msg["event"] == "iwown_post_body_received"
+        )
+        self.assertEqual(raw_body_log.msg["endpoint"], "pb/upload")
+        self.assertEqual(
+            base64.b64decode(raw_body_log.msg["post_body_base64"]),
+            body,
+        )
+        self.assertFalse(raw_body_log.msg["post_body_truncated"])
+        self.assertEqual(
+            [
+                {
+                    "metric_type": reading["metric_type"],
+                    "value_main": reading["value_main"],
+                    "value_sub": reading["value_sub"],
+                }
+                for reading in log_record.msg["parsed_readings"]
+            ],
+            [
+                {
+                    "metric_type": MetricType.STEPS,
+                    "value_main": "5432",
+                    "value_sub": None,
+                },
+                {
+                    "metric_type": MetricType.HEART_RATE,
+                    "value_main": "72",
+                    "value_sub": None,
+                },
+                {
+                    "metric_type": MetricType.BLOOD_PRESSURE,
+                    "value_main": "120",
+                    "value_sub": "78",
+                },
+                {
+                    "metric_type": MetricType.BLOOD_OXYGEN,
+                    "value_main": "96",
+                    "value_sub": None,
+                },
+                {
+                    "metric_type": MetricType.WEIGHT,
+                    "value_main": "68",
+                    "value_sub": None,
+                },
+            ],
+        )
+        self.assertTrue(
+            all(
+                reading["device_no"] == self.device_id
+                for reading in log_record.msg["parsed_readings"]
+            )
+        )
 
     def test_pb_upload_returns_iwown_error_bytes_for_malformed_packets(self):
         upload_url = reverse("iwown_health_data_upload")
@@ -896,16 +984,30 @@ class IwownHealthDataCallbackTests(TestCase):
         upload_url = reverse("iwown_alarm_upload")
         body = _iwown_body(self.device_id, _iwown_packet(0x12, b""))
 
-        response = self.client.post(
-            upload_url,
-            data=body,
-            content_type="application/x-www-form-urlencoded",
-        )
+        with self.assertLogs(
+            "business_support.services.device_integrations.iwown",
+            level="INFO",
+        ) as captured:
+            response = self.client.post(
+                upload_url,
+                data=body,
+                content_type="application/x-www-form-urlencoded",
+            )
 
         self.assertEqual(upload_url, "/deviceupload/iwown/alarm/upload")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"\x00")
         self.assertFalse(HealthMetric.objects.filter(patient=self.patient).exists())
+        raw_body_log = next(
+            record
+            for record in captured.records
+            if record.msg["event"] == "iwown_post_body_received"
+        )
+        self.assertEqual(raw_body_log.msg["endpoint"], "alarm/upload")
+        self.assertEqual(
+            base64.b64decode(raw_body_log.msg["post_body_base64"]),
+            body,
+        )
 
     def test_sleep_endpoint_returns_no_data_without_processing(self):
         upload_url = reverse("iwown_sleep_result")
@@ -919,6 +1021,37 @@ class IwownHealthDataCallbackTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"ReturnCode": 10404})
         self.assertFalse(HealthMetric.objects.filter(patient=self.patient).exists())
+
+    def test_sleep_post_logs_complete_request_body(self):
+        upload_url = reverse("iwown_sleep_result")
+        body = json.dumps(
+            {
+                "deviceid": self.device_id,
+                "sleep_date": "2026-07-21",
+            }
+        ).encode("utf-8")
+
+        with self.assertLogs(
+            "business_support.services.device_integrations.iwown",
+            level="INFO",
+        ) as captured:
+            response = self.client.post(
+                upload_url,
+                data=body,
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        raw_body_log = next(
+            record
+            for record in captured.records
+            if record.msg["event"] == "iwown_post_body_received"
+        )
+        self.assertEqual(raw_body_log.msg["endpoint"], "health/sleep")
+        self.assertEqual(
+            base64.b64decode(raw_body_log.msg["post_body_base64"]),
+            body,
+        )
 
     def test_pb_upload_persists_centigram_scaled_iwown_weight(self):
         response = self.client.post(
