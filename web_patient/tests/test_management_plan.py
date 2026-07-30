@@ -38,24 +38,13 @@ class ManagementPlanViewTests(TestCase):
         self.url = reverse('web_patient:management_plan')
 
     @patch('web_patient.views.plan.get_daily_plan_summary')
-    @patch('web_patient.views.plan.HealthMetricService.query_last_metric')
-    def test_management_plan_context(self, mock_query_metric, mock_get_plan):
+    def test_management_plan_context(self, mock_get_plan):
         # 1. Mock Plan Data (In Plan)
         mock_get_plan.return_value = [
             {"task_type": "MEDICATION", "title": "按时用药", "status": 0}, # Incomplete
             {"task_type": "MONITORING", "title": "测量体温", "status": 0},
             {"task_type": "MONITORING", "title": "测量血压", "status": 0},
         ]
-
-        # 2. Mock Metric Data (Some data exists)
-        mock_query_metric.return_value = {
-            MetricType.BODY_TEMPERATURE: {
-                "value_display": "36.5",
-                "measured_at": timezone.now()
-            },
-            # BP missing (Incomplete)
-            # SpO2 not in plan (Should be empty status)
-        }
 
         # Create request
         request = self.factory.get(self.url)
@@ -74,29 +63,19 @@ class ManagementPlanViewTests(TestCase):
         # Better: Use self.client.force_login(self.user)
         
     @patch('web_patient.views.plan.get_daily_plan_summary')
-    @patch('web_patient.views.plan.HealthMetricService.query_last_metric')
-    def test_management_plan_view_logic(self, mock_query_metric, mock_get_plan):
+    def test_management_plan_view_logic(self, mock_get_plan):
         self.client.force_login(self.user)
         
         # Scenario 1: Medication In Plan, Incomplete
-        # Scenario 2: Temp In Plan, Completed
+        # Scenario 2: Temp Task Completed
         # Scenario 3: BP In Plan, Incomplete
         # Scenario 4: SpO2 Not In Plan
         
         mock_get_plan.return_value = [
             {"task_type": "MEDICATION", "title": "按时用药", "status": 0},
-            {"task_type": "MONITORING", "title": "测量体温", "status": 1}, # Backend says completed, but we check data too?
-                                                                        # Requirement says: "If indicator in plan... Data entered: completed"
+            {"task_type": "MONITORING", "title": "测量体温", "status": 1},
             {"task_type": "MONITORING", "title": "测量血压", "status": 0},
         ]
-        
-        mock_query_metric.return_value = {
-            MetricType.BODY_TEMPERATURE: {
-                "value_display": "36.5",
-                "measured_at": timezone.now()
-            },
-            MetricType.BLOOD_PRESSURE: None # No data
-        }
         
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
@@ -115,12 +94,12 @@ class ManagementPlanViewTests(TestCase):
         # But let's assume if task status is 1 (completed), it is completed.
         
         # Check Monitoring
-        # Temp: In plan + Data = Completed
+        # Temp: completed task status is displayed directly.
         temp_task = next((t for t in monitoring_plan if t['title'] == '测量体温'), None)
         self.assertIsNotNone(temp_task)
         self.assertEqual(temp_task['status'], 'completed')
         
-        # BP: In plan + No Data = Incomplete
+        # BP: pending task status is displayed as incomplete.
         bp_task = next((t for t in monitoring_plan if t['title'] == '测量血压/心率'), None)
         self.assertIsNotNone(bp_task)
         self.assertEqual(bp_task['status'], 'incomplete')
@@ -130,6 +109,102 @@ class ManagementPlanViewTests(TestCase):
         self.assertIsNotNone(spo2_task)
         self.assertEqual(spo2_task['status'], '')
         self.assertEqual(spo2_task['status_text'], '今日无计划')
+
+    @patch('web_patient.views.plan.get_daily_plan_summary')
+    def test_new_monitoring_categories_resolve_by_metric_type_and_keep_order(
+        self, mock_get_plan
+    ):
+        self.client.force_login(self.user)
+        mock_get_plan.return_value = [
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": "无意义旧标题",
+                "metric_type": MetricType.BLOOD_KETONE,
+                "status": int(core_choices.TaskStatus.PENDING),
+            },
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": "另一个旧标题",
+                "metric_type": MetricType.BLOOD_GLUCOSE,
+                "status": int(core_choices.TaskStatus.COMPLETED),
+            },
+        ]
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        monitoring_plan = response.context["monitoring_plan"]
+        self.assertEqual(
+            [item["title"] for item in monitoring_plan],
+            [
+                "测量血氧",
+                "测量血压/心率",
+                "测量体温",
+                "测量体重",
+                "测量步数",
+                "测量血糖",
+                "测量血酮",
+                "测量尿酸",
+            ],
+        )
+        self.assertEqual(monitoring_plan[5]["status"], "completed")
+        self.assertEqual(monitoring_plan[6]["status"], "incomplete")
+        self.assertEqual(monitoring_plan[7]["status_text"], "今日无计划")
+
+    @patch('web_patient.views.plan.get_daily_plan_summary')
+    def test_new_monitoring_categories_fallback_to_legacy_titles(
+        self, mock_get_plan
+    ):
+        self.client.force_login(self.user)
+        mock_get_plan.return_value = [
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": title,
+                "status": int(core_choices.TaskStatus.PENDING),
+            }
+            for title in ("血糖监测", "血酮监测", "尿酸监测")
+        ]
+        response = self.client.get(self.url)
+
+        statuses = {
+            item["title"]: item["status"]
+            for item in response.context["monitoring_plan"]
+        }
+        self.assertTrue(
+            {"测量血糖", "测量血酮", "测量尿酸"}.issubset(statuses),
+            statuses,
+        )
+        self.assertEqual(statuses["测量血糖"], "incomplete")
+        self.assertEqual(statuses["测量血酮"], "incomplete")
+        self.assertEqual(statuses["测量尿酸"], "incomplete")
+
+    @patch('web_patient.views.plan.get_daily_plan_summary')
+    def test_blood_pressure_and_heart_rate_remain_one_group_and_any_completion_wins(
+        self, mock_get_plan
+    ):
+        self.client.force_login(self.user)
+        mock_get_plan.return_value = [
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": "血压监测",
+                "metric_type": MetricType.BLOOD_PRESSURE,
+                "status": int(core_choices.TaskStatus.PENDING),
+            },
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": "心率监测",
+                "metric_type": MetricType.HEART_RATE,
+                "status": int(core_choices.TaskStatus.COMPLETED),
+            },
+        ]
+        response = self.client.get(self.url)
+
+        bp_hr_items = [
+            item
+            for item in response.context["monitoring_plan"]
+            if item["title"] == "测量血压/心率"
+        ]
+        self.assertEqual(len(bp_hr_items), 1)
+        self.assertEqual(bp_hr_items[0]["status"], "completed")
 
     def test_management_plan_treatment_courses_from_cycles_and_tasks(self):
         self.client.force_login(self.user)
