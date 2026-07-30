@@ -3,14 +3,17 @@ from __future__ import annotations
 import logging
 import hashlib
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
 from business_support.models import Device, DeviceMetricReceipt, DeviceProvider
-from business_support.services.device_integrations.base import DeviceMetricReading
+from business_support.services.device_integrations.base import (
+    DeviceMetricReading,
+    StepAggregationMode,
+)
 from health_data.models import MetricType
 from health_data.services.health_metric import HealthMetricService
 
@@ -98,6 +101,35 @@ class DeviceMetricIngestionService:
             Device.objects.filter(pk=device.pk).filter(
                 Q(last_active_at__isnull=True) | Q(last_active_at__lt=activity_at)
             ).update(last_active_at=activity_at)
+            if (
+                reading.metric_type == MetricType.STEPS
+                and reading.value_main is not None
+                and reading.value_main < 0
+            ):
+                logger.warning(
+                    {
+                        "event": "device_step_value_invalid",
+                        "provider": reading.provider_code,
+                        "device_id": device.pk,
+                        **_device_log_fields(reading.device_no),
+                        "measured_at": reading.measured_at,
+                        "external_event_id": reading.external_event_id,
+                    }
+                )
+            if (
+                reading.metric_type == MetricType.STEPS
+                and reading.step_aggregation == StepAggregationMode.INCREMENT
+                and cls._has_cumulative_step_marker(device, reading)
+            ):
+                logger.info(
+                    {
+                        "event": "device_step_increment_after_cumulative_skipped",
+                        "provider": reading.provider_code,
+                        "device_id": device.pk,
+                        "measured_at": reading.measured_at,
+                    }
+                )
+                return None
             if cls._is_exact_retry(device, reading):
                 logger.info(
                     {
@@ -115,7 +147,16 @@ class DeviceMetricIngestionService:
                 measured_at=reading.measured_at,
                 value_main=reading.value_main,
                 value_sub=reading.value_sub,
+                step_aggregation=reading.step_aggregation,
             )
+            is_valid_cumulative_step = (
+                reading.metric_type == MetricType.STEPS
+                and reading.step_aggregation == StepAggregationMode.CUMULATIVE
+                and reading.value_main is not None
+                and reading.value_main >= 0
+            )
+            if is_valid_cumulative_step:
+                cls._record_cumulative_step_marker(device, reading)
             if metric is not None:
                 cls._record_external_event(device, reading)
             return metric
@@ -170,10 +211,11 @@ class DeviceMetricIngestionService:
     @staticmethod
     def _is_exact_retry(device: Device, reading: DeviceMetricReading) -> bool:
         """Check a provider event key after locking its device row."""
-        if (
-            not reading.external_event_id
-            or reading.metric_type == MetricType.STEPS
-        ):
+        is_non_receipted_step = (
+            reading.metric_type == MetricType.STEPS
+            and reading.step_aggregation != StepAggregationMode.INCREMENT
+        )
+        if not reading.external_event_id or is_non_receipted_step:
             return False
         return DeviceMetricReceipt.objects.filter(
             device=device,
@@ -187,15 +229,59 @@ class DeviceMetricIngestionService:
         device: Device,
         reading: DeviceMetricReading,
     ) -> None:
-        """Record only successfully persisted non-step provider events."""
-        if (
-            not reading.external_event_id
-            or reading.metric_type == MetricType.STEPS
-        ):
+        """Record successfully persisted provider events that require idempotency."""
+        is_non_receipted_step = (
+            reading.metric_type == MetricType.STEPS
+            and reading.step_aggregation != StepAggregationMode.INCREMENT
+        )
+        if not reading.external_event_id or is_non_receipted_step:
             return
         DeviceMetricReceipt.objects.create(
             device=device,
             provider_code=(reading.provider_code or "").strip().upper(),
             external_event_id=reading.external_event_id,
             metric_type=reading.metric_type,
+        )
+
+    @staticmethod
+    def _local_date(measured_at: datetime) -> date:
+        """Resolve a reading to the same local-day boundary as health metrics."""
+        current_timezone = timezone.get_current_timezone()
+        if timezone.is_naive(measured_at):
+            return timezone.make_aware(measured_at, current_timezone).date()
+        return timezone.localtime(measured_at, current_timezone).date()
+
+    @classmethod
+    def _cumulative_step_marker_id(
+        cls,
+        reading: DeviceMetricReading,
+    ) -> str:
+        provider = (reading.provider_code or "").strip().lower()
+        local_date = cls._local_date(reading.measured_at)
+        return f"{provider}:steps:cumulative:{local_date}"
+
+    @classmethod
+    def _has_cumulative_step_marker(
+        cls,
+        device: Device,
+        reading: DeviceMetricReading,
+    ) -> bool:
+        return DeviceMetricReceipt.objects.filter(
+            device=device,
+            provider_code=(reading.provider_code or "").strip().upper(),
+            external_event_id=cls._cumulative_step_marker_id(reading),
+            metric_type=MetricType.STEPS,
+        ).exists()
+
+    @classmethod
+    def _record_cumulative_step_marker(
+        cls,
+        device: Device,
+        reading: DeviceMetricReading,
+    ) -> None:
+        DeviceMetricReceipt.objects.get_or_create(
+            device=device,
+            provider_code=(reading.provider_code or "").strip().upper(),
+            external_event_id=cls._cumulative_step_marker_id(reading),
+            metric_type=MetricType.STEPS,
         )

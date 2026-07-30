@@ -19,6 +19,7 @@ from .base import (
     DeviceCallbackParseError,
     DeviceCallbackPayload,
     DeviceMetricReading,
+    StepAggregationMode,
 )
 
 
@@ -295,6 +296,7 @@ class IwownHealthDataAdapter:
                 value_main=Decimal(steps),
                 raw_payload={"option": "0x0A", "steps": steps},
                 external_event_id=external_event_id,
+                step_aggregation=StepAggregationMode.CUMULATIVE,
             )
         ]
 
@@ -348,6 +350,36 @@ class IwownHealthDataAdapter:
             required=True,
         )
         readings: list[DeviceMetricReading] = []
+
+        pedometer_payload = _first_field(health, 3, 2)
+        if isinstance(pedometer_payload, bytes):
+            try:
+                pedometer = _parse_protobuf_fields(pedometer_payload)
+            except DeviceCallbackParseError as error:
+                logger.warning(
+                    {
+                        "event": "iwown_historical_pedometer_invalid",
+                        "provider": self.provider_code,
+                        **build_iwown_device_log_fields(device_no),
+                        "sequence": sequence,
+                        "error": str(error),
+                    }
+                )
+            else:
+                steps = _first_field(pedometer, 4, 5)
+                if isinstance(steps, int):
+                    readings.append(
+                        self._build_reading(
+                            device_no,
+                            measured_at,
+                            MetricType.STEPS,
+                            steps,
+                            sequence=sequence,
+                            external_event_id=external_event_id,
+                            raw_values={"steps": steps},
+                            step_aggregation=StepAggregationMode.INCREMENT,
+                        )
+                    )
 
         heart_rate_payload = _first_field(health, 4, 2)
         if isinstance(heart_rate_payload, bytes):
@@ -665,6 +697,7 @@ class IwownHealthDataAdapter:
         sequence: int,
         external_event_id: str,
         raw_values: dict[str, int | None],
+        step_aggregation: str | None = None,
     ) -> DeviceMetricReading:
         raw_payload: dict[str, Any] = {
             "option": "0x80",
@@ -680,6 +713,7 @@ class IwownHealthDataAdapter:
             value_sub=Decimal(value_sub) if value_sub is not None else None,
             raw_payload=raw_payload,
             external_event_id=external_event_id,
+            step_aggregation=step_aggregation,
         )
 
     @staticmethod

@@ -10,6 +10,13 @@ class DeviceCallbackParseError(ValueError):
     """Raised when a provider callback body cannot be parsed."""
 
 
+class StepAggregationMode:
+    """Describe how a device step value contributes to its local-day total."""
+
+    CUMULATIVE = "cumulative"
+    INCREMENT = "increment"
+
+
 @dataclass(frozen=True)
 class DeviceMetricReading:
     """
@@ -27,6 +34,7 @@ class DeviceMetricReading:
     value_sub: Decimal | None = None
     raw_payload: dict[str, Any] | None = None
     external_event_id: str | None = None
+    step_aggregation: str | None = None
 
 
 @dataclass(frozen=True)

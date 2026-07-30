@@ -140,6 +140,32 @@ def _iwown_five_metric_body(device_id: str) -> bytes:
     )
 
 
+def _iwown_historical_step_body(
+    device_id: str,
+    *,
+    sequence: int,
+    measured_at: datetime,
+    steps: int,
+) -> bytes:
+    pedometer = _proto_fixed32_field(4, steps)
+    health = (
+        _proto_message_field(1, _iwown_datetime_payload(measured_at))
+        + _proto_message_field(3, pedometer)
+    )
+    history_data = _proto_fixed32_field(1, sequence) + _proto_message_field(
+        3,
+        health,
+    )
+    notification = _proto_varint_field(1, 0) + _proto_message_field(
+        4,
+        history_data,
+    )
+    return _iwown_body(
+        device_id,
+        _iwown_packet(0x80, notification),
+    )
+
+
 def _iwown_scaled_weight_body(device_id: str, weight: int) -> bytes:
     measured_at = datetime(2026, 7, 18, 10, 32, 0)
     scale = (
@@ -467,13 +493,17 @@ class IwownHealthDataAdapterTests(TestCase):
         self.assertEqual(reading.device_no, self.device_id)
         self.assertEqual(reading.metric_type, MetricType.STEPS)
         self.assertEqual(reading.value_main, Decimal("4321"))
+        self.assertEqual(
+            getattr(reading, "step_aggregation", None),
+            "cumulative",
+        )
         self.assertTrue(reading.external_event_id.startswith("0x0A:"))
         self.assertEqual(
             reading.measured_at,
             timezone.make_aware(measured_at, timezone.get_current_timezone()),
         )
 
-    def test_parse_historical_health_maps_hr_bp_and_oxygen_only(self):
+    def test_parse_historical_health_maps_pedometer_hr_bp_and_oxygen(self):
         from business_support.services.device_integrations.iwown import (
             IwownHealthDataAdapter,
         )
@@ -527,10 +557,20 @@ class IwownHealthDataAdapterTests(TestCase):
         self.assertSetEqual(
             set(readings),
             {
+                MetricType.STEPS,
                 MetricType.HEART_RATE,
                 MetricType.BLOOD_PRESSURE,
                 MetricType.BLOOD_OXYGEN,
             },
+        )
+        self.assertEqual(readings[MetricType.STEPS].value_main, Decimal("99"))
+        self.assertEqual(
+            getattr(readings[MetricType.STEPS], "step_aggregation", None),
+            "increment",
+        )
+        self.assertEqual(
+            readings[MetricType.STEPS].raw_payload["metric"],
+            {"steps": 99},
         )
         self.assertEqual(readings[MetricType.HEART_RATE].value_main, Decimal("73"))
         self.assertEqual(
@@ -548,7 +588,60 @@ class IwownHealthDataAdapterTests(TestCase):
         event_ids = {reading.external_event_id for reading in result.readings}
         self.assertEqual(len(event_ids), 1)
         self.assertTrue(next(iter(event_ids)).startswith("0x80:0:17:"))
-        self.assertNotIn(MetricType.STEPS, readings)
+
+    def test_malformed_historical_pedometer_does_not_drop_valid_heart_rate(self):
+        from business_support.services.device_integrations.iwown import (
+            IwownHealthDataAdapter,
+        )
+
+        measured_at = datetime(2026, 7, 18, 10, 31, 0)
+        malformed_pedometer = b"\x25\x01"
+        heart_rate = (
+            _proto_fixed32_field(1, 61)
+            + _proto_fixed32_field(2, 89)
+            + _proto_fixed32_field(3, 73)
+        )
+        health = (
+            _proto_message_field(1, _iwown_datetime_payload(measured_at))
+            + _proto_message_field(3, malformed_pedometer)
+            + _proto_message_field(4, heart_rate)
+        )
+        history_data = _proto_fixed32_field(1, 19) + _proto_message_field(
+            3,
+            health,
+        )
+        notification = _proto_varint_field(1, 0) + _proto_message_field(
+            4,
+            history_data,
+        )
+        body = _iwown_body(
+            self.device_id,
+            _iwown_packet(0x80, notification),
+        )
+
+        with self.assertLogs(
+            "business_support.services.device_integrations.iwown",
+            level="WARNING",
+        ) as captured:
+            try:
+                result = IwownHealthDataAdapter().parse_body(body)
+            except ValueError as error:
+                self.fail(
+                    "Malformed pedometer data dropped valid sibling metrics: "
+                    f"{error}"
+                )
+
+        self.assertEqual(len(result.readings), 1)
+        self.assertEqual(result.readings[0].metric_type, MetricType.HEART_RATE)
+        self.assertEqual(result.readings[0].value_main, Decimal("73"))
+        log_record = captured.records[-1]
+        self.assertEqual(
+            log_record.msg["event"],
+            "iwown_historical_pedometer_invalid",
+        )
+        self.assertEqual(log_record.msg["sequence"], 19)
+        self.assertNotIn("device_id", log_record.msg)
+        self.assertEqual(log_record.msg["device_id_suffix"], "2223")
 
     def test_parse_third_party_packet_maps_only_supported_metrics(self):
         from business_support.services.device_integrations.iwown import (
@@ -929,7 +1022,14 @@ class IwownHealthDataCallbackTests(TestCase):
         self.assertEqual(steps.value_main, Decimal("5432"))
         self.assertEqual(
             DeviceMetricReceipt.objects.filter(device=self.device).count(),
-            4,
+            5,
+        )
+        self.assertTrue(
+            DeviceMetricReceipt.objects.filter(
+                device=self.device,
+                external_event_id="iwown:steps:cumulative:2026-07-18",
+                metric_type=MetricType.STEPS,
+            ).exists()
         )
 
     def test_pb_upload_is_idempotent_for_exact_retry(self):
@@ -957,7 +1057,14 @@ class IwownHealthDataCallbackTests(TestCase):
         )
         self.assertEqual(
             DeviceMetricReceipt.objects.filter(device=self.device).count(),
-            4,
+            5,
+        )
+        self.assertTrue(
+            DeviceMetricReceipt.objects.filter(
+                device=self.device,
+                external_event_id="iwown:steps:cumulative:2026-07-18",
+                metric_type=MetricType.STEPS,
+            ).exists()
         )
 
     def test_pb_upload_unknown_device_log_does_not_expose_imei(self):
@@ -1096,6 +1203,264 @@ class IwownHealthDataCallbackTests(TestCase):
                 (METRIC_URIC_ACID, Decimal("410")),
             },
         )
+
+    def test_pb_upload_accumulates_historical_steps_idempotently(self):
+        first = _iwown_historical_step_body(
+            self.device_id,
+            sequence=31,
+            measured_at=datetime(2026, 7, 18, 9, 0),
+            steps=120,
+        )
+        second = _iwown_historical_step_body(
+            self.device_id,
+            sequence=32,
+            measured_at=datetime(2026, 7, 18, 10, 0),
+            steps=80,
+        )
+
+        for body in (first, second, first):
+            response = self.client.post(
+                reverse("iwown_health_data_upload"),
+                data=body,
+                content_type="application/x-www-form-urlencoded",
+            )
+            self.assertEqual(response.content, b"\x00")
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.value_main, Decimal("200"))
+
+
+class IwownStepIngestionTests(TestCase):
+    def setUp(self):
+        from business_support.models import DeviceProvider
+
+        self.provider = DeviceProvider.objects.get(code="IWOWN")
+        self.patient = PatientProfile.objects.create(
+            phone="13900004100",
+            name="IWOWN步数患者",
+        )
+        self.device = Device.objects.create(
+            provider=self.provider,
+            sn="SN-IWOWN-STEPS-001",
+            imei="860132060872225",
+            current_patient=self.patient,
+        )
+
+    def historical_step(
+        self,
+        external_event_id: str,
+        value: str,
+        *,
+        hour: int,
+    ):
+        from business_support.services.device_integrations.base import (
+            DeviceMetricReading,
+            StepAggregationMode,
+        )
+
+        return DeviceMetricReading(
+            provider_code="IWOWN",
+            device_no=self.device.imei,
+            measured_at=timezone.make_aware(
+                datetime(2026, 7, 18, hour, 0),
+                timezone.get_current_timezone(),
+            ),
+            metric_type=MetricType.STEPS,
+            value_main=Decimal(value),
+            external_event_id=external_event_id,
+            step_aggregation=StepAggregationMode.INCREMENT,
+        )
+
+    def cumulative_step(self, value: str, *, hour: int):
+        from business_support.services.device_integrations.base import (
+            DeviceMetricReading,
+            StepAggregationMode,
+        )
+
+        return DeviceMetricReading(
+            provider_code="IWOWN",
+            device_no=self.device.imei,
+            measured_at=timezone.make_aware(
+                datetime(2026, 7, 18, hour, 0),
+                timezone.get_current_timezone(),
+            ),
+            metric_type=MetricType.STEPS,
+            value_main=Decimal(value),
+            external_event_id=f"0x0A:{hour}:{value}",
+            step_aggregation=StepAggregationMode.CUMULATIVE,
+        )
+
+    def cumulative_marker(self):
+        from business_support.models import DeviceMetricReceipt
+
+        return DeviceMetricReceipt.objects.filter(
+            device=self.device,
+            provider_code="IWOWN",
+            external_event_id="iwown:steps:cumulative:2026-07-18",
+            metric_type=MetricType.STEPS,
+        )
+
+    def test_different_historical_events_add_to_one_daily_total(self):
+        from health_data.services.device_metric_ingestion import (
+            DeviceMetricIngestionService,
+        )
+
+        first = self.historical_step("iwown:history:1", "120", hour=9)
+        second = self.historical_step("iwown:history:2", "80", hour=10)
+
+        DeviceMetricIngestionService.ingest_readings([first])
+        DeviceMetricIngestionService.ingest_readings([second])
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.value_main, Decimal("200"))
+        self.assertEqual(metric.measured_at, second.measured_at)
+        self.assertEqual(
+            HealthMetric.objects.filter(
+                patient=self.patient,
+                metric_type=MetricType.STEPS,
+            ).count(),
+            1,
+        )
+
+    def test_exact_historical_event_retry_is_not_added_twice(self):
+        from business_support.models import DeviceMetricReceipt
+        from health_data.services.device_metric_ingestion import (
+            DeviceMetricIngestionService,
+        )
+
+        reading = self.historical_step(
+            "iwown:history:retry",
+            "120",
+            hour=9,
+        )
+
+        first = DeviceMetricIngestionService.ingest_readings([reading])
+        retry = DeviceMetricIngestionService.ingest_readings([reading])
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.value_main, Decimal("120"))
+        self.assertEqual(first.created_count, 1)
+        self.assertEqual(retry.skipped_count, 1)
+        self.assertEqual(
+            DeviceMetricReceipt.objects.filter(
+                device=self.device,
+                metric_type=MetricType.STEPS,
+            ).count(),
+            1,
+        )
+
+    def test_negative_historical_steps_are_rejected(self):
+        from business_support.models import DeviceMetricReceipt
+        from health_data.services.device_metric_ingestion import (
+            DeviceMetricIngestionService,
+        )
+
+        reading = self.historical_step(
+            "iwown:history:negative",
+            "-1",
+            hour=9,
+        )
+
+        with self.assertLogs(
+            "health_data.services.device_metric_ingestion",
+            level="WARNING",
+        ) as captured:
+            result = DeviceMetricIngestionService.ingest_readings([reading])
+
+        self.assertEqual(result.skipped_count, 1)
+        self.assertFalse(
+            HealthMetric.objects.filter(patient=self.patient).exists()
+        )
+        self.assertFalse(
+            DeviceMetricReceipt.objects.filter(device=self.device).exists()
+        )
+        log_record = captured.records[-1]
+        self.assertEqual(log_record.msg["event"], "device_step_value_invalid")
+        self.assertEqual(log_record.msg["provider"], "IWOWN")
+        self.assertEqual(
+            log_record.msg["external_event_id"],
+            "iwown:history:negative",
+        )
+        self.assertNotIn("device_no", log_record.msg)
+        self.assertEqual(log_record.msg["device_id_suffix"], "2225")
+
+    def test_cumulative_step_suppresses_later_historical_increment(self):
+        from health_data.services.device_metric_ingestion import (
+            DeviceMetricIngestionService,
+        )
+
+        cumulative = self.cumulative_step("1000", hour=10)
+        later_increment = self.historical_step(
+            "iwown:history:after",
+            "200",
+            hour=11,
+        )
+
+        DeviceMetricIngestionService.ingest_readings([cumulative])
+        result = DeviceMetricIngestionService.ingest_readings([later_increment])
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.value_main, Decimal("1000"))
+        self.assertEqual(result.skipped_count, 1)
+
+    def test_lower_cumulative_after_history_does_not_regress_and_marks_day(self):
+        from health_data.services.device_metric_ingestion import (
+            DeviceMetricIngestionService,
+        )
+
+        before = self.historical_step(
+            "iwown:history:before",
+            "600",
+            hour=9,
+        )
+        lower_cumulative = self.cumulative_step("500", hour=10)
+        after = self.historical_step(
+            "iwown:history:after",
+            "100",
+            hour=11,
+        )
+
+        DeviceMetricIngestionService.ingest_readings([before])
+        DeviceMetricIngestionService.ingest_readings([lower_cumulative])
+        DeviceMetricIngestionService.ingest_readings([after])
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.value_main, Decimal("600"))
+        self.assertTrue(self.cumulative_marker().exists())
+
+    def test_larger_cumulative_can_update_after_day_marker_exists(self):
+        from health_data.services.device_metric_ingestion import (
+            DeviceMetricIngestionService,
+        )
+
+        DeviceMetricIngestionService.ingest_readings(
+            [self.cumulative_step("1000", hour=10)]
+        )
+        DeviceMetricIngestionService.ingest_readings(
+            [self.cumulative_step("1200", hour=11)]
+        )
+
+        metric = HealthMetric.objects.get(
+            patient=self.patient,
+            metric_type=MetricType.STEPS,
+        )
+        self.assertEqual(metric.value_main, Decimal("1200"))
+        self.assertEqual(self.cumulative_marker().count(), 1)
 
 
 class DeviceMetricIngestionTests(TestCase):
