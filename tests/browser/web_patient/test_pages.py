@@ -537,7 +537,12 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         ordinary_input = self.page.locator(
             f'textarea[name="question_{ordinary_text.id}"]'
         )
+        eqvas_hint_text = (
+            "请按您今天的整体健康状况评分：0分代表您能想象的最差健康状况，"
+            "100分代表最好。该分数用于记录您的自身感受，并帮助医生观察健康变化趋势。"
+        )
         expect(ordinary_input).to_be_visible()
+        expect(self.page.get_by_text(eqvas_hint_text, exact=True)).to_have_count(0)
         ordinary_input.fill("恢复情况良好")
         self.page.get_by_role("button", name="下一题").click()
 
@@ -545,6 +550,7 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
             f'input[name="question_{eqvas_text.id}"][inputmode="numeric"]'
         )
         expect(eqvas_input).to_be_visible()
+        expect(self.page.get_by_text(eqvas_hint_text, exact=True)).to_be_visible()
         eqvas_input.fill("1.5")
         expect(eqvas_input).to_have_value("")
 
