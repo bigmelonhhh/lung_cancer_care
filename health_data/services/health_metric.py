@@ -18,6 +18,7 @@ from django.db.models import Count
 from django.db.models.functions import TruncMonth
 from django.core.paginator import Paginator, Page
 
+from business_support.services.device_integrations.base import StepAggregationMode
 from health_data.models import (
     HealthMetric,
     MetricMeasurementContext,
@@ -57,6 +58,7 @@ class HealthMetricService:
         measured_at: datetime,
         value_main: Optional[Decimal] = None,
         value_sub: Optional[Decimal] = None,
+        step_aggregation: str | None = None,
     ) -> HealthMetric | None:
         """
         Save a provider-neutral metric reading produced by a device adapter.
@@ -66,6 +68,12 @@ class HealthMetricService:
         and alert generation.
         """
         if metric_type == MetricType.STEPS:
+            if step_aggregation == StepAggregationMode.INCREMENT:
+                return cls._add_device_steps(
+                    patient_id=patient_id,
+                    measured_at=measured_at,
+                    value_main=value_main,
+                )
             return cls._save_device_steps(
                 patient_id=patient_id,
                 measured_at=measured_at,
@@ -107,8 +115,8 @@ class HealthMetricService:
         measured_at: datetime,
         value_main: Optional[Decimal],
     ) -> HealthMetric | None:
-        if value_main is None:
-            logger.warning("步数数据不完整，跳过。patient_id=%s", patient_id)
+        if value_main is None or value_main < 0:
+            logger.warning("步数数据无效，跳过。patient_id=%s", patient_id)
             return None
 
         start_of_day, end_of_day = cls._resolve_local_day_window(measured_at)
@@ -141,6 +149,56 @@ class HealthMetricService:
             metric.value_main = value_main
             metric.measured_at = measured_at
             update_fields = ["value_main", "measured_at"]
+            if task_id is not None and metric.task_id != task_id:
+                metric.task_id = task_id
+                update_fields.append("task_id")
+            metric.save(update_fields=update_fields)
+            return metric
+
+        return cls._persist_metric(
+            patient_id=patient_id,
+            metric_type=MetricType.STEPS,
+            value_main=value_main,
+            measured_at=measured_at,
+            source=MetricSource.DEVICE,
+            task_id=task_id,
+        )
+
+    @classmethod
+    def _add_device_steps(
+        cls,
+        patient_id: int,
+        measured_at: datetime,
+        value_main: Optional[Decimal],
+    ) -> HealthMetric | None:
+        """Add one device interval to the patient's local-day step total."""
+        if value_main is None or value_main < 0:
+            logger.warning("步数数据无效，跳过。patient_id=%s", patient_id)
+            return None
+
+        start_of_day, end_of_day = cls._resolve_local_day_window(measured_at)
+        _, task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
+            patient_id=patient_id,
+            metric_type=MetricType.STEPS,
+            occurred_at=measured_at,
+        )
+        metric = (
+            HealthMetric.objects.select_for_update()
+            .filter(
+                patient_id=patient_id,
+                metric_type=MetricType.STEPS,
+                measured_at__gte=start_of_day,
+                measured_at__lt=end_of_day,
+            )
+            .order_by("-measured_at")
+            .first()
+        )
+        if metric:
+            metric.value_main = (metric.value_main or Decimal("0")) + value_main
+            update_fields = ["value_main"]
+            if measured_at > metric.measured_at:
+                metric.measured_at = measured_at
+                update_fields.append("measured_at")
             if task_id is not None and metric.task_id != task_id:
                 metric.task_id = task_id
                 update_fields.append("task_id")
