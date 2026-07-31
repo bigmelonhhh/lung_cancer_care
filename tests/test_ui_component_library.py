@@ -11,6 +11,114 @@ class DemoForm(forms.Form):
 
 
 class UiComponentLibraryTests(SimpleTestCase):
+    def test_health_record_general_metrics_use_medical_icon_component(self):
+        template_paths = (
+            "templates/web_patient/health_records.html",
+            "templates/web_doctor/mobile/health_records.html",
+        )
+
+        for relative_path in template_paths:
+            with self.subTest(template=relative_path):
+                template_source = (
+                    Path(settings.BASE_DIR) / relative_path
+                ).read_text(encoding="utf-8")
+                loop_start = template_source.index("{% for stat in health_stats %}")
+                title_start = template_source.index("{{ stat.title }}", loop_start)
+                general_metric_icon_markup = template_source[loop_start:title_start]
+
+                self.assertIn(
+                    '{% include "components/medical_icon.html" with type=stat.icon class="w-5 h-5" %}',
+                    general_metric_icon_markup,
+                )
+                self.assertNotIn("<svg", general_metric_icon_markup)
+                self.assertNotIn("<img", general_metric_icon_markup)
+
+    def test_medical_icon_component_supports_health_record_aliases(self):
+        medication_icon = render_to_string(
+            "components/medical_icon.html",
+            {"type": "medication", "class": "w-5 h-5"},
+        )
+        bp_hr_icon = render_to_string(
+            "components/medical_icon.html",
+            {"type": "bp_hr", "class": "w-5 h-5"},
+        )
+        default_icon = render_to_string(
+            "components/medical_icon.html",
+            {"type": "unknown", "class": "w-5 h-5"},
+        )
+
+        self.assertEqual(
+            medication_icon,
+            render_to_string(
+                "components/medical_icon.html",
+                {"type": "medical", "class": "w-5 h-5"},
+            ),
+        )
+        for alias in ("bp", "heart"):
+            with self.subTest(alias=alias):
+                self.assertEqual(
+                    bp_hr_icon,
+                    render_to_string(
+                        "components/medical_icon.html",
+                        {"type": alias, "class": "w-5 h-5"},
+                    ),
+                )
+        self.assertNotEqual(
+            default_icon,
+            render_to_string(
+                "components/medical_icon.html",
+                {"type": "weight", "class": "w-5 h-5"},
+            ),
+        )
+
+    def test_patient_home_daily_plan_uses_medical_icon_component(self):
+        patient_home_template = (
+            Path(settings.BASE_DIR) / "templates/web_patient/patient_home.html"
+        ).read_text(encoding="utf-8")
+        loop_start = patient_home_template.index("{% for plan in daily_plans %}")
+        action_start = patient_home_template.index('id="plan-action-', loop_start)
+        daily_plan_icon_markup = patient_home_template[loop_start:action_start]
+
+        self.assertIn(
+            '{% include "components/medical_icon.html" with type=plan.type class="w-5 h-5" %}',
+            daily_plan_icon_markup,
+        )
+        self.assertNotIn("<svg", daily_plan_icon_markup)
+        self.assertNotIn("<img", daily_plan_icon_markup)
+
+    def test_patient_management_plan_uses_medical_icon_component(self):
+        management_plan_template = (
+            Path(settings.BASE_DIR) / "templates/web_patient/management_plan.html"
+        ).read_text(encoding="utf-8")
+        loop_start = management_plan_template.index(
+            "{% for task in monitoring_plan %}"
+        )
+        title_start = management_plan_template.index("{{ task.title }}", loop_start)
+        monitoring_icon_markup = management_plan_template[loop_start:title_start]
+
+        self.assertIn(
+            '{% include "components/medical_icon.html" with type=task.icon class="w-5 h-5" %}',
+            monitoring_icon_markup,
+        )
+        self.assertNotIn("<svg", monitoring_icon_markup)
+        self.assertNotIn("<img", monitoring_icon_markup)
+
+    def test_patient_health_calendar_uses_medical_icon_component(self):
+        calendar_partial = (
+            Path(settings.BASE_DIR)
+            / "templates/web_patient/partials/_daily_plan_list.html"
+        ).read_text(encoding="utf-8")
+        loop_start = calendar_partial.index("{% for plan in daily_plans %}")
+        title_start = calendar_partial.index("{{ plan.title }}", loop_start)
+        task_icon_markup = calendar_partial[loop_start:title_start]
+
+        self.assertIn(
+            '{% include "components/medical_icon.html" with type=plan.type class="w-5 h-5" %}',
+            task_icon_markup,
+        )
+        self.assertNotIn("<svg", task_icon_markup)
+        self.assertNotIn("<img", task_icon_markup)
+
     def test_privacy_image_component_renders_static_source_with_defaults(self):
         html = render_to_string(
             "components/ui/privacy_image.html",

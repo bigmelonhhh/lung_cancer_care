@@ -138,6 +138,58 @@ class TaskCompletionServiceTest(TestCase):
             1,
         )
 
+    def test_new_general_monitoring_metrics_complete_their_daily_tasks(self):
+        metric_cases = (
+            (MetricType.BLOOD_GLUCOSE, "血糖监测", Decimal("6.2"), "fasting"),
+            (MetricType.BLOOD_KETONE, "血酮监测", Decimal("0.4"), None),
+            (MetricType.URIC_ACID, "尿酸监测", Decimal("380"), None),
+        )
+        tasks = []
+        for metric_type, name, _value, _context in metric_cases:
+            template, _ = MonitoringTemplate.objects.get_or_create(
+                code=metric_type,
+                defaults={
+                    "name": name,
+                    "metric_type": metric_type,
+                    "is_active": True,
+                },
+            )
+            plan = PlanItem.objects.create(
+                cycle=self.cycle,
+                category=choices.PlanItemCategory.MONITORING,
+                template_id=template.id,
+                item_name=name,
+                schedule_days=[1],
+                status=choices.PlanItemStatus.ACTIVE,
+            )
+            tasks.append(
+                DailyTask.objects.create(
+                    patient=self.patient,
+                    plan_item=plan,
+                    task_date=self.task_date,
+                    task_type=choices.PlanItemCategory.MONITORING,
+                    title=name,
+                    status=choices.TaskStatus.PENDING,
+                )
+            )
+
+        for metric_type, _name, value, context in metric_cases:
+            HealthMetricService.save_manual_metric(
+                patient_id=self.patient.id,
+                metric_type=metric_type,
+                measured_at=self.occurred_at,
+                value_main=value,
+                measurement_context=context,
+            )
+
+        self.assertEqual(
+            DailyTask.objects.filter(
+                id__in=[task.id for task in tasks],
+                status=choices.TaskStatus.COMPLETED,
+            ).count(),
+            3,
+        )
+
     def test_complete_daily_medication_tasks_allows_terminated_for_past_date(self):
         yesterday = self.task_date - timedelta(days=1)
         occurred_at = self.occurred_at - timedelta(days=1)

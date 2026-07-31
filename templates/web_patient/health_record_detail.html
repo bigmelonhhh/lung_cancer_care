@@ -3,7 +3,7 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block body %}
-<div class="h-screen min-h-screen bg-[#F5F5F5] font-sans flex flex-col" style="height: 100dvh;">
+<div class="h-screen min-h-screen bg-[#F3F4F6] font-sans flex flex-col" style="height: 100dvh;">
   <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
     <div class="pt-safe-top">
       <div class="flex items-center h-12 px-4 relative">
@@ -91,6 +91,16 @@
                   <span class="text-lg font-bold tracking-tight text-slate-900">
                     {{ record.data.0.value }} / {{ record.data.1.value }} mmHg
                   </span>
+                </div>
+                {% endif %}
+                {% elif record_type == 'glucose' %}
+                {% if item.key == 'glucose' %}
+                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-slate-100 p-2">
+                  <span class="min-w-[3em] text-xs font-medium text-slate-500">{{ item.label }}:</span>
+                  <span class="text-lg font-bold text-slate-900">{{ item.value }}</span>
+                  {% if record.is_manual %}
+                  <span class="text-xs font-medium text-slate-600">(测量场景：{{ record.data.1.value }})</span>
+                  {% endif %}
                 </div>
                 {% endif %}
                 {% elif record.data|length > 2 %}
@@ -219,12 +229,16 @@
     weight: "{% url 'web_patient:record_weight' %}",
     spo2: "{% url 'web_patient:record_spo2' %}",
     bp: "{% url 'web_patient:record_bp' %}",
-    bp_hr: "{% url 'web_patient:record_bp' %}"
+    bp_hr: "{% url 'web_patient:record_bp' %}",
+    glucose: "{% url 'web_patient:record_general_monitoring' 'glucose' %}",
+    ketone: "{% url 'web_patient:record_general_monitoring' 'ketone' %}",
+    uric_acid: "{% url 'web_patient:record_general_monitoring' 'uric_acid' %}"
   };
   const recordsData = [
     {% for record in records %}
     {
       id: "{{ record.id|escapejs }}",
+      measurement_context: "{{ record.measurement_context|default:''|escapejs }}",
       data: [
         {% for field in record.data %}
         { label: "{{ field.label|escapejs }}", value: "{{ field.value|escapejs }}", key: "{{ field.key|escapejs }}" },
@@ -275,6 +289,21 @@
         <div class="flex items-baseline  gap-3">
           <span class="text-xs font-medium text-slate-500">血压:</span>
           <span class="text-lg font-bold tracking-tight text-slate-900">${escapeHtml(ssy?.value || '--')} / ${escapeHtml(szy?.value || '--')} mmHg</span>
+        </div>
+      </div>`;
+    }
+
+    if (currentType === 'glucose') {
+      const glucose = record.data.find(item => item.key === 'glucose');
+      const context = record.data.find(item => item.key === 'measurement_context');
+      const measurementContextHtml = record.is_manual
+        ? `<span class="text-xs font-medium text-slate-600">(测量场景：${escapeHtml(context?.value || '未记录')})</span>`
+        : '';
+      return `<div class="rounded-xl bg-slate-100 p-2">
+        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span class="min-w-[3em] text-xs font-medium text-slate-500">${escapeHtml(glucose?.label || '血糖')}:</span>
+          <span class="text-lg font-bold text-slate-900">${escapeHtml(glucose?.value || '--')}</span>
+          ${measurementContextHtml}
         </div>
       </div>`;
     }
@@ -523,7 +552,8 @@
       div.innerHTML = buildRecordCardHtml(record);
       recordsData.push({
         id: record.id.toString(),
-        data: record.data
+        data: record.data,
+        measurement_context: record.measurement_context || ''
       });
       container.insertBefore(div, spinner);
     });
@@ -668,8 +698,15 @@
       }
 
       let inputHtml = '';
-      if (field.key === 'temperature' || field.key === 'ssy' || field.key === 'szy' || field.key === 'heart' || field.key === 'weight' || field.key === 'spo2') {
-        inputHtml = `<input type="number" step="0.1" name="${field.key}" value="${val}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
+      if (field.key === 'measurement_context') {
+        inputHtml = `<select name="measurement_context" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">
+          <option value="fasting" ${record.measurement_context === 'fasting' ? 'selected' : ''}>空腹</option>
+          <option value="postprandial_2h" ${record.measurement_context === 'postprandial_2h' ? 'selected' : ''}>餐后2小时</option>
+          <option value="random" ${record.measurement_context === 'random' ? 'selected' : ''}>随机</option>
+        </select>`;
+      } else if (field.key === 'temperature' || field.key === 'ssy' || field.key === 'szy' || field.key === 'heart' || field.key === 'weight' || field.key === 'spo2' || field.key === 'glucose' || field.key === 'ketone' || field.key === 'uric_acid') {
+        const step = field.key === 'uric_acid' ? '1' : '0.1';
+        inputHtml = `<input type="number" min="0" step="${step}" name="${field.key}" value="${val}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
       } else {
         inputHtml = `<input type="text" name="${field.key}" value="${field.value}" class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:border-blue-500">`;
       }
@@ -692,7 +729,7 @@
   function submitEdit() {
     const id = currentEditId;
     const container = document.getElementById('edit-fields');
-    const inputs = container.querySelectorAll('input');
+    const inputs = container.querySelectorAll('input, select');
 
     const formData = new FormData();
     formData.append('id', id);
@@ -706,7 +743,9 @@
         formData.append('value_main', input.value);
       } else if (input.name === 'szy') {
         formData.append('value_sub', input.value);
-      } else if (input.name === 'temperature' || input.name === 'weight' || input.name === 'spo2' || input.name === 'steps' || input.name === 'heart') {
+      } else if (input.name === 'measurement_context') {
+        formData.append('measurement_context', input.value);
+      } else if (input.name === 'temperature' || input.name === 'weight' || input.name === 'spo2' || input.name === 'steps' || input.name === 'heart' || input.name === 'glucose' || input.name === 'ketone' || input.name === 'uric_acid') {
         formData.append('value_main', input.value);
       }
     });

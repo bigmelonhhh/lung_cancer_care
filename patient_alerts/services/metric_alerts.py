@@ -9,9 +9,12 @@ from django.utils import timezone
 
 from health_data.models import HealthMetric, MetricType
 from health_data.utils import (
+    evaluate_blood_ketone_level,
     evaluate_blood_pressure_level,
+    evaluate_glucose_level,
     evaluate_spo2_level,
     evaluate_temperature_level,
+    evaluate_uric_acid_level,
 )
 from patient_alerts.models import AlertEventType, AlertLevel, PatientAlert
 from patient_alerts.services.alert_sources import PatientAlertSourceService
@@ -32,6 +35,9 @@ class MetricAlertService:
         MetricType.BODY_TEMPERATURE,
         MetricType.WEIGHT,
         MetricType.BLOOD_PRESSURE,
+        MetricType.BLOOD_GLUCOSE,
+        MetricType.BLOOD_KETONE,
+        MetricType.URIC_ACID,
     }
 
     @classmethod
@@ -50,15 +56,65 @@ class MetricAlertService:
 
         patient = cls._get_patient(metric)
 
+        alert = None
         if metric.metric_type == MetricType.BLOOD_OXYGEN:
-            return cls._handle_spo2(metric, patient)
-        if metric.metric_type == MetricType.BODY_TEMPERATURE:
-            return cls._handle_temperature(metric, patient)
-        if metric.metric_type == MetricType.WEIGHT:
-            return cls._handle_weight(metric, patient)
-        if metric.metric_type == MetricType.BLOOD_PRESSURE:
-            return cls._handle_blood_pressure(metric, patient)
-        return None
+            alert = cls._handle_spo2(metric, patient)
+        elif metric.metric_type == MetricType.BODY_TEMPERATURE:
+            alert = cls._handle_temperature(metric, patient)
+        elif metric.metric_type == MetricType.WEIGHT:
+            alert = cls._handle_weight(metric, patient)
+        elif metric.metric_type == MetricType.BLOOD_PRESSURE:
+            alert = cls._handle_blood_pressure(metric, patient)
+        elif metric.metric_type == MetricType.BLOOD_GLUCOSE:
+            alert = cls._handle_glucose(metric)
+        elif metric.metric_type == MetricType.BLOOD_KETONE:
+            alert = cls._handle_blood_ketone(metric)
+        elif metric.metric_type == MetricType.URIC_ACID:
+            alert = cls._handle_uric_acid(metric)
+
+        if alert is None:
+            cls.remove_metric(metric)
+        return alert
+
+    @classmethod
+    def _handle_glucose(cls, metric: HealthMetric) -> PatientAlert | None:
+        level = evaluate_glucose_level(
+            metric.value_main,
+            metric.measurement_context,
+        )
+        if level <= 0 or metric.value_main is None:
+            return None
+        context_label = metric.get_measurement_context_display() or "随机"
+        return cls._create_alert(
+            metric=metric,
+            level=level,
+            title="血糖异常",
+            content=f"{context_label}血糖 {float(metric.value_main):g} mmol/L",
+        )
+
+    @classmethod
+    def _handle_blood_ketone(cls, metric: HealthMetric) -> PatientAlert | None:
+        level = evaluate_blood_ketone_level(metric.value_main)
+        if level <= 0 or metric.value_main is None:
+            return None
+        return cls._create_alert(
+            metric=metric,
+            level=level,
+            title="血酮异常",
+            content=f"血酮 {float(metric.value_main):g} mmol/L",
+        )
+
+    @classmethod
+    def _handle_uric_acid(cls, metric: HealthMetric) -> PatientAlert | None:
+        level = evaluate_uric_acid_level(metric.value_main)
+        if level <= 0 or metric.value_main is None:
+            return None
+        return cls._create_alert(
+            metric=metric,
+            level=level,
+            title="尿酸异常",
+            content=f"尿酸 {float(metric.value_main):g} μmol/L",
+        )
 
     @staticmethod
     def _get_patient(metric: HealthMetric) -> PatientProfile:
@@ -380,6 +436,7 @@ class MetricAlertService:
             "value_main": str(metric.value_main) if metric.value_main is not None else None,
             "value_sub": str(metric.value_sub) if metric.value_sub is not None else None,
             "measured_at": metric.measured_at.isoformat(),
+            "measurement_context": metric.measurement_context,
         }
         alert = PatientAlertService.create_or_update_alert(
             patient_id=metric.patient_id,
@@ -402,4 +459,45 @@ class MetricAlertService:
             event_level=level,
             source_payload=payload,
         )
+        cls._refresh_alert_from_sources(alert)
         return alert
+
+    @classmethod
+    def remove_metric(cls, metric: HealthMetric) -> None:
+        """移除指标对应的异常来源并重算聚合预警。"""
+        source = (
+            PatientAlertSourceService.get_metric_source(metric.id)
+        )
+        if source is None:
+            return
+        alert = source.alert
+        source.delete()
+        cls._refresh_alert_from_sources(alert)
+
+    @staticmethod
+    def _refresh_alert_from_sources(alert: PatientAlert) -> None:
+        sources = alert.sources.all()
+        if not sources.exists():
+            if alert.is_active:
+                alert.is_active = False
+                alert.save(update_fields=["is_active"])
+            return
+
+        latest = sources.order_by("-occurred_at", "-id").first()
+        max_level = sources.aggregate(value=Max("event_level"))["value"]
+        alert.is_active = True
+        alert.event_level = max_level
+        alert.event_time = latest.occurred_at
+        alert.source_id = latest.source_id
+        alert.source_payload = latest.source_payload
+        alert.event_content = latest.value_display
+        alert.save(
+            update_fields=[
+                "is_active",
+                "event_level",
+                "event_time",
+                "source_id",
+                "source_payload",
+                "event_content",
+            ]
+        )

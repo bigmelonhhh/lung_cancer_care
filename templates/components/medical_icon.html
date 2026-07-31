@@ -1,0 +1,114 @@
+{# templates/components/medical_icon.html #}
+{% comment %}
+医疗图标公共组件
+用法：{% include "components/medical_icon.html" with type="glucose" class="w-5 h-5" %}
+支持类目：
+  - medication / medical (用药)
+  - temperature (体温)
+  - bp_hr / bp / heart (血压/心率)
+  - spo2 (血氧)
+  - weight (体重)
+  - glucose (血糖)
+  - ketone (血酮)
+  - uric_acid (尿酸)
+  - step (步数)
+  - questionnaire / followup (问卷量表/随访)
+  - checkup (复查/检查)
+{% endcomment %}
+
+{% if type == 'medication' or type == 'medical' %}
+  <!-- 用药 (Pill/Capsule) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m10.5 20.5 10-10a4.95 4.5 0 1 0-7-7l-10 10a4.95 4.5 0 1 0 7 7Z"/>
+    <path d="m8.5 8.5 7 7"/>
+  </svg>
+
+{% elif type == 'temperature' %}
+  <!-- 体温 (Thermometer) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/>
+    <path d="M12 9v4"/>
+  </svg>
+
+{% elif type == 'bp_hr' or type == 'bp' or type == 'heart' %}
+  <!-- 血压/心率 (Heart Pulse) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+    <path d="M3.2 12H7.5l2-3 3 6 2-3h4.3"/>
+  </svg>
+
+{% elif type == 'weight' %}
+  <!-- 体重 (Weight / Balance) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M3 6l3 1m0 0-3 9a5.002 5.002 0 0 0 6.001 0L6 7Zm0 0 6-2m6 2 3-1m-3 1-3 9a5.002 5.002 0 0 0 6.001 0L18 7Zm0 0-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/>
+  </svg>
+
+{% elif type == 'spo2' %}
+  <!-- 血氧 (SpO2 / Blood Oxygen Droplet Wave) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>
+    <path d="M9 13.5h6"/>
+    <path d="M10 16.5h4"/>
+  </svg>
+
+{% elif type == 'glucose' %}
+  <!-- 血糖 (Blood Glucose Droplet Plus) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>
+    <path d="M12 12v5"/>
+    <path d="M9.5 14.5h5"/>
+  </svg>
+
+{% elif type == 'ketone' %}
+  <!-- 血酮 (Ketone Droplet Molecule) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>
+    <circle cx="12" cy="14.5" r="2"/>
+  </svg>
+
+{% elif type == 'uric_acid' %}
+  <!-- 尿酸 (Uric Acid Droplet Crystal) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>
+    <path d="m10 12 4 4"/>
+    <path d="m14 12-4 4"/>
+  </svg>
+
+{% elif type == 'step' %}
+  <!-- 步数 (Steps / Footprints) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4 16c0 1.1.9 2 2 2h2c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2H6c-1.1 0-2 .9-2 2v8z"/>
+    <path d="M14 18c0 1.1.9 2 2 2h2c1.1 0 2-.9 2-2v-8c0-1.1-.9-2-2-2h-2c-1.1 0-2 .9-2 2v8z"/>
+    <circle cx="7" cy="4" r="1.5" fill="currentColor"/>
+    <circle cx="17" cy="6" r="1.5" fill="currentColor"/>
+  </svg>
+
+{% elif type == 'questionnaire' or type == 'followup' %}
+  <!-- 问卷量表/随访 (Questionnaire Clipboard) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1"/>
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+    <path d="m9 14 2 2 4-4"/>
+    <path d="M9 10h6"/>
+  </svg>
+
+{% elif type == 'checkup' %}
+  <!-- 复查 (Medical Report/Checkup) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <path d="M14 2v6h6"/>
+    <path d="M10 12h4"/>
+    <path d="M10 16h4"/>
+    <path d="M8 12h.01"/>
+    <path d="M8 16h.01"/>
+  </svg>
+
+{% else %}
+  <!-- 默认通用医疗图标 (Document/Task) -->
+  <svg class="{{ class|default:'w-5 h-5' }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <path d="M14 2v6h6"/>
+    <path d="M16 13H8"/>
+    <path d="M16 17H8"/>
+  </svg>
+{% endif %}

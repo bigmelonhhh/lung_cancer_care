@@ -130,6 +130,31 @@ class HealthRecordsServicePackageTests(TestCase):
         )
         self.assertEqual(temp_item["count"], 1)
 
+    def test_new_monitoring_cards_only_appear_when_selected_package_has_records(self):
+        now = timezone.now()
+        order = self._create_paid_order(
+            paid_at=now - timedelta(days=2),
+            name="监测服务包",
+            duration_days=30,
+        )
+        tz = timezone.get_current_timezone()
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            measured_at=timezone.make_aware(
+                datetime.combine(order.start_date, datetime.min.time()),
+                tz,
+            ),
+            value_main=Decimal("6.2"),
+        )
+
+        response = self.client.get(self.url)
+
+        types = [item["type"] for item in response.context["health_stats"]]
+        self.assertIn("glucose", types)
+        self.assertNotIn("ketone", types)
+        self.assertNotIn("uric_acid", types)
+
     def test_survey_cards_only_show_active_questionnaires_submitted_in_selected_package(self):
         now = timezone.now()
         older_order = self._create_paid_order(

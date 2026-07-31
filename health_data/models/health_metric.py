@@ -22,6 +22,12 @@ class MetricSource(models.TextChoices):
     MANUAL = "manual", "手动"
 
 
+class MetricMeasurementContext(models.TextChoices):
+    FASTING = "fasting", "空腹"
+    POSTPRANDIAL_2H = "postprandial_2h", "餐后2小时"
+    RANDOM = "random", "随机"
+
+
 class ActiveHealthMetricManager(models.Manager):
     """
     默认只返回 is_active=True 的健康指标记录。
@@ -54,6 +60,14 @@ class HealthMetric(models.Model):
     value_main = models.DecimalField("主数值", max_digits=10, decimal_places=2, null=True, blank=True)
     value_sub = models.DecimalField(
         "副数值", max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    measurement_context = models.CharField(
+        "测量场景",
+        max_length=32,
+        choices=MetricMeasurementContext.choices,
+        null=True,
+        blank=True,
+        help_text="血糖手工录入场景；其他指标及兼容旧数据可为空。",
     )
     questionnaire_submission = models.ForeignKey(
         "health_data.QuestionnaireSubmission",
@@ -145,7 +159,7 @@ class HealthMetric(models.Model):
             return f"{float(val_main):g} mmol/L"
 
         if m_type == MetricType.URIC_ACID:
-            return f"{float(val_main):g} umol/L"
+            return f"{float(val_main):g} μmol/L"
 
         # 2. 默认情况
         return str(val_main)

@@ -50,11 +50,15 @@ class HealthCalendarTaskTypeSkipMetricTests(TestCase):
         )
 
     @patch("web_patient.views.health_calendar.get_daily_plan_summary")
-    @patch("web_patient.views.health_calendar.HealthMetric.objects.filter")
+    @patch(
+        "web_patient.views.health_calendar.HealthMetricService.query_last_metric_for_date"
+    )
     def test_task_type_checkup_and_questionnaire_skip_metric_query(
-        self, mock_filter, mock_summary
+        self, mock_query_metric, mock_summary
     ):
-        mock_filter.side_effect = AssertionError("should not query metric for 2/3 only")
+        mock_query_metric.side_effect = AssertionError(
+            "should not query metric for 2/3 only"
+        )
         mock_summary.return_value = [
             {"title": "复查提醒", "status": 0, "task_type": 2},
             {"title": "问卷提醒", "status": 1, "task_type": 3, "questionnaire_ids": [6, 7, 5]},

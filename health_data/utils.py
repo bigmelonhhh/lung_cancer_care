@@ -189,3 +189,44 @@ def evaluate_temperature_level(
         level_from_value = 0
 
     return max(level_from_value, level_from_time)
+
+
+def evaluate_glucose_level(
+    value: Optional[Decimal | float | int],
+    measurement_context: str | None,
+) -> int:
+    """按测量场景评估血糖异常等级。"""
+    current = _to_decimal(value)
+    if current is None:
+        return 0
+    if current < Decimal("3.0"):
+        return 2
+    if current < Decimal("3.9"):
+        return 1
+    if measurement_context == "fasting":
+        return 1 if current >= Decimal("7.0") else 0
+    return 1 if current >= Decimal("11.1") else 0
+
+
+def evaluate_blood_ketone_level(
+    value: Optional[Decimal | float | int],
+) -> int:
+    """评估血酮异常等级。"""
+    current = _to_decimal(value)
+    if current is None or current < Decimal("0.6"):
+        return 0
+    if current <= Decimal("1.5"):
+        return 1
+    if current <= Decimal("3.0"):
+        return 2
+    return 3
+
+
+def evaluate_uric_acid_level(
+    value: Optional[Decimal | float | int],
+) -> int:
+    """评估尿酸异常等级。"""
+    current = _to_decimal(value)
+    if current is None:
+        return 0
+    return 1 if current > Decimal("420") else 0

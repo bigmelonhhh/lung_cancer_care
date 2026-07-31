@@ -1,12 +1,17 @@
-from datetime import datetime
-from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from health_data.models import HealthMetric, MetricType
+from core.models import DailyTask, MonitoringTemplate, PlanItem, TreatmentCycle
+from core.models import choices as core_choices
+from health_data.models import (
+    HealthMetric,
+    MetricMeasurementContext,
+    MetricType,
+)
 from users.models import CustomUser, PatientProfile
 
 
@@ -28,6 +33,18 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
             reverse("web_patient:record_bp"),
             reverse("web_patient:record_spo2"),
             reverse("web_patient:record_weight"),
+            reverse(
+                "web_patient:record_general_monitoring",
+                args=["glucose"],
+            ),
+            reverse(
+                "web_patient:record_general_monitoring",
+                args=["ketone"],
+            ),
+            reverse(
+                "web_patient:record_general_monitoring",
+                args=["uric_acid"],
+            ),
         ]
         for url in cases:
             resp = self.client.get(url, {"selected_date": selected_date})
@@ -52,6 +69,116 @@ class HealthCalendarSelectedDateRecordingTests(TestCase):
         ).last()
         self.assertIsNotNone(metric)
         self.assertEqual(timezone.localtime(metric.measured_at).date().isoformat(), selected_date)
+
+    def test_general_monitoring_posts_complete_selected_date_tasks_and_refresh_calendar(
+        self,
+    ):
+        selected_date = timezone.localdate() - timedelta(days=1)
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="健康日历补录疗程",
+            start_date=selected_date,
+            end_date=timezone.localdate(),
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        cases = (
+            (
+                "glucose",
+                MetricType.BLOOD_GLUCOSE,
+                "血糖监测",
+                "6.2",
+                MetricMeasurementContext.FASTING,
+            ),
+            ("ketone", MetricType.BLOOD_KETONE, "血酮监测", "0.5", None),
+            ("uric_acid", MetricType.URIC_ACID, "尿酸监测", "380", None),
+        )
+        task_ids = []
+        for _slug, metric_type, title, _value, _context in cases:
+            template, _ = MonitoringTemplate.objects.get_or_create(
+                code=metric_type,
+                defaults={
+                    "name": title,
+                    "metric_type": metric_type,
+                    "is_active": True,
+                },
+            )
+            plan_item = PlanItem.objects.create(
+                cycle=cycle,
+                category=core_choices.PlanItemCategory.MONITORING,
+                template_id=template.id,
+                item_name=title,
+                schedule_days=[1],
+                status=core_choices.PlanItemStatus.ACTIVE,
+            )
+            task_ids.append(
+                DailyTask.objects.create(
+                    patient=self.patient,
+                    plan_item=plan_item,
+                    task_date=selected_date,
+                    task_type=core_choices.PlanItemCategory.MONITORING,
+                    title=title,
+                    status=core_choices.TaskStatus.PENDING,
+                ).id
+            )
+
+        for slug, metric_type, _title, value, context in cases:
+            form_data = {
+                "value": value,
+                "selected_date": selected_date.isoformat(),
+                "record_time_touched": "0",
+            }
+            if context:
+                form_data["measurement_context"] = context
+            response = self.client.post(
+                (
+                    reverse(
+                        "web_patient:record_general_monitoring",
+                        args=[slug],
+                    )
+                    + "?source=calendar"
+                ),
+                form_data,
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.json()["status"], "success")
+            metric = HealthMetric.objects.get(
+                patient=self.patient,
+                metric_type=metric_type,
+            )
+            self.assertEqual(
+                timezone.localtime(metric.measured_at).date(),
+                selected_date,
+            )
+
+        self.assertEqual(
+            DailyTask.objects.filter(
+                id__in=task_ids,
+                status=core_choices.TaskStatus.COMPLETED,
+            ).count(),
+            3,
+        )
+
+        calendar_response = self.client.get(
+            reverse("web_patient:health_calendar"),
+            {"date": selected_date.isoformat()},
+        )
+        self.assertEqual(calendar_response.status_code, 200)
+        plans_by_type = {
+            plan["type"]: plan for plan in calendar_response.context["daily_plans"]
+        }
+        self.assertEqual(
+            plans_by_type["glucose"]["subtitle"],
+            "已记录：空腹 6.2 mmol/L",
+        )
+        self.assertEqual(
+            plans_by_type["ketone"]["subtitle"],
+            "已记录：0.5 mmol/L",
+        )
+        self.assertEqual(
+            plans_by_type["uric_acid"]["subtitle"],
+            "已记录：380 μmol/L",
+        )
 
     def test_record_bp_post_overrides_date_to_selected_date(self):
         selected_date = "2026-01-11"

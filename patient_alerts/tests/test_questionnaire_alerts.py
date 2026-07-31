@@ -2,9 +2,20 @@ from decimal import Decimal
 
 from django.test import TestCase
 
-from core.models import Questionnaire, QuestionnaireCode
-from health_data.models import QuestionnaireSubmission
-from patient_alerts.models import AlertEventType, AlertLevel, PatientAlertSource
+from core.models import (
+    Questionnaire,
+    QuestionnaireCode,
+    QuestionnaireOption,
+    QuestionnaireQuestion,
+)
+from core.models.choices import QuestionType
+from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
+from patient_alerts.models import (
+    AlertEventType,
+    AlertLevel,
+    PatientAlert,
+    PatientAlertSource,
+)
 from patient_alerts.services.questionnaire_alerts import QuestionnaireAlertService
 from users.models import PatientProfile
 
@@ -114,3 +125,108 @@ class QuestionnaireAlertServiceTests(TestCase):
         alert = QuestionnaireAlertService.process_submission(submission)
 
         self.assertIsNone(alert)
+
+    def test_eq5d5l_alert_uses_dimension_grade_and_auditable_payload(self):
+        questionnaire = self._get_questionnaire("Q_EQ5D5L", "EQ-5D-5L量表")
+        levels = (2, 1, 3, 2, 4)
+        dimension_names = ("行动能力", "自我照顾", "日常活动", "疼痛/不适", "焦虑/抑郁")
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("0.55"),
+        )
+        for seq, (name, level) in enumerate(zip(dimension_names, levels)):
+            question = QuestionnaireQuestion.objects.create(
+                questionnaire=questionnaire,
+                text=name,
+                q_type=QuestionType.SINGLE,
+                seq=seq,
+            )
+            option = QuestionnaireOption.objects.create(
+                question=question,
+                text=f"{level}级",
+                value=str(level),
+                score=0,
+                seq=level,
+            )
+            QuestionnaireAnswer.objects.create(
+                submission=submission,
+                question=question,
+                option=option,
+            )
+
+        alert = QuestionnaireAlertService.process_submission(submission)
+
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.event_level, AlertLevel.SEVERE)
+        self.assertEqual(alert.event_title, "EQ-5D-5L量表异常")
+        self.assertEqual(
+            alert.event_content,
+            "健康状态21324，健康效用指数0.55，最严重维度为焦虑/抑郁（4级）。",
+        )
+        source = PatientAlertSource.objects.get(alert=alert)
+        self.assertEqual(source.value_display, alert.event_content)
+        self.assertEqual(source.source_payload["health_state"], "21324")
+        self.assertEqual(source.source_payload["utility_index"], "0.55")
+        self.assertEqual(source.source_payload["max_dimension_level"], 4)
+        self.assertEqual(source.source_payload["max_dimensions"], ["焦虑/抑郁"])
+        self.assertEqual(
+            source.source_payload["grading_rule"],
+            "EQ5D5L_MAX_DIMENSION_V1",
+        )
+
+    def test_eqvas_alert_uses_absolute_grade_and_special_content(self):
+        questionnaire = self._get_questionnaire("Q_EQVAS", "EQ-VAS量表")
+        question = QuestionnaireQuestion.objects.create(
+            questionnaire=questionnaire,
+            text="EQ-VAS自评",
+            q_type=QuestionType.TEXT,
+            seq=0,
+        )
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("58.00"),
+        )
+        QuestionnaireAnswer.objects.create(
+            submission=submission,
+            question=question,
+            value_text="58",
+        )
+
+        alert = QuestionnaireAlertService.process_submission(submission)
+
+        self.assertIsNotNone(alert)
+        self.assertEqual(alert.event_level, AlertLevel.MODERATE)
+        self.assertEqual(alert.event_title, "EQ-VAS评分异常")
+        self.assertEqual(
+            alert.event_content,
+            "EQ-VAS评分58分，当前为3级中度。",
+        )
+        source = PatientAlertSource.objects.get(alert=alert)
+        self.assertEqual(source.value_display, alert.event_content)
+        self.assertEqual(source.source_payload["vas_score"], 58)
+        self.assertEqual(
+            source.source_payload["grading_rule"],
+            "EQVAS_ABSOLUTE_A_V1",
+        )
+
+    def test_eqvas_optional_blank_does_not_create_alert(self):
+        questionnaire = self._get_questionnaire("Q_EQVAS", "EQ-VAS量表")
+        QuestionnaireQuestion.objects.create(
+            questionnaire=questionnaire,
+            text="EQ-VAS自评",
+            q_type=QuestionType.TEXT,
+            is_required=False,
+            seq=0,
+        )
+        submission = QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("0.00"),
+        )
+
+        alert = QuestionnaireAlertService.process_submission(submission)
+
+        self.assertIsNone(alert)
+        self.assertFalse(PatientAlert.objects.exists())

@@ -1,7 +1,6 @@
 """问卷提交业务逻辑服务。"""
 
 import logging
-import re
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
@@ -23,6 +22,8 @@ from health_data.models import QuestionnaireAnswer, QuestionnaireSubmission
 from health_data.services.health_metric import HealthMetricService
 from health_data.services.questionnaire_scoring import (
     Eq5d5lChinaCalculator,
+    EqVasCalculator,
+    QuestionnaireGradeResult,
     is_eq5d5l_code,
     is_eqvas_code,
 )
@@ -41,7 +42,6 @@ class QuestionnaireSubmissionService:
     MAX_TEXT_ANSWER_LENGTH = 2000
     EQ5D5L_QUESTION_COUNT = 5
     EQVAS_QUESTION_COUNT = 1
-    EQVAS_VAS_PATTERN = re.compile(r"(?:0|[1-9]|[1-9][0-9]|100)", re.ASCII)
     SLEEP_T_SCORE_MAP = {
         8: Decimal("30.5"),
         9: Decimal("35.3"),
@@ -352,11 +352,7 @@ class QuestionnaireSubmissionService:
             raise ValidationError("EQ-VAS 问卷题目必须为问答/填空题。")
 
         vas_value = text_answers_by_question.get(question.id)
-        if vas_value is None:
-            return Decimal("0.00")
-        if cls.EQVAS_VAS_PATTERN.fullmatch(vas_value) is None:
-            raise ValidationError("EQ-VAS 自评分必须为 0 至 100 的整数。")
-        return Decimal(vas_value)
+        return EqVasCalculator.calculate(vas_value)
 
     @classmethod
     def get_submission_dates(
@@ -915,29 +911,37 @@ class QuestionnaireSubmissionService:
                 }
             )
 
+        score_label = "问卷评分"
+        health_state = None
+        if is_eq5d5l_code(submission.questionnaire.code):
+            score_label = "健康效用指数"
+            try:
+                health_state = cls._get_eq5d5l_grade_result(
+                    submission
+                ).details.get("health_state")
+            except ValidationError:
+                # 历史答卷可能不满足当前五维结构；详情仍应允许查看原始答案。
+                health_state = None
+        elif is_eqvas_code(submission.questionnaire.code):
+            score_label = "EQ-VAS评分"
+
         return {
             "submission_id": submission.id,
             "questionnaire_id": submission.questionnaire_id,
             "questionnaire_name": submission.questionnaire.name,
             "submitted_at": cls._to_localtime(submission.created_at),
+            "score_label": score_label,
+            "score_value": submission.total_score,
+            "health_state": health_state,
             "questions": question_items,
         }
 
     @classmethod
-    def get_submission_grade(cls, submission_id: int) -> int:
-        """
-        根据问卷类型计算当前提交的分级结果。
-
-        【功能说明】
-        - 根据问卷 code 选择不同的分级规则；
-        - 当前支持体能评估（Q_PHYSICAL）、呼吸评估（Q_BREATH）与咳嗽评估（Q_COUGH）。
-
-        【参数说明】
-        :param submission_id: 问卷提交 ID。
-
-        【返回值说明】
-        :return: int，分级数字（1-4）。
-        """
+    def get_submission_grade_result(
+        cls,
+        submission_id: int,
+    ) -> QuestionnaireGradeResult:
+        """返回问卷分级及预警所需的可审计上下文。"""
         if not submission_id:
             raise ValidationError("提交记录不能为空。")
 
@@ -948,6 +952,145 @@ class QuestionnaireSubmissionService:
         except QuestionnaireSubmission.DoesNotExist as exc:
             raise ValidationError("提交记录不存在。") from exc
 
+        questionnaire_code = submission.questionnaire.code
+        if is_eq5d5l_code(questionnaire_code):
+            return cls._get_eq5d5l_grade_result(submission)
+        if is_eqvas_code(questionnaire_code):
+            return cls._get_eqvas_grade_result(submission)
+
+        return QuestionnaireGradeResult(
+            grade_level=cls._get_legacy_submission_grade(submission),
+            rule_version="LEGACY_FIXED_CODE_V1",
+            score_label="总分",
+        )
+
+    @classmethod
+    def get_submission_grade(cls, submission_id: int) -> int | None:
+        """兼容返回问卷分级；不可分级的有效空值返回None。"""
+        return cls.get_submission_grade_result(submission_id).grade_level
+
+    @classmethod
+    def _get_eq5d5l_grade_result(
+        cls,
+        submission: QuestionnaireSubmission,
+    ) -> QuestionnaireGradeResult:
+        levels = cls._get_eq5d5l_submission_levels(submission)
+        grade_level = Eq5d5lChinaCalculator.grade(levels)
+        max_dimension_level = max(levels)
+        max_dimensions = [
+            name
+            for name, level in zip(
+                Eq5d5lChinaCalculator.DIMENSION_NAMES,
+                levels,
+            )
+            if level == max_dimension_level
+        ]
+        utility_index = submission.total_score
+        if utility_index is None:
+            utility_index = Eq5d5lChinaCalculator.calculate(levels)
+
+        return QuestionnaireGradeResult(
+            grade_level=grade_level,
+            rule_version="EQ5D5L_MAX_DIMENSION_V1",
+            score_label="健康效用指数",
+            details={
+                "health_state": "".join(str(level) for level in levels),
+                "utility_index": cls._format_decimal(utility_index),
+                "max_dimension_level": max_dimension_level,
+                "max_dimensions": max_dimensions,
+            },
+        )
+
+    @classmethod
+    def _get_eqvas_grade_result(
+        cls,
+        submission: QuestionnaireSubmission,
+    ) -> QuestionnaireGradeResult:
+        questions = list(
+            QuestionnaireQuestion.objects.filter(
+                questionnaire_id=submission.questionnaire_id,
+            )
+            .only("id", "q_type", "seq")
+            .order_by("seq", "id")
+        )
+        if len(questions) != cls.EQVAS_QUESTION_COUNT:
+            raise ValidationError("EQ-VAS 问卷必须恰好配置一道题。")
+        question = questions[0]
+        if question.q_type != QuestionType.TEXT:
+            raise ValidationError("EQ-VAS 问卷题目必须为问答/填空题。")
+
+        answers = list(
+            QuestionnaireAnswer.objects.filter(
+                submission=submission,
+                question_id=question.id,
+            )
+            .only("id", "option_id", "value_text")
+            .order_by("id")
+        )
+        if len(answers) > 1 or any(answer.option_id for answer in answers):
+            raise ValidationError("EQ-VAS 问卷答案结构错误。")
+
+        value_text = answers[0].value_text if answers else None
+        grade_level = EqVasCalculator.grade(value_text)
+        details: dict[str, Any] = {}
+        if grade_level is not None:
+            details["vas_score"] = int(value_text)
+
+        return QuestionnaireGradeResult(
+            grade_level=grade_level,
+            rule_version="EQVAS_ABSOLUTE_A_V1",
+            score_label="EQ-VAS评分",
+            details=details,
+        )
+
+    @classmethod
+    def _get_eq5d5l_submission_levels(
+        cls,
+        submission: QuestionnaireSubmission,
+    ) -> tuple[int, ...]:
+        questions = list(
+            QuestionnaireQuestion.objects.filter(
+                questionnaire_id=submission.questionnaire_id,
+            )
+            .only("id", "q_type", "seq")
+            .order_by("seq", "id")
+        )
+        if len(questions) != cls.EQ5D5L_QUESTION_COUNT:
+            raise ValidationError("EQ-5D-5L 问卷必须恰好配置五道题。")
+        if any(question.q_type != QuestionType.SINGLE for question in questions):
+            raise ValidationError("EQ-5D-5L 五个健康维度必须均为单选题。")
+
+        answers_by_question: dict[int, list[QuestionnaireAnswer]] = {}
+        answers = QuestionnaireAnswer.objects.filter(
+            submission=submission,
+        ).select_related("option")
+        for answer in answers:
+            answers_by_question.setdefault(answer.question_id, []).append(answer)
+
+        levels: list[int] = []
+        for question in questions:
+            question_answers = answers_by_question.get(question.id, [])
+            if (
+                len(question_answers) != 1
+                or not question_answers[0].option
+                or question_answers[0].option.question_id != question.id
+            ):
+                raise ValidationError(
+                    "EQ-5D-5L 五个健康维度必须各选择一个选项。"
+                )
+            option_value = question_answers[0].option.value
+            if option_value not in {"1", "2", "3", "4", "5"}:
+                raise ValidationError(
+                    "EQ-5D-5L 健康维度选项值必须为 1 至 5 的整数。"
+                )
+            levels.append(int(option_value))
+        return tuple(levels)
+
+    @classmethod
+    def _get_legacy_submission_grade(
+        cls,
+        submission: QuestionnaireSubmission,
+    ) -> int:
         questionnaire_code = submission.questionnaire.code
         total_score = submission.total_score
         if total_score is None:

@@ -4,7 +4,12 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
-from health_data.models import HealthMetric, MetricSource, MetricType
+from health_data.models import (
+    HealthMetric,
+    MetricMeasurementContext,
+    MetricSource,
+    MetricType,
+)
 from patient_alerts.models import AlertEventType, AlertLevel, AlertStatus, PatientAlert, PatientAlertSource
 from patient_alerts.services.metric_alerts import MetricAlertService
 from users import choices
@@ -284,3 +289,98 @@ class MetricAlertServiceTests(TestCase):
         alert_second = MetricAlertService.process_metric(metric_second)
         self.assertIsNotNone(alert_second)
         self.assertEqual(alert_second.event_level, AlertLevel.MODERATE)
+
+    def test_new_general_monitoring_metrics_create_expected_alerts(self):
+        cases = [
+            (
+                MetricType.BLOOD_GLUCOSE,
+                Decimal("7.0"),
+                MetricMeasurementContext.FASTING,
+                AlertLevel.MILD,
+                "血糖异常",
+            ),
+            (
+                MetricType.BLOOD_KETONE,
+                Decimal("1.51"),
+                None,
+                AlertLevel.MODERATE,
+                "血酮异常",
+            ),
+            (
+                MetricType.URIC_ACID,
+                Decimal("420.01"),
+                None,
+                AlertLevel.MILD,
+                "尿酸异常",
+            ),
+        ]
+
+        for metric_type, value, context, level, title in cases:
+            with self.subTest(metric_type=metric_type):
+                metric = HealthMetric.objects.create(
+                    patient=self.patient,
+                    metric_type=metric_type,
+                    value_main=value,
+                    measurement_context=context,
+                    measured_at=timezone.now(),
+                    source=MetricSource.MANUAL,
+                )
+                alert = MetricAlertService.process_metric(metric)
+
+                self.assertIsNotNone(alert)
+                self.assertEqual(alert.event_level, level)
+                self.assertEqual(alert.event_title, title)
+                source = PatientAlertSource.objects.get(source_key=f"metric:{metric.id}")
+                self.assertEqual(
+                    source.source_payload.get("measurement_context"),
+                    context,
+                )
+
+    def test_metric_edit_to_normal_removes_source_and_deactivates_alert(self):
+        metric = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            value_main=Decimal("8.0"),
+            measurement_context=MetricMeasurementContext.FASTING,
+            measured_at=timezone.now(),
+            source=MetricSource.MANUAL,
+        )
+        alert = MetricAlertService.process_metric(metric)
+        self.assertTrue(alert.is_active)
+
+        metric.value_main = Decimal("6.0")
+        metric.save(update_fields=["value_main"])
+        result = MetricAlertService.process_metric(metric)
+
+        self.assertIsNone(result)
+        self.assertFalse(PatientAlertSource.objects.filter(source_key=f"metric:{metric.id}").exists())
+        alert.refresh_from_db()
+        self.assertFalse(alert.is_active)
+
+    def test_remove_metric_recomputes_parent_from_remaining_sources(self):
+        older = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_KETONE,
+            value_main=Decimal("0.6"),
+            measured_at=timezone.now() - timedelta(hours=1),
+            source=MetricSource.MANUAL,
+        )
+        newer = HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_KETONE,
+            value_main=Decimal("3.1"),
+            measured_at=timezone.now(),
+            source=MetricSource.MANUAL,
+        )
+        alert = MetricAlertService.process_metric(older)
+        MetricAlertService.process_metric(newer)
+
+        MetricAlertService.remove_metric(newer)
+        alert.refresh_from_db()
+        self.assertTrue(alert.is_active)
+        self.assertEqual(alert.event_level, AlertLevel.MILD)
+        self.assertEqual(alert.event_time, older.measured_at)
+
+        MetricAlertService.remove_metric(older)
+        alert.refresh_from_db()
+        self.assertFalse(alert.is_active)

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from core.models import DailyTask, MonitoringTemplate, TreatmentCycle, choices
 from health_data.models import MetricType
+from health_data.services.monitoring_catalog import resolve_monitoring_definition
 from users.models import PatientProfile
 
 
@@ -27,6 +28,9 @@ MONITORING_ADHERENCE_TYPES = (
     MetricType.STEPS,
     MetricType.WEIGHT,
     MetricType.BODY_TEMPERATURE,
+    MetricType.BLOOD_GLUCOSE,
+    MetricType.BLOOD_KETONE,
+    MetricType.URIC_ACID,
 )
 
 _TASK_MAX_OVERDUE_DAYS = {
@@ -208,13 +212,30 @@ def get_daily_plan_summary(
             }
         )
 
-    # 监测：逐条返回（前端需逐项展示）。
-    for task in tasks_by_type.get(choices.PlanItemCategory.MONITORING, []):
+    # 监测：逐条返回（前端需逐项展示）。模板编码一次性批量解析。
+    monitoring_tasks = tasks_by_type.get(choices.PlanItemCategory.MONITORING, [])
+    template_ids = {
+        task.plan_item.template_id
+        for task in monitoring_tasks
+        if task.plan_item_id and task.plan_item.template_id
+    }
+    metric_type_by_template_id = dict(
+        MonitoringTemplate.objects.filter(id__in=template_ids).values_list("id", "code")
+    )
+    for task in monitoring_tasks:
+        metric_type = None
+        if task.plan_item_id:
+            metric_type = metric_type_by_template_id.get(task.plan_item.template_id)
+        definition = resolve_monitoring_definition(
+            metric_type=metric_type,
+            title=task.title,
+        )
         summary.append(
             {
                 "task_type": int(task.task_type),
                 "status": int(task.status),
                 "title": task.title,
+                "metric_type": definition.metric_type if definition else metric_type,
             }
         )
 
@@ -641,7 +662,7 @@ def get_adherence_metrics(
     【适用类型】
     - choices.PlanItemCategory: MEDICATION / CHECKUP / QUESTIONNAIRE / MONITORING。
     - health_data.models.MetricType: 血压/血氧/心率/体重/体温/步数等具体监测项。
-    - MONITORING_ADHERENCE_ALL: 综合监测依从率（六项监测汇总）。
+    - MONITORING_ADHERENCE_ALL: 综合监测依从率（九项监测汇总）。
 
     【参数说明】
     - patient_id: int，患者 ID。

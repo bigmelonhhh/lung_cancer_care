@@ -139,6 +139,54 @@ class TaskAdherenceServiceTest(TestCase):
         self.assertEqual(result["completed"], 0)
         self.assertIsNone(result["rate"])
 
+    def test_new_metrics_are_included_in_combined_monitoring_adherence(self):
+        for index, metric_type in enumerate(
+            (
+                MetricType.BLOOD_GLUCOSE,
+                MetricType.BLOOD_KETONE,
+                MetricType.URIC_ACID,
+            )
+        ):
+            template, _ = MonitoringTemplate.objects.get_or_create(
+                code=metric_type,
+                defaults={
+                    "name": f"监测{index}",
+                    "metric_type": metric_type,
+                    "is_active": True,
+                },
+            )
+            plan = PlanItem.objects.create(
+                cycle=self.cycle,
+                category=choices.PlanItemCategory.MONITORING,
+                template_id=template.id,
+                item_name=template.name,
+                schedule_days=[1],
+                status=choices.PlanItemStatus.ACTIVE,
+            )
+            DailyTask.objects.create(
+                patient=self.patient,
+                plan_item=plan,
+                task_date=self.start_date,
+                task_type=choices.PlanItemCategory.MONITORING,
+                title=template.name,
+                status=(
+                    choices.TaskStatus.COMPLETED
+                    if index < 2
+                    else choices.TaskStatus.PENDING
+                ),
+            )
+
+        result = task_service.get_adherence_metrics(
+            patient_id=self.patient.id,
+            adherence_type=task_service.MONITORING_ADHERENCE_ALL,
+            start_date=self.start_date,
+            end_date=self.start_date,
+        )
+
+        self.assertEqual(result["total"], 3)
+        self.assertEqual(result["completed"], 2)
+        self.assertAlmostEqual(result["rate"], 2 / 3)
+
     def test_get_adherence_metrics_batch(self):
         bp_template, _ = MonitoringTemplate.objects.get_or_create(
             code=MetricType.BLOOD_PRESSURE,

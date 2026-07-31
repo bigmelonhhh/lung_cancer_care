@@ -65,6 +65,7 @@ class MobileHealthRecordDetailChartTests(TestCase):
         minute=0,
         value_main="1",
         value_sub=None,
+        source="manual",
     ):
         return HealthMetric.objects.create(
             patient=self.patient,
@@ -72,7 +73,7 @@ class MobileHealthRecordDetailChartTests(TestCase):
             measured_at=self._aware_dt(year, month, day, hour, minute),
             value_main=Decimal(str(value_main)),
             value_sub=Decimal(str(value_sub)) if value_sub is not None else None,
-            source="manual",
+            source=source,
         )
 
     def _create_submission(self, questionnaire, score, submitted_at):
@@ -99,8 +100,65 @@ class MobileHealthRecordDetailChartTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["chart_available"])
         self.assertEqual(response.context["chart_mode"], "line")
+
+    def test_glucose_detail_is_read_only_and_uses_real_metric_label(self):
+        metric = self._create_metric(
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            year=2025,
+            month=3,
+            day=2,
+            hour=9,
+            value_main="6.2",
+        )
+        metric.measurement_context = "fasting"
+        metric.save(update_fields=["measurement_context"])
+
+        response = self.client.get(
+            self.url,
+            {
+                "type": "glucose",
+                "title": "血糖",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+                "source": "health_records",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["chart_available"])
+        self.assertFalse(response.context["show_operation_controls"])
+        self.assertEqual(response.context["records"][0]["data"][0]["label"], "血糖")
+        self.assertContains(response, "(测量场景：空腹)")
         self.assertContains(response, "切换图表")
         self.assertContains(response, 'id="record-chart-wrapper"')
+
+    def test_device_glucose_detail_hides_measurement_context(self):
+        metric = self._create_metric(
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            year=2025,
+            month=3,
+            day=2,
+            hour=9,
+            value_main="6.2",
+            source="device",
+        )
+        metric.measurement_context = "fasting"
+        metric.save(update_fields=["measurement_context"])
+
+        response = self.client.get(
+            self.url,
+            {
+                "type": "glucose",
+                "title": "血糖",
+                "patient_id": self.patient.id,
+                "month": "2025-03",
+                "source": "health_records",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "6.2 mmol/L")
+        self.assertNotContains(response, "(测量场景：空腹)")
 
     def test_medication_chart_payload_uses_all_completed_rule(self):
         DailyTask.objects.create(

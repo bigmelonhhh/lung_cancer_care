@@ -3,7 +3,7 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block body %}
-<div class="h-screen min-h-screen bg-[#F5F5F5] font-sans flex flex-col" style="height: 100dvh;">
+<div class="h-screen min-h-screen bg-[#F3F4F6] font-sans flex flex-col" style="height: 100dvh;">
   <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
     <div class="pt-safe-top">
       <div class="flex items-center h-12 px-4 relative">
@@ -82,6 +82,16 @@
                   <span class="text-lg font-bold tracking-tight text-slate-900">
                     {{ record.data.0.value }} / {{ record.data.1.value }} mmHg
                   </span>
+                </div>
+                {% endif %}
+                {% elif record_type == 'glucose' %}
+                {% if item.key == 'glucose' %}
+                <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <span class="min-w-[3em] text-xs font-medium text-slate-500">{{ item.label }}:</span>
+                  <span class="text-lg font-bold text-slate-900">{{ item.value }}</span>
+                  {% if record.is_manual %}
+                  <span class="text-xs font-medium text-slate-600">(测量场景：{{ record.data.1.value }})</span>
+                  {% endif %}
                 </div>
                 {% endif %}
                 {% elif record.data|length > 2 %}
@@ -214,6 +224,21 @@
         <div class="flex items-baseline  gap-3">
           <span class="text-xs font-medium text-slate-500">血压:</span>
           <span class="text-lg font-bold tracking-tight text-slate-900">${escapeHtml(ssy?.value || '--')} / ${escapeHtml(szy?.value || '--')} mmHg</span>
+        </div>
+      </div>`;
+    }
+
+    if (currentType === 'glucose') {
+      const glucose = record.data.find(item => item.key === 'glucose');
+      const context = record.data.find(item => item.key === 'measurement_context');
+      const measurementContextHtml = record.is_manual
+        ? `<span class="text-xs font-medium text-slate-600">(测量场景：${escapeHtml(context?.value || '未记录')})</span>`
+        : '';
+      return `<div class="rounded-xl bg-slate-100 px-3 py-2.5">
+        <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span class="min-w-[3em] text-xs font-medium text-slate-500">${escapeHtml(glucose?.label || '血糖')}:</span>
+          <span class="text-lg font-bold text-slate-900">${escapeHtml(glucose?.value || '--')}</span>
+          ${measurementContextHtml}
         </div>
       </div>`;
     }

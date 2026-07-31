@@ -477,6 +477,15 @@ class PatientService:
             profile.baseline_steps = data.get(
                 "baseline_steps", profile.baseline_steps
             )
+            profile.baseline_blood_glucose = data.get(
+                "baseline_blood_glucose", profile.baseline_blood_glucose
+            )
+            profile.baseline_blood_ketone = data.get(
+                "baseline_blood_ketone", profile.baseline_blood_ketone
+            )
+            profile.baseline_uric_acid = data.get(
+                "baseline_uric_acid", profile.baseline_uric_acid
+            )
             
             profile.save()
             return profile
@@ -524,6 +533,9 @@ class PatientService:
             profile.baseline_blood_pressure_dbp = data.get("baseline_blood_pressure_dbp")
             profile.baseline_heart_rate = data.get("baseline_heart_rate")
             profile.baseline_steps = data.get("baseline_steps")
+            profile.baseline_blood_glucose = data.get("baseline_blood_glucose")
+            profile.baseline_blood_ketone = data.get("baseline_blood_ketone")
+            profile.baseline_uric_acid = data.get("baseline_uric_acid")
 
             # 3. 销售归属处理 (仅当档案无销售时，继承 User 的潜客归属)
             if not profile.sales and getattr(user, "bound_sales", None):

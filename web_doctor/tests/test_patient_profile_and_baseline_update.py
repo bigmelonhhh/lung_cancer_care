@@ -5,6 +5,7 @@ from django.urls import reverse
 
 from users import choices
 from users.models import CustomUser, DoctorProfile, PatientProfile
+from web_doctor.forms import PatientHealthBaselineForm
 
 
 class DoctorPatientProfileAndBaselineUpdateTests(TestCase):
@@ -92,3 +93,39 @@ class DoctorPatientProfileAndBaselineUpdateTests(TestCase):
         content = response.content.decode("utf-8")
         self.assertIn("身高", content)
         self.assertIn("170.5 cm", content)
+
+    def test_health_metrics_update_saves_and_renders_new_baselines(self):
+        self.client.force_login(self.doctor_user)
+        response = self.client.post(
+            reverse("web_doctor:patient_health_metrics_update", args=[self.patient.id]),
+            {
+                "blood_glucose": "6.2",
+                "blood_ketone": "0.6",
+                "uric_acid": "420",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.patient.refresh_from_db()
+        self.assertEqual(self.patient.baseline_blood_glucose, Decimal("6.2"))
+        self.assertEqual(self.patient.baseline_blood_ketone, Decimal("0.6"))
+        self.assertEqual(self.patient.baseline_uric_acid, 420)
+        content = response.content.decode("utf-8")
+        self.assertIn("6.2 mmol/L", content)
+        self.assertIn("0.6 mmol/L", content)
+        self.assertIn("420 μmol/L", content)
+
+    def test_health_baseline_form_accepts_zero_and_rejects_negative_values(self):
+        zero_form = PatientHealthBaselineForm(
+            {
+                "blood_glucose": "0",
+                "blood_ketone": "0",
+                "uric_acid": "0",
+            }
+        )
+        self.assertTrue(zero_form.is_valid(), zero_form.errors)
+        self.assertEqual(zero_form.cleaned_data["baseline_blood_glucose"], Decimal("0"))
+
+        negative_form = PatientHealthBaselineForm({"blood_glucose": "-0.1"})
+        self.assertFalse(negative_form.is_valid())
+        self.assertIn("blood_glucose", negative_form.errors)

@@ -222,6 +222,25 @@ class MobileHealthRecordsStatsTests(TestCase):
         self.assertContains(response, "记录：1次")
         self.assertContains(response, "异常：")
 
+    def test_mobile_health_records_shows_new_general_monitoring_card(self):
+        measured_at = self._make_aware(self.order.start_date, hour=10)
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_KETONE,
+            source=MetricSource.MANUAL,
+            value_main=Decimal("0.50"),
+            measured_at=measured_at,
+        )
+
+        self.client.force_login(self.doctor_user)
+        response = self.client.get(
+            self.doctor_url,
+            {"patient_id": self.patient.id, "package_id": self.order.id},
+        )
+
+        types = [item["type"] for item in response.context["health_stats"]]
+        self.assertIn("ketone", types)
+
     def test_health_records_hide_unconfigured_items_and_omit_zero_abnormal(self):
         measured_at = self._make_aware(self.order.start_date, hour=9)
         HealthMetric.objects.create(

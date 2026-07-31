@@ -386,16 +386,16 @@
       const menuUrls = {{ menuUrl|safe }};
       let url = specificUrl || menuUrls[type];
       if (url) {
-           const dateDisplayEl = document.getElementById('current-date-display');
-           const selectedDate = dateDisplayEl ? dateDisplayEl.textContent.trim() : '';
-           const sep = url.includes('?') ? '&' : '?';
-           const dateParam = selectedDate ? `&selected_date=${encodeURIComponent(selectedDate)}` : '';
-           let finalUrl = url + sep + "patient_id={{ patient.id }}" + dateParam;
-           if (type === 'checkup') {
-               const sep2 = finalUrl.includes('?') ? '&' : '?';
-               finalUrl = finalUrl + sep2 + "source=calendar";
-           }
-           window.location.href = finalUrl;
+          const selectedDate = resolveActiveDateStr();
+          const finalUrl = new URL(url, window.location.origin);
+          finalUrl.searchParams.set('source', 'calendar');
+          finalUrl.searchParams.set('patient_id', "{{ patient.id }}");
+          if (selectedDate) {
+            finalUrl.searchParams.set('selected_date', selectedDate);
+          }
+          window.location.href = (
+            finalUrl.pathname + finalUrl.search + finalUrl.hash
+          );
       }
   }
 

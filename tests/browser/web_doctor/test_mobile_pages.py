@@ -18,6 +18,7 @@ from core.models import (
 )
 from health_data.models import (
     HealthMetric,
+    MetricMeasurementContext,
     MetricType,
     QuestionnaireAnswer,
     QuestionnaireSubmission,
@@ -235,6 +236,75 @@ class DoctorMobilePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator("#record-list-wrapper")).to_be_visible()
         expect(self.page.locator("#chart-switch-btn")).to_be_visible()
         expect(self.page.locator("#empty-state")).to_contain_text("暂无记录")
+
+    def test_mobile_general_monitoring_records_are_read_only(self):
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            measured_at=timezone.now(),
+            value_main=Decimal("6.2"),
+            measurement_context=MetricMeasurementContext.FASTING,
+            source="manual",
+        )
+        for metric_type, value in (
+            (MetricType.BLOOD_KETONE, Decimal("0.5")),
+            (MetricType.URIC_ACID, Decimal("380")),
+        ):
+            HealthMetric.objects.create(
+                patient=self.patient,
+                metric_type=metric_type,
+                measured_at=timezone.now(),
+                value_main=value,
+                source="manual",
+            )
+
+        records_url = (
+            self.url_for("web_doctor:mobile_health_records")
+            + "?patient_id=%s" % self.patient.id
+        )
+        self.page.goto(records_url, wait_until="domcontentloaded")
+        expect(self.page.locator("body")).to_contain_text("血糖")
+        expect(self.page.locator("body")).to_contain_text("血酮")
+        expect(self.page.locator("body")).to_contain_text("尿酸")
+
+        detail_url = (
+            self.url_for("web_doctor:mobile_health_record_detail")
+            + "?"
+            + urlencode(
+                {
+                    "type": "glucose",
+                    "title": "血糖",
+                    "patient_id": self.patient.id,
+                }
+            )
+        )
+        self.page.goto(detail_url, wait_until="domcontentloaded")
+        expect(self.page.locator("body")).to_contain_text("6.2 mmol/L")
+        expect(self.page.locator("body")).to_contain_text("空腹")
+        expect(self.page.locator("#add-record-btn")).to_have_count(0)
+        expect(self.page.locator('[data-action="edit"]')).to_have_count(0)
+        expect(self.page.locator('[data-action="delete"]')).to_have_count(0)
+
+        manual_html = self.page.evaluate(
+            """buildDataBlockHtml({
+                is_manual: true,
+                data: [
+                    {key: 'glucose', label: '血糖', value: '6.2 mmol/L'},
+                    {key: 'measurement_context', label: '测量场景', value: '空腹'}
+                ]
+            })"""
+        )
+        device_html = self.page.evaluate(
+            """buildDataBlockHtml({
+                is_manual: false,
+                data: [
+                    {key: 'glucose', label: '血糖', value: '6.2 mmol/L'},
+                    {key: 'measurement_context', label: '测量场景', value: '空腹'}
+                ]
+            })"""
+        )
+        self.assertIn("测量场景：空腹", manual_html)
+        self.assertNotIn("测量场景", device_html)
 
     def test_mobile_patient_records_page_loads_empty_state(self):
         self.page.goto(

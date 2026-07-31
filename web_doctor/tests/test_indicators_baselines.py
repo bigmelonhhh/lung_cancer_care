@@ -239,3 +239,45 @@ class IndicatorsBaselineTests(TestCase):
         self.assertNotIn("markLine", html_temp)
         self.assertIn("yAxis: 6000", html_steps)
 
+    def test_new_metric_baselines_render_only_when_configured_including_zero(self, *_mocks):
+        self.patient.baseline_blood_glucose = Decimal("6.2")
+        self.patient.baseline_blood_ketone = Decimal("0.0")
+        self.patient.baseline_uric_acid = None
+        self.patient.save(
+            update_fields=[
+                "baseline_blood_glucose",
+                "baseline_blood_ketone",
+                "baseline_uric_acid",
+            ]
+        )
+
+        context = self._context()
+        glucose = context["charts"]["glucose"]
+        ketone = context["charts"]["ketone"]
+        uric_acid = context["charts"]["uric_acid"]
+
+        self.assertEqual(glucose["series"][0]["baseline"], Decimal("6.2"))
+        self.assertEqual(ketone["series"][0]["baseline"], Decimal("0.0"))
+        self.assertIsNone(uric_acid["series"][0]["baseline"])
+        self.assertIn("yAxis: 6.2", self._render_chart(glucose))
+        self.assertIn("yAxis: 0.0", self._render_chart(ketone))
+        self.assertNotIn("markLine", self._render_chart(uric_acid))
+        self.assertGreaterEqual(glucose["y_max"], 6.2)
+
+    def test_new_metric_y_axes_expand_for_baselines_above_default_ranges(self, *_mocks):
+        self.patient.baseline_blood_glucose = Decimal("25.0")
+        self.patient.baseline_blood_ketone = Decimal("7.0")
+        self.patient.baseline_uric_acid = 900
+        self.patient.save(
+            update_fields=[
+                "baseline_blood_glucose",
+                "baseline_blood_ketone",
+                "baseline_uric_acid",
+            ]
+        )
+
+        charts = self._context()["charts"]
+
+        self.assertGreaterEqual(charts["glucose"]["y_max"], 25)
+        self.assertGreaterEqual(charts["ketone"]["y_max"], 7)
+        self.assertGreaterEqual(charts["uric_acid"]["y_max"], 900)
