@@ -588,19 +588,6 @@
             });
         });
 
-        // 点击遮罩层关闭
-        $('#todo-modal').click(function(e) {
-            if (e.target === this) {
-                closeModal();
-            }
-        });
-
-        // ESC键关闭
-        $(document).keydown(function(e) {
-            if (e.key === "Escape" && !$('#todo-modal').hasClass('hidden')) {
-                closeModal();
-            }
-        });
     }
 
     function waitForJQueryReady(maxRetries, intervalMs) {

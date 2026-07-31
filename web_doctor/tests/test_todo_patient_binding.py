@@ -202,6 +202,17 @@ class TodoPatientBindingTests(TestCase):
         self.assertContains(response, 'mt-2 flex flex-wrap items-start justify-between gap-x-3 gap-y-1', html=False)
         self.assertContains(response, 'flex flex-wrap items-center gap-x-2 gap-y-1', html=False)
 
+    def test_todo_modal_can_only_be_closed_by_action_buttons(self):
+        """Todo modal should not close from backdrop clicks or the Escape key."""
+        url = reverse('web_doctor:doctor_todo_list')
+        response = self.client.get(url, {'patient_id': self.patient1.id, 'status': 'pending'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="cancel-btn"', html=False)
+        self.assertContains(response, 'id="save-btn"', html=False)
+        self.assertNotContains(response, "$('#todo-modal').click(function(e)")
+        self.assertNotContains(response, 'e.key === "Escape"')
+
     def test_todo_list_page_htmx_table_only(self):
         """Test doctor_todo_list_page with HTMX request returns table only"""
         url = reverse('web_doctor:doctor_todo_list')
