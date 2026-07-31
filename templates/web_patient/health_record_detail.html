@@ -98,7 +98,9 @@
                 <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-xl bg-slate-100 p-2">
                   <span class="min-w-[3em] text-xs font-medium text-slate-500">{{ item.label }}:</span>
                   <span class="text-lg font-bold text-slate-900">{{ item.value }}</span>
+                  {% if record.is_manual %}
                   <span class="text-xs font-medium text-slate-600">(测量场景：{{ record.data.1.value }})</span>
+                  {% endif %}
                 </div>
                 {% endif %}
                 {% elif record.data|length > 2 %}
@@ -294,11 +296,14 @@
     if (currentType === 'glucose') {
       const glucose = record.data.find(item => item.key === 'glucose');
       const context = record.data.find(item => item.key === 'measurement_context');
+      const measurementContextHtml = record.is_manual
+        ? `<span class="text-xs font-medium text-slate-600">(测量场景：${escapeHtml(context?.value || '未记录')})</span>`
+        : '';
       return `<div class="rounded-xl bg-slate-100 p-2">
         <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span class="min-w-[3em] text-xs font-medium text-slate-500">${escapeHtml(glucose?.label || '血糖')}:</span>
           <span class="text-lg font-bold text-slate-900">${escapeHtml(glucose?.value || '--')}</span>
-          <span class="text-xs font-medium text-slate-600">(测量场景：${escapeHtml(context?.value || '未记录')})</span>
+          ${measurementContextHtml}
         </div>
       </div>`;
     }

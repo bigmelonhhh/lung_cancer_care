@@ -371,6 +371,27 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         expect(self.page.locator("body")).to_contain_text("空腹")
         expect(self.page.locator("body")).not_to_contain_text("评分")
 
+        manual_html = self.page.evaluate(
+            """buildDataBlockHtml({
+                is_manual: true,
+                data: [
+                    {key: 'glucose', label: '血糖', value: '6.2 mmol/L'},
+                    {key: 'measurement_context', label: '测量场景', value: '空腹'}
+                ]
+            })"""
+        )
+        device_html = self.page.evaluate(
+            """buildDataBlockHtml({
+                is_manual: false,
+                data: [
+                    {key: 'glucose', label: '血糖', value: '6.2 mmol/L'},
+                    {key: 'measurement_context', label: '测量场景', value: '空腹'}
+                ]
+            })"""
+        )
+        self.assertIn("测量场景：空腹", manual_html)
+        self.assertNotIn("测量场景", device_html)
+
     def test_record_checkup_upload_image_opens_clear_preview(self):
         self._create_checkup_task()
         self.page.set_viewport_size({"width": 320, "height": 700})

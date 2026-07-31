@@ -285,6 +285,27 @@ class DoctorMobilePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator('[data-action="edit"]')).to_have_count(0)
         expect(self.page.locator('[data-action="delete"]')).to_have_count(0)
 
+        manual_html = self.page.evaluate(
+            """buildDataBlockHtml({
+                is_manual: true,
+                data: [
+                    {key: 'glucose', label: '血糖', value: '6.2 mmol/L'},
+                    {key: 'measurement_context', label: '测量场景', value: '空腹'}
+                ]
+            })"""
+        )
+        device_html = self.page.evaluate(
+            """buildDataBlockHtml({
+                is_manual: false,
+                data: [
+                    {key: 'glucose', label: '血糖', value: '6.2 mmol/L'},
+                    {key: 'measurement_context', label: '测量场景', value: '空腹'}
+                ]
+            })"""
+        )
+        self.assertIn("测量场景：空腹", manual_html)
+        self.assertNotIn("测量场景", device_html)
+
     def test_mobile_patient_records_page_loads_empty_state(self):
         self.page.goto(
             self.url_for("web_doctor:mobile_patient_records", self.patient.id),

@@ -169,6 +169,29 @@ class GeneralMonitoringMetricViewTests(TestCase):
         self.assertContains(response, "(测量场景：空腹)")
         self.assertTrue(response.context["show_add_button"])
 
+    def test_device_glucose_detail_hides_measurement_context(self):
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_GLUCOSE,
+            value_main=Decimal("6.2"),
+            measurement_context=MetricMeasurementContext.FASTING,
+            measured_at=timezone.now(),
+            source=MetricSource.DEVICE,
+        )
+
+        response = self.client.get(
+            reverse("web_patient:health_record_detail"),
+            {
+                "type": "glucose",
+                "title": "血糖",
+                "source": "health_records",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "6.2 mmol/L")
+        self.assertNotContains(response, "(测量场景：空腹)")
+
     def test_update_metric_rejects_other_patient_and_updates_glucose_context(self):
         metric = HealthMetric.objects.create(
             patient=self.patient,
