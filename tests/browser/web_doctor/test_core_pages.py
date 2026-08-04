@@ -265,6 +265,51 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         self.assertEqual(history_slot.inner_html().strip(), "")
         self.assertNotIn("bg-indigo-50", history_row.get_attribute("class") or "")
 
+    def test_settings_plan_table_keeps_left_header_fixed_while_date_header_syncs(self):
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器固定列疗程",
+            start_date=today - timedelta(days=3),
+            end_date=today + timedelta(days=17),
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-settings").click()
+
+        plan_container = self.page.locator("#plan-table-slot #plan-table-container")
+        expect(plan_container).to_be_visible(timeout=10000)
+        expect(plan_container.locator("[data-plan-sticky-head-col]")).to_have_count(3)
+        expect(plan_container.locator("[data-plan-sticky-section]")).to_have_count(4)
+
+        left_header = plan_container.locator("[data-plan-sticky-head-col]").first
+        body_scroll = plan_container.locator("[data-plan-table-body-scroll]")
+        date_head = plan_container.locator("[data-plan-table-head]")
+
+        scroll_metrics = body_scroll.evaluate(
+            "node => ({ scrollWidth: node.scrollWidth, clientWidth: node.clientWidth })"
+        )
+        self.assertGreater(scroll_metrics["scrollWidth"], scroll_metrics["clientWidth"])
+
+        scroll_offset = min(scroll_metrics["scrollWidth"] - scroll_metrics["clientWidth"], 240)
+        before_box = left_header.bounding_box()
+        self.assertIsNotNone(before_box)
+
+        body_scroll.evaluate(
+            "(node, value) => { node.scrollLeft = value; node.dispatchEvent(new Event('scroll')); return node.scrollLeft; }",
+            scroll_offset,
+        )
+        self.page.wait_for_timeout(100)
+
+        after_box = left_header.bounding_box()
+        self.assertIsNotNone(after_box)
+        self.assertLess(abs(after_box["x"] - before_box["x"]), 3)
+        self.assertIn(
+            f"translateX(-{scroll_offset}px)",
+            date_head.evaluate("node => node.style.transform"),
+        )
+
     def test_change_password_page_loads_and_returns_to_workspace(self):
         self.page.goto(self.url_for("web_doctor:doctor_change_password"), wait_until="domcontentloaded")
 
