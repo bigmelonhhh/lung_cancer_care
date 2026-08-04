@@ -148,3 +148,45 @@ class PatientListServiceStatusGroupsTest(TestCase):
         self.assertIn(f"主任：{self.assignment_director.name}", content)
         self.assertIn(f"主任：{self.fallback_director.name}", content)
 
+    @patch("web_doctor.views.workspace.TodoListService")
+    @patch("web_doctor.views.workspace.ChatService")
+    def test_patient_list_markup_hooks(self, MockChatService, MockTodoListService):
+        """组件化后保留分组头/卡片钩子、选中态属性与徽章降灰样式。"""
+        mock_page = MagicMock()
+        mock_page.paginator.count = 0
+        MockTodoListService.get_todo_page.return_value = mock_page
+
+        chat_service = MockChatService.return_value
+        chat_service.get_or_create_patient_conversation.return_value = MagicMock()
+        chat_service.get_unread_count.return_value = 0
+
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("web_doctor:doctor_workspace_patient_list"))
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode("utf-8")
+
+        # 三个分组头与折叠体均渲染（分组头组件化后的关键钩子）
+        for section in ("managed", "stopped", "unpaid"):
+            self.assertIn(f'data-section-toggle="{section}"', content)
+            self.assertIn(f'data-section-body="{section}"', content)
+            self.assertIn(f'data-section-count="{section}"', content)
+
+        # 患者卡片钩子与分组归属
+        for section in ("managed", "stopped", "unpaid"):
+            self.assertIn(f'data-patient-entry data-section="{section}"', content)
+        self.assertIn("data-patient-item", content)
+
+        # 选中态由 data-selected 属性驱动，不再依赖 JS 维护 class 清单
+        self.assertIn("data-[selected=true]:bg-indigo-50/50", content)
+        self.assertIn("data-[selected=true]:!border-indigo-500", content)
+
+        # 计数为 0 的待办徽章降级为灰色弱化态
+        self.assertIn("bg-gray-50 border-gray-100", content)
+        # 未读咨询徽章常驻淡蓝底（0 值也保持可识别，>0 时加深）
+        self.assertIn("bg-sky-50 border-sky-100", content)
+
+        # 三个分组图标使用语义色区分：管理中绿 / 停止管理灰 / 未付费琥珀
+        self.assertIn("text-emerald-500 group-hover:text-emerald-600", content)
+        self.assertIn("text-amber-500 group-hover:text-amber-600", content)
+
