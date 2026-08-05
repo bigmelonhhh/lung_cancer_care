@@ -1,63 +1,132 @@
 {# 单个疗程的计划视图：用药 + 复查 + 随访 #}
 {% load plan_dates %}
 
-{% with cycle_days=cycle.cycle_days|default:21 total_columns=cycle.cycle_days|default:21|add:"3" plan_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px container_id=plan_table_container_id|default:"plan-table-container" tooltip_id=plan_day_tooltip_id|default:"plan-day-tooltip" %}
-<div id="{{ container_id }}" class="mt-3" data-plan-table-container>
+{% with cycle_days=cycle.cycle_days|default:21 plan_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px date_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px|add:"-384" container_id=plan_table_container_id|default:"plan-table-container" tooltip_id=plan_day_tooltip_id|default:"plan-day-tooltip" %}
+<div
+  id="{{ container_id }}"
+  class="relative mt-3"
+  data-plan-table-container
+  style="--plan-sticky-col-1-width: 12rem; --plan-sticky-col-2-width: 6rem; --plan-sticky-col-3-width: 6rem;"
+>
+  <style>
+    [data-plan-table-container] [data-plan-sticky-col] {
+      position: sticky;
+      background: #ffffff;
+      background-clip: padding-box;
+      transition: background-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    [data-plan-table-container] [data-plan-sticky-col="1"] {
+      left: 0;
+      z-index: 11;
+    }
+
+    [data-plan-table-container] [data-plan-sticky-col="2"] {
+      left: var(--plan-sticky-col-1-width);
+      z-index: 12;
+    }
+
+    [data-plan-table-container] [data-plan-sticky-col="3"] {
+      left: calc(var(--plan-sticky-col-1-width) + var(--plan-sticky-col-2-width));
+      z-index: 13;
+      box-shadow: 1px 0 0 rgba(148, 163, 184, 0.25), 10px 0 16px -14px rgba(15, 23, 42, 0.3);
+    }
+
+    [data-plan-table-container] [data-plan-sticky-head-col] {
+      background: rgb(248 250 252);
+      background-clip: padding-box;
+    }
+
+    [data-plan-table-container] [data-plan-sticky-section] {
+      position: sticky;
+      left: 0;
+      z-index: 15;
+      background-clip: padding-box;
+      box-shadow: 1px 0 0 rgba(148, 163, 184, 0.2), 10px 0 16px -14px rgba(15, 23, 42, 0.22);
+    }
+
+    [data-plan-table-container] tr.opacity-60 [data-plan-sticky-col] {
+      background: rgb(248 250 252);
+    }
+
+    [data-plan-table-container] tr[data-plan-sticky-row]:hover [data-plan-sticky-col] {
+      background: rgb(248 250 252);
+    }
+
+    [data-plan-table-container] tr[data-plan-sticky-row]:focus-within [data-plan-sticky-col] {
+      background: #ffffff;
+    }
+  </style>
+
   <div class="sticky top-0 z-20 bg-slate-50">
-    <div class="overflow-hidden" data-plan-table-head-clip>
-      <table
-        class="w-full text-left border-separate border-spacing-0 table-fixed"
-        style="min-width: {{ plan_table_min_width }}px;"
-        data-plan-table-head
-        aria-hidden="true"
-      >
-        <colgroup>
-          <col class="w-48">
-          <col class="w-24">
-          <col class="w-24">
-          {% for day_meta in plan_view.header_days %}
-          <col class="w-8">
-          {% endfor %}
-        </colgroup>
-        <thead>
-          <tr class="bg-slate-50">
-            <th colspan="3" class="px-0 py-2 border-b border-slate-200 bg-slate-50"></th>
-            {% for week_range in plan_view.header_week_ranges %}
-            <th
-              colspan="{{ week_range.span }}"
-              class="px-2 py-2 border-b border-slate-200 bg-slate-50 {% if not forloop.last %}border-r border-slate-300{% endif %}"
-              data-plan-range="{{ week_range.start_day }}-{{ week_range.end_day }}"
-              data-plan-range-start-day="{{ week_range.start_day }}"
-              data-plan-range-end-day="{{ week_range.end_day }}"
-              title="{{ week_range.title }}"
-            >
-              <div class="flex items-center gap-2 text-[11px] font-medium leading-none text-slate-500 tabular-nums">
-                <span class="whitespace-nowrap">{{ week_range.start_date_display }}</span>
-                <span class="h-px flex-1 bg-slate-300"></span>
-                <span class="whitespace-nowrap">{{ week_range.end_date_display }}</span>
-              </div>
-            </th>
-            {% endfor %}
-          </tr>
-          <tr class="bg-slate-50 text-sm uppercase text-slate-500 border-b border-slate-200">
-            <th class="px-4 py-3 font-semibold w-48">项目名称</th>
-            <th class="px-2 py-3 font-semibold w-24">剂量/配置</th>
-            <th class="px-2 py-3 font-semibold w-24">默认频次</th>
+    <div class="flex">
+      <div class="shrink-0 border-r border-slate-200" aria-hidden="true">
+        <table class="text-left border-separate border-spacing-0 table-fixed" style="width: 384px;">
+          <colgroup>
+            <col class="w-48">
+            <col class="w-24">
+            <col class="w-24">
+          </colgroup>
+          <thead>
+            <tr class="bg-slate-50">
+              <th colspan="3" class="px-0 py-2 border-b border-slate-200 bg-slate-50"></th>
+            </tr>
+            <tr class="bg-slate-50 text-sm uppercase text-slate-500 border-b border-slate-200">
+              <th class="px-4 py-3 font-semibold w-48 border-b border-slate-200" data-plan-sticky-head-col>项目名称</th>
+              <th class="px-2 py-3 font-semibold w-24 border-b border-slate-200" data-plan-sticky-head-col>剂量/配置</th>
+              <th class="px-2 py-3 font-semibold w-24 border-b border-slate-200" data-plan-sticky-head-col>默认频次</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <div class="min-w-0 flex-1 overflow-hidden" data-plan-table-head-clip>
+        <table
+          class="text-left border-separate border-spacing-0 table-fixed"
+          style="min-width: {{ date_table_min_width }}px;"
+          data-plan-table-head
+          aria-hidden="true"
+        >
+          <colgroup>
             {% for day_meta in plan_view.header_days %}
-            <th
-              class="cursor-pointer px-1 py-3 font-medium text-center w-8 {% if day_meta.day_index|add:'-1'|divisibleby:7 %}text-sm{% else %}text-[10px]{% endif %} {% if day_meta.should_highlight %}text-rose-500 font-semibold{% elif day_meta.day_index|add:'-1'|divisibleby:7 %}text-slate-800{% else %}text-slate-400{% endif %} {% if day_meta.day_index|divisibleby:7 %}border-r border-gray-200{% endif %}"
-              data-plan-day="{{ day_meta.day_index }}"
-              data-plan-label="D{{ day_meta.day_index }}"
-              data-plan-date="{{ day_meta.date_display_mmdd }}"
-              data-plan-day-note="{{ day_meta.highlight_reason }}"
-              title="{{ day_meta.date_display_full }}{% if day_meta.highlight_reason %} · {{ day_meta.highlight_reason }}{% endif %}"
-            >
-              D{{ day_meta.day_index }}
-            </th>
+            <col class="w-8">
             {% endfor %}
-          </tr>
-        </thead>
-      </table>
+          </colgroup>
+          <thead>
+            <tr class="bg-slate-50">
+              {% for week_range in plan_view.header_week_ranges %}
+              <th
+                colspan="{{ week_range.span }}"
+                class="px-2 py-2 border-b border-slate-200 bg-slate-50 {% if not forloop.last %}border-r border-slate-300{% endif %}"
+                data-plan-range="{{ week_range.start_day }}-{{ week_range.end_day }}"
+                data-plan-range-start-day="{{ week_range.start_day }}"
+                data-plan-range-end-day="{{ week_range.end_day }}"
+                title="{{ week_range.title }}"
+              >
+                <div class="flex items-center gap-2 text-[11px] font-medium leading-none text-slate-500 tabular-nums">
+                  <span class="whitespace-nowrap">{{ week_range.start_date_display }}</span>
+                  <span class="h-px flex-1 bg-slate-300"></span>
+                  <span class="whitespace-nowrap">{{ week_range.end_date_display }}</span>
+                </div>
+              </th>
+              {% endfor %}
+            </tr>
+            <tr class="bg-slate-50 text-sm uppercase text-slate-500 border-b border-slate-200">
+              {% for day_meta in plan_view.header_days %}
+              <th
+                class="cursor-pointer px-1 py-3 font-medium text-center w-8 border-b border-slate-200 {% if day_meta.day_index|add:'-1'|divisibleby:7 %}text-sm{% else %}text-[10px]{% endif %} {% if day_meta.should_highlight %}text-rose-500 font-semibold{% elif day_meta.day_index|add:'-1'|divisibleby:7 %}text-slate-800{% else %}text-slate-400{% endif %} {% if day_meta.day_index|divisibleby:7 %}border-r border-gray-200{% endif %}"
+                data-plan-day="{{ day_meta.day_index }}"
+                data-plan-label="D{{ day_meta.day_index }}"
+                data-plan-date="{{ day_meta.date_display_mmdd }}"
+                data-plan-day-note="{{ day_meta.highlight_reason }}"
+                title="{{ day_meta.date_display_full }}{% if day_meta.highlight_reason %} · {{ day_meta.highlight_reason }}{% endif %}"
+              >
+                D{{ day_meta.day_index }}
+              </th>
+              {% endfor %}
+            </tr>
+          </thead>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -76,9 +145,10 @@
       </colgroup>
     <tbody class="divide-y divide-slate-100 group-section">
       <tr class="bg-slate-50/30">
-        <td colspan="{{ total_columns }}" class="px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50/40">
+        <td colspan="3" class="px-4 py-2 text-sm font-bold text-indigo-700 bg-indigo-50/40" data-plan-sticky-section>
           📈 一般监测计划
         </td>
+        <td colspan="{{ cycle_days }}" class="px-0 py-2 bg-indigo-50/40"></td>
       </tr>
       {% with current_day=plan_view.current_day_index|default:1 %}
       {% for monitoring in plan_view.monitorings %}
@@ -88,7 +158,7 @@
     </tbody>
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
-        <td colspan="{{ total_columns }}" class="px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50/30">
+        <td colspan="3" class="px-4 py-2 text-sm font-bold text-indigo-600 bg-indigo-50/30" data-plan-sticky-section>
           <div class="flex items-center justify-between">
             <span>💊 用药计划</span>
             {% if cycle and patient %}
@@ -139,6 +209,7 @@
             {% endif %}
           </div>
         </td>
+        <td colspan="{{ cycle_days }}" class="px-0 py-2 bg-indigo-50/30"></td>
       </tr>
       {% with current_day=plan_view.current_day_index|default:1 %}
         {% for med in plan_view.medications %}
@@ -149,9 +220,10 @@
 
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
-        <td colspan="{{ total_columns }}" class="px-4 py-2 text-sm font-bold text-sky-600 bg-sky-50/30">
+        <td colspan="3" class="px-4 py-2 text-sm font-bold text-sky-600 bg-sky-50/30" data-plan-sticky-section>
           📄 复查计划
         </td>
+        <td colspan="{{ cycle_days }}" class="px-0 py-2 bg-sky-50/30"></td>
       </tr>
       {% with current_day=plan_view.current_day_index|default:1 %}
       {% for check in plan_view.checkups %}
@@ -161,9 +233,10 @@
     </tbody>
     <tbody class="divide-y divide-slate-100 border-t border-slate-200">
       <tr class="bg-slate-50/30">
-        <td colspan="{{ total_columns }}" class="px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50/30">
+        <td colspan="3" class="px-4 py-2 text-sm font-bold text-emerald-600 bg-emerald-50/30" data-plan-sticky-section>
           🧾 问卷计划
         </td>
+        <td colspan="{{ cycle_days }}" class="px-0 py-2 bg-emerald-50/30"></td>
       </tr>
       {% with current_day=plan_view.current_day_index|default:1 %}
       {% for questionnaire in plan_view.questionnaires %}
@@ -348,6 +421,11 @@
 
 <script>
   (function() {
+    /**
+     * Resolve the active plan table container from a swapped fragment or nested node.
+     * @param {Element | Document | null | undefined} root The potential root node returned by HTMX or DOM events.
+     * @returns {Element | null} The nearest plan table container element.
+     */
     function findPlanTableContainer(root) {
       if (!root) return document.querySelector('[data-plan-table-container]');
       if (root.matches && root.matches('[data-plan-table-container]')) return root;
@@ -362,6 +440,11 @@
       return document.querySelector('[data-plan-table-container]');
     }
 
+    /**
+     * Determine whether the current swap target should rebind the plan table scroll sync.
+     * @param {Element | null | undefined} target The HTMX swap target.
+     * @returns {boolean} Whether the target contains or is the plan table container.
+     */
     function shouldInitFromTarget(target) {
       if (!target) return false;
       if (target.id === 'plan-table-slot' || target.id === 'history-plan-table-slot') return true;
@@ -369,6 +452,11 @@
       return false;
     }
 
+    /**
+     * Bind horizontal scroll syncing between the date header strip and the body grid.
+     * @param {Element | Document | null | undefined} root The container root used to locate the current plan table.
+     * @returns {void}
+     */
     function initPlanTableStickyHead(root) {
       var container = findPlanTableContainer(root);
       if (!container || container.dataset.planStickyBound === '1') return;
@@ -377,6 +465,10 @@
       var headTable = container.querySelector('[data-plan-table-head]');
       if (!bodyScroll || !headTable) return;
 
+      /**
+       * Offset the date header so it stays aligned with the horizontally scrolled body.
+       * @returns {void}
+       */
       function syncHeader() {
         var offset = bodyScroll.scrollLeft || 0;
         headTable.style.transform = 'translateX(' + (-offset) + 'px)';

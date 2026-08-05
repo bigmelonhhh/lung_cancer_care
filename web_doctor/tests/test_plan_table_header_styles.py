@@ -1,3 +1,4 @@
+import re
 from datetime import date
 
 from django.contrib.auth import get_user_model
@@ -147,10 +148,44 @@ class PlanTableHeaderStylesTests(TestCase):
         self.assertIn('data-plan-range="22-28"', html)
         self.assertIn('title="2026-1-22 至 2026-1-28"', html)
         self.assertIn("D28", html)
-        self.assertIn('colspan="31"', html)
+        self.assertIn('colspan="28"', html)
         self.assertIn("min-width: 1280px;", html)
         self.assertEqual(html.count("border-r border-gray-200"), 4)
         self.assertIn('data-plan-label="D22"', html)
+
+    def test_plan_table_renders_split_header_and_sticky_column_markers(self):
+        plan_view = self._build_plan_view(
+            monitorings=[
+                {
+                    "lib_id": 1,
+                    "name": "监测A",
+                    "is_active": True,
+                    "schedule": [1, 7, 14, 21],
+                    "plan_item_id": 1,
+                }
+            ]
+        )
+
+        html = render_to_string(
+            "web_doctor/partials/settings/plan_table.html",
+            {
+                "patient": self.patient,
+                "cycle": self.cycle,
+                "is_cycle_editable": True,
+                "plan_view": plan_view,
+            },
+        )
+
+        self.assertIn('data-plan-table-head-clip', html)
+        self.assertIn('data-plan-table-body-scroll', html)
+        self.assertEqual(len(re.findall(r'<th[^>]*data-plan-sticky-head-col', html)), 3)
+        self.assertEqual(len(re.findall(r'<td[^>]*data-plan-sticky-section', html)), 4)
+        self.assertIn('data-plan-sticky-col="1"', html)
+        self.assertIn('data-plan-sticky-col="2"', html)
+        self.assertIn('data-plan-sticky-col="3"', html)
+        self.assertIn('style="width: 384px;"', html)
+        self.assertIn('--plan-sticky-col-1-width: 12rem;', html)
+        self.assertIn('colspan="21"', html)
 
     def test_28_day_cycle_adds_week_dividers_for_each_row(self):
         self.cycle.cycle_days = 28

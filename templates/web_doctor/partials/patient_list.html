@@ -1,64 +1,10 @@
 <li class="px-3 pt-3 pb-1">
-    <button
-        type="button"
-        class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-gray-900 transition-colors group"
-        data-section-toggle="managed"
-    >
-        <span class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7" r="4"></circle>
-                <path d="M20 8v6"></path>
-                <path d="M23 11h-6"></path>
-            </svg>
-            <span class="font-medium tracking-wide text-xs uppercase">管理中</span>
-            <span class="text-gray-400 text-xs font-normal">(<span data-section-count="managed">{{ managed_patients|length }}</span>)</span>
-        </span>
-        <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor" data-section-chevron="managed">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"></path>
-        </svg>
-    </button>
+    {% include "web_doctor/partials/patient_list_section_header.html" with section="managed" title="管理中" count=managed_patients|length icon_path_a="M20 8v6" icon_path_b="M23 11h-6" icon_color_class="text-emerald-500 group-hover:text-emerald-600" %}
     <div data-section-body="managed" class="overflow-hidden" style="height: auto;">
-        <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-150 bg-white shadow-sm">
+        <ul class="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-100 bg-white shadow-sm overflow-hidden">
             {% if managed_patients %}
                 {% for patient in managed_patients %}
-                    <li data-patient-entry data-section="managed">
-                        <button
-                            type="button"
-                            class="w-full text-left px-4 py-4 hover:bg-gray-200 focus:outline-none transition-all duration-200 rounded-md"
-                            data-patient-item
-                            data-patient-id="{{ patient.id }}"
-                            data-patient-name="{{ patient.name|default:'' }}"
-                            data-patient-phone="{{ patient.phone|default:'' }}"
-                            data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
-                            data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
-                        >
-                            <div class="flex items-center justify-between mb-1">
-                                <div class="flex items-center gap-2">
-                                    <p class="text-sm font-semibold text-gray-900">{{ patient.name }}</p>
-                                    <span class="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 font-medium">{{ patient.age|default:"-" }}岁</span>
-                                </div>
-                                <span class="text-xs text-gray-400">{{ patient.get_gender_display }}</span>
-                            </div>
-                            
-                            <div class="space-y-1 mb-3">
-                                <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    主任：{{ patient.director_doctor_name|default:"--" }}
-                                </p>
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100">
-                                    <span class="text-[10px] text-rose-600 font-medium">待办</span>
-                                    <span class="ml-1 text-xs font-bold text-rose-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
-                                </div>
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100">
-                                    <span class="text-[10px] text-indigo-600 font-medium">未读咨询</span>
-                                    <span class="ml-1 text-xs font-bold text-indigo-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
-                                </div>
-                            </div>
-                        </button>
-                    </li>
+                    {% include "web_doctor/partials/patient_list_card.html" with section="managed" %}
                 {% endfor %}
             {% else %}
                 <li class="px-4 py-8 text-sm text-gray-400 text-center italic">暂无管理中患者</li>
@@ -68,67 +14,12 @@
 </li>
 
 <li class="px-3 pt-3 pb-1">
-    <button
-        type="button"
-        class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-gray-900 transition-colors group"
-        data-section-toggle="stopped"
-    >
-        <span class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7" r="4"></circle>
-                <path d="M18 8l4 4"></path>
-                <path d="M22 8l-4 4"></path>
-            </svg>
-            <span class="font-medium tracking-wide text-xs uppercase">停止管理</span>
-            <span class="text-gray-400 text-xs font-normal">(<span data-section-count="stopped">{{ stopped_patients|length }}</span>)</span>
-        </span>
-        <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor" data-section-chevron="stopped">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"></path>
-        </svg>
-    </button>
+    {% include "web_doctor/partials/patient_list_section_header.html" with section="stopped" title="停止管理" count=stopped_patients|length icon_path_a="M18 8l4 4" icon_path_b="M22 8l-4 4" icon_color_class="text-gray-400 group-hover:text-gray-500" %}
     <div data-section-body="stopped" class="overflow-hidden" style="height: 0px;">
-        <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-100 bg-white shadow-sm">
+        <ul class="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-100 bg-white shadow-sm overflow-hidden">
             {% if stopped_patients %}
                 {% for patient in stopped_patients %}
-                    <li data-patient-entry data-section="stopped">
-                        <button
-                            type="button"
-                            class="w-full text-left px-4 py-4 hover:bg-gray-50 focus:outline-none transition-all duration-200 rounded-md opacity-75 hover:opacity-100"
-                            data-patient-item
-                            data-patient-id="{{ patient.id }}"
-                            data-patient-name="{{ patient.name|default:'' }}"
-                            data-patient-phone="{{ patient.phone|default:'' }}"
-                            data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
-                            data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
-                        >
-                            <div class="flex items-center justify-between mb-1">
-                                <div class="flex items-center gap-2">
-                                    <p class="text-sm font-semibold text-gray-700">{{ patient.name }}</p>
-                                    <span class="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 font-medium">{{ patient.age|default:"-" }}岁</span>
-                                </div>
-                                <span class="text-xs text-gray-400">{{ patient.get_gender_display }}</span>
-                            </div>
-                            
-                            <div class="space-y-1 mb-3">
-                                <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    主任：{{ patient.director_doctor_name|default:"--" }}
-                                </p>
-                              
-                            </div>
-
-                            <div class="flex items-center gap-2">
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100">
-                                    <span class="text-[10px] text-rose-600 font-medium">待办</span>
-                                    <span class="ml-1 text-xs font-bold text-rose-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
-                                </div>
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100">
-                                    <span class="text-[10px] text-indigo-600 font-medium">未读咨询</span>
-                                    <span class="ml-1 text-xs font-bold text-indigo-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
-                                </div>
-                            </div>
-                        </button>
-                    </li>
+                    {% include "web_doctor/partials/patient_list_card.html" with section="stopped" muted=True %}
                 {% endfor %}
             {% else %}
                 <li class="px-4 py-8 text-sm text-gray-400 text-center italic">暂无停止管理患者</li>
@@ -138,65 +29,12 @@
 </li>
 
 <li class="px-3 pt-3 pb-1">
-    <button
-        type="button"
-        class="w-full flex items-center justify-between text-left text-sm text-gray-600 hover:text-gray-900 transition-colors group"
-        data-section-toggle="unpaid"
-    >
-        <span class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                <circle cx="8.5" cy="7" r="4"></circle>
-                <path d="M12 12v6"></path>
-                <path d="M9 15h6"></path>
-            </svg>
-            <span class="font-medium tracking-wide text-xs uppercase">未付费</span>
-            <span class="text-gray-400 text-xs font-normal">(<span data-section-count="unpaid">{{ unpaid_patients|length }}</span>)</span>
-        </span>
-        <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-500 transition-transform duration-200" viewBox="0 0 20 20" fill="currentColor" data-section-chevron="unpaid">
-            <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"></path>
-        </svg>
-    </button>
+    {% include "web_doctor/partials/patient_list_section_header.html" with section="unpaid" title="未付费" count=unpaid_patients|length icon_path_a="M12 12v6" icon_path_b="M9 15h6" icon_color_class="text-amber-500 group-hover:text-amber-600" %}
     <div data-section-body="unpaid" class="overflow-hidden" style="height: 0px;">
-        <ul class="mt-2 divide-y divide-gray-50 rounded-lg border border-gray-100 bg-white shadow-sm">
+        <ul class="mt-2 divide-y divide-gray-100 rounded-lg border border-gray-100 bg-white shadow-sm overflow-hidden">
             {% if unpaid_patients %}
                 {% for patient in unpaid_patients %}
-                    <li data-patient-entry data-section="unpaid">
-                        <button
-                            type="button"
-                            class="w-full text-left px-4 py-4 hover:bg-gray-50 focus:outline-none transition-all duration-200 rounded-md opacity-75 hover:opacity-100"
-                            data-patient-item
-                            data-patient-id="{{ patient.id }}"
-                            data-patient-name="{{ patient.name|default:'' }}"
-                            data-patient-phone="{{ patient.phone|default:'' }}"
-                            data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
-                            data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
-                        >
-                            <div class="flex items-center justify-between mb-1">
-                                <div class="flex items-center gap-2">
-                                    <p class="text-sm font-semibold text-gray-700">{{ patient.name }}</p>
-                                    <span class="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 font-medium">{{ patient.age|default:"-" }}岁</span>
-                                </div>
-                                <span class="text-xs text-gray-400">{{ patient.get_gender_display }}</span>
-                            </div>
-                            
-                            <div class="space-y-1 mb-3">
-                                <p class="text-xs text-gray-500 flex items-center gap-1">
-                                    主任：{{ patient.director_doctor_name|default:"--" }}
-                                </p>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-rose-50 border border-rose-100">
-                                    <span class="text-[10px] text-rose-600 font-medium">待办</span>
-                                    <span class="ml-1 text-xs font-bold text-rose-600">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
-                                </div>
-                                <div class="flex items-center px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-100">
-                                    <span class="text-[10px] text-indigo-600 font-medium">未读咨询</span>
-                                    <span class="ml-1 text-xs font-bold text-indigo-600">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
-                                </div>
-                            </div>
-                        </button>
-                    </li>
+                    {% include "web_doctor/partials/patient_list_card.html" with section="unpaid" muted=True %}
                 {% endfor %}
             {% else %}
                 <li class="px-4 py-8 text-sm text-gray-400 text-center italic">暂无未付费患者</li>
@@ -350,17 +188,9 @@
     input.value = getFilterTerm();
   };
 
-  const clearSelectedHighlightClasses = function () {
-    document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
-      item.classList.remove(
-        "bg-gray-50",
-        "ring-1",
-        "ring-inset",
-        "ring-gray-200",
-        "bg-indigo-50",
-        "ring-indigo-200",
-        "text-indigo-600"
-      );
+  const clearSelectedHighlight = function () {
+    document.querySelectorAll("button[data-patient-item][data-selected]").forEach(function (item) {
+      item.removeAttribute("data-selected");
     });
   };
 
@@ -368,22 +198,22 @@
     try {
       sessionStorage.removeItem(SELECTED_KEY);
     } catch (e) {}
-    clearSelectedHighlightClasses();
+    clearSelectedHighlight();
   };
 
   const applySelectedHighlight = function () {
     const selectedId = sessionStorage.getItem(SELECTED_KEY);
     if (!selectedId) {
-      clearSelectedHighlightClasses();
+      clearSelectedHighlight();
       return;
     }
     const btn = document.querySelector('button[data-patient-item][data-patient-id="' + selectedId + '"]');
     if (!btn) {
-      clearSelectedHighlightClasses();
+      clearSelectedHighlight();
       return;
     }
-    clearSelectedHighlightClasses();
-    btn.classList.add("bg-indigo-50", "ring-1", "ring-inset", "ring-indigo-200", "text-indigo-600");
+    clearSelectedHighlight();
+    btn.setAttribute("data-selected", "true");
   };
 
   const applyAllUIState = function (animate) {
@@ -732,18 +562,8 @@
       } catch (e) {}
     }
 
-    document.querySelectorAll("button[data-patient-item]").forEach(function (item) {
-      item.classList.remove(
-        "bg-gray-50",
-        "ring-1",
-        "ring-inset",
-        "ring-gray-200",
-        "bg-indigo-50",
-        "ring-indigo-200",
-        "text-indigo-600"
-      );
-    });
-    btn.classList.add("bg-indigo-50", "ring-1", "ring-inset", "ring-indigo-200", "text-indigo-600");
+    clearSelectedHighlight();
+    btn.setAttribute("data-selected", "true");
 
     if (!patientId || !homeUrl) {
       showToast("患者主页加载失败，请稍后重试");

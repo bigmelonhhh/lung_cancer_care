@@ -1,0 +1,40 @@
+{# 患者列表卡片（管理中 / 停止管理 / 未付费 共用） #}
+{# 用法：{% include "web_doctor/partials/patient_list_card.html" with patient=patient section="managed" %}，muted=True 表示停止管理/未付费的弱化样式 #}
+<li data-patient-entry data-section="{{ section }}">
+    <button
+        type="button"
+        class="w-full text-left pl-3 pr-4 py-3.5 border-l-4 border-transparent hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 data-[selected=true]:bg-indigo-50/50 data-[selected=true]:!border-indigo-500 data-[selected=true]:relative data-[selected=true]:z-10 transition-all duration-200 {% if muted %}opacity-75 hover:opacity-100{% endif %}"
+        data-patient-item
+        data-patient-id="{{ patient.id }}"
+        data-patient-name="{{ patient.name|default:'' }}"
+        data-patient-phone="{{ patient.phone|default:'' }}"
+        data-home-url="{% url 'web_doctor:patient_workspace_section' patient.id 'home' %}"
+        data-todo-url="{% url 'web_doctor:patient_todo_sidebar' patient.id %}"
+    >
+        <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center gap-2">
+                <p class="text-sm font-semibold {% if muted %}text-gray-700{% else %}text-gray-900{% endif %}">{{ patient.name }}</p>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 font-medium">{{ patient.age|default:"-" }}岁</span>
+            </div>
+            <span class="text-xs text-gray-400">{{ patient.get_gender_display }}</span>
+        </div>
+
+        <div class="space-y-1 mb-3">
+            <p class="text-xs text-gray-500 flex items-center gap-1">
+                主任：{{ patient.director_doctor_name|default:"--" }}
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <div class="flex items-center px-2 py-0.5 rounded-full border {% if patient.todo_count > 0 %}bg-rose-50 border-rose-100{% else %}bg-gray-50 border-gray-100{% endif %}">
+                <span class="text-[10px] font-medium {% if patient.todo_count > 0 %}text-rose-600{% else %}text-gray-400{% endif %}">待办</span>
+                <span class="ml-1 text-xs font-bold {% if patient.todo_count > 0 %}text-rose-600{% else %}text-gray-400{% endif %}">({% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count|default:0 }}{% endif %})</span>
+            </div>
+            {# 未读咨询保持常驻淡蓝底（即使为 0），确保运营能随时识别该维度；>0 时加深提醒 #}
+            <div class="flex items-center px-2 py-0.5 rounded-full border {% if patient.consult_count > 0 %}bg-sky-100 border-sky-200{% else %}bg-sky-50 border-sky-100{% endif %}">
+                <span class="text-[10px] font-medium {% if patient.consult_count > 0 %}text-sky-700{% else %}text-sky-600{% endif %}">未读咨询</span>
+                <span class="ml-1 text-xs font-bold {% if patient.consult_count > 0 %}text-sky-700{% else %}text-sky-600{% endif %}">({% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count|default:0 }}{% endif %})</span>
+            </div>
+        </div>
+    </button>
+</li>
