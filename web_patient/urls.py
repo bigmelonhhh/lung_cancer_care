@@ -14,6 +14,11 @@ urlpatterns = [
     path("plan/", views.management_plan, name="management_plan"),
     path("medication/", views.my_medication, name="my_medication"),
     path("health/records/", views.health_records, name="health_records"),
+    path(
+        "health/records/tab-content/",
+        views.health_records_tab_content,
+        name="health_records_tab_content",
+    ),
     path("health/record/detail/", views.health_record_detail, name="health_record_detail"),
     path(
         "health/questionnaire/submission/<int:submission_id>/",
@@ -21,6 +26,7 @@ urlpatterns = [
         name="questionnaire_submission_detail",
     ),
     path("health/review/record/detail/", views.review_record_detail, name="review_record_detail"),
+    path("health/review/metric/detail/", views.review_metric_detail, name="review_metric_detail"),
     path("record/temperature/", views.record_temperature, name="record_temperature"),
     path(
         "record/monitoring/<slug:slug>/",
@@ -80,6 +86,11 @@ urlpatterns = [
         "api/health/review/record/images/",
         views.review_record_detail_data,
         name="review_record_detail_data",
+    ),
+    path(
+        "api/health/review/metric/detail/",
+        views.review_metric_detail_data,
+        name="review_metric_detail_data",
     ),
     path("api/medication/submit/", views.submit_medication, name="submit_medication"),
     # Chat API

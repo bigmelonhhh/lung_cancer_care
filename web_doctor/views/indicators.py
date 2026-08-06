@@ -2,25 +2,30 @@ import logging
 import json
 from datetime import date, timedelta, datetime
 from decimal import Decimal, ROUND_CEILING, InvalidOperation
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from django.core.cache import cache
 from core.models import (
-    CheckupFieldMapping,
-    CheckupLibrary,
     DailyTask,
     TreatmentCycle,
     choices,
     QuestionnaireCode,
-    StandardFieldValueType,
 )
 from core.service.treatment_cycle import get_treatment_cycles as _get_treatment_cycles
 from core.service.tasks import get_adherence_metrics_batch
 from health_data.services.health_metric import HealthMetricService
 from health_data.models.health_metric import MetricType
-from health_data.models import CheckupResultValue, QuestionnaireSubmission
+from health_data.models import QuestionnaireSubmission
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
 from health_data.services.questionnaire_display import QuestionnaireDisplayService
+from health_data.services.review_indicator_service import (
+    FOLLOWUP_REVIEW_PREFERENCES_KEY as _FOLLOWUP_REVIEW_PREFERENCES_KEY,
+    INDICATOR_PREFERENCES_VERSION as _INDICATOR_PREFERENCES_VERSION,
+    build_followup_review_catalog,
+    get_saved_followup_review_mapping_ids,
+    normalize_followup_review_mapping_ids,
+    query_followup_review_series as _query_followup_review_series,
+)
 from users.models import PatientProfile
 
 logger = logging.getLogger(__name__)
@@ -31,8 +36,6 @@ _CYCLE_STATE_RANK = {
     "completed": 2,
     "terminated": 3,
 }
-_INDICATOR_PREFERENCES_VERSION = 1
-_FOLLOWUP_REVIEW_PREFERENCES_KEY = "followup_review"
 
 
 def _format_adherence_percent(rate) -> tuple[int | None, str]:
@@ -76,110 +79,6 @@ def get_treatment_cycles(patient: PatientProfile, page: int = 1, page_size: int 
     return cycles_page
 
 
-def build_followup_review_catalog() -> tuple[list[dict], dict[int, dict], list[int]]:
-    review_mapping_qs = (
-        CheckupFieldMapping.objects.filter(
-            is_active=True,
-            standard_field__is_active=True,
-        )
-        .select_related("standard_field")
-        .order_by("sort_order", "id")
-    )
-    checkup_items = list(
-        CheckupLibrary.objects.filter(is_active=True)
-        .prefetch_related(
-            Prefetch(
-                "standard_field_mappings",
-                queryset=review_mapping_qs,
-                to_attr="active_standard_field_mappings",
-            )
-        )
-        .order_by("sort_order", "name", "id")
-    )
-
-    review_catalog = []
-    mapping_meta: dict[int, dict] = {}
-    all_mapping_ids = []
-    for checkup in checkup_items:
-        fields = []
-        for mapping in getattr(checkup, "active_standard_field_mappings", []):
-            standard_field = mapping.standard_field
-            selectable = standard_field.value_type == StandardFieldValueType.DECIMAL
-            field_name = standard_field.chinese_name or standard_field.english_abbr or standard_field.local_code or ""
-            field_abbr = standard_field.english_abbr or ""
-            field_display_name = f"{field_name}({field_abbr})" if field_abbr else field_name
-            field_item = {
-                "mapping_id": mapping.id,
-                "field_id": standard_field.id,
-                "field_code": standard_field.local_code or "",
-                "field_name": field_name,
-                "field_display_name": field_display_name,
-                "abbr": field_abbr,
-                "unit": standard_field.default_unit or "",
-                "value_type": standard_field.value_type,
-                "selectable": selectable,
-            }
-            fields.append(field_item)
-            mapping_meta[mapping.id] = {
-                **field_item,
-                "checkup_id": checkup.id,
-                "checkup_code": checkup.code or "",
-                "checkup_name": checkup.name or "",
-                "category_name": checkup.get_category_display(),
-            }
-            all_mapping_ids.append(mapping.id)
-        review_catalog.append(
-            {
-                "checkup_id": checkup.id,
-                "checkup_code": checkup.code or "",
-                "checkup_name": checkup.name or "",
-                "category_name": checkup.get_category_display(),
-                "fields": fields,
-            }
-        )
-
-    return review_catalog, mapping_meta, all_mapping_ids
-
-
-def normalize_followup_review_mapping_ids(
-    raw_mapping_ids: list[str] | list[int] | None,
-    mapping_meta: dict[int, dict] | None = None,
-) -> list[int]:
-    if mapping_meta is None:
-        _, mapping_meta, _ = build_followup_review_catalog()
-
-    normalized_mapping_ids = []
-    seen_mapping_ids = set()
-    for mapping_id_raw in raw_mapping_ids or []:
-        try:
-            mapping_id = int(mapping_id_raw)
-        except (TypeError, ValueError):
-            continue
-        mapping_info = mapping_meta.get(mapping_id)
-        if (
-            not mapping_info
-            or not mapping_info["selectable"]
-            or mapping_id in seen_mapping_ids
-        ):
-            continue
-        normalized_mapping_ids.append(mapping_id)
-        seen_mapping_ids.add(mapping_id)
-    return normalized_mapping_ids
-
-
-def get_saved_followup_review_mapping_ids(patient: PatientProfile) -> list[int]:
-    preferences = getattr(patient, "indicator_preferences", {}) or {}
-    if not isinstance(preferences, dict):
-        return []
-    followup_review_preferences = preferences.get(_FOLLOWUP_REVIEW_PREFERENCES_KEY, {})
-    if not isinstance(followup_review_preferences, dict):
-        return []
-    selected_mapping_ids = followup_review_preferences.get("selected_mapping_ids", [])
-    if not isinstance(selected_mapping_ids, list):
-        return []
-    return selected_mapping_ids
-
-
 def save_followup_review_preferences(
     patient: PatientProfile,
     raw_mapping_ids: list[str] | list[int] | None,
@@ -207,73 +106,6 @@ def _format_followup_review_chart_title(mapping_info: dict, unit: str = "") -> s
     if unit:
         title = f"{title} {unit}"
     return title
-
-
-def _query_followup_review_series(
-    *,
-    patient: PatientProfile,
-    mapping_ids: list[int],
-    mapping_meta: dict[int, dict],
-    date_list: list[date],
-    start_date: date,
-    end_date: date,
-) -> tuple[dict[int, list[float | None]], dict[int, list[float]], dict[int, str]]:
-    if not mapping_ids:
-        return {}, {}, {}
-
-    selected_pairs = {
-        (mapping_meta[mapping_id]["checkup_id"], mapping_meta[mapping_id]["field_id"])
-        for mapping_id in mapping_ids
-    }
-    checkup_ids = {checkup_id for checkup_id, _ in selected_pairs}
-    field_ids = {field_id for _, field_id in selected_pairs}
-
-    result_values = (
-        CheckupResultValue.objects.filter(
-            patient=patient,
-            checkup_item_id__in=checkup_ids,
-            standard_field_id__in=field_ids,
-            report_date__range=(start_date, end_date),
-            value_numeric__isnull=False,
-        )
-        .order_by("report_date", "id")
-        .only(
-            "id",
-            "checkup_item_id",
-            "standard_field_id",
-            "report_date",
-            "value_numeric",
-            "unit",
-        )
-    )
-
-    values_by_pair_and_date: dict[tuple[int, int], dict[date, float]] = {
-        pair: {} for pair in selected_pairs
-    }
-    unit_by_pair: dict[tuple[int, int], str] = {}
-    for result_value in result_values:
-        pair = (result_value.checkup_item_id, result_value.standard_field_id)
-        if pair not in selected_pairs:
-            continue
-        values_by_pair_and_date[pair][result_value.report_date] = float(result_value.value_numeric)
-        if result_value.unit:
-            unit_by_pair[pair] = result_value.unit
-
-    series_by_mapping: dict[int, list[float | None]] = {}
-    values_by_mapping: dict[int, list[float]] = {}
-    unit_by_mapping: dict[int, str] = {}
-    for mapping_id in mapping_ids:
-        mapping_info = mapping_meta[mapping_id]
-        pair = (mapping_info["checkup_id"], mapping_info["field_id"])
-        day_value_map = values_by_pair_and_date.get(pair, {})
-        series_data = [day_value_map.get(day) for day in date_list]
-        series_by_mapping[mapping_id] = series_data
-        values_by_mapping[mapping_id] = [
-            value for value in series_data if value is not None
-        ]
-        unit_by_mapping[mapping_id] = unit_by_pair.get(pair) or mapping_info["unit"]
-
-    return series_by_mapping, values_by_mapping, unit_by_mapping
 
 
 def _to_decimal(value):

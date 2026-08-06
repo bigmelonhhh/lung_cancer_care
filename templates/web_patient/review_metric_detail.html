@@ -7,7 +7,7 @@
   <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
     <div class="pt-safe-top">
       <div class="flex items-center h-12 px-4 relative">
-        <a href="{% url 'web_patient:health_records' %}?tab=metrics{% if patient_id %}&amp;patient_id={{ patient_id }}{% endif %}" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+        <a href="{% url 'web_patient:health_records' %}?tab=metrics{% if patient_id %}&amp;patient_id={{ patient_id }}{% endif %}" id="nav-back-link" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
@@ -37,21 +37,27 @@
   </div>
 
   <div id="record-list-wrapper" class="flex-1 min-h-0 flex flex-col">
-    <div id="record-list" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-3 pb-16">
+    <div id="record-list" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 pb-16">
       {% regroup initial_items by date_str as date_groups %}
       {% for group in date_groups %}
-      <div class="record-date-group">
-        <div class="flex items-center justify-between mb-1.5">
-          <div class="text-sm font-bold text-slate-700">{{ group.grouper }}{% with first=group.list.0 %}（{{ first.weekday }}）{% endwith %}</div>
-          {% with first=group.list.0 %}
+      {% with first=group.list.0 %}
+      <div class="record-date-group bg-white rounded-2xl shadow-sm px-3 py-3" data-date="{{ group.grouper }}">
+        <div class="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <div class="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+            <span class="text-sm font-semibold text-slate-800">{{ group.grouper }}</span>
+            <span>{{ first.weekday }}</span>
+          </div>
           {% if first.source_label %}
-          <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">{{ first.source_label }}</span>
+          <span class="flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            {{ first.source_label }}
+          </span>
           {% endif %}
-          {% endwith %}
         </div>
-        <div class="space-y-2">
+        {% endwith %}
+        <div class="space-y-1.5">
           {% for item in group.list %}
-          <div class="record-item bg-white rounded-2xl shadow-sm px-4 py-3">
+          <div class="record-item rounded-xl bg-slate-100 px-3 py-2.5">
             <div class="flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <div class="font-bold text-slate-800 text-base">{{ item.field_display_name }}</div>
@@ -106,7 +112,7 @@
 </div>
 
 <template id="record-card-template">
-  <div class="record-item bg-white rounded-2xl shadow-sm px-4 py-3">
+  <div class="record-item rounded-xl bg-slate-100 px-3 py-2.5">
     <div class="flex items-center justify-between gap-3">
       <div class="min-w-0">
         <div class="font-bold text-slate-800 text-base" data-slot="name"></div>
@@ -195,23 +201,41 @@
             let groupEl = groupsByDate.get(item.date_str);
             if (!groupEl) {
                 groupEl = document.createElement("div");
-                groupEl.className = "record-date-group";
+                groupEl.className = "record-date-group bg-white rounded-2xl shadow-sm px-3 py-3";
                 groupEl.dataset.date = item.date_str;
                 const header = document.createElement("div");
-                header.className = "flex items-center justify-between mb-1.5";
-                const headerDate = document.createElement("div");
-                headerDate.className = "text-sm font-bold text-slate-700";
-                headerDate.textContent = item.date_str + "（" + item.weekday + "）";
-                header.appendChild(headerDate);
+                header.className = "mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2";
+                const headerLeft = document.createElement("div");
+                headerLeft.className = "min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500";
+                const dateSpan = document.createElement("span");
+                dateSpan.className = "text-sm font-semibold text-slate-800";
+                dateSpan.textContent = item.date_str;
+                const weekdaySpan = document.createElement("span");
+                weekdaySpan.textContent = item.weekday;
+                headerLeft.appendChild(dateSpan);
+                headerLeft.appendChild(weekdaySpan);
+                header.appendChild(headerLeft);
                 if (item.source_label) {
                     const sourceTag = document.createElement("span");
-                    sourceTag.className = "rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500";
-                    sourceTag.textContent = item.source_label;
+                    sourceTag.className = "flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500";
+                    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    icon.setAttribute("class", "h-3 w-3");
+                    icon.setAttribute("fill", "none");
+                    icon.setAttribute("viewBox", "0 0 24 24");
+                    icon.setAttribute("stroke", "currentColor");
+                    const iconPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    iconPath.setAttribute("stroke-linecap", "round");
+                    iconPath.setAttribute("stroke-linejoin", "round");
+                    iconPath.setAttribute("stroke-width", "2");
+                    iconPath.setAttribute("d", "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z");
+                    icon.appendChild(iconPath);
+                    sourceTag.appendChild(icon);
+                    sourceTag.appendChild(document.createTextNode(item.source_label));
                     header.appendChild(sourceTag);
                 }
                 groupEl.appendChild(header);
                 const listContainer = document.createElement("div");
-                listContainer.className = "space-y-2";
+                listContainer.className = "space-y-1.5";
                 groupEl.appendChild(listContainer);
                 listEl.insertBefore(groupEl, loadingEl);
                 groupsByDate.set(item.date_str, groupEl);
@@ -227,7 +251,7 @@
             card.querySelector('[data-slot="value"]').textContent = item.value;
             card.querySelector('[data-slot="unit"]').textContent = item.unit || "";
             fillStatus(card.querySelector('[data-slot="status"]'), item.abnormal_flag);
-            groupEl.querySelector(".space-y-2").appendChild(card);
+            groupEl.querySelector(".space-y-1.5").appendChild(card);
         });
     }
 
@@ -513,6 +537,15 @@
     }
 
     document.getElementById("chart-switch-btn").addEventListener("click", toggleViewMode);
+    // 返回优先走历史栈：健康档案页 Tab 切换用 replaceState，普通跳转返回会
+    // 在历史栈中重复压入健康档案条目，导致连续返回时又回到列表页；
+    // href 保留作为直接进入（无历史可退）时的兜底链接。
+    document.getElementById("nav-back-link").addEventListener("click", function (event) {
+        if (window.history.length > 1) {
+            event.preventDefault();
+            window.history.back();
+        }
+    });
     document.getElementById("month-picker-area").addEventListener("click", function () {
         monthPicker.showPicker();
     });

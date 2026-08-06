@@ -79,35 +79,17 @@
         
 
         <div id="checkup-section"{% if not is_member %} class="hidden"{% endif %}>
-          <div class="text-black font-semibold text-lg mb-2 mt-4">复查档案</div>
-          <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
-              {% if checkup_stats %}
-                  {% for stat in checkup_stats %}
-                  <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
-                      <div class="flex items-start gap-3">
-                          <div class="w-6 h-6 flex items-center justify-center text-blue-600 mt-0.5">
-                              <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                          </div>
-                          <div>
-                              <div class="flex items-center gap-2">
-                                  <h3 class="font-bold text-slate-800 text-base" style="max-width: 220px;">{{ stat.title }}</h3>
-                              </div>
-                              <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
-                                  <span>记录：{{ stat.count }}次</span>
-                                 
-                              </div>
-                          </div>
-                      </div>
-                      <button onclick="window.location.href='{% url 'web_patient:review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                          查看详情
-                      </button>
-                  </div>
-                  {% endfor %}
-              {% else %}
-                  <div class="p-4 text-sm text-slate-500">暂无复查档案数据</div>
-              {% endif %}
+          <div class="flex items-center gap-6 mt-4 mb-2">
+              <a href="{% url 'web_patient:health_records' %}?tab=archive{% if selected_package_id %}&amp;package_id={{ selected_package_id }}{% endif %}"
+                 data-checkup-tab="archive" data-active="{% if active_tab == 'archive' %}true{% else %}false{% endif %}"
+                 class="pb-1 text-lg {% if active_tab == 'archive' %}font-bold text-slate-900 border-b-2 border-blue-600{% else %}font-medium text-slate-500{% endif %}">复查档案</a>
+              <a href="{% url 'web_patient:health_records' %}?tab=metrics{% if selected_package_id %}&amp;package_id={{ selected_package_id }}{% endif %}"
+                 data-checkup-tab="metrics" data-active="{% if active_tab == 'metrics' %}true{% else %}false{% endif %}"
+                 class="pb-1 text-lg {% if active_tab == 'metrics' %}font-bold text-slate-900 border-b-2 border-blue-600{% else %}font-medium text-slate-500{% endif %}">复查指标</a>
+          </div>
+
+          <div id="checkup-tab-content">
+              {% include "web_patient/partials/health_records_checkup_tabs.html" %}
           </div>
         </div>
 
@@ -205,6 +187,56 @@
                 }
             })
             .catch(function () {});
+    })();
+
+    // 复查档案/复查指标 Tab 页内切换：仅拉取局部片段刷新，不重新路由，
+    // 并用 replaceState 同步 tab 参数，保证从详情页返回后仍停留在原 Tab。
+    (function () {
+        var tabContent = document.getElementById("checkup-tab-content");
+        var tabLinks = document.querySelectorAll("#checkup-section [data-checkup-tab]");
+        if (!tabContent || !tabLinks.length) return;
+        var tabUrl = "{% url 'web_patient:health_records_tab_content' %}";
+        var ACTIVE_CLASSES = ["font-bold", "text-slate-900", "border-b-2", "border-blue-600"];
+        var INACTIVE_CLASSES = ["font-medium", "text-slate-500"];
+        var TAB_CLASSES = ACTIVE_CLASSES.concat(INACTIVE_CLASSES);
+
+        function applyTabStyles() {
+            tabLinks.forEach(function (link) {
+                TAB_CLASSES.forEach(function (cls) { link.classList.remove(cls); });
+                var classes = link.dataset.active === "true" ? ACTIVE_CLASSES : INACTIVE_CLASSES;
+                classes.forEach(function (cls) { link.classList.add(cls); });
+            });
+        }
+
+        tabLinks.forEach(function (link) {
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+                var tab = link.getAttribute("data-checkup-tab");
+                var currentUrl = new URL(window.location.href);
+                if (link.dataset.active === "true" && currentUrl.searchParams.get("tab") === tab) return;
+
+                var params = new URLSearchParams();
+                params.set("tab", tab);
+                var packageId = currentUrl.searchParams.get("package_id");
+                if (packageId) params.set("package_id", packageId);
+
+                fetch(tabUrl + "?" + params.toString(), { credentials: "same-origin" })
+                    .then(function (res) {
+                        if (!res.ok) throw new Error("tab content load failed");
+                        return res.text();
+                    })
+                    .then(function (html) {
+                        tabContent.innerHTML = html;
+                        tabLinks.forEach(function (item) {
+                            item.dataset.active = item.getAttribute("data-checkup-tab") === tab ? "true" : "false";
+                        });
+                        applyTabStyles();
+                        currentUrl.searchParams.set("tab", tab);
+                        window.history.replaceState(null, "", currentUrl.toString());
+                    })
+                    .catch(function () {});
+            });
+        });
     })();
 </script>
 {% endblock %}
