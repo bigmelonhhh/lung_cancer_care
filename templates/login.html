@@ -578,6 +578,27 @@
 </main>
 
 <script>
+  // 登录页是三端工作台的统一重置入口（退出登录、会话过期都会回到这里）。
+  // sessionStorage 生命周期是标签页级的，退出登录不会清空；若不清理，
+  // 重新登录后医生端首页会从上次的 sessionStorage 里错误恢复“选中患者高亮”、
+  // 搜索词等旧状态。只要到达登录页即视为开启新会话，统一重置工作台状态。
+  (function () {
+    var WORKSPACE_STATE_KEYS = [
+      'doctor_patient_list_selected_patient_id',
+      'doctor_patient_list_filter',
+      'doctor_workspace_restore_selected_on_return',
+      'todo_pending_jump',
+      'todo_needs_refresh'
+    ];
+    try {
+      WORKSPACE_STATE_KEYS.forEach(function (key) {
+        sessionStorage.removeItem(key);
+      });
+    } catch (e) {}
+  })();
+</script>
+
+<script>
   (function () {
     const form = document.getElementById('portal-login-form');
     if (!form) return;

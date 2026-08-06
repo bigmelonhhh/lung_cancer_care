@@ -97,6 +97,18 @@ class MobileAuthTests(TestCase):
         self.assertContains(response, 'name="password"', html=False)
         self.assertContains(response, "使用手机号登录")
 
+    def test_login_page_resets_doctor_workspace_session_state(self):
+        """登录页需携带工作台 sessionStorage 重置脚本。
+
+        sessionStorage 是标签页级的，退出登录不会清空；若登录页不做重置，
+        重新登录后医生端首页会错误恢复上次的选中患者高亮等旧状态。
+        """
+        response = self.client.get(self.login_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "doctor_patient_list_selected_patient_id")
+        self.assertContains(response, "sessionStorage.removeItem")
+
     def test_login_page_uses_shared_healthcare_login_branding(self):
         """医生端登录页与后台登录页保持统一品牌视觉。"""
         response = self.client.get(self.login_url)

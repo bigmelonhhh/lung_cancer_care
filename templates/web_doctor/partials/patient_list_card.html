@@ -3,7 +3,8 @@
 <li data-patient-entry data-section="{{ section }}">
     <button
         type="button"
-        class="w-full text-left pl-3 pr-4 py-3.5 border-l-4 border-transparent hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 data-[selected=true]:bg-indigo-50/50 data-[selected=true]:!border-indigo-500 data-[selected=true]:relative data-[selected=true]:z-10 transition-all duration-200 {% if muted %}opacity-75 hover:opacity-100{% endif %}"
+        {# 选中竖条用 inset box-shadow 绘制，不依赖 button 自身 border-color 切换（Safari 对按钮边框动态变色存在不重绘/过渡异常问题）；pl-4 补偿原 border-l-4 的 4px，保持文字位置不变 #}
+        class="w-full text-left pl-4 pr-4 py-3.5 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 data-[selected=true]:bg-indigo-50/50 data-[selected=true]:shadow-[inset_4px_0_0_0_#6366f1] transition-[background-color,box-shadow] duration-200 {% if muted %}opacity-75 hover:opacity-100{% endif %}"
         data-patient-item
         data-patient-id="{{ patient.id }}"
         data-patient-name="{{ patient.name|default:'' }}"

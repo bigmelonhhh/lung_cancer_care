@@ -4679,6 +4679,12 @@ video {
   transition-duration: 150ms;
 }
 
+.transition-\[background-color\2c box-shadow\] {
+  transition-property: background-color,box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
 .transition-\[width\] {
   transition-property: width;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -5730,25 +5736,18 @@ video {
   --tw-ring-color: rgb(165 180 252 / var(--tw-ring-opacity, 1));
 }
 
-.data-\[selected\=true\]\:relative[data-selected="true"] {
-  position: relative;
-}
-
-.data-\[selected\=true\]\:z-10[data-selected="true"] {
-  z-index: 10;
-}
-
 .data-\[collapsed\=true\]\:w-14[data-collapsed="true"] {
   width: 3.5rem;
 }
 
-.data-\[selected\=true\]\:\!border-indigo-500[data-selected="true"] {
-  --tw-border-opacity: 1 !important;
-  border-color: rgb(99 102 241 / var(--tw-border-opacity, 1)) !important;
-}
-
 .data-\[selected\=true\]\:bg-indigo-50\/50[data-selected="true"] {
   background-color: rgb(238 242 255 / 0.5);
+}
+
+.data-\[selected\=true\]\:shadow-\[inset_4px_0_0_0_\#6366f1\][data-selected="true"] {
+  --tw-shadow: inset 4px 0 0 0 #6366f1;
+  --tw-shadow-colored: inset 4px 0 0 0 var(--tw-shadow-color);
+  box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <form method="get" class="mt-5 relative z-10">
+    <form method="get" id="mobile-patient-search-form" class="mt-5 relative z-10">
       <div class="flex items-center gap-3">
         <div class="flex-1 relative">
             <input
@@ -40,158 +40,99 @@
       {% if q %}
       <div class="mt-3 text-xs text-blue-100 flex items-center gap-2 px-1">
         <span>当前搜索：<span class="font-bold text-white">{{ q }}</span></span>
-        <a href="{% url 'web_doctor:mobile_patient_list' %}" class="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white transition">清空</a>
+        <button type="button" id="mobile-patient-search-clear" class="px-2 py-0.5 rounded-md bg-white/10 hover:bg-white/20 text-white transition">清空</button>
       </div>
       {% endif %}
     </form>
   </div>
 
   <div class="px-4 py-5 space-y-5 -mt-2 relative z-20">
-    <!-- Managed Patients -->
-    <div class="bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-900/5">
-      <div class="px-5 py-3 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+    <!-- 管理中患者 -->
+    <details data-fold="managed" open class="bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-900/5">
+      <summary class="mobile-fold-summary px-5 py-3 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 cursor-pointer select-none">
         <div class="flex items-center gap-2">
             <span class="w-1.5 h-4 bg-blue-600 rounded-full"></span>
             <span class="font-lexend font-bold text-sm text-slate-800">管理中患者</span>
             <span class="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-bold">{{ managed_total }}</span>
         </div>
-        <span class="text-[10px] font-medium text-slate-400 uppercase tracking-wide">页数 {{ managed_page.number }}/{{ managed_page.paginator.num_pages }}</span>
-      </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-medium text-slate-400 uppercase tracking-wide">页数 {{ managed_page.number }}/{{ managed_page.paginator.num_pages }}</span>
+          {% include "components/mobile/icon.html" with name="chevron-down" class="mobile-fold-chevron w-4 h-4 text-slate-400 transition-transform duration-200" %}
+        </div>
+      </summary>
       <div>
         {% if managed_patients %}
           {% for patient in managed_patients %}
-          <a
-            href="{% url 'web_doctor:mobile_patient_home' patient.id %}"
-            class="px-5 py-4 border-b border-slate-50 last:border-0 flex items-center justify-between active:bg-slate-50 transition-colors group"
-            data-patient-item
-            data-patient-id="{{ patient.id }}"
-            data-patient-name="{{ patient.name|default:'' }}"
-            data-patient-gender="{{ patient.get_gender_display|default:'' }}"
-            data-patient-age="{{ patient.age|default:'' }}"
-            data-patient-no="P{{ patient.id|stringformat:'06d' }}"
-            data-patient-phone="{{ patient.phone|default:'' }}"
-          >
-            <div class="min-w-0">
-              <div class="flex items-baseline gap-2">
-                <div class="text-base font-bold text-slate-800 truncate max-w-[9rem] group-hover:text-blue-600 transition-colors">{{ patient.name }}</div>
-                <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
-              </div>
-              <div class="mt-1 text-xs leading-5 text-slate-500">
-                <p>主任：{{ patient.director_doctor_name|default:"--" }}</p>
-              </div>
-              <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
-                <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full {% if patient.todo_count > 0 %}bg-red-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>待办</span>
-                  {% if patient.todo_count > 0 %}
-                  <span class="text-red-600 font-bold bg-red-50 px-1.5 rounded-md">
-                    {% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count }}{% endif %}
-                  </span>
-                  {% else %}
-                  <span class="text-slate-400">0</span>
-                  {% endif %}
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>未读咨询数</span>
-                  {% if patient.consult_count > 0 %}
-                  <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
-                    {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}
-                  </span>
-                  {% else %}
-                  <span class="text-slate-400">0</span>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                {% include "components/mobile/icon.html" with name="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" %}
-            </div>
-          </a>
+          {% include "web_doctor/mobile/partials/patient_list_card.html" %}
           {% endfor %}
         {% else %}
           {% include "components/ui/empty_state.html" with title="暂无管理中患者" description="" extra_class="border-0 bg-transparent py-8" %}
         {% endif %}
       </div>
-      {% with q_enc=q|urlencode unmanaged_num_str=unmanaged_page.number|stringformat:"s" %}
-        {% with managed_base_query="q="|add:q_enc|add:"&unmanaged_page="|add:unmanaged_num_str|add:"&" %}
+      {% with q_enc=q|urlencode stopped_num_str=stopped_page.number|stringformat:"s" unpaid_num_str=unpaid_page.number|stringformat:"s" %}
+        {% with managed_base_query="q="|add:q_enc|add:"&stopped_page="|add:stopped_num_str|add:"&unpaid_page="|add:unpaid_num_str|add:"&" %}
         {% include "web_doctor/mobile/partials/pagination.html" with page=managed_page param_name="managed_page" base_query=managed_base_query extra_class="bg-slate-50/50 border-t border-slate-100 px-4 py-3" %}
         {% endwith %}
       {% endwith %}
-    </div>
+    </details>
 
-    <!-- Unmanaged Patients -->
-    <div class="bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-900/5">
-      <div class="px-5 py-3 border-b border-slate-50 flex items-center justify-between bg-slate-50/50">
+    <!-- 停止管理患者 -->
+    <details data-fold="stopped" class="bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-900/5">
+      <summary class="mobile-fold-summary px-5 py-3 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 cursor-pointer select-none">
         <div class="flex items-center gap-2">
             <span class="w-1.5 h-4 bg-slate-400 rounded-full"></span>
-            <span class="font-lexend font-bold text-sm text-slate-800">未管理的患者</span>
-            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold">{{ unmanaged_total }}</span>
+            <span class="font-lexend font-bold text-sm text-slate-800">停止管理</span>
+            <span class="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold">{{ stopped_total }}</span>
         </div>
-        <span class="text-[10px] font-medium text-slate-400 uppercase tracking-wide">页数 {{ unmanaged_page.number }}/{{ unmanaged_page.paginator.num_pages }}</span>
-      </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-medium text-slate-400 uppercase tracking-wide">页数 {{ stopped_page.number }}/{{ stopped_page.paginator.num_pages }}</span>
+          {% include "components/mobile/icon.html" with name="chevron-down" class="mobile-fold-chevron w-4 h-4 text-slate-400 transition-transform duration-200" %}
+        </div>
+      </summary>
       <div>
-        {% if unmanaged_patients %}
-          {% for patient in unmanaged_patients %}
-          <a
-            href="{% url 'web_doctor:mobile_patient_home' patient.id %}"
-            class="px-5 py-4 border-b border-slate-50 last:border-0 flex items-center justify-between active:bg-slate-50 transition-colors group"
-            data-patient-item
-            data-patient-id="{{ patient.id }}"
-            data-patient-name="{{ patient.name|default:'' }}"
-            data-patient-gender="{{ patient.get_gender_display|default:'' }}"
-            data-patient-age="{{ patient.age|default:'' }}"
-            data-patient-no="P{{ patient.id|stringformat:'06d' }}"
-            data-patient-phone="{{ patient.phone|default:'' }}"
-          >
-            <div class="min-w-0">
-              <div class="flex items-baseline gap-2">
-                <div class="text-base font-bold text-slate-800 truncate max-w-[9rem] group-hover:text-blue-600 transition-colors">{{ patient.name }}</div>
-                <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
-              </div>
-              <div class="mt-1 text-xs leading-5 text-slate-500">
-                <p>主任：{{ patient.director_doctor_name|default:"--" }}</p>
-              </div>
-              <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
-                <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full {% if patient.todo_count > 0 %}bg-red-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>待办</span>
-                  {% if patient.todo_count > 0 %}
-                  <span class="text-red-600 font-bold bg-red-50 px-1.5 rounded-md">
-                    {% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count }}{% endif %}
-                  </span>
-                  {% else %}
-                  <span class="text-slate-400">0</span>
-                  {% endif %}
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
-                  <span>未读咨询数</span>
-                  {% if patient.consult_count > 0 %}
-                  <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
-                    {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}
-                  </span>
-                  {% else %}
-                  <span class="text-slate-400">0</span>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                {% include "components/mobile/icon.html" with name="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" %}
-            </div>
-          </a>
+        {% if stopped_patients %}
+          {% for patient in stopped_patients %}
+          {% include "web_doctor/mobile/partials/patient_list_card.html" %}
           {% endfor %}
         {% else %}
-          {% include "components/ui/empty_state.html" with title="暂无未管理患者" description="" extra_class="border-0 bg-transparent py-8" %}
+          {% include "components/ui/empty_state.html" with title="暂无停止管理患者" description="" extra_class="border-0 bg-transparent py-8" %}
         {% endif %}
       </div>
-      {% with q_enc=q|urlencode managed_num_str=managed_page.number|stringformat:"s" %}
-        {% with unmanaged_base_query="q="|add:q_enc|add:"&managed_page="|add:managed_num_str|add:"&" %}
-        {% include "web_doctor/mobile/partials/pagination.html" with page=unmanaged_page param_name="unmanaged_page" base_query=unmanaged_base_query extra_class="bg-slate-50/50 border-t border-slate-100 px-4 py-3" %}
+      {% with q_enc=q|urlencode managed_num_str=managed_page.number|stringformat:"s" unpaid_num_str=unpaid_page.number|stringformat:"s" %}
+        {% with stopped_base_query="q="|add:q_enc|add:"&managed_page="|add:managed_num_str|add:"&unpaid_page="|add:unpaid_num_str|add:"&" %}
+        {% include "web_doctor/mobile/partials/pagination.html" with page=stopped_page param_name="stopped_page" base_query=stopped_base_query extra_class="bg-slate-50/50 border-t border-slate-100 px-4 py-3" %}
         {% endwith %}
       {% endwith %}
-    </div>
+    </details>
+
+    <!-- 未付费患者 -->
+    <details data-fold="unpaid" class="bg-white rounded-2xl overflow-hidden shadow-sm ring-1 ring-slate-900/5">
+      <summary class="mobile-fold-summary px-5 py-3 border-b border-slate-50 flex items-center justify-between bg-slate-50/50 cursor-pointer select-none">
+        <div class="flex items-center gap-2">
+            <span class="w-1.5 h-4 bg-amber-500 rounded-full"></span>
+            <span class="font-lexend font-bold text-sm text-slate-800">未付费</span>
+            <span class="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-bold">{{ unpaid_total }}</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-medium text-slate-400 uppercase tracking-wide">页数 {{ unpaid_page.number }}/{{ unpaid_page.paginator.num_pages }}</span>
+          {% include "components/mobile/icon.html" with name="chevron-down" class="mobile-fold-chevron w-4 h-4 text-slate-400 transition-transform duration-200" %}
+        </div>
+      </summary>
+      <div>
+        {% if unpaid_patients %}
+          {% for patient in unpaid_patients %}
+          {% include "web_doctor/mobile/partials/patient_list_card.html" %}
+          {% endfor %}
+        {% else %}
+          {% include "components/ui/empty_state.html" with title="暂无未付费患者" description="" extra_class="border-0 bg-transparent py-8" %}
+        {% endif %}
+      </div>
+      {% with q_enc=q|urlencode managed_num_str=managed_page.number|stringformat:"s" stopped_num_str=stopped_page.number|stringformat:"s" %}
+        {% with unpaid_base_query="q="|add:q_enc|add:"&managed_page="|add:managed_num_str|add:"&stopped_page="|add:stopped_num_str|add:"&" %}
+        {% include "web_doctor/mobile/partials/pagination.html" with page=unpaid_page param_name="unpaid_page" base_query=unpaid_base_query extra_class="bg-slate-50/50 border-t border-slate-100 px-4 py-3" %}
+        {% endwith %}
+      {% endwith %}
+    </details>
   </div>
 
   <div id="mobile-patient-nav-loading" class="fixed inset-0 z-50 hidden">
@@ -207,6 +148,12 @@
 {% endblock %}
 
 {% block extra_head %}
+<style>
+  /* 患者列表折叠分组：隐藏 summary 默认三角，展开时旋转箭头 */
+  .mobile-fold-summary { list-style: none; }
+  .mobile-fold-summary::-webkit-details-marker { display: none; }
+  details[data-fold][open] .mobile-fold-chevron { transform: rotate(180deg); }
+</style>
 <script>
   (function () {
     const STORAGE_KEY = "mobile_selected_patient";
@@ -238,6 +185,67 @@
     window.addEventListener("pageshow", function () {
       const loading = document.getElementById("mobile-patient-nav-loading");
       if (loading) loading.classList.add("hidden");
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+      // 折叠分组状态持久化：对齐 PC 端，刷新/分页后保持展开收起状态。
+      const FOLD_KEY = "mobile_patient_list_fold_state";
+      const readFoldState = function () {
+        try {
+          return JSON.parse(sessionStorage.getItem(FOLD_KEY) || "{}");
+        } catch (e) {
+          return {};
+        }
+      };
+      const writeFoldState = function (state) {
+        try {
+          sessionStorage.setItem(FOLD_KEY, JSON.stringify(state));
+        } catch (e) {}
+      };
+      const folds = document.querySelectorAll("details[data-fold]");
+      const savedFold = readFoldState();
+      folds.forEach(function (d) {
+        const key = d.getAttribute("data-fold");
+        if (Object.prototype.hasOwnProperty.call(savedFold, key)) {
+          d.open = !!savedFold[key];
+        }
+        d.addEventListener("toggle", function () {
+          const state = readFoldState();
+          state[d.getAttribute("data-fold")] = d.open;
+          writeFoldState(state);
+        });
+      });
+
+      // 搜索：用 location.replace 替换当前历史记录，避免返回时退回搜索前状态。
+      const buildSearchUrl = function (keyword) {
+        const url = new URL(window.location.href);
+        if (keyword) {
+          url.searchParams.set("q", keyword);
+        } else {
+          url.searchParams.delete("q");
+        }
+        url.searchParams.delete("managed_page");
+        url.searchParams.delete("stopped_page");
+        url.searchParams.delete("unpaid_page");
+        return url.toString();
+      };
+      const searchForm = document.getElementById("mobile-patient-search-form");
+      if (searchForm) {
+        searchForm.addEventListener("submit", function (event) {
+          event.preventDefault();
+          const input = searchForm.querySelector("input[name='q']");
+          const keyword = input ? input.value.trim() : "";
+          window.location.replace(buildSearchUrl(keyword));
+        });
+      }
+      const clearBtn = document.getElementById("mobile-patient-search-clear");
+      if (clearBtn) {
+        clearBtn.addEventListener("click", function () {
+          const input = searchForm ? searchForm.querySelector("input[name='q']") : null;
+          if (input) input.value = "";
+          window.location.replace(buildSearchUrl(""));
+        });
+      }
     });
   })();
 </script>
