@@ -216,7 +216,7 @@ class DoctorMobilePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator("body")).to_contain_text("一般监测指标")
         expect(self.page.locator("body")).to_contain_text("体温")
         expect(self.page.locator("body")).not_to_contain_text("异常：0次")
-        expect(self.page.get_by_role("button", name="查看").first).to_be_visible()
+        expect(self.page.get_by_role("link", name="查看").first).to_be_visible()
 
         detail_url = (
             self.url_for("web_doctor:mobile_health_record_detail")
