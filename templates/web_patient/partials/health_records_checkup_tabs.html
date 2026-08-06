@@ -10,11 +10,11 @@
         {% for stat in review_metric_stats %}
         <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
             <div class="flex items-start gap-3 min-w-0 flex-1">
-                <div class="w-6 h-6 flex items-center justify-center mt-0.5 shrink-0">
+                {% comment %} <div class="w-6 h-6 flex items-center justify-center mt-0.5 shrink-0">
                     <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
                     </svg>
-                </div>
+                </div> {% endcomment %}
                 <div class="min-w-0 flex-1">
                     <div class="flex items-center gap-2 min-w-0">
                         <h3 class="min-w-0 truncate font-bold text-slate-800 text-base">{{ stat.title }}</h3>
@@ -33,8 +33,8 @@
                 </div>
             </div>
             <a href="{% url 'web_patient:review_metric_detail' %}?mapping_id={{ stat.mapping_id }}&amp;patient_id={{ patient_id|default:'' }}"
-               class="shrink-0 bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                查看详情
+               class="shrink-0 bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                查看
             </a>
         </div>
         {% endfor %}
@@ -65,8 +65,8 @@
                     </div>
                 </div>
             </div>
-            <button onclick="window.location.href='{% url 'web_patient:review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                查看详情
+            <button onclick="window.location.href='{% url 'web_patient:review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                查看
             </button>
         </div>
         {% endfor %}

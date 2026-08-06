@@ -69,7 +69,7 @@ class QuestionnaireSubmissionDetailViewTests(TestCase):
             self.assertEqual(resp.status_code, 200)
             self.assertContains(resp, f'data-submission-id="{submission.id}"')
             self.assertContains(resp, 'role="button"')
-            self.assertNotContains(resp, "查看详情")
+            self.assertNotContains(resp, "查看")
 
             ajax_resp = self.client.get(
                 self.record_detail_url,
@@ -101,7 +101,7 @@ class QuestionnaireSubmissionDetailViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'data-submission-id=""')
         self.assertContains(resp, 'aria-disabled="true"')
-        self.assertNotContains(resp, "查看详情")
+        self.assertNotContains(resp, "查看")
 
     def test_dynamic_questionnaire_records_are_scoped_to_selected_service_package(self):
         product = Product.objects.create(

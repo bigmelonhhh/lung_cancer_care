@@ -206,7 +206,7 @@ class HealthRecordsTabContentTests(ReviewMetricTestBase):
         self.assertEqual(response.context["active_tab"], "metrics")
         self.assertTemplateUsed(response, "web_patient/partials/health_records_checkup_tabs.html")
         self.assertContains(response, "白细胞计数(WBC)")
-        self.assertContains(response, "查看详情")
+        self.assertContains(response, "查看")
 
     def test_archive_tab_defaults_and_returns_archive_list(self):
         response = self.client.get(self.url, {"tab": "archive"})

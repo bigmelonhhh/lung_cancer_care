@@ -68,8 +68,8 @@
                     </div>
                 </div>
 
-                <button onclick="window.location.href='{% url 'web_doctor:mobile_health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}{% if stat.type == 'medical' and is_medication_detail_entry %}&source=medication&view=detail{% else %}&source=health_records{% endif %}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                    查看详情
+                <button onclick="window.location.href='{% url 'web_doctor:mobile_health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}{% if stat.type == 'medical' and is_medication_detail_entry %}&source=medication&view=detail{% else %}&source=health_records{% endif %}'" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                    查看
                 </button>
             </div>
             {% empty %}
@@ -100,8 +100,8 @@
                               </div>
                           </div>
                       </div>
-                      <button onclick="window.location.href='{% url 'web_doctor:mobile_review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                          查看详情
+                      <button onclick="window.location.href='{% url 'web_doctor:mobile_review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                          查看
                       </button>
                   </div>
                   {% endfor %}
@@ -140,8 +140,8 @@
                     </div>
                 </div>
 
-                <a href="{% url 'web_doctor:mobile_health_record_detail' %}?patient_id={{ patient_id|default:'' }}&amp;questionnaire_id={{ stat.questionnaire_id }}&amp;package_id={{ selected_package_id }}&amp;source=survey_list" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                    查看详情
+                <a href="{% url 'web_doctor:mobile_health_record_detail' %}?patient_id={{ patient_id|default:'' }}&amp;questionnaire_id={{ stat.questionnaire_id }}&amp;package_id={{ selected_package_id }}&amp;source=survey_list" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                    查看
                 </a>
             </div>
             {% endfor %}
