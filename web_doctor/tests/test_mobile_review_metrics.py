@@ -205,6 +205,43 @@ class MobileHealthRecordsReviewMetricTests(DoctorReviewMetricTestBase):
         )
         self.assertContains(response, "白细胞计数(WBC)")
 
+    def test_health_records_metrics_count_deduplicates_same_day_records(self):
+        order = self._create_paid_order(
+            paid_at=timezone.now() - timedelta(days=10),
+            duration_days=30,
+        )
+        self._select_mapping()
+        duplicated_date = order.start_date + timedelta(days=1)
+        self._create_result_value(
+            duplicated_date,
+            "6.2",
+            abnormal_flag=CheckupResultAbnormalFlag.NORMAL,
+            image_suffix="same-day-old",
+        )
+        self._create_result_value(
+            duplicated_date,
+            "10.5",
+            abnormal_flag=CheckupResultAbnormalFlag.HIGH,
+            image_suffix="same-day-new",
+        )
+        self._create_result_value(
+            order.start_date + timedelta(days=2),
+            "7.1",
+            abnormal_flag=CheckupResultAbnormalFlag.NORMAL,
+            image_suffix="next-day",
+        )
+
+        response = self.client.get(
+            self.health_records_url,
+            {"patient_id": self.patient.id, "tab": "metrics"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        stats = response.context["review_metric_stats"]
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]["count"], 2)
+        self.assertEqual(stats[0]["latest_value"], "7.1")
+
     def test_health_records_metrics_tab_without_configuration_shows_empty_state(self):
         self._create_paid_order(
             paid_at=timezone.now() - timedelta(days=10),

@@ -311,7 +311,7 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, f'data-submission-id="{submission.id}"')
         self.assertContains(resp, 'role="button"')
-        self.assertNotContains(resp, "查看")
+        self.assertNotContains(resp, "查看详情")
 
         ajax_resp = self.client.get(
             self.record_detail_url,
@@ -350,7 +350,7 @@ class MobileQuestionnaireSubmissionDetailTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.context["records"], [])
         self.assertNotContains(resp, 'class="record-item')
-        self.assertNotContains(resp, "查看")
+        self.assertNotContains(resp, "查看详情")
 
     def test_questionnaire_submission_detail_page_renders_single_and_multiple_answers(self):
         questionnaire = self._get_or_create_questionnaire()

@@ -160,6 +160,38 @@ class HealthRecordsReviewMetricStatsTests(ReviewMetricTestBase):
         self.assertEqual(stats[0]["latest_value"], "")
         self.assertEqual(stats[0]["abnormal_flag"], "")
 
+    def test_stats_count_deduplicates_multiple_records_on_same_date(self):
+        order = self._create_paid_order(
+            paid_at=timezone.now() - timedelta(days=10), duration_days=30
+        )
+        self._select_mapping()
+        duplicated_date = order.start_date + timedelta(days=1)
+        self._create_result_value(
+            duplicated_date,
+            "6.2",
+            abnormal_flag=CheckupResultAbnormalFlag.NORMAL,
+            image_suffix="same-day-old",
+        )
+        self._create_result_value(
+            duplicated_date,
+            "10.5",
+            abnormal_flag=CheckupResultAbnormalFlag.HIGH,
+            image_suffix="same-day-new",
+        )
+        self._create_result_value(
+            order.start_date + timedelta(days=2),
+            "7.1",
+            abnormal_flag=CheckupResultAbnormalFlag.NORMAL,
+            image_suffix="next-day",
+        )
+
+        response = self.client.get(self.url, {"tab": "metrics"})
+        self.assertEqual(response.status_code, 200)
+        stats = response.context["review_metric_stats"]
+        self.assertEqual(len(stats), 1)
+        self.assertEqual(stats[0]["count"], 2)
+        self.assertEqual(stats[0]["latest_value"], "7.1")
+
     def test_tab_param_controls_active_tab(self):
         self._create_paid_order(paid_at=timezone.now() - timedelta(days=10), duration_days=30)
 

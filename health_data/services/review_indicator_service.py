@@ -243,6 +243,7 @@ def build_patient_review_metric_stats(
 
     每一项包含 mapping_id、显示名、检查分类名、记录次数与最新值信息，
     统计范围限定在 [start_date, end_date]。
+    其中记录次数按“同日去重后”的有效天数统计，最新值取时间范围内最新写入的一条。
     """
     selected_mapping_ids, mapping_meta = get_patient_selected_mapping_meta(patient)
     if not selected_mapping_ids:
@@ -277,11 +278,15 @@ def build_patient_review_metric_stats(
 
     count_by_pair: dict[tuple[int, int], int] = {}
     latest_by_pair: dict[tuple[int, int], CheckupResultValue] = {}
+    seen_dates_by_pair: dict[tuple[int, int], set[date]] = {}
     for result_value in result_values:
         pair = (result_value.checkup_item_id, result_value.standard_field_id)
         if pair not in selected_pairs:
             continue
-        count_by_pair[pair] = count_by_pair.get(pair, 0) + 1
+        seen_dates = seen_dates_by_pair.setdefault(pair, set())
+        if result_value.report_date not in seen_dates:
+            seen_dates.add(result_value.report_date)
+            count_by_pair[pair] = count_by_pair.get(pair, 0) + 1
         latest_by_pair[pair] = result_value
 
     stats: list[dict] = []
