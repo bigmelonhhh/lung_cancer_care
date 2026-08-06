@@ -14,7 +14,14 @@ from health_data.services.monitoring_catalog import (
 )
 from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
+from health_data.services.review_indicator_service import (
+    build_patient_review_metric_stats,
+    build_review_metric_chart,
+    get_review_metric_mapping_info,
+    record_to_detail_item,
+)
 from health_data.models import (
+    CheckupResultValue,
     HealthMetric,
     MetricType,
     QuestionnaireSubmission,
@@ -821,25 +828,12 @@ def record_weight(request: HttpRequest) -> HttpResponse:
     return render(request, "web_patient/record_weight.html", context)
 
 
-@auto_wechat_login
-@check_patient
-def health_records(request: HttpRequest) -> HttpResponse:
-    """
-    【页面说明】健康档案页面 `/p/health/records/` 
-    【功能逻辑】
-    1. 展示各项健康指标的记录统计（记录次数、异常次数）。
-    2. 支持空状态展示。
-    """
-    patient = request.patient
-    patient_id = patient.id or None
-    is_member = _is_member(patient)
-    selected_package_id = request.GET.get("package_id")
-    entry_source = request.GET.get("source")
-    entry_view = request.GET.get("view")
-    is_medication_detail_entry = bool(
-        entry_source == "medication" and (entry_view == "detail" or not entry_view)
-    )
+def _resolve_service_package_selection(patient, is_member, selected_package_id):
+    """解析服务包列表、选中服务包与统计日期范围。
 
+    返回 (service_packages, selected_package, start_date, end_date)；
+    非会员或无服务包时日期范围回退为全量（2000-01-01 至今日）。
+    """
     service_packages = []
     if is_member:
         orders = get_paid_orders_for_patient(patient)
@@ -881,6 +875,95 @@ def health_records(request: HttpRequest) -> HttpResponse:
     else:
         start_date = datetime(2000, 1, 1).date()
         end_date = today
+    return service_packages, selected_package, start_date, end_date
+
+
+def _build_checkup_tab_stats(patient, patient_id, is_member, selected_package, start_date, end_date):
+    """构建复查档案与复查指标统计（仅会员且有服务包时）。
+
+    返回 (checkup_stats, review_metric_stats)，供健康档案页与 Tab 局部刷新共用。
+    """
+    checkup_stats = []
+    review_metric_stats = []
+    if not (is_member and selected_package and patient_id):
+        return checkup_stats, review_metric_stats
+
+    from health_data.services.report_service import ReportUploadService
+
+    checkup_library_items = get_active_checkup_library()
+    if checkup_library_items:
+        for chk in checkup_library_items:
+            lib_id = chk.get("lib_id")
+            code = chk.get("code")
+
+            if not lib_id:
+                continue
+
+            completed_count = 0
+            if code:
+                try:
+                    # 查询每个复查分类的记录总数
+                    # 使用 list_report_images 替代 query_metrics_by_type
+                    # 统计口径：按分类聚合、去重（list_report_images 已按日期分组统计 total）
+                    payload = ReportUploadService.list_report_images(
+                        patient_id=int(patient_id),
+                        category_code=code,
+                        report_month="",
+                        page_num=1,
+                        page_size=1,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    completed_count = int(payload.get("total") or 0)
+                except Exception as e:
+                    logging.error(f"查询复查档案统计失败 code={code}: {e}")
+            checkup_stats.append(
+                {
+                    "lib_id": lib_id,
+                    "code": code,
+                    "title": chk.get("name") or "",
+                    "category": chk.get("category") or "",
+                    "count": completed_count,
+                    "abnormal": 0,
+                }
+            )
+
+    # 复查指标：医生配置的核心关注指标统计（含 0 记录项），范围跟随服务包
+    try:
+        review_metric_stats = build_patient_review_metric_stats(
+            patient=patient,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as e:
+        logging.error(f"查询复查指标统计失败: {e}")
+
+    checkup_stats = [item for item in checkup_stats if item["count"] or item["abnormal"]]
+    return checkup_stats, review_metric_stats
+
+
+@auto_wechat_login
+@check_patient
+def health_records(request: HttpRequest) -> HttpResponse:
+    """
+    【页面说明】健康档案页面 `/p/health/records/` 
+    【功能逻辑】
+    1. 展示各项健康指标的记录统计（记录次数、异常次数）。
+    2. 支持空状态展示。
+    """
+    patient = request.patient
+    patient_id = patient.id or None
+    is_member = _is_member(patient)
+    selected_package_id = request.GET.get("package_id")
+    entry_source = request.GET.get("source")
+    entry_view = request.GET.get("view")
+    is_medication_detail_entry = bool(
+        entry_source == "medication" and (entry_view == "detail" or not entry_view)
+    )
+
+    service_packages, selected_package, start_date, end_date = _resolve_service_package_selection(
+        patient, is_member, selected_package_id
+    )
 
     start_dt = datetime.combine(start_date, datetime.min.time())
     end_dt = datetime.combine(end_date, datetime.max.time())
@@ -959,7 +1042,6 @@ def health_records(request: HttpRequest) -> HttpResponse:
                     logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
                     # 保持默认值 0
     health_survey_stats = []
-    checkup_stats = []
     if is_member and selected_package and patient_id:
         tz = timezone.get_current_timezone()
         survey_start_at = timezone.make_aware(
@@ -974,45 +1056,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
             end_at=survey_end_at,
         )
 
-        from health_data.services.report_service import ReportUploadService
-
-        checkup_library_items = get_active_checkup_library() 
-        if patient_id and checkup_library_items:
-            for chk in checkup_library_items:
-                lib_id = chk.get("lib_id")
-                code = chk.get("code")
-                
-                if not lib_id:
-                    continue
-
-                completed_count = 0
-                if code:
-                    try:
-                        # 查询每个复查分类的记录总数
-                        # 使用 list_report_images 替代 query_metrics_by_type
-                        # 统计口径：按分类聚合、去重（list_report_images 已按日期分组统计 total）
-                        payload = ReportUploadService.list_report_images(
-                            patient_id=int(patient_id),
-                            category_code=code,
-                            report_month="",
-                            page_num=1,
-                            page_size=1,
-                            start_date=start_date,
-                            end_date=end_date,
-                        )
-                        completed_count = int(payload.get("total") or 0)
-                    except Exception as e:
-                        logging.error(f"查询复查档案统计失败 code={code}: {e}")
-                checkup_stats.append(
-                    {
-                        "lib_id": lib_id,
-                        "code": code,
-                        "title": chk.get("name") or "",
-                        "category": chk.get("category") or "",
-                        "count": completed_count,
-                        "abnormal": 0,
-                    }
-                )
+    checkup_stats, review_metric_stats = _build_checkup_tab_stats(
+        patient, patient_id, is_member, selected_package, start_date, end_date
+    )
 
     if not is_medication_detail_entry:
         health_stats = [item for item in health_stats if item["count"] or item["abnormal"]]
@@ -1020,6 +1066,9 @@ def health_records(request: HttpRequest) -> HttpResponse:
         item for item in health_survey_stats if item["count"] or item["abnormal"]
     ]
     checkup_stats = [item for item in checkup_stats if item["count"] or item["abnormal"]]
+
+    active_tab = request.GET.get("tab")
+    active_tab = "metrics" if active_tab == "metrics" else "archive"
 
     context = {
         "patient_id": patient_id,
@@ -1030,6 +1079,8 @@ def health_records(request: HttpRequest) -> HttpResponse:
         "selected_package_id": selected_package["id"] if selected_package else None,
         "selected_date_range": {"start_date": start_date, "end_date": end_date},
         "checkup_stats": checkup_stats,
+        "review_metric_stats": review_metric_stats,
+        "active_tab": active_tab,
         "buy_url": generate_menu_auth_url("market:product_buy"),
         "entry_source": entry_source,
         "entry_view": entry_view,
@@ -1037,6 +1088,38 @@ def health_records(request: HttpRequest) -> HttpResponse:
     }
 
     return render(request, "web_patient/health_records.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def health_records_tab_content(request: HttpRequest) -> HttpResponse:
+    """复查档案/复查指标 Tab 局部内容。
+
+    供健康档案页 Tab 页内切换时 fetch 刷新，不整页跳转，
+    避免进入详情页返回后丢失 Tab 状态。
+    """
+    patient = request.patient
+    patient_id = patient.id or None
+    is_member = _is_member(patient)
+
+    _, selected_package, start_date, end_date = _resolve_service_package_selection(
+        patient, is_member, request.GET.get("package_id")
+    )
+    checkup_stats, review_metric_stats = _build_checkup_tab_stats(
+        patient, patient_id, is_member, selected_package, start_date, end_date
+    )
+
+    active_tab = request.GET.get("tab")
+    active_tab = "metrics" if active_tab == "metrics" else "archive"
+
+    context = {
+        "patient_id": patient_id,
+        "selected_package_id": selected_package["id"] if selected_package else None,
+        "checkup_stats": checkup_stats,
+        "review_metric_stats": review_metric_stats,
+        "active_tab": active_tab,
+    }
+    return render(request, "web_patient/partials/health_records_checkup_tabs.html", context)
 
 
 @auto_wechat_login
@@ -2492,3 +2575,205 @@ def review_record_detail_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"success": False, "message": "数据加载失败，请重试"}, status=500)
 
     return JsonResponse({"success": True, **payload})
+
+
+def _load_review_metric_records_batch(
+    *,
+    patient,
+    checkup_id: int,
+    field_id: int,
+    cursor_month: str,
+    cursor_offset: int,
+    limit: int,
+) -> tuple[list, bool, str | None, int | None]:
+    """按月游标批量加载单指标复查记录（对齐一般监测）。
+
+    从 cursor_month 起逐月倒序取数，当月不足 limit 时自动回退前月补齐，
+    直到凑满 limit 或到达最早记录月；同一日期多条结果仅保留最新一条
+    （id 最大，与图表「同日多条取最后一条」口径一致）。
+    返回 (records, has_more, next_cursor_month, next_cursor_offset)。
+    """
+    base_qs = CheckupResultValue.objects.filter(
+        patient=patient,
+        checkup_item_id=checkup_id,
+        standard_field_id=field_id,
+        value_numeric__isnull=False,
+    )
+
+    earliest = base_qs.order_by("report_date", "id").only("report_date").first()
+    if earliest is None:
+        return [], False, None, None
+
+    earliest_month = earliest.report_date.strftime("%Y-%m")
+    active_month = _resolve_month_window(cursor_month)[0]
+    active_offset = max(0, cursor_offset)
+    records = []
+
+    while len(records) < limit and _month_gte(active_month, earliest_month):
+        month_label, month_start, month_end_exclusive, _ = _resolve_month_window(active_month)
+        month_base = base_qs.filter(
+            report_date__gte=month_start.date(),
+            report_date__lt=month_end_exclusive.date(),
+        )
+        # 同日多条仅保留最新写入的一条（id 最大），日期不跨月，月内去重即全局去重
+        latest_ids = list(
+            month_base.values("report_date")
+            .annotate(max_id=Max("id"))
+            .values_list("max_id", flat=True)
+        )
+        month_qs = (
+            month_base.filter(id__in=latest_ids)
+            .order_by("-report_date", "-id")
+            .only(
+                "id",
+                "report_date",
+                "value_numeric",
+                "unit",
+                "range_text",
+                "lower_bound",
+                "upper_bound",
+                "abnormal_flag",
+            )
+        )
+        month_total = month_qs.count()
+        if active_offset >= month_total:
+            active_month = _shift_month(month_label)
+            active_offset = 0
+            continue
+
+        remaining = limit - len(records)
+        month_items = list(month_qs[active_offset : active_offset + remaining])
+        records.extend(month_items)
+
+        next_offset = active_offset + len(month_items)
+        if next_offset < month_total:
+            return records, True, month_label, next_offset
+
+        active_month = _shift_month(month_label)
+        active_offset = 0
+
+    has_more = bool(records) and _month_gte(active_month, earliest_month)
+    return records, has_more, active_month if has_more else None, 0 if has_more else None
+
+
+@auto_wechat_login
+@check_patient
+def review_metric_detail(request: HttpRequest) -> HttpResponse:
+    """复查指标详情页：单指标记录列表 + 按月趋势图表（列表/图表交互均对齐一般监测）。"""
+    patient = request.patient
+    patient_id = patient.id or None
+    mapping_id_raw = request.GET.get("mapping_id") or ""
+
+    mapping_info = get_review_metric_mapping_info(mapping_id_raw)
+    if not mapping_info:
+        raise Http404("指标不存在或已停用")
+    mapping_id = mapping_info["mapping_id"]
+
+    current_month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+    current_month, _, _, _ = _resolve_month_window(current_month)
+
+    chart = build_review_metric_chart(patient, mapping_id, current_month) or {}
+
+    records = []
+    has_more = False
+    next_cursor_month = None
+    next_cursor_offset = None
+    if patient_id:
+        (
+            records,
+            has_more,
+            next_cursor_month,
+            next_cursor_offset,
+        ) = _load_review_metric_records_batch(
+            patient=patient,
+            checkup_id=mapping_info["checkup_id"],
+            field_id=mapping_info["field_id"],
+            cursor_month=current_month,
+            cursor_offset=0,
+            limit=RECORD_BATCH_SIZE,
+        )
+
+    initial_items = [record_to_detail_item(record, mapping_info) for record in records]
+
+    context = {
+        "patient_id": patient_id,
+        "title": mapping_info["field_display_name"],
+        "mapping_id": mapping_id,
+        "current_month": current_month,
+        "chart_available": bool(chart.get("has_data")),
+        "chart_json": json.dumps(chart, ensure_ascii=False),
+        "initial_items": initial_items,
+        "has_records": bool(initial_items),
+        "has_more": has_more,
+        "next_cursor_month": next_cursor_month,
+        "next_cursor_offset": next_cursor_offset,
+        "batch_size": RECORD_BATCH_SIZE,
+    }
+    return render(request, "web_patient/review_metric_detail.html", context)
+
+
+@auto_wechat_login
+@check_patient
+def review_metric_detail_data(request: HttpRequest) -> JsonResponse:
+    """复查指标详情数据接口：仅传 month 返回当月图表数据，否则按游标返回记录批量列表。"""
+    patient = request.patient
+    patient_id = patient.id or None
+
+    requested_patient_id = request.GET.get("patient_id")
+    if requested_patient_id and patient_id and str(patient_id) != str(requested_patient_id):
+        return JsonResponse({"success": False, "message": "无权访问该患者数据"}, status=403)
+
+    mapping_info = get_review_metric_mapping_info(request.GET.get("mapping_id") or "")
+    if not mapping_info:
+        return JsonResponse({"success": False, "message": "指标不存在或已停用"}, status=404)
+    mapping_id = mapping_info["mapping_id"]
+
+    if "month" in request.GET and not any(
+        key in request.GET for key in ("cursor_month", "cursor_offset", "limit")
+    ):
+        month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+        month, _, _, _ = _resolve_month_window(month)
+        chart = build_review_metric_chart(patient, mapping_id, month)
+        if chart is None:
+            return JsonResponse({"success": False, "message": "图表数据加载失败"}, status=500)
+        return JsonResponse({"success": True, "chart": chart, "month": month})
+
+    cursor_month = request.GET.get("cursor_month") or timezone.localdate().strftime("%Y-%m")
+    cursor_month, _, _, days_in_month = _resolve_month_window(cursor_month)
+
+    try:
+        cursor_offset = max(0, int(request.GET.get("cursor_offset", 0)))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "message": "cursor_offset 必须为整数。"}, status=400)
+
+    try:
+        limit = int(request.GET.get("limit", days_in_month))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "message": "limit 必须为整数。"}, status=400)
+    limit = max(1, min(limit, days_in_month))
+
+    (
+        records,
+        has_more,
+        next_cursor_month,
+        next_cursor_offset,
+    ) = _load_review_metric_records_batch(
+        patient=patient,
+        checkup_id=mapping_info["checkup_id"],
+        field_id=mapping_info["field_id"],
+        cursor_month=cursor_month,
+        cursor_offset=cursor_offset,
+        limit=limit,
+    )
+
+    items = [record_to_detail_item(record, mapping_info) for record in records]
+    return JsonResponse(
+        {
+            "success": True,
+            "items": items,
+            "has_more": has_more,
+            "next_cursor_month": next_cursor_month,
+            "next_cursor_offset": next_cursor_offset,
+            "batch_size": limit,
+        }
+    )
