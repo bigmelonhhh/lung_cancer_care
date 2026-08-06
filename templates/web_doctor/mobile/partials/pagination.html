@@ -1,0 +1,45 @@
+{% comment %}
+移动端统一分页器 partial。
+统一三种历史样式为一种：h-11 rounded-xl shadow-sm ring-1 ring-slate-900/5。
+
+参数：
+- page: Django Page 对象（必填）
+- param_name: 分页参数名（必填，如 "records_page" / "managed_page" / "page"）
+- base_query: 基础查询串（可选，如 "q=xxx&unmanaged_page=2&"，会拼在 ? 后、param_name 前）
+- hx_target: HTMX 目标选择器（可选，传入则启用 HTMX 局部刷新）
+- hx_indicator: HTMX indicator 选择器（可选）
+- extra_class: 容器额外 class（可选）
+
+用法示例：
+  {% include "web_doctor/mobile/partials/pagination.html" with page=reports_page param_name="records_page" %}
+  {% include "web_doctor/mobile/partials/pagination.html" with page=todo_page param_name="page" hx_target="#mobile-todo-list-content" hx_indicator="#mobile-todo-loading" %}
+{% endcomment %}
+{% if page.paginator.num_pages > 1 %}
+<div class="flex items-center justify-between gap-3 {{ extra_class|default:'' }}">
+  {% if page.has_previous %}
+  <a
+    href="?{{ base_query|default:'' }}{{ param_name }}={{ page.previous_page_number }}"
+    {% if hx_target %}hx-get="?{{ base_query|default:'' }}{{ param_name }}={{ page.previous_page_number }}" hx-target="{{ hx_target }}" hx-swap="innerHTML"{% if hx_indicator %} hx-indicator="{{ hx_indicator }}"{% endif %}{% endif %}
+    class="flex-1 h-11 rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5 flex items-center justify-center text-sm font-bold text-slate-700 active:bg-slate-50 transition"
+  >
+    上一页
+  </a>
+  {% else %}
+  <div class="flex-1 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-400 cursor-not-allowed">上一页</div>
+  {% endif %}
+
+  <div class="text-xs font-medium text-slate-400 shrink-0 tabular-nums">第{{ page.number }}/{{ page.paginator.num_pages }}页</div>
+
+  {% if page.has_next %}
+  <a
+    href="?{{ base_query|default:'' }}{{ param_name }}={{ page.next_page_number }}"
+    {% if hx_target %}hx-get="?{{ base_query|default:'' }}{{ param_name }}={{ page.next_page_number }}" hx-target="{{ hx_target }}" hx-swap="innerHTML"{% if hx_indicator %} hx-indicator="{{ hx_indicator }}"{% endif %}{% endif %}
+    class="flex-1 h-11 rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5 flex items-center justify-center text-sm font-bold text-slate-700 active:bg-slate-50 transition"
+  >
+    下一页
+  </a>
+  {% else %}
+  <div class="flex-1 h-11 rounded-xl bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-400 cursor-not-allowed">下一页</div>
+  {% endif %}
+</div>
+{% endif %}

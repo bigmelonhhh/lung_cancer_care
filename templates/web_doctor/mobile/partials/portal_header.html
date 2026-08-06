@@ -1,0 +1,38 @@
+{% comment %}
+医生移动端统一顶栏。
+带业务语义的局部模板，按 AGENTS.md 第 5 条放在 web_doctor/mobile/partials/ 下。
+
+参数：
+- title: 主标题（必填）
+- subtitle: 副标题（可选，留空则不渲染）
+- back_href: 返回 fallback URL（必填，无返回按钮时传空字符串）
+- back_aria_label: 返回按钮 aria-label（可选，默认"返回"）
+
+返回按钮统一使用 data-role="mobile-back"，由 base_portal.html 中的全局事件委托处理：
+- 优先 history.back()
+- history 为空时跳转 back_href
+- 无 JS 时直接走 href（渐进增强，符合 AGENTS.md 第 5 条"页面导航优先使用具有真实 href 的 <a>"）
+{% endcomment %}
+<div class="bg-blue-600 pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden rounded-b-3xl">
+    <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
+
+    <div class="relative z-10 pt-4 flex items-center gap-3">
+        {% if back_href %}
+        <a
+            href="{{ back_href }}"
+            data-role="mobile-back"
+            class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0"
+            aria-label="{{ back_aria_label|default:'返回' }}"
+        >
+            {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+        </a>
+        {% endif %}
+        <div class="text-white min-w-0 flex-1 {% if subtitle %}flex flex-col{% endif %}">
+            <div class="text-xl font-bold truncate leading-tight">{{ title }}</div>
+            {% if subtitle %}
+            <div class="text-xs text-blue-100 opacity-90 font-medium mt-0.5 truncate">{{ subtitle }}</div>
+            {% endif %}
+        </div>
+    </div>
+</div>

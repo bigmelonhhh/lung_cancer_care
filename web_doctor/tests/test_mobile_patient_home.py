@@ -108,7 +108,7 @@ class MobilePatientHomeTests(TestCase):
         self.assertTemplateUsed(response, "web_doctor/mobile/patient_home.html")
         self.assertContains(response, f"患者：{self.patient_active.name}")
         self.assertContains(response, "常用菜单")
-        self.assertContains(response, 'id="mobile-back-btn"', html=False)
+        self.assertContains(response, 'data-role="mobile-back"', html=False)
         self.assertContains(
             response,
             f'href="{reverse("web_doctor:mobile_patient_basic_info")}?patient_id={self.patient_active.id}"',

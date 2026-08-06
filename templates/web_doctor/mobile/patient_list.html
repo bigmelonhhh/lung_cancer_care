@@ -3,11 +3,6 @@
 {% block title %}患者列表{% endblock %}
 
 {% block body %}
-<!-- Import Fonts -->
-<style>    .font-lexend { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-    .font-source { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-</style>
-
 <div class="min-h-screen bg-slate-50 pb-safe-bottom font-source text-slate-900">
   <div class="bg-blue-600 pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden rounded-b-3xl">
     <!-- Abstract Background Pattern -->
@@ -15,12 +10,10 @@
     <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
 
     <div class="flex items-center gap-3 pt-4 relative z-10">
-      <div onclick="window.history.back()" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20">
-        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-      </div>
-      <div class="text-white">
+      <a href="{% url 'web_doctor:mobile_home' %}" data-role="mobile-back" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回工作台">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
+      <div class="text-white min-w-0 flex-1 flex flex-col">
         <div class="text-xl font-lexend font-bold leading-tight">患者列表</div>
         <div class="text-xs text-blue-100 opacity-90 font-medium mt-0.5">支持姓名/手机号搜索</div>
       </div>
@@ -38,11 +31,9 @@
               autocomplete="off"
               inputmode="search"
             />
-            <svg class="w-5 h-5 text-slate-400 absolute left-3.5 top-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
+            {% include "components/mobile/icon.html" with name="search" class="w-5 h-5 text-slate-400 absolute left-3.5 top-3" %}
         </div>
-        <button type="submit" class="h-11 px-6 rounded-full bg-slate-900 text-white text-sm font-bold active:scale-95 transition hover:bg-slate-800 shadow-lg shadow-slate-900/10">
+        <button type="submit" class="h-11 px-6 rounded-full bg-blue-700 ring-1 ring-white/20 text-white text-sm font-bold active:scale-95 transition hover:bg-blue-800 shadow-lg shadow-blue-900/20">
           搜索
         </button>
       </div>
@@ -114,39 +105,19 @@
               </div>
             </div>
             <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
+                {% include "components/mobile/icon.html" with name="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" %}
             </div>
           </a>
           {% endfor %}
         {% else %}
-          <div class="p-8 text-center">
-             <div class="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                <svg class="w-6 h-6 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                </svg>
-             </div>
-             <p class="text-sm text-slate-400 font-medium">暂无管理中患者</p>
-          </div>
+          {% include "components/ui/empty_state.html" with title="暂无管理中患者" description="" extra_class="border-0 bg-transparent py-8" %}
         {% endif %}
       </div>
-      {% if managed_page.paginator.num_pages > 1 %}
-      <div class="bg-slate-50/50 border-t border-slate-100 px-4 py-3 flex items-center justify-between text-sm">
-        {% if managed_page.has_previous %}
-          <a class="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 font-medium active:bg-slate-50 transition shadow-sm"
-             href="?q={{ q|urlencode }}&managed_page={{ managed_page.previous_page_number }}&unmanaged_page={{ unmanaged_page.number }}">上一页</a>
-        {% else %}
-          <span class="px-4 py-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-300 font-medium">上一页</span>
-        {% endif %}
-        {% if managed_page.has_next %}
-          <a class="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 font-medium active:bg-slate-50 transition shadow-sm"
-             href="?q={{ q|urlencode }}&managed_page={{ managed_page.next_page_number }}&unmanaged_page={{ unmanaged_page.number }}">下一页</a>
-        {% else %}
-          <span class="px-4 py-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-300 font-medium">下一页</span>
-        {% endif %}
-      </div>
-      {% endif %}
+      {% with q_enc=q|urlencode unmanaged_num_str=unmanaged_page.number|stringformat:"s" %}
+        {% with managed_base_query="q="|add:q_enc|add:"&unmanaged_page="|add:unmanaged_num_str|add:"&" %}
+        {% include "web_doctor/mobile/partials/pagination.html" with page=managed_page param_name="managed_page" base_query=managed_base_query extra_class="bg-slate-50/50 border-t border-slate-100 px-4 py-3" %}
+        {% endwith %}
+      {% endwith %}
     </div>
 
     <!-- Unmanaged Patients -->
@@ -207,34 +178,19 @@
               </div>
             </div>
             <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
-                <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                </svg>
+                {% include "components/mobile/icon.html" with name="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" %}
             </div>
           </a>
           {% endfor %}
         {% else %}
-          <div class="p-8 text-center">
-             <p class="text-sm text-slate-400 font-medium">暂无未管理患者</p>
-          </div>
+          {% include "components/ui/empty_state.html" with title="暂无未管理患者" description="" extra_class="border-0 bg-transparent py-8" %}
         {% endif %}
       </div>
-      {% if unmanaged_page.paginator.num_pages > 1 %}
-      <div class="bg-slate-50/50 border-t border-slate-100 px-4 py-3 flex items-center justify-between text-sm">
-        {% if unmanaged_page.has_previous %}
-          <a class="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 font-medium active:bg-slate-50 transition shadow-sm"
-             href="?q={{ q|urlencode }}&managed_page={{ managed_page.number }}&unmanaged_page={{ unmanaged_page.previous_page_number }}">上一页</a>
-        {% else %}
-          <span class="px-4 py-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-300 font-medium">上一页</span>
-        {% endif %}
-        {% if unmanaged_page.has_next %}
-          <a class="px-4 py-2 rounded-lg bg-white border border-slate-200 text-slate-600 font-medium active:bg-slate-50 transition shadow-sm"
-             href="?q={{ q|urlencode }}&managed_page={{ managed_page.number }}&unmanaged_page={{ unmanaged_page.next_page_number }}">下一页</a>
-        {% else %}
-          <span class="px-4 py-2 rounded-lg bg-slate-50 border border-slate-100 text-slate-300 font-medium">下一页</span>
-        {% endif %}
-      </div>
-      {% endif %}
+      {% with q_enc=q|urlencode managed_num_str=managed_page.number|stringformat:"s" %}
+        {% with unmanaged_base_query="q="|add:q_enc|add:"&managed_page="|add:managed_num_str|add:"&" %}
+        {% include "web_doctor/mobile/partials/pagination.html" with page=unmanaged_page param_name="unmanaged_page" base_query=unmanaged_base_query extra_class="bg-slate-50/50 border-t border-slate-100 px-4 py-3" %}
+        {% endwith %}
+      {% endwith %}
     </div>
   </div>
 

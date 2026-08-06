@@ -3,11 +3,6 @@
 {% block title %}患者咨询{% endblock %}
 
 {% block body %}
-<!-- Import Fonts -->
-<style>    .font-lexend { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-    .font-source { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-</style>
-
 <div x-data="mobilePatientChatList()" x-init="init()" class="fixed inset-0 bg-slate-50 overflow-hidden font-source text-slate-900">
   {% csrf_token %}
 
@@ -17,15 +12,13 @@
     <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
 
     <div class="relative z-10 h-12 px-4 flex items-center justify-between">
-      <button type="button" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20" @click="goBack()">
-        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
+      <a href="{% url 'web_doctor:mobile_patient_home' patient_id=patient.id %}" data-role="mobile-back" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回患者主页">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
       <div class="min-w-0 px-2 flex-1 text-center">
         <div class="text-lg font-lexend font-bold text-white truncate">聊天记录：{{ patient.name }}</div>
       </div>
-      <div class="w-9 h-9"></div>
+      <div class="w-9 h-9 shrink-0"></div>
     </div>
   </div>
 
@@ -209,14 +202,6 @@
           this.markLatestRead();
         });
         this.startPolling();
-      },
-
-      goBack() {
-        if (window.history.length > 1) {
-          window.history.back();
-          return;
-        }
-        window.location.href = "{% url 'web_doctor:mobile_patient_home' patient.id %}";
       },
 
       getCsrfToken() {

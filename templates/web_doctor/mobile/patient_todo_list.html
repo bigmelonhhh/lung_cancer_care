@@ -3,11 +3,6 @@
 {% block title %}患者待办{% endblock %}
 
 {% block body %}
-<!-- Import Fonts -->
-<style>    .font-lexend { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-    .font-source { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-</style>
-
 <div class="min-h-screen bg-slate-50 pb-safe-bottom font-source text-slate-900 overflow-x-hidden">
   <div class="bg-blue-600 pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden rounded-b-3xl">
     <!-- Abstract Background Pattern -->
@@ -15,12 +10,10 @@
     <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
 
     <div class="relative z-10 pt-4 flex items-center gap-3">
-      <button type="button" id="mobile-back-btn" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20">
-        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-      <div class="text-white min-w-0 px-1 flex flex-col">
+      <a href="{% if patient %}{% url 'web_doctor:mobile_patient_home' patient_id=patient.id %}{% else %}{% url 'web_doctor:mobile_home' %}{% endif %}" data-role="mobile-back" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
+      <div class="text-white min-w-0 flex-1 flex flex-col">
         <div class="text-xl font-lexend font-bold truncate">
           {% if patient %}患者待办：{{ patient.name }}{% else %}患者待办{% endif %}
         </div>
@@ -482,12 +475,6 @@
           setModalMode(mode, payload);
           openModal();
           loadTodoHistory(payload);
-          return;
-        }
-
-        const backBtn = event.target.closest("#mobile-back-btn");
-        if (backBtn) {
-          window.history.back(); 
           return;
         }
 

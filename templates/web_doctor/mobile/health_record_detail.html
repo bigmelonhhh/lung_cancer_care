@@ -3,20 +3,23 @@
 {% block title %}{{ title }}{% endblock %}
 
 {% block body %}
-<div class="h-screen min-h-screen bg-[#F3F4F6] font-sans flex flex-col" style="height: 100dvh;">
-  <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
-    <div class="pt-safe-top">
-      <div class="flex items-center h-12 px-4 relative">
-        <div onclick="goListReplace()" class="cursor-pointer absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-          </svg>
-        </div>
-        <h1 class="w-full text-center text-lg font-bold text-slate-800">{{ title }}</h1>
+<div class="h-screen min-h-screen bg-slate-50 font-source text-slate-900 flex flex-col" style="height: 100dvh;">
+  <div class="bg-blue-600 pt-safe-top pb-10 px-4 shadow-md relative overflow-hidden rounded-b-3xl flex-none">
+    <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
+
+    <div class="relative z-10 pt-4 flex items-center gap-3">
+      <a href="{% url 'web_doctor:mobile_health_records' %}?patient_id={{ patient_id }}" data-role="mobile-back" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回健康档案">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
+      <div class="text-white min-w-0 flex-1">
+        <div class="text-xl font-lexend font-bold truncate">{{ title }}</div>
       </div>
     </div>
+  </div>
 
-    <div class="flex items-center border-t border-slate-100 h-12">
+  <div class="bg-white shadow-sm flex-none -mt-6 relative z-20 rounded-t-2xl">
+    <div class="flex items-center h-12">
       <div class="flex-1 flex items-center justify-center {% if chart_available %}border-r border-slate-100{% endif %} active:bg-slate-50 transition cursor-pointer relative" onclick="document.getElementById('month-picker').showPicker()">
         <input type="month" id="month-picker" class="absolute inset-0 opacity-0 cursor-pointer" onchange="updateMonthDisplay(this)" value="{{ current_month }}">
         <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -324,10 +327,6 @@
     if (container.scrollHeight <= container.clientHeight + 20) {
       loadMoreData();
     }
-  }
-
-  function goListReplace() {
-    history.back();
   }
 
   function viewQuestionnaireDetail(submissionId) {
