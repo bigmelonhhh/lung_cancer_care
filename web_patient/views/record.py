@@ -2659,7 +2659,11 @@ def _load_review_metric_records_batch(
 @auto_wechat_login
 @check_patient
 def review_metric_detail(request: HttpRequest) -> HttpResponse:
-    """复查指标详情页：单指标记录列表 + 按月趋势图表（列表/图表交互均对齐一般监测）。"""
+    """复查指标详情页：单指标记录列表 + 按月趋势图表（列表/图表交互均对齐一般监测）。
+
+    月份切换后的首屏状态以整页视图为准：由服务端重新计算首屏列表、
+    图表数据与分页游标；前端数据接口只承担滚动分页和独立图表数据返回。
+    """
     patient = request.patient
     patient_id = patient.id or None
     mapping_id_raw = request.GET.get("mapping_id") or ""
@@ -2715,7 +2719,11 @@ def review_metric_detail(request: HttpRequest) -> HttpResponse:
 @auto_wechat_login
 @check_patient
 def review_metric_detail_data(request: HttpRequest) -> JsonResponse:
-    """复查指标详情数据接口：仅传 month 返回当月图表数据，否则按游标返回记录批量列表。"""
+    """复查指标详情数据接口：仅传 month 返回当月图表数据，否则按游标返回记录批量列表。
+
+    该接口不再负责月份切换后的首屏页面重建；切换月份时由详情页整页刷新，
+    接口只用于滚动分页补数和图表的独立数据获取。
+    """
     patient = request.patient
     patient_id = patient.id or None
 

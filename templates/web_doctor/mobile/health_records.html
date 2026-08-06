@@ -79,35 +79,24 @@
         
 
         <div id="checkup-section"{% if not is_member %} class="hidden"{% endif %}>
-          <div class="text-black font-semibold text-lg mb-2 mt-4">复查档案</div>
-          <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
-              {% if checkup_stats %}
-                  {% for stat in checkup_stats %}
-                  <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
-                      <div class="flex items-start gap-3">
-                          <div class="w-6 h-6 flex items-center justify-center text-blue-600 mt-0.5">
-                              <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                          </div>
-                          <div>
-                              <div class="flex items-center gap-2">
-                                  <h3 class="font-bold text-slate-800 text-base" style="max-width: 220px;">{{ stat.title }}</h3>
-                              </div>
-                              <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
-                                  <span>记录：{{ stat.count }}次</span>
-                                 
-                              </div>
-                          </div>
-                      </div>
-                      <button onclick="window.location.href='{% url 'web_doctor:mobile_review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                          查看
-                      </button>
-                  </div>
-                  {% endfor %}
-              {% else %}
-                  <div class="p-4 text-sm text-slate-500">暂无复查档案数据</div>
-              {% endif %}
+          <div class="mt-5 mb-3 p-1 bg-slate-200/80 rounded-xl flex items-center shadow-inner">
+                <a href="{% url 'web_doctor:mobile_health_records' %}?tab=archive&amp;patient_id={{ patient_id|default:'' }}{% if selected_package_id %}&amp;package_id={{ selected_package_id }}{% endif %}"
+                data-checkup-tab="archive"
+                data-active="{% if active_tab == 'archive' %}true{% else %}false{% endif %}"
+                class="flex-1 py-2.5 text-center text-base rounded-lg transition-all duration-200 select-none {% if active_tab == 'archive' %}bg-white font-bold text-blue-600 shadow-sm{% else %}font-medium text-slate-600{% endif %}">
+                    复查档案
+                </a>
+
+                <a href="{% url 'web_doctor:mobile_health_records' %}?tab=metrics&amp;patient_id={{ patient_id|default:'' }}{% if selected_package_id %}&amp;package_id={{ selected_package_id }}{% endif %}"
+                data-checkup-tab="metrics"
+                data-active="{% if active_tab == 'metrics' %}true{% else %}false{% endif %}"
+                class="flex-1 py-2.5 text-center text-base rounded-lg transition-all duration-200 select-none {% if active_tab == 'metrics' %}bg-white font-bold text-blue-600 shadow-sm{% else %}font-medium text-slate-600{% endif %}">
+                    复查指标
+                </a>
+            </div>
+
+          <div id="checkup-tab-content">
+              {% include "web_doctor/mobile/partials/health_records_checkup_tabs.html" %}
           </div>
         </div>
 
@@ -166,6 +155,66 @@
             var url = new URL(window.location.href);
             url.searchParams.set("package_id", packageId);
             window.location.href = url.toString();
+        });
+    })();
+
+    (function () {
+        var tabContent = document.getElementById("checkup-tab-content");
+        var tabLinks = document.querySelectorAll("#checkup-section [data-checkup-tab]");
+        if (!tabContent || !tabLinks.length) return;
+        var tabUrl = "{% url 'web_doctor:mobile_health_records_tab_content' %}";
+
+        var ACTIVE_CLASSES = ["bg-white", "font-bold", "text-blue-600", "shadow-sm"];
+        var INACTIVE_CLASSES = ["font-medium", "text-slate-600"];
+        var ALL_STATE_CLASSES = [
+            "bg-white", "font-bold", "text-blue-600", "shadow-sm",
+            "font-medium", "text-slate-600", "hover:text-slate-900", "text-slate-900"
+        ];
+
+        function applyTabStyles() {
+            tabLinks.forEach(function (link) {
+                ALL_STATE_CLASSES.forEach(function (cls) {
+                    link.classList.remove(cls);
+                });
+
+                var isActive = link.dataset.active === "true";
+                var targetClasses = isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES;
+                targetClasses.forEach(function (cls) {
+                    link.classList.add(cls);
+                });
+            });
+        }
+
+        tabLinks.forEach(function (link) {
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+                var tab = link.getAttribute("data-checkup-tab");
+                var currentUrl = new URL(window.location.href);
+                if (link.dataset.active === "true" && currentUrl.searchParams.get("tab") === tab) return;
+
+                var params = new URLSearchParams();
+                params.set("tab", tab);
+                var patientId = currentUrl.searchParams.get("patient_id");
+                if (patientId) params.set("patient_id", patientId);
+                var packageId = currentUrl.searchParams.get("package_id");
+                if (packageId) params.set("package_id", packageId);
+
+                fetch(tabUrl + "?" + params.toString(), { credentials: "same-origin" })
+                    .then(function (res) {
+                        if (!res.ok) throw new Error("tab content load failed");
+                        return res.text();
+                    })
+                    .then(function (html) {
+                        tabContent.innerHTML = html;
+                        tabLinks.forEach(function (item) {
+                            item.dataset.active = item.getAttribute("data-checkup-tab") === tab ? "true" : "false";
+                        });
+                        applyTabStyles();
+                        currentUrl.searchParams.set("tab", tab);
+                        window.history.replaceState(null, "", currentUrl.toString());
+                    })
+                    .catch(function () {});
+            });
         });
     })();
 

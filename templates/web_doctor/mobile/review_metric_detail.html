@@ -7,7 +7,7 @@
   <div class="bg-white sticky top-0 z-30 shadow-sm flex-none">
     <div class="pt-safe-top">
       <div class="flex items-center h-12 px-4 relative">
-        <a href="{% url 'web_patient:health_records' %}?tab=metrics{% if patient_id %}&amp;patient_id={{ patient_id }}{% endif %}" id="nav-back-link" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
+        <a href="{% url 'web_doctor:mobile_health_records' %}?tab=metrics&amp;patient_id={{ patient_id|default:'' }}" id="nav-back-link" class="absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60 z-10">
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
@@ -135,7 +135,7 @@
 (function () {
     const mappingId = "{{ mapping_id }}";
     const patientId = "{{ patient_id|default:'' }}";
-    const dataUrl = "{% url 'web_patient:review_metric_detail_data' %}";
+    const dataUrl = "{% url 'web_doctor:mobile_review_metric_detail_data' %}";
     let currentMonth = "{{ current_month }}";
     let hasMore = {{ has_more|yesno:"true,false" }};
     let cursorMonth = "{{ next_cursor_month|default:'' }}";
@@ -331,8 +331,6 @@
 
         const unitSuffix = chartData.unit ? "(" + chartData.unit + ")" : "";
         const seriesName = chartData.title || "";
-        // 服务端返回「1号 -> 月底」升序，y 轴日期配 inverse 后 1 号置顶，
-        // 与一般监测详情页的横向滑动图表形态保持一致
         const dates = (chartData.date_labels || []).slice();
         const values = (chartData.data || []).slice();
         const points = [];
@@ -389,7 +387,6 @@
                     });
                     return [dateLabel].concat(rows).join("<br/>");
                 },
-                // tooltip 位置：优先点击点右侧，空间不足切左侧（对齐一般监测）
                 position: function (point, params, dom, rect, size) {
                     const x = point[0];
                     const y = point[1];
@@ -517,9 +514,6 @@
     }
 
     document.getElementById("chart-switch-btn").addEventListener("click", toggleViewMode);
-    // 返回优先走历史栈：健康档案页 Tab 切换用 replaceState，普通跳转返回会
-    // 在历史栈中重复压入健康档案条目，导致连续返回时又回到列表页；
-    // href 保留作为直接进入（无历史可退）时的兜底链接。
     document.getElementById("nav-back-link").addEventListener("click", function (event) {
         if (window.history.length > 1) {
             event.preventDefault();

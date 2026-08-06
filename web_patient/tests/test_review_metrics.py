@@ -276,6 +276,11 @@ class ReviewMetricDetailTests(ReviewMetricTestBase):
         # 无 range_text 时用上下限拼装参考范围
         self.assertEqual(items[1]["reference_range"], "")
         self.assertContains(response, "白细胞计数(WBC)")
+        self.assertContains(response, "window.location.replace(url.toString())")
+        self.assertContains(response, 'id="empty-state"')
+        self.assertContains(response, "暂无记录")
+        self.assertNotContains(response, "function resetListForMonth()")
+        self.assertNotContains(response, "function refreshChartForMonth(")
 
     def test_detail_page_initial_batch_anchors_month_and_fills_previous_month(self):
         # 锚定月之后的记录不应出现；锚定月不足时自动补前月数据（对齐一般监测）
@@ -404,6 +409,15 @@ class ReviewMetricDetailTests(ReviewMetricTestBase):
     def test_detail_page_invalid_mapping_returns_404(self):
         response = self.client.get(self.page_url, {"mapping_id": "999999"})
         self.assertEqual(response.status_code, 404)
+
+    def test_detail_page_empty_state_matches_general_monitoring_style(self):
+        response = self.client.get(
+            self.page_url, {"mapping_id": self.mapping_wbc.id, "month": "2025-06"}
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.context["has_records"])
+        self.assertContains(response, 'id="empty-state"')
+        self.assertContains(response, "暂无记录")
 
     def test_data_api_month_returns_chart_payload(self):
         self._create_result_value(
