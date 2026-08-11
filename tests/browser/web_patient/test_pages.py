@@ -1,5 +1,5 @@
 from base64 import b64decode
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 import json
 from urllib.parse import urlencode
@@ -485,6 +485,69 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         self._open("web_patient:health_calendar")
         expect(self.page.locator("body")).to_contain_text("健康日历")
         expect(self.page.locator("body")).to_contain_text("今日计划")
+
+    def test_management_plan_treatment_course_sections_expand_and_collapse(self):
+        today = timezone.localdate()
+        current_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器进行中疗程",
+            start_date=today - timedelta(days=5),
+            end_date=today + timedelta(days=15),
+            cycle_days=21,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        future_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器未开始疗程",
+            start_date=today + timedelta(days=20),
+            end_date=today + timedelta(days=40),
+            cycle_days=21,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        ended_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器已结束疗程",
+            start_date=today - timedelta(days=40),
+            end_date=today - timedelta(days=20),
+            cycle_days=21,
+            status=core_choices.TreatmentCycleStatus.COMPLETED,
+        )
+        for cycle in (current_cycle, future_cycle, ended_cycle):
+            DailyTask.objects.create(
+                patient=self.patient,
+                task_date=cycle.start_date,
+                task_type=PlanItemCategory.QUESTIONNAIRE,
+                title=f"{cycle.name}问卷",
+                status=TaskStatus.PENDING,
+            )
+
+        self.page.set_viewport_size({"width": 375, "height": 812})
+        self._open("web_patient:management_plan")
+
+        current_section = self.page.locator('[data-course-section="in_progress"]')
+        future_section = self.page.locator('[data-course-section="not_started"]')
+        ended_section = self.page.locator('[data-course-section="ended"]')
+
+        expect(current_section).to_have_attribute("open", "")
+        expect(future_section).not_to_have_attribute("open", "")
+        expect(ended_section).not_to_have_attribute("open", "")
+        expect(current_section.get_by_text(current_cycle.name, exact=True)).to_be_visible()
+        expect(future_section.get_by_text(future_cycle.name, exact=True)).to_be_hidden()
+        expect(ended_section.get_by_text(ended_cycle.name, exact=True)).to_be_hidden()
+
+        future_section.locator("summary").click()
+        expect(future_section).to_have_attribute("open", "")
+        expect(future_section.get_by_text(future_cycle.name, exact=True)).to_be_visible()
+
+        ended_section.locator("summary").click()
+        expect(ended_section.get_by_text(ended_cycle.name, exact=True)).to_be_visible()
+        ended_section.locator("summary").click()
+        expect(ended_section.get_by_text(ended_cycle.name, exact=True)).to_be_hidden()
+
+        self.assertLessEqual(
+            self.page.evaluate("document.documentElement.scrollWidth"),
+            375,
+        )
 
     def test_daily_survey_renders_text_inputs_and_submits_mixed_answer_payloads(self):
         today = timezone.localdate()

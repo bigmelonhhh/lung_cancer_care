@@ -1388,6 +1388,10 @@ video {
   min-height: 100vh;
 }
 
+.min-h-12 {
+  min-height: 3rem;
+}
+
 .w-0 {
   width: 0px;
 }
@@ -3637,6 +3641,11 @@ video {
   padding-bottom: 2rem;
 }
 
+.py-7 {
+  padding-top: 1.75rem;
+  padding-bottom: 1.75rem;
+}
+
 .pb-0 {
   padding-bottom: 0px;
 }
@@ -4604,6 +4613,10 @@ video {
 
 .ring-white\/20 {
   --tw-ring-color: rgb(255 255 255 / 0.2);
+}
+
+.ring-slate-200\/80 {
+  --tw-ring-color: rgb(226 232 240 / 0.8);
 }
 
 .ring-opacity-5 {
