@@ -128,6 +128,65 @@ class PlanTableHeaderStylesTests(TestCase):
 
         self.assertEqual(html.count("border-r border-gray-200"), 15)
 
+    def test_editable_plan_table_renders_independent_checkup_and_questionnaire_searches(self):
+        plan_view = self._build_plan_view(
+            checkups=[
+                {
+                    "lib_id": 1,
+                    "name": "胸部增强CT",
+                    "is_active": True,
+                    "schedule": [],
+                    "plan_item_id": 1,
+                }
+            ],
+            questionnaires=[
+                {
+                    "lib_id": 2,
+                    "name": "睡眠质量量表",
+                    "is_active": True,
+                    "schedule": [],
+                    "plan_item_id": 2,
+                }
+            ],
+        )
+
+        html = render_to_string(
+            "web_doctor/partials/settings/plan_table.html",
+            {
+                "patient": self.patient,
+                "cycle": self.cycle,
+                "is_cycle_editable": True,
+                "plan_view": plan_view,
+            },
+        )
+
+        self.assertEqual(html.count("data-plan-filter-input"), 2)
+        self.assertIn('aria-label="搜索复查类目"', html)
+        self.assertIn('aria-label="搜索量表"', html)
+        search_inputs = re.findall(r'<input[^>]+data-plan-filter-input[^>]*>', html)
+        self.assertEqual(len(search_inputs), 2)
+        for search_input in search_inputs:
+            self.assertIn("placeholder:text-slate-300", search_input)
+            self.assertNotIn("font-normal", search_input)
+        self.assertIn('data-plan-filter-text="胸部增强CT"', html)
+        self.assertIn('data-plan-filter-text="睡眠质量量表"', html)
+        self.assertIn("未找到匹配的复查类目", html)
+        self.assertIn("未找到匹配的量表", html)
+
+    def test_readonly_plan_table_does_not_render_search_controls(self):
+        html = render_to_string(
+            "web_doctor/partials/settings/plan_table.html",
+            {
+                "patient": self.patient,
+                "cycle": self.cycle,
+                "is_cycle_editable": False,
+                "plan_view": self._build_plan_view(),
+            },
+        )
+
+        self.assertNotIn("data-plan-filter-input", html)
+        self.assertNotIn("data-plan-filter-empty", html)
+
     def test_28_day_cycle_renders_all_headers_dates_and_dynamic_width(self):
         self.cycle.cycle_days = 28
         self.cycle.save(update_fields=["cycle_days"])

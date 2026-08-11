@@ -993,6 +993,8 @@ def _build_settings_context(
         "current_cycle_count": len(current_cycles),
         "history_cycles": history_cycles,
         "quick_cycle_candidates": cycles,
+        "treatment_cycle_days_min": MIN_TREATMENT_CYCLE_DAYS,
+        "treatment_cycle_days_max": MAX_TREATMENT_CYCLE_DAYS,
         "expanded_cycle_id": expanded_cycle_id,
         "plan_view": plan_view,
         "current_day_index": current_day_index,

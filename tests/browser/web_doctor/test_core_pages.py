@@ -7,6 +7,7 @@ from chat.models import Conversation, ConversationType, Message, MessageSenderRo
 from core.models import (
     CheckupFieldMapping,
     CheckupLibrary,
+    Questionnaire,
     StandardField,
     StandardFieldValueType,
     TreatmentCycle,
@@ -208,6 +209,97 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         modal.locator('button[type="button"]').first.click()
         expect(modal).to_be_hidden(timeout=10000)
 
+    def test_settings_plan_searches_filter_independently_and_survive_htmx_updates(self):
+        today = timezone.localdate()
+        current_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器搜索当前疗程",
+            start_date=today - timedelta(days=2),
+            end_date=today + timedelta(days=18),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        future_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器搜索未来疗程",
+            start_date=today + timedelta(days=30),
+            end_date=today + timedelta(days=50),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        CheckupLibrary.objects.create(
+            name="浏览器胸部增强CT",
+            code="BROWSER_SEARCH_CHEST_CT",
+            category=choices.CheckupCategory.IMAGING,
+            is_active=True,
+        )
+        CheckupLibrary.objects.create(
+            name="浏览器血液肿瘤标志物",
+            code="BROWSER_SEARCH_BLOOD_MARKER",
+            category=choices.CheckupCategory.BLOOD,
+            is_active=True,
+        )
+        Questionnaire.objects.create(
+            name="浏览器睡眠质量量表",
+            code="Q_BROWSER_SEARCH_SLEEP",
+            is_active=True,
+        )
+        Questionnaire.objects.create(
+            name="浏览器呼吸困难量表",
+            code="Q_BROWSER_SEARCH_BREATH",
+            is_active=True,
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-settings").click()
+
+        plan_container = self.page.locator("#plan-table-slot #plan-table-container")
+        expect(plan_container).to_be_visible(timeout=10000)
+        expect(self.page.locator('[data-cycle-select-row][data-cycle-id="%s"]' % current_cycle.id)).to_have_attribute(
+            "aria-current", "true"
+        )
+
+        checkup_search = plan_container.get_by_label("搜索复查类目")
+        questionnaire_search = plan_container.get_by_label("搜索量表")
+        chest_row = plan_container.locator('[data-plan-filter-text="浏览器胸部增强CT"]')
+        blood_row = plan_container.locator('[data-plan-filter-text="浏览器血液肿瘤标志物"]')
+        sleep_row = plan_container.locator('[data-plan-filter-text="浏览器睡眠质量量表"]')
+        breath_row = plan_container.locator('[data-plan-filter-text="浏览器呼吸困难量表"]')
+
+        checkup_search.fill("胸部增强")
+        expect(chest_row).to_be_visible()
+        expect(blood_row).to_be_hidden()
+        expect(sleep_row).to_be_visible()
+        expect(breath_row).to_be_visible()
+
+        questionnaire_search.fill("睡眠质量")
+        expect(sleep_row).to_be_visible()
+        expect(breath_row).to_be_hidden()
+        expect(chest_row).to_be_visible()
+
+        checkup_search.fill("不存在的复查")
+        expect(plan_container.get_by_text("未找到匹配的复查类目", exact=True)).to_be_visible()
+        checkup_search.fill("")
+        expect(chest_row).to_be_visible()
+        expect(blood_row).to_be_visible()
+
+        checkup_search.fill("胸部增强")
+        with self.page.expect_response(lambda response: "/plan-toggle/" in response.url):
+            chest_row.locator("[data-checkup-toggle]").check(force=True)
+        expect(chest_row).to_be_visible(timeout=10000)
+        expect(checkup_search).to_have_value("胸部增强")
+
+        with self.page.expect_response(
+            lambda response: "/settings/" in response.url and "cycle_id=%s" % future_cycle.id in response.url
+        ):
+            self.page.locator('[data-cycle-select-row][data-cycle-id="%s"]' % future_cycle.id).click()
+        plan_container = self.page.locator("#plan-table-slot #plan-table-container")
+        expect(plan_container).to_be_visible(timeout=10000)
+        refreshed_search = plan_container.get_by_label("搜索复查类目")
+        refreshed_search.fill("血液肿瘤")
+        expect(plan_container.locator('[data-plan-filter-text="浏览器血液肿瘤标志物"]')).to_be_visible()
+        expect(plan_container.locator('[data-plan-filter-text="浏览器胸部增强CT"]')).to_be_hidden()
+
     def test_settings_history_cycle_detail_opens_in_history_panel_and_closes(self):
         today = timezone.localdate()
         TreatmentCycle.objects.create(
@@ -250,6 +342,7 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(history_slot).to_contain_text("历史疗程配置详情")
         expect(history_slot).to_contain_text("浏览器历史疗程")
         expect(history_slot.locator("#history-plan-table-container")).to_be_visible(timeout=10000)
+        expect(history_slot.locator("[data-plan-filter-input]")).to_have_count(0)
         expect(self.page.locator("#plan-table-slot #plan-table-container")).to_be_visible(timeout=10000)
         expect(self.page.locator("#history-plan-table-slot #plan-table-container")).to_have_count(0)
         expect(history_row).to_have_attribute("aria-selected", "true")

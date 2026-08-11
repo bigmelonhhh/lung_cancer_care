@@ -4,6 +4,8 @@
 <tr
   class="hover:bg-slate-50 transition-colors {% if not questionnaire.is_active %}opacity-60{% endif %}"
   data-questionnaire-row
+  data-plan-filter-row
+  data-plan-filter-text="{{ questionnaire.name }}"
   data-plan-sticky-row
   {% if not is_cycle_editable %}data-readonly-row="1"{% endif %}
 >
