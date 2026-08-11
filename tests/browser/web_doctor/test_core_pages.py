@@ -403,6 +403,74 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
             date_head.evaluate("node => node.style.transform"),
         )
 
+    def test_settings_plan_table_aligns_fixed_and_date_columns_for_supported_cycle_lengths(self):
+        self.page.set_viewport_size({"width": 1920, "height": 1080})
+        today = timezone.localdate()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器周期列对齐疗程",
+            start_date=today,
+            end_date=today + timedelta(days=1),
+            cycle_days=2,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        CheckupLibrary.objects.create(
+            name="浏览器周期列对齐复查",
+            code="BROWSER_PLAN_COLUMN_ALIGNMENT",
+            category=choices.CheckupCategory.IMAGING,
+            is_active=True,
+        )
+
+        for cycle_days in (2, 21, 28, 100):
+            with self.subTest(cycle_days=cycle_days):
+                cycle.cycle_days = cycle_days
+                cycle.end_date = today + timedelta(days=cycle_days - 1)
+                cycle.save(update_fields=["cycle_days", "end_date"])
+
+                self.open_patient_workspace()
+                self.page.get_by_test_id("workspace-tab-settings").click()
+
+                plan_container = self.page.locator("#plan-table-slot #plan-table-container")
+                expect(plan_container).to_be_visible(timeout=10000)
+                header_cells = plan_container.locator("[data-plan-sticky-head-col]")
+                plan_row = plan_container.locator(
+                    '[data-plan-filter-text="浏览器周期列对齐复查"]'
+                )
+                expect(plan_row).to_be_visible(timeout=10000)
+                body_cells = plan_row.locator("[data-plan-sticky-col]")
+
+                for column_index, expected_width in enumerate((192, 96, 96)):
+                    header_box = header_cells.nth(column_index).bounding_box()
+                    body_box = body_cells.nth(column_index).bounding_box()
+                    self.assertIsNotNone(header_box)
+                    self.assertIsNotNone(body_box)
+                    self.assertAlmostEqual(header_box["x"], body_box["x"], delta=1)
+                    self.assertAlmostEqual(header_box["width"], expected_width, delta=1)
+                    self.assertAlmostEqual(body_box["width"], expected_width, delta=1)
+
+                day_indexes = sorted({1, min(8, cycle_days), cycle_days})
+                for day_index in day_indexes:
+                    header_day = plan_container.locator(
+                        f'[data-plan-table-head] [data-plan-day="{day_index}"]'
+                    )
+                    body_day = plan_row.locator("td").nth(day_index + 2)
+                    header_box = header_day.bounding_box()
+                    body_box = body_day.bounding_box()
+                    self.assertIsNotNone(header_box)
+                    self.assertIsNotNone(body_box)
+                    self.assertAlmostEqual(header_box["x"], body_box["x"], delta=2)
+                    self.assertAlmostEqual(header_box["width"], body_box["width"], delta=1)
+                    self.assertGreaterEqual(body_box["width"], 31.9)
+                    self.assertLessEqual(body_box["width"], 40.2)
+
+                scroll_metrics = plan_container.locator("[data-plan-table-body-scroll]").evaluate(
+                    "node => ({ scrollWidth: node.scrollWidth, clientWidth: node.clientWidth })"
+                )
+                if cycle_days <= 21:
+                    self.assertEqual(scroll_metrics["scrollWidth"], scroll_metrics["clientWidth"])
+                else:
+                    self.assertGreater(scroll_metrics["scrollWidth"], scroll_metrics["clientWidth"])
+
     def test_change_password_page_loads_and_returns_to_workspace(self):
         self.page.goto(self.url_for("web_doctor:doctor_change_password"), wait_until="domcontentloaded")
 

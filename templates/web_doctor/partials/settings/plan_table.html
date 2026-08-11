@@ -1,7 +1,8 @@
 {# 单个疗程的计划视图：用药 + 复查 + 随访 #}
 {% load plan_dates %}
 
-{% with cycle_days=cycle.cycle_days|default:21 plan_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px date_table_min_width=cycle.cycle_days|default:21|plan_table_min_width_px|add:"-384" container_id=plan_table_container_id|default:"plan-table-container" tooltip_id=plan_day_tooltip_id|default:"plan-day-tooltip" %}
+{% with cycle_days=cycle.cycle_days|default:21 container_id=plan_table_container_id|default:"plan-table-container" tooltip_id=plan_day_tooltip_id|default:"plan-day-tooltip" %}
+{% with plan_table_min_width=cycle_days|plan_table_min_width_px plan_table_max_width=cycle_days|plan_table_max_width_px date_table_min_width=cycle_days|plan_table_min_width_px|add:"-384" date_table_max_width=cycle_days|plan_table_max_width_px|add:"-384" %}
 <div
   id="{{ container_id }}"
   class="relative mt-3"
@@ -82,13 +83,13 @@
       <div class="min-w-0 flex-1 overflow-hidden" data-plan-table-head-clip>
         <table
           class="text-left border-separate border-spacing-0 table-fixed"
-          style="min-width: {{ date_table_min_width }}px;"
+          style="width: clamp({{ date_table_min_width }}px, 100%, {{ date_table_max_width }}px); min-width: {{ date_table_min_width }}px; max-width: {{ date_table_max_width }}px;"
           data-plan-table-head
           aria-hidden="true"
         >
           <colgroup>
             {% for day_meta in plan_view.header_days %}
-            <col class="w-8">
+            <col>
             {% endfor %}
           </colgroup>
           <thead>
@@ -132,15 +133,15 @@
 
   <div class="overflow-x-auto" data-plan-table-body-scroll>
     <table
-      class="w-full text-left border-separate border-spacing-0 table-fixed"
-      style="min-width: {{ plan_table_min_width }}px;"
+      class="text-left border-separate border-spacing-0 table-fixed"
+      style="width: clamp({{ plan_table_min_width }}px, 100%, {{ plan_table_max_width }}px); min-width: {{ plan_table_min_width }}px; max-width: {{ plan_table_max_width }}px;"
     >
       <colgroup>
         <col class="w-48">
         <col class="w-24">
         <col class="w-24">
         {% for day_meta in plan_view.header_days %}
-        <col class="w-8">
+        <col>
         {% endfor %}
       </colgroup>
     <tbody class="divide-y divide-slate-100 group-section">
@@ -299,6 +300,7 @@
     <div class="mt-1 text-[11px] text-slate-500 sm:text-xs" data-plan-tooltip-desc></div>
   </div>
 </div>
+{% endwith %}
 {% endwith %}
 
 <script>

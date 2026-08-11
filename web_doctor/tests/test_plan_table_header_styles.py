@@ -8,6 +8,7 @@ from django.test import TestCase
 from core.models import TreatmentCycle
 from core.service.china_calendar import ChinaCalendarService
 from users.models import PatientProfile
+from web_doctor.templatetags.plan_dates import plan_table_max_width_px, plan_table_min_width_px
 
 User = get_user_model()
 
@@ -212,6 +213,19 @@ class PlanTableHeaderStylesTests(TestCase):
         self.assertEqual(html.count("border-r border-gray-200"), 4)
         self.assertIn('data-plan-label="D22"', html)
 
+    def test_plan_table_width_bounds_cover_supported_cycle_lengths(self):
+        expected_widths = {
+            2: (448, 464),
+            21: (1056, 1224),
+            28: (1280, 1504),
+            100: (3584, 4384),
+        }
+
+        for cycle_days, (expected_min, expected_max) in expected_widths.items():
+            with self.subTest(cycle_days=cycle_days):
+                self.assertEqual(plan_table_min_width_px(cycle_days), expected_min)
+                self.assertEqual(plan_table_max_width_px(cycle_days), expected_max)
+
     def test_plan_table_renders_split_header_and_sticky_column_markers(self):
         plan_view = self._build_plan_view(
             monitorings=[
@@ -245,6 +259,9 @@ class PlanTableHeaderStylesTests(TestCase):
         self.assertIn('style="width: 384px;"', html)
         self.assertIn('--plan-sticky-col-1-width: 12rem;', html)
         self.assertIn('colspan="21"', html)
+        self.assertNotIn('<col class="w-8">', html)
+        self.assertIn('width: clamp(672px, 100%, 840px);', html)
+        self.assertIn('width: clamp(1056px, 100%, 1224px);', html)
 
     def test_28_day_cycle_adds_week_dividers_for_each_row(self):
         self.cycle.cycle_days = 28

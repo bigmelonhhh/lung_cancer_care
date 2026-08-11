@@ -4,6 +4,10 @@ from django import template
 
 register = template.Library()
 
+PLAN_TABLE_FIXED_WIDTH_PX = 384
+PLAN_DAY_MIN_WIDTH_PX = 32
+PLAN_DAY_MAX_WIDTH_PX = 40
+
 
 @register.filter(name="add_days")
 def add_days(value, days):
@@ -52,10 +56,21 @@ def week_ranges(value):
 
 @register.filter(name="plan_table_min_width_px")
 def plan_table_min_width_px(value):
+    cycle_days = _normalize_cycle_days(value)
+    return PLAN_TABLE_FIXED_WIDTH_PX + (cycle_days * PLAN_DAY_MIN_WIDTH_PX)
+
+
+@register.filter(name="plan_table_max_width_px")
+def plan_table_max_width_px(value):
+    cycle_days = _normalize_cycle_days(value)
+    return PLAN_TABLE_FIXED_WIDTH_PX + (cycle_days * PLAN_DAY_MAX_WIDTH_PX)
+
+
+def _normalize_cycle_days(value):
     try:
         cycle_days = int(value)
     except (TypeError, ValueError):
         cycle_days = 21
     if cycle_days <= 0:
         cycle_days = 21
-    return 384 + (cycle_days * 32)
+    return cycle_days
