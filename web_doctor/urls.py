@@ -32,6 +32,11 @@ urlpatterns = [
     path("doctor/mobile/patient/<int:patient_id>/records/", views.mobile_patient_records, name="mobile_patient_records"),
     path("doctor/mobile/health/records/", views.mobile_health_records, name="mobile_health_records"),
     path(
+        "doctor/mobile/health/records/tab-content/",
+        views.mobile_health_records_tab_content,
+        name="mobile_health_records_tab_content",
+    ),
+    path(
         "doctor/mobile/health/record/detail/",
         views.mobile_health_record_detail,
         name="mobile_health_record_detail",
@@ -47,9 +52,19 @@ urlpatterns = [
         name="mobile_review_record_detail",
     ),
     path(
+        "doctor/mobile/health/review/metric/detail/",
+        views.mobile_review_metric_detail,
+        name="mobile_review_metric_detail",
+    ),
+    path(
         "doctor/mobile/api/health/review/record/images/",
         views.mobile_review_record_detail_data,
         name="mobile_review_record_detail_data",
+    ),
+    path(
+        "doctor/mobile/api/health/review/metric/detail/",
+        views.mobile_review_metric_detail_data,
+        name="mobile_review_metric_detail_data",
     ),
     path(
         "api/doctor/mobile/patient-profile/",

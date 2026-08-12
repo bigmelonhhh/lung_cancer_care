@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 from unittest.mock import patch
 
@@ -55,6 +56,14 @@ class TreatmentCycleCreateViewTests(TestCase):
 
     def test_settings_page_renders_custom_cycle_fields(self):
         self._patch_settings_dependencies()
+        start_date = date.today()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="表单约束测试疗程",
+            start_date=start_date,
+            end_date=start_date + timedelta(days=20),
+            cycle_days=21,
+        )
 
         response = self.client.get(self.settings_url)
 
@@ -62,7 +71,13 @@ class TreatmentCycleCreateViewTests(TestCase):
         self.assertContains(response, 'name="cycle_days_mode"')
         self.assertContains(response, 'option value="custom"')
         self.assertContains(response, 'name="cycle_days_custom"')
-        
+        html = response.content.decode("utf-8")
+        custom_inputs = re.findall(r'<input[^>]+name="cycle_days_custom"[^>]*>', html)
+        self.assertEqual(len(custom_inputs), 2)
+        for custom_input in custom_inputs:
+            self.assertIn('min="2"', custom_input)
+            self.assertIn('max="100"', custom_input)
+            self.assertIn('placeholder="2-100"', custom_input)
 
     def test_create_cycle_with_preset_28_days_succeeds(self):
         self._patch_settings_dependencies()
@@ -82,24 +97,24 @@ class TreatmentCycleCreateViewTests(TestCase):
         self.assertEqual(cycle.cycle_days, 28)
         self.assertEqual(cycle.end_date, start_date + timedelta(days=27))
 
-    def test_create_cycle_with_custom_days_succeeds(self):
+    def test_create_cycle_with_custom_100_days_succeeds(self):
         self._patch_settings_dependencies()
         start_date = date(2026, 4, 9)
 
         response = self.client.post(
             self.create_url,
             {
-                "name": "自定义疗程",
+                "name": "百天自定义疗程",
                 "start_date": start_date.isoformat(),
                 "cycle_days_mode": "custom",
-                "cycle_days_custom": "15",
+                "cycle_days_custom": "100",
             },
         )
 
         self.assertEqual(response.status_code, 200)
-        cycle = TreatmentCycle.objects.get(name="自定义疗程")
-        self.assertEqual(cycle.cycle_days, 15)
-        self.assertEqual(cycle.end_date, start_date + timedelta(days=14))
+        cycle = TreatmentCycle.objects.get(name="百天自定义疗程")
+        self.assertEqual(cycle.cycle_days, 100)
+        self.assertEqual(cycle.end_date, start_date + timedelta(days=99))
 
     def test_create_cycle_with_empty_custom_days_shows_error_and_preserves_selection(self):
         self._patch_settings_dependencies()
@@ -116,7 +131,7 @@ class TreatmentCycleCreateViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(TreatmentCycle.objects.filter(name="空自定义疗程").exists())
-        self.assertContains(response, "请输入 2-60 天的疗程天数。")
+        self.assertContains(response, "请输入 2-100 天的疗程天数。")
 
         html = response.content.decode("utf-8")
         self.assertIn('option value="custom" selected', html)
@@ -131,17 +146,17 @@ class TreatmentCycleCreateViewTests(TestCase):
                 "name": "超范围疗程",
                 "start_date": "2026-04-09",
                 "cycle_days_mode": "custom",
-                "cycle_days_custom": "61",
+                "cycle_days_custom": "101",
             },
         )
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(TreatmentCycle.objects.filter(name="超范围疗程").exists())
-        self.assertContains(response, "周期天数必须在 2-60 天之间。")
+        self.assertContains(response, "周期天数必须在 2-100 天之间。")
 
         html = response.content.decode("utf-8")
         self.assertIn('option value="custom" selected', html)
-        self.assertIn('value="61"', html)
+        self.assertIn('value="101"', html)
 
     def test_create_cycle_with_non_integer_custom_days_shows_error(self):
         self._patch_settings_dependencies()
@@ -158,7 +173,7 @@ class TreatmentCycleCreateViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(TreatmentCycle.objects.filter(name="非整数疗程").exists())
-        self.assertContains(response, "请输入 2-60 天的疗程天数。")
+        self.assertContains(response, "请输入 2-100 天的疗程天数。")
 
         html = response.content.decode("utf-8")
         self.assertIn('option value="custom" selected', html)

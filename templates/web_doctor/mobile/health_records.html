@@ -3,41 +3,33 @@
 {% block title %}健康档案{% endblock %}
 
 {% block body %}
-<div class="min-h-screen bg-[#F3F4F6] font-sans pb-10">
-    
-    <div class="bg-white sticky top-0 z-30 shadow-sm">
-        <div class="pt-safe-top">
-            <div class="flex items-center h-12 px-4 relative">
-                <div  onclick="window.history.back()" class="cursor-pointer absolute left-4 p-2 -ml-2 text-slate-600 active:opacity-60">
-                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-                    </svg>
-                </div>
-                <h1 class="w-full text-center text-lg font-bold text-slate-800">健康档案</h1> 
-            </div>
-            <div id="service-package-section" class="px-4 pb-3{% if not service_packages %} hidden{% endif %}">
-                <div class="flex items-center gap-3">
-                    <div class="flex-1">
-                        <label for="servicePackageSelect" class="block text-xs font-medium text-slate-500 mb-1">服务包</label>
-                        <div class="relative">
-                            <select id="servicePackageSelect" class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-9 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                {% for pkg in service_packages %}
-                                <option value="{{ pkg.id }}" {% if pkg.id == selected_package_id %}selected{% endif %}>
-                                    {{ pkg.name }}（{{ pkg.start_date|date:"Y-m-d" }} ~ {{ pkg.end_date|date:"Y-m-d" }}）
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
-                                <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
-                                </svg>
-                            </div>
+<div class="min-h-screen bg-slate-50 font-source text-slate-900 pb-safe-bottom">
+    {% url 'web_doctor:mobile_patient_home' patient_id as health_back_url %}
+    {% include "web_doctor/mobile/partials/portal_header.html" with title="健康档案" back_href=health_back_url back_aria_label="返回患者主页" %}
+
+    <div id="service-package-section" class="px-4 -mt-2 relative z-20{% if not service_packages %} hidden{% endif %}">
+        <div class="bg-white rounded-2xl shadow-sm ring-1 ring-slate-900/5 p-4">
+            <div class="flex items-center gap-3">
+                <div class="flex-1">
+                    <label for="servicePackageSelect" class="block text-xs font-medium text-slate-500 mb-1">服务包</label>
+                    <div class="relative">
+                        <select id="servicePackageSelect" class="w-full appearance-none bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 pr-9 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            {% for pkg in service_packages %}
+                            <option value="{{ pkg.id }}" {% if pkg.id == selected_package_id %}selected{% endif %}>
+                                {{ pkg.name }}（{{ pkg.start_date|date:"Y-m-d" }} ~ {{ pkg.end_date|date:"Y-m-d" }}）
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">
+                            <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd" />
+                            </svg>
                         </div>
                     </div>
                 </div>
-                <div class="mt-2 text-xs text-slate-500">
-                    当前统计范围：{{ selected_date_range.start_date|date:"Y-m-d" }} ~ {{ selected_date_range.end_date|date:"Y-m-d" }}
-                </div>
+            </div>
+            <div class="mt-2 text-xs text-slate-500">
+                当前统计范围：{{ selected_date_range.start_date|date:"Y-m-d" }} ~ {{ selected_date_range.end_date|date:"Y-m-d" }}
             </div>
         </div>
     </div>
@@ -68,9 +60,9 @@
                     </div>
                 </div>
 
-                <button onclick="window.location.href='{% url 'web_doctor:mobile_health_record_detail' %}?type={{ stat.type }}&title={{ stat.title }}&patient_id={{ patient_id|default:'' }}{% if stat.type == 'medical' and is_medication_detail_entry %}&source=medication&view=detail{% else %}&source=health_records{% endif %}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                    查看详情
-                </button>
+                <a href="{% url 'web_doctor:mobile_health_record_detail' %}?type={{ stat.type }}&amp;title={{ stat.title }}&amp;patient_id={{ patient_id|default:'' }}{% if stat.type == 'medical' and is_medication_detail_entry %}&amp;source=medication&amp;view=detail{% else %}&amp;source=health_records{% endif %}" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                    查看
+                </a>
             </div>
             {% empty %}
             <div class="p-4 text-sm text-slate-500">暂无一般监测数据</div>
@@ -79,35 +71,24 @@
         
 
         <div id="checkup-section"{% if not is_member %} class="hidden"{% endif %}>
-          <div class="text-black font-semibold text-lg mb-2 mt-4">复查档案</div>
-          <div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
-              {% if checkup_stats %}
-                  {% for stat in checkup_stats %}
-                  <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
-                      <div class="flex items-start gap-3">
-                          <div class="w-6 h-6 flex items-center justify-center text-blue-600 mt-0.5">
-                              <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                              </svg>
-                          </div>
-                          <div>
-                              <div class="flex items-center gap-2">
-                                  <h3 class="font-bold text-slate-800 text-base" style="max-width: 220px;">{{ stat.title }}</h3>
-                              </div>
-                              <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
-                                  <span>记录：{{ stat.count }}次</span>
-                                 
-                              </div>
-                          </div>
-                      </div>
-                      <button onclick="window.location.href='{% url 'web_doctor:mobile_review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                          查看详情
-                      </button>
-                  </div>
-                  {% endfor %}
-              {% else %}
-                  <div class="p-4 text-sm text-slate-500">暂无复查档案数据</div>
-              {% endif %}
+          <div class="mt-5 mb-3 p-1 bg-slate-200/80 rounded-xl flex items-center shadow-inner">
+                <a href="{% url 'web_doctor:mobile_health_records' %}?tab=archive&amp;patient_id={{ patient_id|default:'' }}{% if selected_package_id %}&amp;package_id={{ selected_package_id }}{% endif %}"
+                data-checkup-tab="archive"
+                data-active="{% if active_tab == 'archive' %}true{% else %}false{% endif %}"
+                class="flex-1 py-2.5 text-center text-base rounded-lg transition-all duration-200 select-none {% if active_tab == 'archive' %}bg-white font-bold text-blue-600 shadow-sm{% else %}font-medium text-slate-600{% endif %}">
+                    复查档案
+                </a>
+
+                <a href="{% url 'web_doctor:mobile_health_records' %}?tab=metrics&amp;patient_id={{ patient_id|default:'' }}{% if selected_package_id %}&amp;package_id={{ selected_package_id }}{% endif %}"
+                data-checkup-tab="metrics"
+                data-active="{% if active_tab == 'metrics' %}true{% else %}false{% endif %}"
+                class="flex-1 py-2.5 text-center text-base rounded-lg transition-all duration-200 select-none {% if active_tab == 'metrics' %}bg-white font-bold text-blue-600 shadow-sm{% else %}font-medium text-slate-600{% endif %}">
+                    复查指标
+                </a>
+            </div>
+
+          <div id="checkup-tab-content">
+              {% include "web_doctor/mobile/partials/health_records_checkup_tabs.html" %}
           </div>
         </div>
 
@@ -140,8 +121,8 @@
                     </div>
                 </div>
 
-                <a href="{% url 'web_doctor:mobile_health_record_detail' %}?patient_id={{ patient_id|default:'' }}&amp;questionnaire_id={{ stat.questionnaire_id }}&amp;package_id={{ selected_package_id }}&amp;source=survey_list" class="bg-blue-600 text-white text-sm font-bold px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
-                    查看详情
+                <a href="{% url 'web_doctor:mobile_health_record_detail' %}?patient_id={{ patient_id|default:'' }}&amp;questionnaire_id={{ stat.questionnaire_id }}&amp;package_id={{ selected_package_id }}&amp;source=survey_list" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                    查看
                 </a>
             </div>
             {% endfor %}
@@ -153,11 +134,6 @@
     </div>
 </div>
 <script>
-    function goHomeReplace() {
-        var url = "{% url 'web_doctor:mobile_patient_home' patient_id %}";
-        window.location.replace(url);
-    }
-
     (function () {
         var select = document.getElementById("servicePackageSelect");
         if (!select) return;
@@ -166,6 +142,66 @@
             var url = new URL(window.location.href);
             url.searchParams.set("package_id", packageId);
             window.location.href = url.toString();
+        });
+    })();
+
+    (function () {
+        var tabContent = document.getElementById("checkup-tab-content");
+        var tabLinks = document.querySelectorAll("#checkup-section [data-checkup-tab]");
+        if (!tabContent || !tabLinks.length) return;
+        var tabUrl = "{% url 'web_doctor:mobile_health_records_tab_content' %}";
+
+        var ACTIVE_CLASSES = ["bg-white", "font-bold", "text-blue-600", "shadow-sm"];
+        var INACTIVE_CLASSES = ["font-medium", "text-slate-600"];
+        var ALL_STATE_CLASSES = [
+            "bg-white", "font-bold", "text-blue-600", "shadow-sm",
+            "font-medium", "text-slate-600", "hover:text-slate-900", "text-slate-900"
+        ];
+
+        function applyTabStyles() {
+            tabLinks.forEach(function (link) {
+                ALL_STATE_CLASSES.forEach(function (cls) {
+                    link.classList.remove(cls);
+                });
+
+                var isActive = link.dataset.active === "true";
+                var targetClasses = isActive ? ACTIVE_CLASSES : INACTIVE_CLASSES;
+                targetClasses.forEach(function (cls) {
+                    link.classList.add(cls);
+                });
+            });
+        }
+
+        tabLinks.forEach(function (link) {
+            link.addEventListener("click", function (event) {
+                event.preventDefault();
+                var tab = link.getAttribute("data-checkup-tab");
+                var currentUrl = new URL(window.location.href);
+                if (link.dataset.active === "true" && currentUrl.searchParams.get("tab") === tab) return;
+
+                var params = new URLSearchParams();
+                params.set("tab", tab);
+                var patientId = currentUrl.searchParams.get("patient_id");
+                if (patientId) params.set("patient_id", patientId);
+                var packageId = currentUrl.searchParams.get("package_id");
+                if (packageId) params.set("package_id", packageId);
+
+                fetch(tabUrl + "?" + params.toString(), { credentials: "same-origin" })
+                    .then(function (res) {
+                        if (!res.ok) throw new Error("tab content load failed");
+                        return res.text();
+                    })
+                    .then(function (html) {
+                        tabContent.innerHTML = html;
+                        tabLinks.forEach(function (item) {
+                            item.dataset.active = item.getAttribute("data-checkup-tab") === tab ? "true" : "false";
+                        });
+                        applyTabStyles();
+                        currentUrl.searchParams.set("tab", tab);
+                        window.history.replaceState(null, "", currentUrl.toString());
+                    })
+                    .catch(function () {});
+            });
         });
     })();
 

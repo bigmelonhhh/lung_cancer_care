@@ -128,15 +128,31 @@ class MobilePatientListTests(TestCase):
 
         content = response.content.decode("utf-8")
         self.assertIn("管理中患者", content)
-        self.assertIn("未管理的患者", content)
+        self.assertIn("停止管理", content)
+        self.assertIn("未付费", content)
         self.assertIn(self.patient_active.name, content)
         self.assertIn(self.patient_expired.name, content)
         self.assertIn(self.patient_none.name, content)
         self.assertIn("主任：", content)
 
         managed_patients = response.context["managed_patients"]
-        unmanaged_patients = response.context["unmanaged_patients"]
-        patient_by_id = {patient.id: patient for patient in managed_patients + unmanaged_patients}
+        stopped_patients = response.context["stopped_patients"]
+        unpaid_patients = response.context["unpaid_patients"]
+        managed_ids = {patient.id for patient in managed_patients}
+        stopped_ids = {patient.id for patient in stopped_patients}
+        unpaid_ids = {patient.id for patient in unpaid_patients}
+
+        self.assertEqual(managed_ids, {self.patient_active.id})
+        self.assertEqual(stopped_ids, {self.patient_expired.id})
+        self.assertEqual(unpaid_ids, {self.patient_none.id})
+        self.assertEqual(response.context["managed_total"], 1)
+        self.assertEqual(response.context["stopped_total"], 1)
+        self.assertEqual(response.context["unpaid_total"], 1)
+
+        patient_by_id = {
+            patient.id: patient
+            for patient in managed_patients + stopped_patients + unpaid_patients
+        }
 
         self.assertEqual(
             patient_by_id[self.patient_active.id].director_doctor_name,

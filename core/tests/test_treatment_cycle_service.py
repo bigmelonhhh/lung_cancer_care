@@ -140,7 +140,7 @@ class TreatmentCycleServiceTest(TestCase):
                 cycle_days=MIN_TREATMENT_CYCLE_DAYS - 1,
             )
 
-        self.assertIn("周期天数必须在 2-60 天之间。", exc_info.exception.messages)
+        self.assertIn("周期天数必须在 2-100 天之间。", exc_info.exception.messages)
 
     def test_create_treatment_cycle_rejects_days_above_max(self):
         with self.assertRaises(ValidationError) as exc_info:
@@ -151,7 +151,7 @@ class TreatmentCycleServiceTest(TestCase):
                 cycle_days=MAX_TREATMENT_CYCLE_DAYS + 1,
             )
 
-        self.assertIn("周期天数必须在 2-60 天之间。", exc_info.exception.messages)
+        self.assertIn("周期天数必须在 2-100 天之间。", exc_info.exception.messages)
 
 
 class TreatmentCycleConfirmerTest(TestCase):

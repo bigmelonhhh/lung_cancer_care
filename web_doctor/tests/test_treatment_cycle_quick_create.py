@@ -222,6 +222,63 @@ class TreatmentCycleQuickCreateViewTests(TestCase):
         self.assertIn("plan-success", trigger_payload)
         self.assertIn("参考疗程下无可复制计划", trigger_payload["plan-success"]["message"])
 
+    def test_quick_create_accepts_custom_100_days(self):
+        self._patch_settings_dependencies()
+        source_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="百天参考疗程",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 21),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+        start_date = date(2026, 4, 9)
+
+        response = self.client.post(
+            self.quick_create_url,
+            {
+                "source_cycle_id": str(source_cycle.id),
+                "name": "百天快捷疗程",
+                "start_date": start_date.isoformat(),
+                "cycle_days_mode": "custom",
+                "cycle_days_custom": "100",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        cycle = TreatmentCycle.objects.get(name="百天快捷疗程")
+        self.assertEqual(cycle.cycle_days, 100)
+        self.assertEqual(cycle.end_date, start_date + timedelta(days=99))
+
+    def test_quick_create_rejects_custom_101_days_and_preserves_value(self):
+        self._patch_settings_dependencies()
+        source_cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="超长参考疗程",
+            start_date=date(2025, 1, 1),
+            end_date=date(2025, 1, 21),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.COMPLETED,
+        )
+
+        response = self.client.post(
+            self.quick_create_url,
+            {
+                "source_cycle_id": str(source_cycle.id),
+                "name": "超长快捷疗程",
+                "start_date": "2026-04-09",
+                "cycle_days_mode": "custom",
+                "cycle_days_custom": "101",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(TreatmentCycle.objects.filter(name="超长快捷疗程").exists())
+        self.assertContains(response, "周期天数必须在 2-100 天之间。")
+        html = response.content.decode("utf-8")
+        self.assertIn('data-auto-open="1"', html)
+        self.assertIn('value="101"', html)
+
     def test_quick_create_rejects_source_cycle_from_other_patient(self):
         self._patch_settings_dependencies()
         other_cycle = TreatmentCycle.objects.create(

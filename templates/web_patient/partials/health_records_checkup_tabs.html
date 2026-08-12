@@ -1,0 +1,77 @@
+{% comment %}
+复查档案区块 Tab 内容局部模板。
+- 首次渲染由 health_records.html include 引入；
+- Tab 页内切换时由 health_records_tab_content 视图单独返回本模板。
+上下文：active_tab、review_metric_stats、checkup_stats、patient_id。
+{% endcomment %}
+{% if active_tab == 'metrics' %}
+<div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
+    {% if review_metric_stats %}
+        {% for stat in review_metric_stats %}
+        <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
+            <div class="flex items-start gap-3 min-w-0 flex-1">
+                <div class="w-6 h-6 flex items-center justify-center mt-0.5 shrink-0">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </div> 
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <h3 class="min-w-0 truncate font-bold text-slate-800 text-base">{{ stat.title }}</h3>
+                        {% if stat.category_name %}
+                        <span class="shrink-0 rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-xs text-violet-600">{{ stat.category_name }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
+                        <span>记录：{{ stat.count }}次</span>
+                        {% if stat.latest_value %}
+                        <span>最新：<span class="{% if stat.abnormal_flag == 'HIGH' %}text-red-500{% elif stat.abnormal_flag == 'LOW' %}text-blue-500{% else %}text-slate-800{% endif %}">{{ stat.latest_value }}{{ stat.latest_unit }}</span></span>
+                        {% else %}
+                        <span>最新：--</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <a href="{% url 'web_patient:review_metric_detail' %}?mapping_id={{ stat.mapping_id }}&amp;patient_id={{ patient_id|default:'' }}"
+               class="shrink-0 bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                查看
+            </a>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="p-4">
+            {% include "components/ui/empty_state.html" with title="暂未配置关注指标" description="医生配置核心关注指标后，这里会展示对应的复查指标数据。" %}
+        </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="bg-white rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
+    {% if checkup_stats %}
+        {% for stat in checkup_stats %}
+        <div class="p-4 flex items-center justify-between active:bg-slate-50 transition">
+            <div class="flex items-start gap-3">
+                <div class="w-6 h-6 flex items-center justify-center text-blue-600 mt-0.5">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6M7 20h10a2 2 0 002-2V6a2 2 0 00-2-2H9l-2 2H7a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="font-bold text-slate-800 text-base" style="max-width: 220px;">{{ stat.title }}</h3>
+                    </div>
+                    <div class="mt-1 flex items-center gap-4 text-sm text-slate-500 font-medium">
+                        <span>记录：{{ stat.count }}次</span>
+                       
+                    </div>
+                </div>
+            </div>
+            <button onclick="window.location.href='{% url 'web_patient:review_record_detail' %}?title={{ stat.title }}&category_code={{ stat.code }}&patient_id={{ patient_id|default:'' }}'" class="bg-blue-600 text-white text-sm font-bold px-5 py-1.5 rounded shadow-sm hover:bg-blue-700 active:scale-95 transition">
+                查看
+            </button>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="p-4 text-sm text-slate-500">暂无复查档案数据</div>
+    {% endif %}
+</div>
+{% endif %}

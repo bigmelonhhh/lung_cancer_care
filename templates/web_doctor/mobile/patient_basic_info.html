@@ -3,11 +3,6 @@
 {% block title %}患者基本信息{% endblock %}
 
 {% block body %}
-<!-- Import Fonts -->
-<style>    .font-lexend { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-    .font-source { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-</style>
-
 <div class="min-h-screen bg-slate-50 pb-safe-bottom font-source text-slate-900">
   <div class="bg-blue-600 pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden rounded-b-3xl">
     <!-- Abstract Background Pattern -->
@@ -15,12 +10,10 @@
     <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
 
     <div class="relative z-10 pt-4 flex items-center gap-3">
-      <button type="button" id="mobile-back-btn" class="cursor-pointer w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20">
-        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-      <div class="text-white min-w-0 px-1 flex flex-col">
+      <a href="{% url 'web_doctor:mobile_patient_home' patient_id=patient.id %}" data-role="mobile-back" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回患者主页">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
+      <div class="text-white min-w-0 flex-1 flex flex-col">
         <div class="text-xl font-lexend font-bold truncate">基本信息</div>
         <div class="text-xs text-blue-100 opacity-90 truncate font-medium mt-0.5">患者：{{ patient.name }} · {{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
       </div>
@@ -249,17 +242,6 @@
     }
 
     window.addEventListener("load", function () {
-      const backBtn = document.getElementById("mobile-back-btn");
-      if (backBtn) {
-        backBtn.addEventListener("click", function () {
-          if (window.history.length > 1) {
-            window.history.back();
-            return;
-          }
-          window.location.href = "{% url 'web_doctor:mobile_patient_home' patient.id %}";
-        });
-      }
-
       const patientId = {{ patient.id|default:"null" }};
       if (!patientId) return;
 

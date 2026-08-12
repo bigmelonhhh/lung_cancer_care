@@ -1,0 +1,539 @@
+{% extends "layouts/base_portal.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block body %}
+<div class="h-screen min-h-screen bg-slate-50 font-source text-slate-900 flex flex-col" style="height: 100dvh;">
+  <div class="bg-blue-600 pt-safe-top pb-10 px-4 shadow-md relative overflow-hidden rounded-b-3xl flex-none">
+    <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
+
+    <div class="relative z-10 pt-4 flex items-center gap-3">
+      <a href="{% url 'web_doctor:mobile_health_records' %}?tab=metrics&amp;patient_id={{ patient_id|default:'' }}" data-role="mobile-back" id="nav-back-link" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回健康档案">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
+      <div class="text-white min-w-0 flex-1">
+        <div class="text-xl font-lexend font-bold truncate">{{ title }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white shadow-sm flex-none -mt-6 relative z-20 rounded-t-2xl">
+    <div class="flex items-center h-12">
+      <div class="flex-1 flex items-center justify-center border-r border-slate-100 active:bg-slate-50 transition cursor-pointer relative" id="month-picker-area">
+        <input type="month" id="month-picker" class="absolute inset-0 opacity-0 cursor-pointer" value="{{ current_month }}">
+        <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span id="month-display" class="text-slate-800 font-medium ml-1">{{ current_month }}</span>
+        <svg class="w-4 h-4 text-slate-500 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div id="chart-switch-btn" class="flex-1 flex items-center justify-center transition cursor-pointer">
+        <svg class="w-5 h-5 text-slate-800 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+        </svg>
+        <span id="chart-switch-text" class="text-slate-800 font-medium ml-1">切换图表</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="record-list-wrapper" class="flex-1 min-h-0 flex flex-col">
+    <div id="record-list" class="flex-1 min-h-0 overflow-y-auto p-3 space-y-2 pb-16">
+      {% regroup initial_items by date_str as date_groups %}
+      {% for group in date_groups %}
+      {% with first=group.list.0 %}
+      <div class="record-date-group bg-white rounded-2xl shadow-sm px-3 py-3" data-date="{{ group.grouper }}">
+        <div class="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <div class="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500">
+            <span class="text-sm font-semibold text-slate-800">{{ group.grouper }}</span>
+            <span>{{ first.weekday }}</span>
+          </div>
+          {% if first.source_label %}
+          <span class="flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">
+            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            {{ first.source_label }}
+          </span>
+          {% endif %}
+        </div>
+        {% endwith %}
+        <div class="space-y-1.5">
+          {% for item in group.list %}
+          <div class="record-item rounded-xl bg-slate-100 px-3 py-2.5">
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-bold text-slate-800 text-base">{{ item.field_display_name }}</div>
+                {% if item.reference_range %}
+                <div class="mt-0.5 text-xs text-slate-400">参考范围：{{ item.reference_range }}</div>
+                {% endif %}
+              </div>
+              <div class="shrink-0 flex items-center gap-2">
+                <div class="text-lg font-bold text-slate-900">{{ item.value }} <span class="text-xs font-medium text-slate-500">{{ item.unit }}</span></div>
+                {% if item.abnormal_flag == 'HIGH' %}
+                <span class="inline-flex items-center gap-0.5 text-xs font-semibold text-red-500">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7" /></svg>
+                  偏高
+                </span>
+                {% elif item.abnormal_flag == 'LOW' %}
+                <span class="inline-flex items-center gap-0.5 text-xs font-semibold text-blue-500">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" /></svg>
+                  偏低
+                </span>
+                {% elif item.abnormal_flag == 'NORMAL' %}
+                <span class="inline-flex items-center gap-0.5 text-xs font-semibold text-emerald-500">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
+                  正常
+                </span>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <div id="empty-state" class="{% if initial_items %}hidden {% endif %}flex flex-col items-center justify-center px-4 py-16 text-center">
+        <div class="mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm">
+          <svg class="h-7 w-7 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M9 17v-6m3 6V7m3 10v-3m5 5H4a1 1 0 01-1-1V6a1 1 0 011-1h16a1 1 0 011 1v12a1 1 0 01-1 1z" />
+          </svg>
+        </div>
+        <p class="text-sm font-medium text-slate-500">暂无记录</p>
+      </div>
+
+      <div id="list-loading" class="hidden text-center text-sm text-slate-400 py-3">加载中...</div>
+      <div id="list-end-tip" class="hidden text-center text-xs text-slate-300 py-3">没有更多记录了</div>
+    </div>
+  </div>
+
+  <div id="record-chart-wrapper" class="flex-1 min-h-0 hidden">
+    <div class="flex-1 overflow-y-auto p-4 pb-20">
+      <p class="text-xs text-slate-500 mb-3">建议横屏查看，可完整浏览当月日期数据。</p>
+      <div class="bg-white rounded-xl border border-slate-200 p-3">
+        <div id="review-metric-line-chart" style="width: 100%; height: 75vh; min-height: 520px;"></div>
+        <div id="chart-empty-tip" class="hidden py-16 text-center text-sm text-slate-400">当月暂无图表数据</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<template id="record-card-template">
+  <div class="record-item rounded-xl bg-slate-100 px-3 py-2.5">
+    <div class="flex items-center justify-between gap-3">
+      <div class="min-w-0">
+        <div class="font-bold text-slate-800 text-base" data-slot="name"></div>
+        <div class="mt-0.5 text-xs text-slate-400" data-slot="range"></div>
+      </div>
+      <div class="shrink-0 flex items-center gap-2">
+        <div class="text-lg font-bold text-slate-900"><span data-slot="value"></span> <span class="text-xs font-medium text-slate-500" data-slot="unit"></span></div>
+        <span data-slot="status" class="inline-flex items-center gap-0.5 text-xs font-semibold"></span>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+(function () {
+    const mappingId = "{{ mapping_id }}";
+    const patientId = "{{ patient_id|default:'' }}";
+    const dataUrl = "{% url 'web_doctor:mobile_review_metric_detail_data' %}";
+    let currentMonth = "{{ current_month }}";
+    let hasMore = {{ has_more|yesno:"true,false" }};
+    let cursorMonth = "{{ next_cursor_month|default:'' }}";
+    let cursorOffset = {{ next_cursor_offset|default_if_none:"0" }};
+    const batchSize = {{ batch_size }};
+    let hasAnyRecords = {{ has_records|yesno:"true,false" }};
+    let isLoading = false;
+    let isChartMode = false;
+    let chartData = {{ chart_json|safe }};
+
+    const STATUS_META = {
+        HIGH: { label: "偏高", icon: "M5 15l7-7 7 7", className: "text-red-500" },
+        LOW: { label: "偏低", icon: "M19 9l-7 7-7-7", className: "text-blue-500" },
+        NORMAL: { label: "正常", icon: "M5 13l4 4L19 7", className: "text-emerald-500" }
+    };
+
+    const listEl = document.getElementById("record-list");
+    const loadingEl = document.getElementById("list-loading");
+    const endTipEl = document.getElementById("list-end-tip");
+    const emptyStateEl = document.getElementById("empty-state");
+    const chartWrapper = document.getElementById("record-chart-wrapper");
+    const listWrapper = document.getElementById("record-list-wrapper");
+    const monthPicker = document.getElementById("month-picker");
+    const monthDisplay = document.getElementById("month-display");
+
+    function buildDataParams(params) {
+        const search = new URLSearchParams();
+        search.set("mapping_id", mappingId);
+        if (patientId) search.set("patient_id", patientId);
+        Object.keys(params || {}).forEach(function (key) {
+            search.set(key, params[key]);
+        });
+        return search.toString();
+    }
+
+    function fillStatus(slotEl, flag) {
+        const meta = STATUS_META[flag];
+        slotEl.innerHTML = "";
+        if (!meta) {
+            slotEl.classList.add("hidden");
+            return;
+        }
+        slotEl.classList.remove("hidden");
+        slotEl.className = "inline-flex items-center gap-0.5 text-xs font-semibold " + meta.className;
+        const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        svg.setAttribute("class", "w-3.5 h-3.5");
+        svg.setAttribute("fill", "none");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("stroke", "currentColor");
+        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+        path.setAttribute("stroke-width", "2.5");
+        path.setAttribute("d", meta.icon);
+        svg.appendChild(path);
+        slotEl.appendChild(svg);
+        slotEl.appendChild(document.createTextNode(" " + meta.label));
+    }
+
+    function appendItems(items) {
+        const template = document.getElementById("record-card-template");
+        const groupsByDate = new Map();
+        listEl.querySelectorAll(".record-date-group").forEach(function (groupEl) {
+            groupsByDate.set(groupEl.dataset.date, groupEl);
+        });
+
+        items.forEach(function (item) {
+            let groupEl = groupsByDate.get(item.date_str);
+            if (!groupEl) {
+                groupEl = document.createElement("div");
+                groupEl.className = "record-date-group bg-white rounded-2xl shadow-sm px-3 py-3";
+                groupEl.dataset.date = item.date_str;
+                const header = document.createElement("div");
+                header.className = "mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2";
+                const headerLeft = document.createElement("div");
+                headerLeft.className = "min-w-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-500";
+                const dateSpan = document.createElement("span");
+                dateSpan.className = "text-sm font-semibold text-slate-800";
+                dateSpan.textContent = item.date_str;
+                const weekdaySpan = document.createElement("span");
+                weekdaySpan.textContent = item.weekday;
+                headerLeft.appendChild(dateSpan);
+                headerLeft.appendChild(weekdaySpan);
+                header.appendChild(headerLeft);
+                if (item.source_label) {
+                    const sourceTag = document.createElement("span");
+                    sourceTag.className = "flex shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500";
+                    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                    icon.setAttribute("class", "h-3 w-3");
+                    icon.setAttribute("fill", "none");
+                    icon.setAttribute("viewBox", "0 0 24 24");
+                    icon.setAttribute("stroke", "currentColor");
+                    const iconPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                    iconPath.setAttribute("stroke-linecap", "round");
+                    iconPath.setAttribute("stroke-linejoin", "round");
+                    iconPath.setAttribute("stroke-width", "2");
+                    iconPath.setAttribute("d", "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z");
+                    icon.appendChild(iconPath);
+                    sourceTag.appendChild(icon);
+                    sourceTag.appendChild(document.createTextNode(item.source_label));
+                    header.appendChild(sourceTag);
+                }
+                groupEl.appendChild(header);
+                const listContainer = document.createElement("div");
+                listContainer.className = "space-y-1.5";
+                groupEl.appendChild(listContainer);
+                listEl.insertBefore(groupEl, loadingEl);
+                groupsByDate.set(item.date_str, groupEl);
+            }
+            const card = template.content.firstElementChild.cloneNode(true);
+            card.querySelector('[data-slot="name"]').textContent = item.field_display_name;
+            const rangeEl = card.querySelector('[data-slot="range"]');
+            if (item.reference_range) {
+                rangeEl.textContent = "参考范围：" + item.reference_range;
+            } else {
+                rangeEl.classList.add("hidden");
+            }
+            card.querySelector('[data-slot="value"]').textContent = item.value;
+            card.querySelector('[data-slot="unit"]').textContent = item.unit || "";
+            fillStatus(card.querySelector('[data-slot="status"]'), item.abnormal_flag);
+            groupEl.querySelector(".space-y-1.5").appendChild(card);
+        });
+    }
+
+    function syncListStates() {
+        if (emptyStateEl) {
+            emptyStateEl.classList.toggle("hidden", hasAnyRecords || isLoading);
+        }
+        const showEndTip = hasAnyRecords && !hasMore && !isLoading;
+        endTipEl.classList.toggle("hidden", !showEndTip);
+    }
+
+    function loadMore() {
+        if (isLoading || !hasMore) return;
+        isLoading = true;
+        loadingEl.classList.remove("hidden");
+        syncListStates();
+        fetch(dataUrl + "?" + buildDataParams({
+            cursor_month: cursorMonth || currentMonth,
+            cursor_offset: cursorOffset,
+            limit: batchSize
+        }), { credentials: "same-origin" })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    hasMore = false;
+                    return;
+                }
+                const items = data.items || [];
+                if (items.length) {
+                    appendItems(items);
+                    hasAnyRecords = true;
+                }
+                hasMore = Boolean(data.has_more);
+                cursorMonth = data.next_cursor_month || "";
+                cursorOffset = Number.isInteger(data.next_cursor_offset) ? data.next_cursor_offset : 0;
+                if (!items.length && !hasAnyRecords) {
+                    hasMore = false;
+                }
+            })
+            .catch(function () {})
+            .finally(function () {
+                isLoading = false;
+                loadingEl.classList.add("hidden");
+                syncListStates();
+            });
+    }
+
+    listEl.addEventListener("scroll", function () {
+        if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 80) {
+            loadMore();
+        }
+    });
+
+    function renderChart() {
+        const chartDom = document.getElementById("review-metric-line-chart");
+        const emptyTip = document.getElementById("chart-empty-tip");
+        if (!chartDom) return;
+        if (!chartData || !chartData.has_data) {
+            chartDom.style.display = "none";
+            emptyTip.classList.remove("hidden");
+            return;
+        }
+        chartDom.style.display = "";
+        emptyTip.classList.add("hidden");
+
+        if (typeof echarts === "undefined") {
+            if (window.LCCCharts && typeof window.LCCCharts.ensureEcharts === "function") {
+                window.LCCCharts.ensureEcharts().then(renderChart).catch(function () {});
+            }
+            return;
+        }
+
+        const unitSuffix = chartData.unit ? "(" + chartData.unit + ")" : "";
+        const seriesName = chartData.title || "";
+        const dates = (chartData.date_labels || []).slice();
+        const values = (chartData.data || []).slice();
+        const points = [];
+        const numericValues = [];
+        dates.forEach(function (dateLabel, idx) {
+            const raw = values[idx];
+            if (raw === null || raw === undefined) return;
+            const numeric = Number(raw);
+            if (!Number.isFinite(numeric)) return;
+            numericValues.push(numeric);
+            points.push({ value: [numeric, dateLabel], raw_value: numeric });
+        });
+
+        const visibleDays = 8;
+        const endValue = Math.max(Math.min(visibleDays - 1, dates.length - 1), 0);
+        const showSlider = dates.length > visibleDays;
+
+        let xMax = 100;
+        if (numericValues.length > 0) {
+            xMax = Math.max.apply(null, numericValues);
+            if (xMax <= 0) {
+                xMax = 1;
+            } else {
+                xMax += 1 + xMax * 0.1;
+            }
+        }
+
+        let chart = echarts.getInstanceByDom(chartDom);
+        if (!chart) {
+            chart = echarts.init(chartDom);
+        }
+        chart.setOption({
+            backgroundColor: "#ffffff",
+            tooltip: {
+                trigger: "axis",
+                confine: true,
+                backgroundColor: "rgba(15, 23, 42, 0.92)",
+                borderWidth: 0,
+                padding: [8, 10],
+                textStyle: { color: "#ffffff", fontSize: 12, lineHeight: 18 },
+                axisPointer: {
+                    type: "line",
+                    lineStyle: { color: "#94a3b8", type: "dashed" }
+                },
+                formatter: function (params) {
+                    if (!Array.isArray(params) || params.length === 0) return "";
+                    const dateLabel = params[0].axisValue || "";
+                    const rows = params.map(function (item) {
+                        const dataItem = item.data || {};
+                        const rawValue = dataItem.raw_value !== undefined
+                            ? dataItem.raw_value
+                            : (Array.isArray(item.value) ? item.value[0] : item.value);
+                        return item.marker + item.seriesName + ": " + rawValue + unitSuffix;
+                    });
+                    return [dateLabel].concat(rows).join("<br/>");
+                },
+                position: function (point, params, dom, rect, size) {
+                    const x = point[0];
+                    const y = point[1];
+                    const boxWidth = size.contentSize[0];
+                    const boxHeight = size.contentSize[1];
+                    const viewWidth = size.viewSize[0];
+                    const viewHeight = size.viewSize[1];
+                    const gap = 12;
+                    let left = x + gap;
+                    if (left + boxWidth > viewWidth) {
+                        left = x - boxWidth - gap;
+                    }
+                    if (left < 0) {
+                        left = 0;
+                    }
+                    let top = y - boxHeight / 2;
+                    if (top + boxHeight > viewHeight) {
+                        top = viewHeight - boxHeight;
+                    }
+                    if (top < 0) {
+                        top = 0;
+                    }
+                    return [left, top];
+                }
+            },
+            grid: {
+                left: 14,
+                right: showSlider ? 56 : 20,
+                top: 42,
+                bottom: 20,
+                containLabel: true
+            },
+            xAxis: {
+                type: "value",
+                position: "top",
+                min: 0,
+                max: xMax,
+                splitNumber: 5,
+                axisLine: { lineStyle: { color: "#cbd5e1" } },
+                axisTick: { show: true },
+                axisLabel: {
+                    color: "#64748b",
+                    fontSize: 11,
+                    rotate: 90,
+                    margin: 16,
+                    hideOverlap: false,
+                    align: "right",
+                    verticalAlign: "middle"
+                },
+                splitLine: { show: true, lineStyle: { color: "#d1d5db" } }
+            },
+            yAxis: {
+                type: "category",
+                data: dates,
+                inverse: true,
+                axisLine: { lineStyle: { color: "#cbd5e1" } },
+                axisLabel: {
+                    color: "#475569",
+                    fontSize: 12,
+                    interval: 0,
+                    hideOverlap: false,
+                    margin: 16,
+                    rotate: -90
+                },
+                splitLine: { show: false }
+            },
+            dataZoom: [
+                {
+                    type: "inside",
+                    yAxisIndex: 0,
+                    filterMode: "none",
+                    startValue: 0,
+                    endValue: endValue,
+                    zoomOnMouseWheel: false,
+                    moveOnMouseMove: true,
+                    moveOnMouseWheel: true
+                },
+                {
+                    type: "slider",
+                    yAxisIndex: 0,
+                    filterMode: "none",
+                    show: showSlider,
+                    right: 8,
+                    top: 92,
+                    bottom: 20,
+                    width: 12,
+                    startValue: 0,
+                    endValue: endValue,
+                    showDetail: false,
+                    borderColor: "#e2e8f0",
+                    fillerColor: "rgba(79, 134, 232, 0.18)",
+                    backgroundColor: "#f1f5f9"
+                }
+            ],
+            series: [
+                {
+                    name: seriesName,
+                    type: "line",
+                    smooth: true,
+                    showSymbol: true,
+                    symbol: "circle",
+                    symbolSize: 5,
+                    data: points,
+                    itemStyle: { color: "#ffffff", borderColor: "#4f86e8", borderWidth: 2 },
+                    lineStyle: { color: "#4f86e8", width: 2 }
+                }
+            ]
+        }, true);
+        setTimeout(function () { chart.resize(); }, 0);
+    }
+
+    function toggleViewMode() {
+        isChartMode = !isChartMode;
+        const switchText = document.getElementById("chart-switch-text");
+        if (isChartMode) {
+            listWrapper.classList.add("hidden");
+            chartWrapper.classList.remove("hidden");
+            switchText.textContent = "切换列表";
+            renderChart();
+        } else {
+            chartWrapper.classList.add("hidden");
+            listWrapper.classList.remove("hidden");
+            switchText.textContent = "切换图表";
+        }
+    }
+
+    document.getElementById("chart-switch-btn").addEventListener("click", toggleViewMode);
+    document.getElementById("month-picker-area").addEventListener("click", function () {
+        monthPicker.showPicker();
+    });
+    monthPicker.addEventListener("change", function () {
+        currentMonth = monthPicker.value || currentMonth;
+        monthDisplay.textContent = currentMonth;
+        const url = new URL(window.location.href);
+        url.searchParams.set("month", currentMonth);
+        window.location.replace(url.toString());
+    });
+
+    window.addEventListener("resize", function () {
+        const chartDom = document.getElementById("review-metric-line-chart");
+        if (!chartDom || typeof echarts === "undefined") return;
+        const chart = echarts.getInstanceByDom(chartDom);
+        if (chart) chart.resize();
+    });
+})();
+</script>
+{% endblock %}

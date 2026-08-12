@@ -179,7 +179,9 @@ class PatientListServiceStatusGroupsTest(TestCase):
 
         # 选中态由 data-selected 属性驱动，不再依赖 JS 维护 class 清单
         self.assertIn("data-[selected=true]:bg-indigo-50/50", content)
-        self.assertIn("data-[selected=true]:!border-indigo-500", content)
+        self.assertIn(
+            "data-[selected=true]:shadow-[inset_4px_0_0_0_#6366f1]", content
+        )
 
         # 计数为 0 的待办徽章降级为灰色弱化态
         self.assertIn("bg-gray-50 border-gray-100", content)

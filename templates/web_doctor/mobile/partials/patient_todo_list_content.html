@@ -111,34 +111,16 @@
   </div>
 {% endfor %}
 
-{% if todo_page.paginator.num_pages > 1 %}
-  <div class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3 flex items-center justify-between text-sm">
-    {% if todo_page.has_previous %}
-      <a
-        class="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 active:bg-slate-50 transition"
-        href="?page={{ todo_page.previous_page_number }}&pagesize={{ pagesize }}{% if patient %}&patient_id={{ patient.id }}{% endif %}"
-        hx-get="?page={{ todo_page.previous_page_number }}&pagesize={{ pagesize }}{% if patient %}&patient_id={{ patient.id }}{% endif %}"
-        hx-target="#mobile-todo-list-content"
-        hx-swap="innerHTML"
-        hx-indicator="#mobile-todo-loading"
-      >上一页</a>
-    {% else %}
-      <span class="px-3 py-1.5 rounded-md border border-slate-100 text-slate-300">上一页</span>
-    {% endif %}
-    <div class="text-slate-500 text-xs">
-      第 <span class="font-bold text-slate-700">{{ todo_page.number }}</span>/<span>{{ todo_page.paginator.num_pages }}</span> 页
-    </div>
-    {% if todo_page.has_next %}
-      <a
-        class="px-3 py-1.5 rounded-md border border-slate-200 text-slate-600 active:bg-slate-50 transition"
-        href="?page={{ todo_page.next_page_number }}&pagesize={{ pagesize }}{% if patient %}&patient_id={{ patient.id }}{% endif %}"
-        hx-get="?page={{ todo_page.next_page_number }}&pagesize={{ pagesize }}{% if patient %}&patient_id={{ patient.id }}{% endif %}"
-        hx-target="#mobile-todo-list-content"
-        hx-swap="innerHTML"
-        hx-indicator="#mobile-todo-loading"
-      >下一页</a>
-    {% else %}
-      <span class="px-3 py-1.5 rounded-md border border-slate-100 text-slate-300">下一页</span>
-    {% endif %}
-  </div>
-{% endif %}
+{% with pagesize_str=pagesize|stringformat:"s" %}
+  {% if patient %}
+    {% with patient_id_str=patient.id|stringformat:"s" %}
+      {% with todo_base_query="pagesize="|add:pagesize_str|add:"&patient_id="|add:patient_id_str|add:"&" %}
+      {% include "web_doctor/mobile/partials/pagination.html" with page=todo_page param_name="page" base_query=todo_base_query hx_target="#mobile-todo-list-content" hx_indicator="#mobile-todo-loading" extra_class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3" %}
+      {% endwith %}
+    {% endwith %}
+  {% else %}
+    {% with todo_base_query="pagesize="|add:pagesize_str|add:"&" %}
+    {% include "web_doctor/mobile/partials/pagination.html" with page=todo_page param_name="page" base_query=todo_base_query hx_target="#mobile-todo-list-content" hx_indicator="#mobile-todo-loading" extra_class="bg-white rounded-2xl shadow-sm border border-slate-100 px-4 py-3" %}
+    {% endwith %}
+  {% endif %}
+{% endwith %}

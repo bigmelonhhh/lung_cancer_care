@@ -277,12 +277,22 @@ class ManagementPlanViewTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
-        courses = response.context["treatment_courses"]
-        self.assertEqual(len(courses), 2)
-        self.assertEqual(courses[0]["name"], cycle_current.name)
-        self.assertTrue(courses[0]["is_current"])
-        self.assertEqual(courses[1]["name"], cycle_history.name)
-        self.assertFalse(courses[1]["is_current"])
+        sections = {
+            section["key"]: section
+            for section in response.context["treatment_course_sections"]
+        }
+        self.assertEqual(
+            [section["key"] for section in response.context["treatment_course_sections"]],
+            ["in_progress", "not_started", "ended"],
+        )
+        self.assertTrue(sections["in_progress"]["default_open"])
+        self.assertFalse(sections["not_started"]["default_open"])
+        self.assertFalse(sections["ended"]["default_open"])
+
+        current_course = sections["in_progress"]["courses"][0]
+        history_course = sections["ended"]["courses"][0]
+        self.assertEqual(current_course["name"], cycle_current.name)
+        self.assertEqual(history_course["name"], cycle_history.name)
 
         def find_item(course, date_str, item_type):
             return next(
@@ -294,22 +304,148 @@ class ManagementPlanViewTests(TestCase):
                 None,
             )
 
-        future_q = find_item(courses[0], date_future.strftime("%Y-%m-%d"), "questionnaire")
+        future_q = find_item(current_course, date_future.strftime("%Y-%m-%d"), "questionnaire")
         self.assertIsNotNone(future_q)
         self.assertEqual(future_q["status"], "not_started")
 
-        future_c = find_item(courses[0], date_future.strftime("%Y-%m-%d"), "checkup")
+        future_c = find_item(current_course, date_future.strftime("%Y-%m-%d"), "checkup")
         self.assertIsNotNone(future_c)
         self.assertEqual(future_c["status"], "not_started")
 
-        recent_q = find_item(courses[0], date_recent.strftime("%Y-%m-%d"), "questionnaire")
+        recent_q = find_item(current_course, date_recent.strftime("%Y-%m-%d"), "questionnaire")
         self.assertIsNotNone(recent_q)
         self.assertEqual(recent_q["status"], "incomplete")
 
-        recent_c = find_item(courses[0], date_recent.strftime("%Y-%m-%d"), "checkup")
+        recent_c = find_item(current_course, date_recent.strftime("%Y-%m-%d"), "checkup")
         self.assertIsNotNone(recent_c)
         self.assertEqual(recent_c["status"], "completed")
 
-        old_q = find_item(courses[1], date_old.strftime("%Y-%m-%d"), "questionnaire")
+        old_q = find_item(history_course, date_old.strftime("%Y-%m-%d"), "questionnaire")
         self.assertIsNotNone(old_q)
         self.assertEqual(old_q["status"], "terminated")
+
+    def test_treatment_course_sections_classify_and_sort_for_patient_usage(self):
+        self.client.force_login(self.user)
+        today = timezone.localdate()
+
+        cycle_specs = (
+            (
+                "今日开始疗程",
+                today,
+                today + datetime.timedelta(days=20),
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "当前较早疗程",
+                today - datetime.timedelta(days=10),
+                today + datetime.timedelta(days=10),
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "当前较新疗程",
+                today - datetime.timedelta(days=2),
+                today + datetime.timedelta(days=18),
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "今日结束疗程",
+                today - datetime.timedelta(days=20),
+                today,
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "稍后开始疗程",
+                today + datetime.timedelta(days=5),
+                today + datetime.timedelta(days=25),
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "更晚开始疗程",
+                today + datetime.timedelta(days=20),
+                today + datetime.timedelta(days=40),
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "最近结束疗程",
+                today - datetime.timedelta(days=30),
+                today - datetime.timedelta(days=2),
+                core_choices.TreatmentCycleStatus.COMPLETED,
+            ),
+            (
+                "自然结束疗程",
+                today - datetime.timedelta(days=60),
+                today - datetime.timedelta(days=20),
+                core_choices.TreatmentCycleStatus.IN_PROGRESS,
+            ),
+            (
+                "已终止疗程",
+                today - datetime.timedelta(days=15),
+                today + datetime.timedelta(days=5),
+                core_choices.TreatmentCycleStatus.TERMINATED,
+            ),
+        )
+        for name, start_date, end_date, status in cycle_specs:
+            TreatmentCycle.objects.create(
+                patient=self.patient,
+                name=name,
+                start_date=start_date,
+                end_date=end_date,
+                cycle_days=(end_date - start_date).days + 1,
+                status=status,
+            )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        sections = {
+            section["key"]: section
+            for section in response.context["treatment_course_sections"]
+        }
+        self.assertEqual(
+            [course["name"] for course in sections["in_progress"]["courses"]],
+            ["今日开始疗程", "当前较新疗程", "当前较早疗程", "今日结束疗程"],
+        )
+        self.assertEqual(
+            [course["name"] for course in sections["not_started"]["courses"]],
+            ["稍后开始疗程", "更晚开始疗程"],
+        )
+        self.assertEqual(
+            [course["name"] for course in sections["ended"]["courses"]],
+            ["已终止疗程", "最近结束疗程", "自然结束疗程"],
+        )
+        self.assertEqual(sections["ended"]["courses"][0]["status_text"], "已终止")
+        self.assertEqual(sections["in_progress"]["count"], 4)
+        self.assertEqual(sections["not_started"]["count"], 2)
+        self.assertEqual(sections["ended"]["count"], 3)
+
+    def test_treatment_course_sections_render_empty_states_and_stay_closed(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        sections = response.context["treatment_course_sections"]
+        self.assertEqual([section["count"] for section in sections], [0, 0, 0])
+        self.assertFalse(any(section["default_open"] for section in sections))
+        self.assertContains(response, "暂无进行中疗程")
+        self.assertContains(response, "暂无未开始疗程")
+        self.assertContains(response, "暂无已结束疗程")
+
+    @patch(
+        "web_patient.services.management_plan._get_all_treatment_cycles",
+        side_effect=RuntimeError("query failed"),
+    )
+    def test_treatment_course_query_failure_is_logged_and_returns_empty_sections(
+        self, mock_get_cycles
+    ):
+        self.client.force_login(self.user)
+
+        with self.assertLogs("web_patient.services.management_plan", level="ERROR"):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [section["count"] for section in response.context["treatment_course_sections"]],
+            [0, 0, 0],
+        )
+        mock_get_cycles.assert_called_once_with(self.patient)

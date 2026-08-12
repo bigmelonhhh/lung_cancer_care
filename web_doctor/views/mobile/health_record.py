@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.db.models import Max
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +15,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from core.models import DailyTask, Questionnaire, QuestionnaireCode
 from core.models.choices import PlanItemCategory, TaskStatus
 from health_data.models import (
+    CheckupResultValue,
     HealthMetric,
     MetricType,
     QuestionnaireSubmission,
@@ -27,6 +28,12 @@ from health_data.services.monitoring_catalog import (
 )
 from health_data.services.questionnaire_display import QuestionnaireDisplayService
 from health_data.services.questionnaire_submission import QuestionnaireSubmissionService
+from health_data.services.review_indicator_service import (
+    build_patient_review_metric_stats,
+    build_review_metric_chart,
+    get_review_metric_mapping_info,
+    record_to_detail_item,
+)
 from market.service.order import get_paid_orders_for_patient
 from patient_alerts.services.todo_list import TodoListService
 from users.decorators import check_doctor_or_assistant
@@ -88,6 +95,84 @@ def _get_patient_from_query(request: HttpRequest):
     patients_qs = _get_workspace_patients(request.user, query=None).select_related("user")
     patient = patients_qs.filter(pk=patient_id_int).first()
     return patient, patient_id_int
+
+
+def _build_checkup_tab_stats(
+    patient,
+    patient_id: int | None,
+    is_member: bool,
+    selected_package: dict | None,
+    start_date,
+    end_date,
+) -> tuple[list[dict], list[dict]]:
+    """构建医生端复查档案与复查指标统计。
+
+    Args:
+        patient: 当前医生可访问的患者对象。
+        patient_id: 当前患者 ID；为空时直接返回空结果。
+        is_member: 当前患者是否仍处于会员服务期内。
+        selected_package: 当前选中的服务包信息；为空时不统计会员模块。
+        start_date: 当前统计窗口开始日期。
+        end_date: 当前统计窗口结束日期。
+
+    Returns:
+        tuple[list[dict], list[dict]]: 返回 `(checkup_stats, review_metric_stats)`。
+        - `checkup_stats` 为复查档案分类统计。
+        - `review_metric_stats` 为医生配置的复查指标统计。
+    """
+    checkup_stats = []
+    review_metric_stats = []
+    if not (is_member and selected_package and patient_id):
+        return checkup_stats, review_metric_stats
+
+    from health_data.services.report_service import ReportUploadService
+
+    checkup_library_items = get_active_checkup_library()
+    if checkup_library_items:
+        for chk in checkup_library_items:
+            lib_id = chk.get("lib_id")
+            code = chk.get("code")
+            if not lib_id:
+                continue
+
+            completed_count = 0
+            if code:
+                try:
+                    payload = ReportUploadService.list_report_images(
+                        patient_id=int(patient_id),
+                        category_code=code,
+                        report_month="",
+                        page_num=1,
+                        page_size=1,
+                        start_date=start_date,
+                        end_date=end_date,
+                    )
+                    completed_count = int(payload.get("total") or 0)
+                except Exception as exc:
+                    logging.error(f"查询复查档案统计失败 code={code}: {exc}")
+
+            checkup_stats.append(
+                {
+                    "lib_id": lib_id,
+                    "code": code,
+                    "title": chk.get("name") or "",
+                    "category": chk.get("category") or "",
+                    "count": completed_count,
+                    "abnormal": 0,
+                }
+            )
+
+    try:
+        review_metric_stats = build_patient_review_metric_stats(
+            patient=patient,
+            start_date=start_date,
+            end_date=end_date,
+        )
+    except Exception as exc:
+        logging.error(f"查询复查指标统计失败: {exc}")
+
+    checkup_stats = [item for item in checkup_stats if item["count"] or item["abnormal"]]
+    return checkup_stats, review_metric_stats
 
 
 @login_required
@@ -221,7 +306,6 @@ def health_records(request: HttpRequest) -> HttpResponse:
                     logging.error(f"查询健康指标统计失败 type={item['type']}: {e}")
 
     health_survey_stats = []
-    checkup_stats = []
     if is_member and selected_package and patient_id:
         tz = timezone.get_current_timezone()
         survey_start_at = timezone.make_aware(
@@ -236,29 +320,14 @@ def health_records(request: HttpRequest) -> HttpResponse:
             end_at=survey_end_at,
         )
 
-    if is_member:
-        from health_data.services.report_service import ReportUploadService
-
-        library = get_active_checkup_library()
-        for lib_item in library:
-            code = lib_item.get("code") or ""
-            title_ = lib_item.get("name") or ""
-            count_ = 0
-            try:
-                payload = ReportUploadService.list_report_images(
-                    patient_id=int(patient_id),
-                    category_code=code,
-                    report_month="",
-                    page_num=1,
-                    page_size=1,
-                    start_date=start_date,
-                    end_date=end_date,
-                )
-                count_ = int(payload.get("total") or 0)
-            except Exception as e:
-                logging.error(f"查询复查档案统计失败 code={code}: {e}")
-                count_ = 0
-            checkup_stats.append({"code": code, "title": title_, "count": count_})
+    checkup_stats, review_metric_stats = _build_checkup_tab_stats(
+        patient=patient,
+        patient_id=patient_id,
+        is_member=is_member,
+        selected_package=selected_package,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
     health_stats = [
         item for item in health_stats if item["count"] or item.get("abnormal", 0)
@@ -269,6 +338,8 @@ def health_records(request: HttpRequest) -> HttpResponse:
     checkup_stats = [
         item for item in checkup_stats if item["count"] or item.get("abnormal", 0)
     ]
+    active_tab = request.GET.get("tab")
+    active_tab = "metrics" if active_tab == "metrics" else "archive"
 
     context = {
         "patient_id": patient_id,
@@ -278,10 +349,89 @@ def health_records(request: HttpRequest) -> HttpResponse:
         "selected_date_range": {"start_date": start_date, "end_date": end_date},
         "health_stats": health_stats,
         "checkup_stats": checkup_stats,
+        "review_metric_stats": review_metric_stats,
         "health_survey_stats": health_survey_stats,
         "is_medication_detail_entry": is_medication_detail_entry,
+        "active_tab": active_tab,
     }
     return render(request, "web_doctor/mobile/health_records.html", context)
+
+
+@login_required
+@check_doctor_or_assistant
+def health_records_tab_content(request: HttpRequest) -> HttpResponse:
+    """返回医生端健康档案页复查模块的 Tab 局部内容。
+
+    Args:
+        request: Django HTTP 请求对象，需携带 `patient_id`，可选 `package_id`、`tab`。
+
+    Returns:
+        HttpResponse: 渲染后的局部模板响应；当患者参数无效或越权时返回 400。
+    """
+    patient, _ = _get_patient_from_query(request)
+    if patient is None:
+        return HttpResponseBadRequest("参数错误")
+
+    patient_id = patient.id or None
+    is_member = _is_member(patient)
+
+    service_packages = []
+    if is_member:
+        orders = get_paid_orders_for_patient(patient)
+        for order in orders:
+            service_packages.append(
+                {
+                    "id": order.id,
+                    "name": order.product.name if getattr(order, "product_id", None) else "",
+                    "start_date": order.start_date,
+                    "end_date": order.end_date,
+                    "is_active": False,
+                }
+            )
+
+    selected_package = None
+    selected_package_id = request.GET.get("package_id")
+    if service_packages:
+        if selected_package_id:
+            try:
+                selected_id_int = int(selected_package_id)
+            except (TypeError, ValueError):
+                selected_id_int = None
+            if selected_id_int:
+                selected_package = next(
+                    (pkg for pkg in service_packages if pkg["id"] == selected_id_int), None
+                )
+        if not selected_package:
+            selected_package = service_packages[0]
+
+    today = timezone.localdate()
+    if selected_package and selected_package.get("start_date") and selected_package.get("end_date"):
+        start_date = selected_package["start_date"]
+        end_date = selected_package["end_date"]
+    else:
+        start_date = datetime(2000, 1, 1).date()
+        end_date = today
+
+    checkup_stats, review_metric_stats = _build_checkup_tab_stats(
+        patient=patient,
+        patient_id=patient_id,
+        is_member=is_member,
+        selected_package=selected_package,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    active_tab = request.GET.get("tab")
+    active_tab = "metrics" if active_tab == "metrics" else "archive"
+
+    context = {
+        "patient_id": patient_id,
+        "selected_package_id": selected_package["id"] if selected_package else None,
+        "checkup_stats": checkup_stats,
+        "review_metric_stats": review_metric_stats,
+        "active_tab": active_tab,
+    }
+    return render(request, "web_doctor/mobile/partials/health_records_checkup_tabs.html", context)
 
 
 def _resolve_month_window(current_month: str) -> tuple[str, datetime, datetime, int]:
@@ -692,6 +842,92 @@ def _load_review_image_groups_batch(
 
     has_more = bool(groups) and _month_gte(active_month, earliest_month)
     return groups, has_more, active_month if has_more else None, 0 if has_more else None
+
+
+def _load_review_metric_records_batch(
+    *,
+    patient,
+    checkup_id: int,
+    field_id: int,
+    cursor_month: str,
+    cursor_offset: int,
+    limit: int,
+) -> tuple[list, bool, str | None, int | None]:
+    """按月游标批量加载医生端单指标复查记录。
+
+    Args:
+        patient: 当前医生可访问的患者对象。
+        checkup_id: 复查分类 ID。
+        field_id: 标准字段 ID。
+        cursor_month: 当前游标月份，格式为 `YYYY-MM`。
+        cursor_offset: 当前月份内的偏移量。
+        limit: 本次最多返回的记录数。
+
+    Returns:
+        tuple[list, bool, str | None, int | None]:
+        返回 `(records, has_more, next_cursor_month, next_cursor_offset)`。
+        同一日期多条结果仅保留最新一条，并在当前月份不足时自动向前补月。
+    """
+    base_qs = CheckupResultValue.objects.filter(
+        patient=patient,
+        checkup_item_id=checkup_id,
+        standard_field_id=field_id,
+        value_numeric__isnull=False,
+    )
+
+    earliest = base_qs.order_by("report_date", "id").only("report_date").first()
+    if earliest is None:
+        return [], False, None, None
+
+    earliest_month = earliest.report_date.strftime("%Y-%m")
+    active_month = _resolve_month_window(cursor_month)[0]
+    active_offset = max(0, cursor_offset)
+    records = []
+
+    while len(records) < limit and _month_gte(active_month, earliest_month):
+        month_label, month_start, month_end_exclusive, _ = _resolve_month_window(active_month)
+        month_base = base_qs.filter(
+            report_date__gte=month_start.date(),
+            report_date__lt=month_end_exclusive.date(),
+        )
+        latest_ids = list(
+            month_base.values("report_date")
+            .annotate(max_id=Max("id"))
+            .values_list("max_id", flat=True)
+        )
+        month_qs = (
+            month_base.filter(id__in=latest_ids)
+            .order_by("-report_date", "-id")
+            .only(
+                "id",
+                "report_date",
+                "value_numeric",
+                "unit",
+                "range_text",
+                "lower_bound",
+                "upper_bound",
+                "abnormal_flag",
+            )
+        )
+        month_total = month_qs.count()
+        if active_offset >= month_total:
+            active_month = _shift_month(month_label)
+            active_offset = 0
+            continue
+
+        remaining = limit - len(records)
+        month_items = list(month_qs[active_offset : active_offset + remaining])
+        records.extend(month_items)
+
+        next_offset = active_offset + len(month_items)
+        if next_offset < month_total:
+            return records, True, month_label, next_offset
+
+        active_month = _shift_month(month_label)
+        active_offset = 0
+
+    has_more = bool(records) and _month_gte(active_month, earliest_month)
+    return records, has_more, active_month if has_more else None, 0 if has_more else None
 
 
 def _build_medication_chart_payload(
@@ -1288,6 +1524,156 @@ def mobile_questionnaire_submission_detail(
         "patient_id": patient.id,
     }
     return render(request, "web_doctor/mobile/questionnaire_submission_detail.html", context)
+
+
+@login_required
+@check_doctor_or_assistant
+def review_metric_detail(request: HttpRequest) -> HttpResponse:
+    """渲染医生端复查指标详情页。
+
+    Args:
+        request: Django HTTP 请求对象，需携带 `patient_id` 与 `mapping_id`，
+            可选 `month` 用于指定当前图表与列表锚定月份。
+
+    Returns:
+        HttpResponse: 指标详情页响应；当患者参数错误时返回 400，
+        当 mapping 不存在或已停用时抛出 404。
+
+    Notes:
+        月份切换后的首屏状态以整页视图为准：由服务端重新计算首屏列表、
+        图表数据与分页游标；前端数据接口只承担滚动分页和独立图表数据返回。
+    """
+    patient, _ = _get_patient_from_query(request)
+    if patient is None:
+        return HttpResponseBadRequest("参数错误")
+
+    patient_id = patient.id or None
+    mapping_id_raw = request.GET.get("mapping_id") or ""
+
+    mapping_info = get_review_metric_mapping_info(mapping_id_raw)
+    if not mapping_info:
+        raise Http404("指标不存在或已停用")
+    mapping_id = mapping_info["mapping_id"]
+
+    current_month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+    current_month, _, _, _ = _resolve_month_window(current_month)
+
+    chart = build_review_metric_chart(patient, mapping_id, current_month) or {}
+
+    records = []
+    has_more = False
+    next_cursor_month = None
+    next_cursor_offset = None
+    if patient_id:
+        (
+            records,
+            has_more,
+            next_cursor_month,
+            next_cursor_offset,
+        ) = _load_review_metric_records_batch(
+            patient=patient,
+            checkup_id=mapping_info["checkup_id"],
+            field_id=mapping_info["field_id"],
+            cursor_month=current_month,
+            cursor_offset=0,
+            limit=RECORD_BATCH_SIZE,
+        )
+
+    initial_items = [record_to_detail_item(record, mapping_info) for record in records]
+
+    context = {
+        "patient_id": patient_id,
+        "title": mapping_info["field_display_name"],
+        "mapping_id": mapping_id,
+        "current_month": current_month,
+        "chart_available": bool(chart.get("has_data")),
+        "chart_json": json.dumps(chart, ensure_ascii=False),
+        "initial_items": initial_items,
+        "has_records": bool(initial_items),
+        "has_more": has_more,
+        "next_cursor_month": next_cursor_month,
+        "next_cursor_offset": next_cursor_offset,
+        "batch_size": RECORD_BATCH_SIZE,
+    }
+    return render(request, "web_doctor/mobile/review_metric_detail.html", context)
+
+
+@login_required
+@check_doctor_or_assistant
+def review_metric_detail_data(request: HttpRequest) -> JsonResponse:
+    """返回医生端复查指标详情页的图表或分页列表数据。
+
+    Args:
+        request: Django HTTP 请求对象，需携带 `patient_id` 与 `mapping_id`。
+            - 仅传 `month` 时返回图表数据。
+            - 传 `cursor_month/cursor_offset/limit` 时返回分页列表数据。
+
+    Returns:
+        JsonResponse: 统一返回成功状态、图表或列表数据；当参数非法或资源不存在时
+        返回对应的 400/404 响应。
+
+    Notes:
+        该接口不再负责月份切换后的首屏页面重建；切换月份时由详情页整页刷新，
+        接口只用于滚动分页补数和图表的独立数据获取。
+    """
+    patient, _ = _get_patient_from_query(request)
+    if patient is None:
+        return JsonResponse({"success": False, "message": "参数错误"}, status=400)
+
+    mapping_info = get_review_metric_mapping_info(request.GET.get("mapping_id") or "")
+    if not mapping_info:
+        return JsonResponse({"success": False, "message": "指标不存在或已停用"}, status=404)
+    mapping_id = mapping_info["mapping_id"]
+
+    if "month" in request.GET and not any(
+        key in request.GET for key in ("cursor_month", "cursor_offset", "limit")
+    ):
+        month = request.GET.get("month") or timezone.localdate().strftime("%Y-%m")
+        month, _, _, _ = _resolve_month_window(month)
+        chart = build_review_metric_chart(patient, mapping_id, month)
+        if chart is None:
+            return JsonResponse({"success": False, "message": "图表数据加载失败"}, status=500)
+        return JsonResponse({"success": True, "chart": chart, "month": month})
+
+    cursor_month = request.GET.get("cursor_month") or timezone.localdate().strftime("%Y-%m")
+    cursor_month, _, _, days_in_month = _resolve_month_window(cursor_month)
+
+    try:
+        cursor_offset = max(0, int(request.GET.get("cursor_offset", 0)))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "message": "cursor_offset 必须为整数。"}, status=400)
+
+    try:
+        limit = int(request.GET.get("limit", days_in_month))
+    except (TypeError, ValueError):
+        return JsonResponse({"success": False, "message": "limit 必须为整数。"}, status=400)
+    limit = max(1, min(limit, days_in_month))
+
+    (
+        records,
+        has_more,
+        next_cursor_month,
+        next_cursor_offset,
+    ) = _load_review_metric_records_batch(
+        patient=patient,
+        checkup_id=mapping_info["checkup_id"],
+        field_id=mapping_info["field_id"],
+        cursor_month=cursor_month,
+        cursor_offset=cursor_offset,
+        limit=limit,
+    )
+
+    items = [record_to_detail_item(record, mapping_info) for record in records]
+    return JsonResponse(
+        {
+            "success": True,
+            "items": items,
+            "has_more": has_more,
+            "next_cursor_month": next_cursor_month,
+            "next_cursor_offset": next_cursor_offset,
+            "batch_size": limit,
+        }
+    )
 
 
 @login_required

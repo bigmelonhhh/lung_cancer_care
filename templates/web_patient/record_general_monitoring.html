@@ -17,7 +17,7 @@
     </div>
   </div>
 
-  <div class="px-4 pt-6">
+  <div class="px-4 pt-4">
     <form method="post" id="monitoring-form" class="rounded-xl bg-white p-5 shadow-sm">
       {% csrf_token %}
       <input type="hidden" name="next" value="{{ request.GET.next }}">

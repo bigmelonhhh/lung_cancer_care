@@ -3,28 +3,19 @@
 {% block title %}患者主页{% endblock %}
 
 {% block body %}
-<!-- Import Fonts -->
-<style>    .font-lexend { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-    .font-source { font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif; }
-</style>
-
 <div class="min-h-screen bg-slate-50 pb-safe-bottom font-source text-slate-900">
   <div class="bg-blue-600 pt-safe-top pb-6 px-4 shadow-md relative overflow-hidden rounded-b-3xl">
-    <!-- Abstract Background Pattern -->
     <div class="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/3 blur-3xl pointer-events-none"></div>
     <div class="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/20 rounded-full translate-y-1/3 -translate-x-1/4 blur-2xl pointer-events-none"></div>
 
     <div class="relative z-10 pt-4 flex items-center gap-3">
-      <button type="button" id="mobile-back-btn" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20">
-        <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
-      <div class="text-white min-w-0 px-1 flex flex-col">
+      <a href="{% url 'web_doctor:mobile_patient_list' %}" data-role="mobile-back" class="w-9 h-9 rounded-full bg-white/15 backdrop-blur-sm flex items-center justify-center active:scale-95 transition hover:bg-white/20 shrink-0" aria-label="返回患者列表">
+        {% include "components/mobile/icon.html" with name="back" class="w-5 h-5 text-white" %}
+      </a>
+      <div class="text-white min-w-0 flex-1 flex flex-col">
         <div class="text-xl font-lexend font-bold truncate">患者：{{ patient.name }}</div>
-        <div class="text-xs text-blue-100 font-medium opacity-90 mt-0.5">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁 </div>
+        <div class="text-xs text-blue-100 font-medium opacity-90 mt-0.5">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
       </div>
-      
     </div>
   </div>
   <div class="flex items-center px-5 font-lexend font-bold text-slate-800 text-lg mt-6 mb-3">
@@ -108,29 +99,6 @@
       el.classList.add("transition", "duration-300", "opacity-100", "translate-y-0");
     });
 
-    document.addEventListener("click", function (event) {
-      const btn = event.target.closest("#mobile-back-btn");
-      if (!btn) return;
-      if (window.history.length > 1) {
-        window.history.back();
-        return;
-      }
-      window.location.href = "{% url 'web_doctor:mobile_patient_list' %}";
-    });
-
-    document.addEventListener("click", function (event) {
-      const entry = event.target.closest("#mobile-patient-chat-entry");
-      if (!entry) return;
-      event.preventDefault();
-      window.location.href = "{% url 'web_doctor:mobile_patient_chat_list' patient_id=patient.id %}";
-    });
-
-    document.addEventListener("click", function (event) {
-      const entry = event.target.closest("#mobile-manage-metrics-entry");
-      if (!entry) return;
-      event.preventDefault();
-      window.location.href = "{% url 'web_doctor:mobile_health_records' %}?patient_id={{ patient.id }}";
-    });
   })();
 </script>
 {% endblock %}

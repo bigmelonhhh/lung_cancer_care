@@ -14,7 +14,7 @@ from core.models import choices
 from users.models import CustomUser, PatientProfile
 
 MIN_TREATMENT_CYCLE_DAYS = 2
-MAX_TREATMENT_CYCLE_DAYS = 60
+MAX_TREATMENT_CYCLE_DAYS = 100
 
 # 根据 patient 来查询当前所有疗程。 按照开始时间倒序排列，并在此处直接做分页。
 

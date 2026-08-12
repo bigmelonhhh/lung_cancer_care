@@ -1,0 +1,54 @@
+{% comment %}
+医生移动端患者列表卡片。
+由 patient_list.html 三个分组（管理中/停止管理/未付费）循环复用。
+依赖当前上下文中的循环变量 patient。
+保留 data-patient-item 与 data-patient-* 属性，供页面级事件委托读取选中患者信息。
+{% endcomment %}
+<a
+  href="{% url 'web_doctor:mobile_patient_home' patient.id %}"
+  class="px-5 py-4 border-b border-slate-50 last:border-0 flex items-center justify-between active:bg-slate-50 transition-colors group"
+  data-patient-item
+  data-patient-id="{{ patient.id }}"
+  data-patient-name="{{ patient.name|default:'' }}"
+  data-patient-gender="{{ patient.get_gender_display|default:'' }}"
+  data-patient-age="{{ patient.age|default:'' }}"
+  data-patient-no="P{{ patient.id|stringformat:'06d' }}"
+  data-patient-phone="{{ patient.phone|default:'' }}"
+>
+  <div class="min-w-0">
+    <div class="flex items-baseline gap-2">
+      <div class="text-base font-bold text-slate-800 truncate max-w-[9rem] group-hover:text-blue-600 transition-colors">{{ patient.name }}</div>
+      <div class="text-xs font-medium text-slate-500 shrink-0 bg-slate-100 px-1.5 py-0.5 rounded">{{ patient.get_gender_display }} · {{ patient.age|default:"-" }}岁</div>
+    </div>
+    <div class="mt-1 text-xs leading-5 text-slate-500">
+      <p>主任：{{ patient.director_doctor_name|default:"--" }}</p>
+    </div>
+    <div class="mt-2 text-xs text-slate-500 flex items-center gap-4">
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full {% if patient.todo_count > 0 %}bg-red-500{% else %}bg-slate-300{% endif %}"></span>
+        <span>待办</span>
+        {% if patient.todo_count > 0 %}
+        <span class="text-red-600 font-bold bg-red-50 px-1.5 rounded-md">
+          {% if patient.todo_count > 99 %}99+{% else %}{{ patient.todo_count }}{% endif %}
+        </span>
+        {% else %}
+        <span class="text-slate-400">0</span>
+        {% endif %}
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full {% if patient.consult_count > 0 %}bg-amber-500{% else %}bg-slate-300{% endif %}"></span>
+        <span>未读咨询数</span>
+        {% if patient.consult_count > 0 %}
+        <span class="text-amber-600 font-bold bg-amber-50 px-1.5 rounded-md">
+          {% if patient.consult_count > 99 %}99+{% else %}{{ patient.consult_count }}{% endif %}
+        </span>
+        {% else %}
+        <span class="text-slate-400">0</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+      {% include "components/mobile/icon.html" with name="chevron-right" class="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" %}
+  </div>
+</a>

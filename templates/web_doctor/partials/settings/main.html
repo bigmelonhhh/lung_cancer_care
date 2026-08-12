@@ -1,4 +1,4 @@
-<div class="space-y-6  mx-auto p-6">
+<div class="space-y-6  mx-auto p-3">
 
     {# 新增：个人资料与病情信息 #}
     <div class="grid grid-cols-1 gap-6">
@@ -348,6 +348,49 @@
     ) {
       window.__initSettingsPlanRows(target);
     }
+  });
+})();
+
+// 复查 / 问卷计划：按名称本地过滤，使用事件委托兼容 htmx 局部刷新
+(function () {
+  if (window.__settingsPlanFilterHooksInstalled) return;
+  window.__settingsPlanFilterHooksInstalled = true;
+
+  function normalizeSearchText(value) {
+    return String(value || "").trim().toLocaleLowerCase();
+  }
+
+  function filterPlanRows(input) {
+    const section = input.closest("[data-plan-filter-section]");
+    if (!section) return;
+
+    const query = normalizeSearchText(input.value);
+    const rows = section.querySelectorAll("[data-plan-filter-row]");
+    const emptyRow = section.querySelector("[data-plan-filter-empty]");
+    let visibleCount = 0;
+
+    rows.forEach((row) => {
+      const rowText = normalizeSearchText(row.getAttribute("data-plan-filter-text"));
+      const matches = !query || rowText.includes(query);
+      row.hidden = !matches;
+      if (matches) visibleCount += 1;
+    });
+
+    if (emptyRow) {
+      emptyRow.hidden = !query || visibleCount > 0;
+    }
+  }
+
+  document.body.addEventListener("input", function (event) {
+    const input = event.target;
+    if (!input || !input.matches || !input.matches("[data-plan-filter-input]")) return;
+    filterPlanRows(input);
+  });
+
+  document.body.addEventListener("search", function (event) {
+    const input = event.target;
+    if (!input || !input.matches || !input.matches("[data-plan-filter-input]")) return;
+    filterPlanRows(input);
   });
 })();
 

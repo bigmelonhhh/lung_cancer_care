@@ -22,6 +22,7 @@ from .record import (
     record_spo2,
     record_weight,
     health_records,
+    health_records_tab_content,
     record_checkup,
     health_record_detail,
     questionnaire_submission_detail,
@@ -30,6 +31,8 @@ from .record import (
     delete_report_image,
     review_record_detail,
     review_record_detail_data,
+    review_metric_detail,
+    review_metric_detail_data,
 )
 from .followup import daily_survey, get_survey_detail, submit_surveys
 from .api import delete_health_metric, update_health_metric, submit_medication
@@ -68,6 +71,7 @@ __all__ = [
     "record_spo2",
     "record_weight",
     "health_records",
+    "health_records_tab_content",
     "record_checkup",
     "health_record_detail",
     "questionnaire_submission_detail",
@@ -86,4 +90,6 @@ __all__ = [
     "delete_report_image",
     "review_record_detail",
     "review_record_detail_data",
+    "review_metric_detail",
+    "review_metric_detail_data",
 ]

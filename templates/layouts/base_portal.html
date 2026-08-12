@@ -12,6 +12,13 @@
       [x-cloak] {
         display: none !important;
       }
+      /* 医生/患者/销售三端移动端统一字体定义。
+         历史上移动端模板内联了 .font-lexend / .font-source 两个类名但实际字体栈相同，
+         这里集中定义一次，避免每个页面重复 <style>，同时保持向后兼容。 */
+      .font-lexend,
+      .font-source {
+        font-family: 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+      }
     </style>
     <title>{% block title %}慢病康复管理系统{% endblock %}</title>
     <link rel="icon" type="image/png" sizes="32x32" href="{% static 'icon32.png' %}" />
@@ -182,6 +189,38 @@
             resumeAlpineMutations(Alpine);
           }
         });
+      })();
+    </script>
+    <script>
+      // 移动端统一返回按钮事件委托。
+      // 约定：所有返回按钮使用 <a href="fallback_url" data-role="mobile-back">。
+      // 优先 history.back()；history 为空时跳 href（渐进增强，无 JS 也能用）。
+      // 替代历史实现：onclick="window.history.back()" / onclick="goBack()" / onclick="goListReplace()" / Alpine @click="goBack()"。
+      (function installMobileBackDelegate() {
+        if (window.__mobileBackDelegateInstalled) return;
+        window.__mobileBackDelegateInstalled = true;
+        function handleBack(event) {
+          var link = event.target.closest && event.target.closest('[data-role="mobile-back"]');
+          if (!link) return;
+          // 允许修饰键走默认行为（新窗口打开等）
+          if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          if (window.history.length > 1) {
+            window.history.back();
+            return;
+          }
+          var href = link.getAttribute('href');
+          if (href && href !== '#' && href.indexOf('javascript:') !== 0) {
+            window.location.href = href;
+          }
+        }
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function () {
+            document.addEventListener('click', handleBack);
+          }, { once: true });
+        } else {
+          document.addEventListener('click', handleBack);
+        }
       })();
     </script>
     {% block extra_head %}{% endblock %}
