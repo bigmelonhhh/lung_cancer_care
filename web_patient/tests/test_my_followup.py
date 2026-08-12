@@ -1,5 +1,6 @@
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.urls import reverse
@@ -74,6 +75,14 @@ class MyFollowupTests(TestCase):
             title="问卷提醒",
             status=core_choices.TaskStatus.PENDING,
         )
+        DailyTask.objects.create(
+            patient=self.patient,
+            plan_item=plan1,
+            task_date=today,
+            task_type=core_choices.PlanItemCategory.QUESTIONNAIRE,
+            title="同日已完成问卷",
+            status=core_choices.TaskStatus.COMPLETED,
+        )
 
         past_plan = PlanItem.objects.create(
             cycle=cycle_past,
@@ -95,16 +104,78 @@ class MyFollowupTests(TestCase):
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
 
-        cycles = response.context["cycles"]
-        self.assertEqual(len(cycles), 2)
-        self.assertIn("当前疗程", cycles[0]["name"])
+        sections = {
+            section["key"]: section
+            for section in response.context["treatment_course_sections"]
+        }
+        self.assertEqual(
+            [section["key"] for section in response.context["treatment_course_sections"]],
+            ["in_progress", "not_started", "ended"],
+        )
+        self.assertTrue(sections["in_progress"]["default_open"])
+        self.assertFalse(sections["ended"]["default_open"])
 
-        current_tasks = cycles[0]["tasks"]
+        current_tasks = sections["in_progress"]["courses"][0]["items"]
         self.assertEqual(len(current_tasks), 1)
         self.assertEqual(current_tasks[0]["date"], today.strftime("%Y-%m-%d"))
         self.assertEqual(current_tasks[0]["status"], "incomplete")
         self.assertEqual(current_tasks[0]["status_text"], "未完成")
+        self.assertEqual(current_tasks[0]["type"], "questionnaire")
 
-        past_tasks = cycles[1]["tasks"]
+        past_tasks = sections["ended"]["courses"][0]["items"]
         self.assertEqual(len(past_tasks), 1)
         self.assertEqual(past_tasks[0]["status"], "terminated")
+
+    def test_my_followup_excludes_checkups_and_keeps_empty_courses(self):
+        today = timezone.localdate()
+        cycle = TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="仅复查疗程",
+            start_date=today - timedelta(days=2),
+            end_date=today + timedelta(days=18),
+            cycle_days=21,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=today,
+            task_type=core_choices.PlanItemCategory.CHECKUP,
+            title="复查提醒",
+            status=core_choices.TaskStatus.PENDING,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        current_section = response.context["treatment_course_sections"][0]
+        self.assertEqual(current_section["courses"][0]["name"], cycle.name)
+        self.assertEqual(current_section["courses"][0]["items"], [])
+        self.assertContains(response, "该疗程暂无随访问卷计划")
+        self.assertNotContains(response, "复查提醒")
+
+    def test_my_followup_empty_sections_render_page_specific_empty_states(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [section["count"] for section in response.context["treatment_course_sections"]],
+            [0, 0, 0],
+        )
+        self.assertContains(response, "暂无进行中疗程")
+        self.assertContains(response, "当前没有正在执行的随访问卷计划")
+
+    @patch(
+        "web_patient.views.my_followup.build_followup_course_sections",
+        side_effect=RuntimeError("query failed"),
+    )
+    def test_my_followup_query_failure_logs_and_renders_error(self, mock_build):
+        with self.assertLogs("web_patient.views.my_followup", level="ERROR"):
+            response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "随访问卷数据加载失败，请稍后重试。")
+        self.assertEqual(
+            [section["count"] for section in response.context["treatment_course_sections"]],
+            [0, 0, 0],
+        )
+        mock_build.assert_called_once()

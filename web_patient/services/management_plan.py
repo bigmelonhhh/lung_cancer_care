@@ -36,21 +36,28 @@ _SECTION_DEFINITIONS = (
 )
 
 
-def _empty_treatment_course_sections() -> list[dict]:
+def build_empty_treatment_course_sections(
+    *,
+    empty_subject: str = "复查与随访问卷计划",
+) -> list[dict]:
     """返回固定顺序的疗程分区空结构。"""
 
-    return [
-        {
-            "key": key,
-            "title": title,
-            "count": 0,
-            "default_open": False,
-            "empty_title": empty_title,
-            "empty_description": empty_description,
-            "courses": [],
-        }
-        for key, title, empty_title, empty_description in _SECTION_DEFINITIONS
-    ]
+    sections = []
+    for key, title, empty_title, empty_description in _SECTION_DEFINITIONS:
+        if key == "in_progress":
+            empty_description = f"当前没有正在执行的{empty_subject}。"
+        sections.append(
+            {
+                "key": key,
+                "title": title,
+                "count": 0,
+                "default_open": False,
+                "empty_title": empty_title,
+                "empty_description": empty_description,
+                "courses": [],
+            }
+        )
+    return sections
 
 
 def _get_all_treatment_cycles(patient) -> list:
@@ -83,16 +90,13 @@ def _classify_treatment_cycle(cycle, as_of_date: date) -> tuple[str, str]:
     return "in_progress", "进行中"
 
 
-def _build_course_items(patient, cycle) -> list[dict]:
+def _build_course_items(patient, cycle, *, task_types: tuple[int, ...]) -> list[dict]:
     """构建单个疗程内按日期合并的复查和随访问卷条目。"""
 
     tasks = (
         DailyTask.objects.filter(
             patient=patient,
-            task_type__in=[
-                choices.PlanItemCategory.CHECKUP,
-                choices.PlanItemCategory.QUESTIONNAIRE,
-            ],
+            task_type__in=task_types,
             task_date__range=(cycle.start_date, cycle.end_date),
         )
         .order_by("-task_date", "task_type", "id")
@@ -162,10 +166,16 @@ def build_treatment_course_sections(
     patient,
     *,
     as_of_date: date | None = None,
+    task_types: tuple[int, ...] = (
+        choices.PlanItemCategory.CHECKUP,
+        choices.PlanItemCategory.QUESTIONNAIRE,
+    ),
+    empty_subject: str = "复查与随访问卷计划",
+    raise_errors: bool = False,
 ) -> list[dict]:
-    """构建管理计划页固定的进行中、未开始和已结束疗程分区。"""
+    """构建固定的进行中、未开始和已结束疗程分区。"""
 
-    sections = _empty_treatment_course_sections()
+    sections = build_empty_treatment_course_sections(empty_subject=empty_subject)
     sections_by_key = {section["key"]: section for section in sections}
     as_of_date = as_of_date or timezone.localdate()
 
@@ -181,15 +191,21 @@ def build_treatment_course_sections(
                     "start_date": cycle.start_date,
                     "end_date": cycle.end_date,
                     "status_text": status_text,
-                    "items": _build_course_items(patient, cycle),
+                    "items": _build_course_items(
+                        patient,
+                        cycle,
+                        task_types=task_types,
+                    ),
                 }
             )
     except Exception:
+        if raise_errors:
+            raise
         logger.exception(
             "构建患者管理计划疗程分区失败",
             extra={"patient_id": getattr(patient, "id", None)},
         )
-        return _empty_treatment_course_sections()
+        return build_empty_treatment_course_sections(empty_subject=empty_subject)
 
     sections_by_key["in_progress"]["courses"].sort(
         key=lambda course: (course["start_date"], course["end_date"]),
@@ -210,3 +226,27 @@ def build_treatment_course_sections(
         )
 
     return sections
+
+
+def build_checkup_course_sections(patient, *, as_of_date: date | None = None) -> list[dict]:
+    """构建仅包含复查任务的疗程分区。"""
+
+    return build_treatment_course_sections(
+        patient,
+        as_of_date=as_of_date,
+        task_types=(choices.PlanItemCategory.CHECKUP,),
+        empty_subject="复查计划",
+        raise_errors=True,
+    )
+
+
+def build_followup_course_sections(patient, *, as_of_date: date | None = None) -> list[dict]:
+    """构建仅包含随访问卷任务的疗程分区。"""
+
+    return build_treatment_course_sections(
+        patient,
+        as_of_date=as_of_date,
+        task_types=(choices.PlanItemCategory.QUESTIONNAIRE,),
+        empty_subject="随访问卷计划",
+        raise_errors=True,
+    )

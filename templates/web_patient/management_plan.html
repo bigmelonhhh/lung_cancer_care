@@ -22,7 +22,7 @@
         </div>
     </div>
 
-    <main class="space-y-6 px-4 pt-6">
+    <main class="space-y-6 px-4 pt-4">
         {% if medication_plan %}
         <section aria-labelledby="medication-plan-title">
             <div class="mb-3 flex items-center justify-between px-1">
@@ -82,87 +82,7 @@
                 <h2 id="treatment-course-plan-title" class="text-base font-bold text-slate-700">复查与随访问卷计划</h2>
             </div>
 
-            <div class="space-y-3">
-                {% for section in treatment_course_sections %}
-                <details
-                    data-course-section="{{ section.key }}"
-                    {% if section.default_open %}open{% endif %}
-                    class="group overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-900/5"
-                >
-                    <summary class="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 transition select-none active:bg-slate-50">
-                        <div class="flex min-w-0 items-center gap-2.5">
-                            {% if section.key == 'in_progress' %}
-                            <span class="h-4 w-1.5 shrink-0 rounded-full bg-blue-500" aria-hidden="true"></span>
-                            {% elif section.key == 'not_started' %}
-                            <span class="h-4 w-1.5 shrink-0 rounded-full bg-amber-400" aria-hidden="true"></span>
-                            {% else %}
-                            <span class="h-4 w-1.5 shrink-0 rounded-full bg-slate-400" aria-hidden="true"></span>
-                            {% endif %}
-                            <span class="truncate text-sm font-bold text-slate-800">{{ section.title }}</span>
-                            <span class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500">{{ section.count }}个</span>
-                        </div>
-                        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-50 transition-colors group-open:bg-blue-50">
-                            <svg class="h-4 w-4 text-slate-400 transition-transform duration-200 group-open:rotate-180 group-open:text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                            </svg>
-                        </span>
-                    </summary>
-
-                    <div class="border-t border-slate-100 bg-slate-50/50 p-3">
-                        {% if section.courses %}
-                        <div class="space-y-3">
-                            {% for course in section.courses %}
-                            <article data-treatment-course class="overflow-hidden rounded-xl bg-white">
-                                <header class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-1">
-                                    <div class="min-w-0">
-                                        <h3 class="truncate text-sm font-bold text-slate-800">{{ course.name }}</h3>
-                                        <p class="mt-1 text-xs text-slate-400">{{ course.start_date|date:"Y-m-d" }} 至 {{ course.end_date|date:"Y-m-d" }}</p>
-                                    </div>
-                                    {% if course.status_text == '进行中' %}
-                                    <span class="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">{{ course.status_text }}</span>
-                                    {% elif course.status_text == '未开始' %}
-                                    <span class="shrink-0 rounded-full bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-600">{{ course.status_text }}</span>
-                                    {% else %}
-                                    <span class="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-500">{{ course.status_text }}</span>
-                                    {% endif %}
-                                </header>
-
-                                {% if course.items %}
-                                <div class="divide-y divide-slate-100 px-4">
-                                    {% for item in course.items %}
-                                    <div class="flex items-center justify-between gap-2 py-3">
-                                        <div class="flex min-w-0 items-center gap-2.5">
-                                            <div class="flex h-6 w-6 shrink-0 items-center justify-center text-blue-600">
-                                                {% include "components/medical_icon.html" with type=item.type class="h-5 w-5" %}
-                                            </div>
-                                            <span class="truncate text-sm font-medium text-slate-700">{{ item.title }}</span>
-                                        </div>
-                                        <div class="flex shrink-0 items-center gap-2">
-                                            <span class="text-xs text-slate-500">{{ item.date }}</span>
-                                            {% if item.status == 'completed' %}
-                                            <span class="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-600">{{ item.status_text }}</span>
-                                            {% elif item.status == 'incomplete' %}
-                                            <span class="rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-500">{{ item.status_text }}</span>
-                                            {% else %}
-                                            <span class="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{{ item.status_text }}</span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% else %}
-                                <p class="px-4 py-5 text-center text-xs text-slate-400">该疗程暂无复查或随访问卷计划</p>
-                                {% endif %}
-                            </article>
-                            {% endfor %}
-                        </div>
-                        {% else %}
-                        {% include "components/ui/empty_state.html" with title=section.empty_title description=section.empty_description extra_class="border-0 bg-transparent py-7" %}
-                        {% endif %}
-                    </div>
-                </details>
-                {% endfor %}
-            </div>
+            {% include "web_patient/partials/treatment_course_sections.html" %}
         </section>
     </main>
 </div>

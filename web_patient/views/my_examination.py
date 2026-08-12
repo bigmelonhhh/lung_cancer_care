@@ -1,136 +1,53 @@
+import logging
+
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.models import DailyTask
-from core.models.choices import PlanItemCategory, TaskStatus
 from core.service import tasks as task_service
-from core.service.treatment_cycle import get_active_treatment_cycle, get_treatment_cycles
 from users.decorators import auto_wechat_login, check_patient, require_membership
+from web_patient.services.management_plan import (
+    build_checkup_course_sections,
+    build_empty_treatment_course_sections,
+)
 
 
-def _resolve_grouped_status(statuses: list[int]) -> int | None:
-    if TaskStatus.PENDING in statuses:
-        return TaskStatus.PENDING
-    if TaskStatus.NOT_STARTED in statuses:
-        return TaskStatus.NOT_STARTED
-    if TaskStatus.TERMINATED in statuses:
-        return TaskStatus.TERMINATED
-    if TaskStatus.COMPLETED in statuses:
-        return TaskStatus.COMPLETED
-    return None
-
-
-def _get_treatment_courses_checkup_like_my_followup(*, patient, today) -> list[dict]:
-    active_cycle = get_active_treatment_cycle(patient)
-
-    cycles_page = get_treatment_cycles(patient, page=1, page_size=100)
-    cycles = list(cycles_page.object_list)
-    while getattr(cycles_page, "has_next", lambda: False)():
-        cycles_page = get_treatment_cycles(
-            patient, page=int(cycles_page.next_page_number()), page_size=100
-        )
-        cycles.extend(list(cycles_page.object_list))
-
-    treatment_courses: list[dict] = []
-    for cycle in cycles:
-        start_date = getattr(cycle, "start_date", None)
-        end_date = getattr(cycle, "end_date", None)
-        if not start_date or not end_date:
-            continue
-
-        tasks = DailyTask.objects.filter(
-            patient=patient,
-            task_type__in=[PlanItemCategory.CHECKUP],
-            task_date__range=(start_date, end_date),
-        ).order_by("-task_date", "task_type", "id")
-
-        grouped: dict[tuple[timezone.datetime.date, int], dict] = {}
-        for task in tasks:
-            key = (task.task_date, int(task.task_type))
-            if key not in grouped:
-                grouped[key] = {"task_id": int(task.id), "statuses": []}
-            grouped[key]["statuses"].append(int(task.status))
-
-        items: list[dict] = []
-        for (task_date, task_type), payload in grouped.items():
-            if task_type != PlanItemCategory.CHECKUP:
-                continue
-
-            status_val = _resolve_grouped_status(payload["statuses"])
-            status = ""
-            status_label = ""
-
-            if status_val == TaskStatus.COMPLETED:
-                status = "completed"
-                status_label = "已完成"
-            elif status_val == TaskStatus.TERMINATED:
-                status = "terminated"
-                status_label = "已中止"
-            elif status_val == TaskStatus.NOT_STARTED:
-                status = "not_started"
-                status_label = "未开始"
-            elif status_val == TaskStatus.PENDING:
-                if task_date > today:
-                    status = "not_started"
-                    status_label = "未开始"
-                else:
-                    status = "active"
-                    status_label = "未完成"
-            else:
-                status = "not_started"
-                status_label = "未开始"
-
-            items.append(
-                {
-                    "id": payload["task_id"],
-                    "title": "复查",
-                    "date": task_date.strftime("%Y-%m-%d"),
-                    "status": status,
-                    "status_label": status_label,
-                }
-            )
-
-        items.sort(key=lambda item: (item.get("date") or ""), reverse=True)
-
-        treatment_courses.append(
-            {
-                "name": cycle.name,
-                "is_current": bool(active_cycle and cycle.id == active_cycle.id),
-                "items": items,
-            }
-        )
-
-    return treatment_courses
+logger = logging.getLogger(__name__)
 
 
 @auto_wechat_login
 @check_patient
 @require_membership
 def my_examination(request: HttpRequest) -> HttpResponse:
+    """展示患者按疗程分组的复查任务。"""
+
     patient = request.patient
     today = timezone.localdate()
+    error_message = None
 
-    task_service.refresh_task_statuses(
-        as_of_date=today,
-        patient_id=patient.id,
-    )
-
-    treatment_courses = _get_treatment_courses_checkup_like_my_followup(
-        patient=patient, today=today
-    )
-    cycles_payload = [
-        {
-            "name": f"{course['name']} (当前疗程)"
-            if course.get("is_current")
-            else course.get("name"),
-            "tasks": course.get("items") or [],
-        }
-        for course in treatment_courses
-    ]
+    try:
+        task_service.refresh_task_statuses(
+            as_of_date=today,
+            patient_id=patient.id,
+        )
+        treatment_course_sections = build_checkup_course_sections(
+            patient,
+            as_of_date=today,
+        )
+    except Exception:
+        logger.exception(
+            "获取患者复查列表失败",
+            extra={"patient_id": patient.id},
+        )
+        error_message = "复查数据加载失败，请稍后重试。"
+        treatment_course_sections = build_empty_treatment_course_sections(
+            empty_subject="复查计划"
+        )
 
     context = {
-        "cycles": cycles_payload,
+        "treatment_course_sections": treatment_course_sections,
         "page_title": "我的复查",
+        "course_empty_message": "该疗程暂无复查计划",
+        "error_message": error_message,
     }
     return render(request, "web_patient/my_examination.html", context)
