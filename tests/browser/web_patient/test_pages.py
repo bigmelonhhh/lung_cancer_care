@@ -219,6 +219,9 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         expect(self.page.get_by_text("今日步数", exact=True)).to_have_count(0)
         expect(self.page.get_by_text("查看历史", exact=True)).to_have_count(0)
         expect(self.page.get_by_text("查看我的康复计划", exact=True)).to_have_count(0)
+        expect(
+            self.page.locator("[data-home-management-plan-link]")
+        ).to_have_attribute("href", reverse("web_patient:management_plan"))
         action = self.page.locator(
             '#plan-action-medication [data-home-task-action="medication"]'
         )

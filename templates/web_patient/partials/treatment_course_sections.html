@@ -32,7 +32,7 @@
                     <header class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-1">
                         <div class="min-w-0">
                             <h3 class="truncate text-sm font-bold text-slate-800">{{ course.name }}</h3>
-                            <p class="mt-1 text-xs text-slate-400">{{ course.start_date|date:"Y-m-d" }} 至 {{ course.end_date|date:"Y-m-d" }}</p>
+                            <p class="mt-1 text-xs text-slate-400">{{ course.start_date|date:"Y-m-d" }} 至 {% if course.end_date %}{{ course.end_date|date:"Y-m-d" }}{% else %}长期{% endif %}</p>
                         </div>
                         {% if course.status_text == '进行中' %}
                         <span class="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">{{ course.status_text }}</span>

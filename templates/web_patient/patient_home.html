@@ -183,8 +183,8 @@
 
       <!-- Plan -->
       <a
-        href="{% if is_member %}{% url 'web_patient:management_plan' %}{% else %}{{ buy_url }}{% endif %}"
-        onclick="return handleMemberOnlyNavigation(event);"
+        data-home-management-plan-link
+        href="{% if can_view_daily_plan %}{% url 'web_patient:management_plan' %}{% else %}{{ buy_url }}{% endif %}"
         class="h-24 rounded-2xl bg-gradient-to-br from-[#0D9488] to-[#0F766E] shadow-sm shadow-teal-100 flex flex-col items-center justify-center gap-2 active:scale-95 transition relative overflow-hidden group"
       >
         <div
@@ -308,7 +308,6 @@
         {% if can_view_history and daily_plans %}
         <a
           href="{% url 'web_patient:management_plan' %}"
-          onclick="return handleMemberOnlyNavigation(event);"
           class="text-sm text-slate-500 font-medium flex items-center hover:text-blue-600 transition"
         >
           查看历史
@@ -435,10 +434,9 @@
       <!-- 空状态保持不变 -->
       <div class="flex flex-col items-center justify-center py-10">
         <p class="text-slate-500 font-medium text-sm">今日暂无任务</p>
-        {% if can_view_history %}
+        {% if can_view_daily_plan %}
         <a
           href="{% url 'web_patient:management_plan' %}"
-          onclick="return handleMemberOnlyNavigation(event);"
           class="flex items-center mt-2"
         >
         <p class="text-[#8a8a8a] text-sm">查看我的康复计划</p>

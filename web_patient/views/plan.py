@@ -1,7 +1,7 @@
 from django.shortcuts import render
 from django.http import HttpRequest, HttpResponse
 from users.models import CustomUser
-from users.decorators import auto_wechat_login, check_patient, require_membership
+from users.decorators import auto_wechat_login, check_patient, require_plan_access
 from core.service.treatment_cycle import get_active_treatment_cycle
 from core.service.plan_item import PlanItemService
 from core.models import TreatmentCycle, choices
@@ -26,7 +26,11 @@ _MANAGEMENT_MONITORING_GROUPS = (
 )
 
 
-def _build_management_monitoring_plan(daily_plans: list[dict]) -> list[dict]:
+def _build_management_monitoring_plan(
+    daily_plans: list[dict],
+    *,
+    include_steps: bool = True,
+) -> list[dict]:
     """构建管理计划页固定监测类目及其今日任务状态。"""
     tasks_by_group: dict[str, list[dict]] = {}
     for task in daily_plans:
@@ -39,6 +43,8 @@ def _build_management_monitoring_plan(daily_plans: list[dict]) -> list[dict]:
 
     monitoring_plan = []
     for group_type, metric_types in _MANAGEMENT_MONITORING_GROUPS:
+        if group_type == "step" and not include_steps:
+            continue
         group_tasks = tasks_by_group.get(group_type, [])
         if not group_tasks:
             status = ""
@@ -72,7 +78,7 @@ def _build_management_monitoring_plan(daily_plans: list[dict]) -> list[dict]:
 
 @auto_wechat_login
 @check_patient
-@require_membership
+@require_plan_access
 def management_plan(request: HttpRequest) -> HttpResponse:
     """
     【页面说明】TODO 管理计划页面 `/p/plan/` 
@@ -84,6 +90,7 @@ def management_plan(request: HttpRequest) -> HttpResponse:
     """
     
     patient = request.patient
+    home_plan_access = request.home_plan_access
     
     patient_id = patient.id or None
 
@@ -111,10 +118,16 @@ def management_plan(request: HttpRequest) -> HttpResponse:
         })
 
     # 2. 常规监测计划
-    monitoring_plan = _build_management_monitoring_plan(daily_plans)
+    monitoring_plan = _build_management_monitoring_plan(
+        daily_plans,
+        include_steps=home_plan_access.can_view_steps,
+    )
 
     # 3. 随访问卷与复查计划
-    treatment_course_sections = build_treatment_course_sections(patient)
+    treatment_course_sections = build_treatment_course_sections(
+        patient,
+        current_only=not home_plan_access.can_view_history,
+    )
 
     context = {
         "medication_plan": medication_plan,
