@@ -72,6 +72,21 @@ class HomePlanAccessTests(TestCase):
         self.assertFalse(access.can_view_steps)
         self.assertFalse(access.can_view_history)
 
+    def test_non_member_with_open_ended_current_cycle_has_trial_access(self):
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="开放式体验疗程",
+            start_date=self.today,
+            end_date=None,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        access = resolve_home_plan_access(self.patient)
+
+        self.assertEqual(access.mode, "trial")
+        self.assertTrue(access.can_view_daily_plan)
+
     def test_non_member_without_current_cycle_is_locked(self):
         scenarios = (
             {
@@ -101,3 +116,27 @@ class HomePlanAccessTests(TestCase):
         access = resolve_home_plan_access(self.patient)
 
         self.assertEqual(access.mode, "trial")
+
+    def test_plan_date_access_follows_member_trial_and_locked_capabilities(self):
+        yesterday = self.today - timedelta(days=1)
+
+        locked_access = resolve_home_plan_access(self.patient)
+        self.assertFalse(
+            locked_access.can_view_plan_date(self.today, as_of_date=self.today)
+        )
+
+        self._create_cycle()
+        trial_access = resolve_home_plan_access(self.patient)
+        self.assertTrue(
+            trial_access.can_view_plan_date(self.today, as_of_date=self.today)
+        )
+        self.assertFalse(
+            trial_access.can_view_plan_date(yesterday, as_of_date=self.today)
+        )
+
+        self._create_paid_order()
+        member_patient = PatientProfile.objects.get(pk=self.patient.pk)
+        member_access = resolve_home_plan_access(member_patient)
+        self.assertTrue(
+            member_access.can_view_plan_date(yesterday, as_of_date=self.today)
+        )

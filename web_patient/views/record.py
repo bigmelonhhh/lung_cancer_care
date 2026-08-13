@@ -156,11 +156,7 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
         except ValueError:
             target_date = timezone.localdate()
 
-    if (
-        home_plan_access.mode == "trial"
-        and has_explicit_date
-        and target_date != timezone.localdate()
-    ):
+    if has_explicit_date and not home_plan_access.can_view_plan_date(target_date):
         return JsonResponse({"success": True, "plans": {}})
 
     summary_list = (
