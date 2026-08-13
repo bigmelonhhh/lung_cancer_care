@@ -505,6 +505,37 @@
       var headTable = container.querySelector('[data-plan-table-head]');
       if (!bodyScroll || !headTable) return;
 
+      var bodyTable = bodyScroll.querySelector('table');
+      var headDayColumns = headTable.querySelectorAll('colgroup > col');
+      var bodyColumns = bodyTable ? bodyTable.querySelectorAll('colgroup > col') : [];
+
+      /**
+       * Give both split tables the same explicit date-column widths. Chromium can
+       * otherwise distribute sub-pixel remainders differently and accumulate a
+       * visible offset across long treatment cycles.
+       * @returns {void}
+       */
+      function syncColumnWidths() {
+        var dayCount = headDayColumns.length;
+        if (!bodyTable || !dayCount || bodyColumns.length < dayCount + 3) return;
+
+        var tableWidth = bodyTable.getBoundingClientRect().width;
+        var dateWidth = (tableWidth - 384) / dayCount;
+        if (dateWidth <= 0) return;
+
+        bodyColumns[0].style.width = '192px';
+        bodyColumns[1].style.width = '96px';
+        bodyColumns[2].style.width = '96px';
+        for (var index = 0; index < dayCount; index += 1) {
+          var width = dateWidth + 'px';
+          headDayColumns[index].style.width = width;
+          bodyColumns[index + 3].style.width = width;
+        }
+        headTable.style.width = (dateWidth * dayCount) + 'px';
+        headTable.style.minWidth = headTable.style.width;
+        headTable.style.maxWidth = headTable.style.width;
+      }
+
       /**
        * Offset the date header so it stays aligned with the horizontally scrolled body.
        * @returns {void}
@@ -514,9 +545,20 @@
         headTable.style.transform = 'translateX(' + (-offset) + 'px)';
       }
 
+      function syncLayout() {
+        syncColumnWidths();
+        syncHeader();
+      }
+
       bodyScroll.addEventListener('scroll', syncHeader, { passive: true });
-      window.addEventListener('resize', syncHeader);
-      syncHeader();
+      window.addEventListener('resize', syncLayout);
+      syncLayout();
+      container.__cleanupPlanTableStickyHead = function() {
+        bodyScroll.removeEventListener('scroll', syncHeader);
+        window.removeEventListener('resize', syncLayout);
+        delete container.__cleanupPlanTableStickyHead;
+        delete container.dataset.planStickyBound;
+      };
       container.dataset.planStickyBound = '1';
     }
 
@@ -530,6 +572,12 @@
       var target = event.target;
       if (!shouldInitFromTarget(target)) return;
       window.__initPlanTableStickyHead(target);
+    });
+
+    document.body.addEventListener('htmx:beforeCleanupElement', function(event) {
+      var target = event.target;
+      if (!target || typeof target.__cleanupPlanTableStickyHead !== 'function') return;
+      target.__cleanupPlanTableStickyHead();
     });
   })();
 </script>

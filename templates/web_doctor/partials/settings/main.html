@@ -236,6 +236,10 @@
   function resetHistoryPlanSlot() {
     const slot = document.getElementById("history-plan-table-slot");
     if (!slot) return;
+    const planTable = slot.querySelector("[data-plan-table-container]");
+    if (planTable && typeof planTable.__cleanupPlanTableStickyHead === "function") {
+      planTable.__cleanupPlanTableStickyHead();
+    }
     slot.innerHTML = "";
     setRowSelected(null);
   }

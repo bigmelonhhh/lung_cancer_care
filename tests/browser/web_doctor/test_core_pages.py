@@ -347,6 +347,10 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.locator("#history-plan-table-slot #plan-table-container")).to_have_count(0)
         expect(history_row).to_have_attribute("aria-selected", "true")
         self.assertIn("bg-indigo-50", history_row.get_attribute("class") or "")
+        detached_history_head = history_slot.locator(
+            "[data-plan-table-head]"
+        ).element_handle()
+        self.assertIsNotNone(detached_history_head)
 
         history_slot.get_by_role("button", name="关闭配置详情").click()
 
@@ -357,6 +361,21 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         )
         self.assertEqual(history_slot.inner_html().strip(), "")
         self.assertNotIn("bg-indigo-50", history_row.get_attribute("class") or "")
+        width_after_close = detached_history_head.evaluate(
+            """
+            node => {
+              node.style.width = '';
+              window.dispatchEvent(new Event('resize'));
+              const container = node.closest('[data-plan-table-container]');
+              return {
+                width: node.style.width,
+                hasCleanup: typeof container.__cleanupPlanTableStickyHead === 'function'
+              };
+            }
+            """
+        )
+        self.assertEqual(width_after_close["width"], "")
+        self.assertFalse(width_after_close["hasCleanup"])
 
     def test_settings_plan_table_keeps_left_header_fixed_while_date_header_syncs(self):
         today = timezone.localdate()
@@ -470,6 +489,40 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
                     self.assertEqual(scroll_metrics["scrollWidth"], scroll_metrics["clientWidth"])
                 else:
                     self.assertGreater(scroll_metrics["scrollWidth"], scroll_metrics["clientWidth"])
+
+    def test_settings_plan_table_removes_resize_listener_before_htmx_cleanup(self):
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="浏览器计划表清理疗程",
+            start_date=today,
+            end_date=today + timedelta(days=20),
+            cycle_days=21,
+            status=choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-settings").click()
+
+        plan_container = self.page.locator("#plan-table-slot #plan-table-container")
+        expect(plan_container).to_be_visible(timeout=10000)
+
+        width_after_cleanup = plan_container.evaluate(
+            """
+            node => {
+              const headTable = node.querySelector('[data-plan-table-head]');
+              node.dispatchEvent(new CustomEvent('htmx:beforeCleanupElement', {
+                bubbles: true,
+                detail: { elt: node }
+              }));
+              headTable.style.width = '';
+              window.dispatchEvent(new Event('resize'));
+              return headTable.style.width;
+            }
+            """
+        )
+
+        self.assertEqual(width_after_cleanup, "")
 
     def test_change_password_page_loads_and_returns_to_workspace(self):
         self.page.goto(self.url_for("web_doctor:doctor_change_password"), wait_until="domcontentloaded")
