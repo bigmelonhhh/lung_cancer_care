@@ -21,6 +21,7 @@
 
   const config = readPatientHomeConfig();
   const IS_MEMBER = Boolean(config.isMember);
+  const CAN_USE_DAILY_PLAN = Boolean(config.canUseDailyPlan);
   const BUY_URL = config.buyUrl || '';
   const PATIENT_ID = config.patientId || '';
   const MENU_URLS = config.menuUrl || {};
@@ -251,7 +252,7 @@
       return;
     }
     event.preventDefault();
-    if (!IS_MEMBER) {
+    if (!CAN_USE_DAILY_PLAN) {
       showMemberOnlyModal('该功能为会员专属，请先开通会员', BUY_URL);
       return;
     }
@@ -329,6 +330,11 @@
         return;
       }
 
+      const actionEl = document.getElementById('plan-action-' + type);
+      if (!actionEl || actionEl.childElementCount === 0) {
+        return;
+      }
+
       const subtitle = HOME_COMPLETED_FALLBACK_SUBTITLES[type];
       if (subtitle) {
         setPlanCardState(type, 'completed', subtitle);
@@ -337,7 +343,7 @@
   }
 
   function refreshMetricData(options) {
-    if (!IS_MEMBER || !URLS.queryLastMetric) {
+    if (!CAN_USE_DAILY_PLAN || !URLS.queryLastMetric) {
       return Promise.resolve(null);
     }
 

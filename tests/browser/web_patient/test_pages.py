@@ -4,6 +4,7 @@ from decimal import Decimal
 import json
 from urllib.parse import urlencode
 
+from django.core.cache import cache
 from django.test import tag
 from django.urls import reverse
 from django.utils import timezone
@@ -31,6 +32,7 @@ from health_data.models import (
     ReportImage,
     ReportUpload,
 )
+from market.models import Order
 from users.models import PatientProfile
 
 from tests.browser.web_patient.base import PatientBrowserTestCase, expect
@@ -191,6 +193,107 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
             any("handleTaskClick is not defined" in message for message in page_errors),
             page_errors,
         )
+
+    def test_patient_home_trial_can_open_task_without_member_extras(self):
+        Order.objects.filter(patient=self.patient).delete()
+        cache.clear()
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="免费体验疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=today,
+            task_type=PlanItemCategory.MEDICATION,
+            title="用药提醒",
+            status=TaskStatus.PENDING,
+        )
+
+        self._open("web_patient:patient_home")
+
+        expect(self.page.get_by_text("今日步数", exact=True)).to_have_count(0)
+        expect(self.page.get_by_text("查看历史", exact=True)).to_have_count(0)
+        expect(self.page.get_by_text("查看我的康复计划", exact=True)).to_have_count(0)
+        action = self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        )
+        expect(action).to_be_visible()
+        action.click()
+        expect(self.page.locator("#medication-modal")).to_be_visible()
+        expect(self.page.locator("#member-only-modal")).to_be_hidden()
+
+    def test_patient_home_trial_keeps_recorded_value_after_visibility_refresh(self):
+        Order.objects.filter(patient=self.patient).delete()
+        cache.clear()
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="免费体验疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=today,
+            task_type=PlanItemCategory.MONITORING,
+            title="血氧监测",
+            status=TaskStatus.COMPLETED,
+        )
+
+        def fulfill_plan_refresh(route):
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body=json.dumps(
+                    {
+                        "success": True,
+                        "plans": {
+                            "spo2": {
+                                "type": "spo2",
+                                "status": "completed",
+                                "subtitle": "今日已记录：99%",
+                            }
+                        },
+                    }
+                ),
+            )
+
+        self.page.route("**/api/last_metric/**", fulfill_plan_refresh)
+        self.page.add_init_script(
+            """
+            (() => {
+              const fixedNow = Date.now();
+              Date.now = () => fixedNow;
+              try {
+                const now = new Date();
+                const date = [
+                  now.getFullYear(),
+                  String(now.getMonth() + 1).padStart(2, '0'),
+                  String(now.getDate()).padStart(2, '0')
+                ].join('-');
+                localStorage.setItem('home_plan_refresh_marker', JSON.stringify({
+                  completedTypes: ['spo2'],
+                  date,
+                  expiresAt: fixedNow + 600000
+                }));
+              } catch (error) {}
+            })();
+            """
+        )
+
+        self._open("web_patient:patient_home")
+
+        subtitle = self.page.locator("#plan-subtitle-spo2")
+        expect(subtitle).to_have_text("今日已记录：99%")
+        self.page.evaluate("document.dispatchEvent(new Event('visibilitychange'))")
+        expect(subtitle).to_have_text("今日已记录：99%")
 
     def test_patient_home_bfcache_refresh_rebuilds_real_task_link(self):
         self._create_checkup_task()
