@@ -24,6 +24,7 @@ from web_patient.services.home_cache import (
     build_patient_home_cache_key,
     get_patient_home_unread_cache_key,
 )
+from web_patient.services.home_plan_access import resolve_home_plan_access
 from users.services.patient import PatientService
 from wx.services.oauth import generate_menu_auth_url
 
@@ -383,10 +384,8 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         return redirect(onboarding_url)
 
     is_family = patient.user_id != request.user.id
-    is_member = bool(
-        getattr(patient, "is_member", False)
-        and getattr(patient, "membership_expire_date", None)
-    )
+    home_plan_access = resolve_home_plan_access(patient)
+    is_member = home_plan_access.mode == "member"
 
     patient_id = patient.id or None
     service_days = "0"
@@ -418,6 +417,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         except Exception:
             logger.debug("patient_home guard_days failed patient_id=%s", patient_id)
 
+    if patient_id and home_plan_access.can_view_daily_plan:
         date_key = timezone.localdate().strftime("%Y%m%d")
 
         summary_cache_key = _cache_key("daily_plan_summary", int(patient_id), date_key)
@@ -448,24 +448,29 @@ def patient_home(request: HttpRequest) -> HttpResponse:
             logger.debug("patient_home metric fetch failed patient_id=%s", patient_id)
             list_data = {}
 
-        unread_cache_key = get_patient_home_unread_cache_key(
-            int(patient_id),
-            request.user.id,
-            date_key,
-        )
-        try:
-            unread_chat_count = _fetch_with_cache(
-                cache_key=unread_cache_key,
-                bypass_cache=cache_bypass,
-                fetcher=lambda: chat_api.get_unread_chat_count(patient, request.user),
-                perf_log=perf_log,
-                perf_key="get_unread_chat_count",
-            ) or 0
-        except Exception:
-            logger.debug("patient_home unread fetch failed patient_id=%s", patient_id)
-            unread_chat_count = 0
+        if is_member:
+            unread_cache_key = get_patient_home_unread_cache_key(
+                int(patient_id),
+                request.user.id,
+                date_key,
+            )
+            try:
+                unread_chat_count = _fetch_with_cache(
+                    cache_key=unread_cache_key,
+                    bypass_cache=cache_bypass,
+                    fetcher=lambda: chat_api.get_unread_chat_count(patient, request.user),
+                    perf_log=perf_log,
+                    perf_key="get_unread_chat_count",
+                ) or 0
+            except Exception:
+                logger.debug("patient_home unread fetch failed patient_id=%s", patient_id)
+                unread_chat_count = 0
 
-        if MetricType.STEPS in list_data and list_data[MetricType.STEPS] is not None:
+        if (
+            home_plan_access.can_view_steps
+            and MetricType.STEPS in list_data
+            and list_data[MetricType.STEPS] is not None
+        ):
             steps_info = list_data[MetricType.STEPS]
             if _is_today_data(steps_info):
                 step_count = steps_info.get("value_display", "0")
@@ -534,6 +539,7 @@ def patient_home(request: HttpRequest) -> HttpResponse:
     buy_url = generate_menu_auth_url("market:product_buy")
     patient_home_config = {
         "isMember": is_member,
+        "canUseDailyPlan": home_plan_access.can_view_daily_plan,
         "buyUrl": buy_url,
         "unreadChatCount": unread_chat_count,
         "patientId": patient_id or "",
@@ -553,6 +559,10 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         "patient": patient,
         "is_family": is_family,
         "is_member": is_member,
+        "home_plan_access_mode": home_plan_access.mode,
+        "can_view_daily_plan": home_plan_access.can_view_daily_plan,
+        "can_view_steps": home_plan_access.can_view_steps,
+        "can_view_history": home_plan_access.can_view_history,
         "service_days": service_days,
         "daily_plans": daily_plans,
         "buy_url": buy_url,

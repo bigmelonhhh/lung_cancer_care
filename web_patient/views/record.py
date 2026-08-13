@@ -34,6 +34,7 @@ from core.service.tasks import get_daily_plan_summary
 from core.service.checkup import get_active_checkup_library
 from market.service.order import get_paid_orders_for_patient
 from web_patient.services.home_cache import invalidate_patient_home_plan_cache
+from web_patient.services.home_plan_access import resolve_home_plan_access
 from web_patient.forms import GeneralMonitoringMetricForm
 from wx.services.oauth import generate_menu_auth_url
 import calendar
@@ -142,7 +143,8 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
     if not patient:
         return JsonResponse({"error": "No patient info"}, status=400)
 
-    if not _is_member(patient):
+    home_plan_access = resolve_home_plan_access(patient)
+    if not home_plan_access.can_view_daily_plan:
         return JsonResponse({"success": True, "plans": {}})
 
     date_str = request.GET.get("date")
@@ -153,6 +155,9 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
             target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
         except ValueError:
             target_date = timezone.localdate()
+
+    if has_explicit_date and not home_plan_access.can_view_plan_date(target_date):
+        return JsonResponse({"success": True, "plans": {}})
 
     summary_list = (
         get_daily_plan_summary(patient, task_date=target_date)

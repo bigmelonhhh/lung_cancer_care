@@ -297,7 +297,7 @@
       {% endif %}
     </div>
 
-    {% if is_member %}
+    {% if can_view_daily_plan %}
     <!-- 4. Daily Plan List (Light Background Items on White Page) -->
     <div class="flex flex-col home-below-fold">
       <div class="flex items-center justify-between mb-4">
@@ -305,7 +305,7 @@
           <span class="w-1 h-4 bg-blue-600 rounded-full"></span>
           <h3 class="text-lg font-bold text-slate-800">今日计划</h3>
         </div>
-        {% if daily_plans %}
+        {% if can_view_history and daily_plans %}
         <a
           href="{% url 'web_patient:management_plan' %}"
           onclick="return handleMemberOnlyNavigation(event);"
@@ -328,7 +328,8 @@
         </a>
         {% endif %}
       </div>
-       <div class="mb-3">
+      {% if can_view_steps %}
+      <div class="mb-3">
         <div
           class="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm flex items-center justify-between active:bg-slate-50 transition"
         >
@@ -352,6 +353,7 @@
           </div>
         </div>
       </div>
+      {% endif %}
       {% if daily_plans %}
       <div class="space-y-3">
         {% for plan in daily_plans %}
@@ -433,6 +435,7 @@
       <!-- 空状态保持不变 -->
       <div class="flex flex-col items-center justify-center py-10">
         <p class="text-slate-500 font-medium text-sm">今日暂无任务</p>
+        {% if can_view_history %}
         <a
           href="{% url 'web_patient:management_plan' %}"
           onclick="return handleMemberOnlyNavigation(event);"
@@ -441,6 +444,7 @@
         <p class="text-[#8a8a8a] text-sm">查看我的康复计划</p>
         <svg t="1772107657873" class="icon w-5 h-5" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="2447" width="32" height="32"><path d="M604.7488 513.659733l-196.292267 196.9024a36.872533 36.872533 0 0 0-1.041066 50.978134 33.8048 33.8048 0 0 0 48.810666 1.019733l218.2144-218.478933c16.648533-16.669867 16.64-43.677867-0.0256-60.330667L455.466667 264.917333a33.493333 33.493333 0 0 0-48.349867 1.041067 36.5312 36.5312 0 0 0 1.041067 50.496l196.590933 197.201067z" fill="#8a8a8a" p-id="2448"></path></svg>
         </a>
+        {% endif %}
       </div>
       {% endif %}
     </div>
