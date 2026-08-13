@@ -26,13 +26,10 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
     except ValidationError:
         raise Http404("患者档案不存在")
 
-    # 统计当前有效亲情账号数量（不含本人）
-    active_family_count = (
-        patient.relations.filter(is_active=True)
-        .exclude(relation_type=choices.RelationType.SELF)
-        .count()
-    )
-    can_add_family = active_family_count < 5
+    family_limit = patient_service.get_family_binding_limit(patient)
+    active_family_count = patient_service.get_active_family_count(patient)
+    can_add_family = active_family_count < family_limit
+    family_limit_message = patient_service.get_family_binding_limit_message(patient)
 
     family_relation_choices = [
         (value, label)
@@ -49,7 +46,7 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
         if not can_add_family:
             messages.error(
                 request,
-                "出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。",
+                family_limit_message,
             )
         return render(
             request,
@@ -59,6 +56,8 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
                 "family_relation_choices": family_relation_choices,
                 "family_default": family_default,
                 "can_add_family": can_add_family,
+                "family_limit": family_limit,
+                "family_limit_message": family_limit_message,
             },
         )
 
@@ -76,7 +75,7 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
     if not can_add_family:
         messages.error(
             request,
-            "出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。",
+            family_limit_message,
         )
 
     return render(
@@ -87,6 +86,8 @@ def bind_landing(request: HttpRequest, patient_id: int) -> HttpResponse:
             "family_relation_choices": family_relation_choices,
             "family_default": family_default,
             "can_add_family": can_add_family,
+            "family_limit": family_limit,
+            "family_limit_message": family_limit_message,
         },
     )
 
@@ -114,20 +115,6 @@ def bind_submit(request: HttpRequest, patient_id: int) -> HttpResponse:
         )
     except (TypeError, ValueError):
         relation_type = choices.RelationType.SPOUSE
-
-    # 仅处理亲情账号绑定，限制最多 5 个
-    if relation_type != choices.RelationType.SELF:
-        active_family_count = (
-            patient.relations.filter(is_active=True)
-            .exclude(relation_type=choices.RelationType.SELF)
-            .count()
-        )
-        if active_family_count >= 5:
-            messages.error(
-                request,
-                "出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。",
-            )
-            return redirect(reverse("web_patient:bind_landing", args=[patient_id]))
 
     relation_name = (request.POST.get("relation_name") or "").strip()
     receive_notification = request.POST.get("receive_notification") == "on"

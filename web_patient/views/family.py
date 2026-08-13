@@ -6,7 +6,7 @@ from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from users.decorators import check_patient, require_membership
+from users.decorators import check_patient
 from users.models import PatientRelation
 from users.services.patient import PatientService
 from wx.services.oauth import generate_menu_auth_url
@@ -16,17 +16,21 @@ patient_service = PatientService()
 
 @login_required
 @check_patient
-@require_membership
 def family_management(request: HttpRequest) -> HttpResponse:
     patient = request.patient
     if not patient:
         return redirect("web_patient:onboarding")
 
+    family_limit = patient_service.get_family_binding_limit(patient)
+    active_family_count = patient_service.get_active_family_count(patient)
+    can_add_family = active_family_count < family_limit
+
     qrcode_url = None
-    try:
-        qrcode_url = patient_service.generate_bind_qrcode(patient.pk)
-    except ValidationError as exc:  # pragma: no cover - 网络异常
-        messages.error(request, exc.message)
+    if can_add_family:
+        try:
+            qrcode_url = patient_service.generate_bind_qrcode(patient.pk)
+        except ValidationError as exc:  # pragma: no cover - 网络异常
+            messages.error(request, exc.message)
 
     relations = (
         PatientRelation.objects.select_related("user")
@@ -42,6 +46,11 @@ def family_management(request: HttpRequest) -> HttpResponse:
             "patient": patient,
             "relations": relations,
             "qrcode_url": qrcode_url,
+            "family_limit": family_limit,
+            "can_add_family": can_add_family,
+            "family_limit_message": patient_service.get_family_binding_limit_message(
+                patient
+            ),
         },
     )
 
@@ -49,7 +58,6 @@ def family_management(request: HttpRequest) -> HttpResponse:
 @require_POST
 @login_required
 @check_patient
-@require_membership
 def unbind_family(request: HttpRequest) -> HttpResponse:
     relation_id = request.POST.get("relation_id")
     if not relation_id:

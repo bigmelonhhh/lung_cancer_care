@@ -21,20 +21,25 @@
 
     <div id="bind-qrcode" class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 space-y-4 text-center">
       <p class="text-sm uppercase tracking-[0.3em] text-slate-400">我的二维码</p>
-      {% if qrcode_url %}
+      {% if not can_add_family %}
+      <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-700">
+        {{ family_limit_message }}
+      </div>
+      <p class="text-sm text-slate-500">如需更换亲情账号，请先解绑现有账号。</p>
+      {% elif qrcode_url %}
       <img src="{{ qrcode_url }}" alt="绑定二维码" class="w-48 h-48 mx-auto rounded-2xl border border-slate-200 shadow" />
+      <p class="text-sm text-slate-500">请家属亲友扫描上方二维码即可加入</p>
       {% else %}
       <div class="w-48 h-48 mx-auto rounded-2xl border-2 border-dashed border-slate-200 flex items-center justify-center text-slate-400">
         无法加载二维码
       </div>
       {% endif %}
-      <p class="text-sm text-slate-500">请家属亲友扫描上方二维码即可加入</p>
     </div>
 
     <div class="bg-white rounded-3xl shadow-sm border border-slate-200 p-6 space-y-4">
       <div class="flex items-center justify-between">
         <h2 class="text-lg font-semibold text-slate-900">亲情账号列表</h2>
-        <span class="text-sm text-slate-400">最多添加 5 个</span>
+        <span class="text-sm text-slate-400">最多添加 {{ family_limit }} 个</span>
       </div>
       {% if relations %}
       <div class="space-y-4">

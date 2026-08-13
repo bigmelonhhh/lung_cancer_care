@@ -78,9 +78,7 @@
     {% else %}
     <div class="bg-white rounded-3xl border border-slate-200 shadow-lg p-6 space-y-3">
       <p class="text-sm font-medium text-slate-900">当前亲情账号数量已达上限</p>
-      <p class="text-sm text-slate-500">
-        出于信息安全与隐私保护的考虑，一个患者最多可绑定 5 个亲情账号。当前绑定数量已达上限，如需调整，请先解绑部分亲情账号或联系康复顾问协助处理。
-      </p>
+      <p class="text-sm text-slate-500">{{ family_limit_message }}</p>
     </div>
     {% endif %}
   </div>

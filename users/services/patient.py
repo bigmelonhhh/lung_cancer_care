@@ -16,6 +16,36 @@ from users.models import PatientProfile, CustomUser, PatientRelation
 
 
 class PatientService:
+    FREE_FAMILY_LIMIT = 1
+    MEMBER_FAMILY_LIMIT = 5
+
+    def get_family_binding_limit(self, patient: PatientProfile) -> int:
+        """返回患者当前会员状态对应的有效亲情账号上限。"""
+
+        if patient is None:
+            raise ValidationError("患者不能为空")
+        return (
+            self.MEMBER_FAMILY_LIMIT
+            if patient.is_member
+            else self.FREE_FAMILY_LIMIT
+        )
+
+    def get_family_binding_limit_message(self, patient: PatientProfile) -> str:
+        """返回患者达到亲情账号上限时的用户提示。"""
+
+        if self.get_family_binding_limit(patient) == self.MEMBER_FAMILY_LIMIT:
+            return "最多可绑定 5 个亲情账号。"
+        return "免费用户最多可绑定 1 个亲情账号。"
+
+    def get_active_family_count(self, patient: PatientProfile) -> int:
+        """统计患者当前有效的非本人亲情账号数量。"""
+
+        if patient is None:
+            raise ValidationError("患者不能为空")
+        return patient.relations.filter(is_active=True).exclude(
+            relation_type=choices.RelationType.SELF
+        ).count()
+
     def update_message_preferences(
         self,
         *,
@@ -312,37 +342,58 @@ class PatientService:
         - `ValidationError`: 如果患者档案不存在，或绑定关系不符合业务规则（如重复认领），则会抛出此异常。
         """
 
-        profile = self.get_profile_for_bind(patient_id)
+        with transaction.atomic():
+            profile = PatientProfile.objects.select_for_update().filter(
+                pk=patient_id
+            ).first()
+            if profile is None:
+                raise ValidationError("患者档案不存在")
 
-        if relation_type == choices.RelationType.SELF:
-            if profile.user and profile.user != user:
-                raise ValidationError("该档案已被其他微信账号认领")
-            if hasattr(user, "patient_profile") and user.patient_profile != profile:
-                raise ValidationError("您已绑定过其他患者档案")
-            profile.user = user
-            profile.claim_status = choices.ClaimStatus.CLAIMED
-            profile.save(update_fields=["user", "claim_status", "updated_at"])
+            if relation_type == choices.RelationType.SELF:
+                if profile.user and profile.user != user:
+                    raise ValidationError("该档案已被其他微信账号认领")
+                if hasattr(user, "patient_profile") and user.patient_profile != profile:
+                    raise ValidationError("您已绑定过其他患者档案")
+                profile.user = user
+                profile.claim_status = choices.ClaimStatus.CLAIMED
+                profile.save(update_fields=["user", "claim_status", "updated_at"])
+                return profile
+
+            existing_relation = PatientRelation.objects.filter(
+                patient=profile,
+                user=user,
+            ).first()
+            is_new_active_relation = not (
+                existing_relation and existing_relation.is_active
+            )
+            if (
+                is_new_active_relation
+                and self.get_active_family_count(profile)
+                >= self.get_family_binding_limit(profile)
+            ):
+                raise ValidationError(
+                    self.get_family_binding_limit_message(profile)
+                )
+
+            relation_name = kwargs.get("relation_name", "")
+            receive_alert_msg = kwargs.get("receive_alert_msg", False)
+            phone = kwargs.get("phone", None)
+            name = kwargs.get("name", "")
+
+            PatientRelation.objects.update_or_create(
+                patient=profile,
+                user=user,
+                defaults={
+                    "relation_type": relation_type,
+                    "relation_name": relation_name,
+                    "phone": phone,
+                    "name": name,
+                    "receive_alert_msg": receive_alert_msg,
+                    "is_active": True,
+                },
+            )
+
             return profile
-
-        relation_name = kwargs.get("relation_name", "")
-        receive_alert_msg = kwargs.get("receive_alert_msg", False)
-        phone = kwargs.get("phone", None)
-        name = kwargs.get("name", "")
-
-        PatientRelation.objects.update_or_create(
-            patient=profile,
-            user=user,
-            defaults={
-                "relation_type": relation_type,
-                "relation_name": relation_name,
-                "phone": phone,
-                "name": name,
-                "receive_alert_msg": receive_alert_msg,
-                "is_active": True,
-            },
-        )
-
-        return profile
     
     def unbind_relation(self, patient: PatientProfile, relation_id: int) -> PatientRelation:
         """

@@ -1,4 +1,5 @@
 from decimal import Decimal
+from unittest.mock import patch
 from urllib.parse import unquote
 
 from django.test import TestCase, Client, override_settings
@@ -52,7 +53,7 @@ class DashboardMembershipGatingTests(TestCase):
         resp = self.client.get(reverse("web_patient:patient_dashboard"))
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.context["is_member"])
-        content = resp.content.decode()
+        content = unquote(resp.content.decode())
 
         self.assertNotIn(reverse("web_patient:my_followup"), content)
         self.assertNotIn(reverse("web_patient:my_examination"), content)
@@ -61,7 +62,7 @@ class DashboardMembershipGatingTests(TestCase):
         self.assertNotIn(reverse("web_patient:device_list"), content)
         self.assertNotIn(reverse("web_patient:my_studio"), content)
         self.assertNotIn(reverse("web_patient:report_list"), content)
-        self.assertNotIn(reverse("web_patient:family_management"), content)
+        self.assertIn(reverse("web_patient:family_management"), content)
         self.assertNotIn(reverse("web_patient:feedback"), content)
 
     def test_dashboard_member_shows_member_urls(self):
@@ -96,11 +97,18 @@ class DashboardMembershipGatingTests(TestCase):
         resp = self.client.get(reverse("web_patient:report_list"))
         self._assert_redirect_contains_buy_path(resp, buy_path)
 
-        resp = self.client.get(reverse("web_patient:family_management"))
-        self._assert_redirect_contains_buy_path(resp, buy_path)
-
         resp = self.client.get(reverse("web_patient:feedback"))
         self._assert_redirect_contains_buy_path(resp, buy_path)
+
+    @patch(
+        "web_patient.views.family.patient_service.generate_bind_qrcode",
+        return_value="https://example.com/family-qrcode",
+    )
+    def test_non_member_can_access_family_management(self, _generate_qrcode):
+        resp = self.client.get(reverse("web_patient:family_management"))
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "最多添加 1 个")
 
     def test_member_can_access_member_only_views(self):
         self._create_paid_order()

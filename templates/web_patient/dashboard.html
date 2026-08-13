@@ -133,7 +133,7 @@
         <div class="grid grid-cols-4 gap-y-8">
           {% for entry in service_entries %}
           <a
-            href="{% if not is_member and entry.title == '我的订单' or not is_member and entry.title == '智能设备' or not is_member and entry.title == '工作室' or not is_member and entry.title == '上传报告' or not is_member and entry.title == '亲情账号' or not is_member and entry.title == '意见反馈' %}{{ buy_url }}{% else %}{{ entry.url }}{% endif %}"
+            href="{% if not is_member and entry.title == '我的订单' or not is_member and entry.title == '智能设备' or not is_member and entry.title == '工作室' or not is_member and entry.title == '上传报告' or not is_member and entry.title == '意见反馈' %}{{ buy_url }}{% else %}{{ entry.url }}{% endif %}"
             onclick="return handleMemberOnlyNavigation(event, '{{ entry.title|escapejs }}');"
             class="flex flex-col items-center gap-3 active:opacity-60 transition group"
           >
@@ -184,7 +184,6 @@
       '智能设备',
       '工作室',
       '上传报告',
-      '亲情账号',
       '意见反馈'
     ]);
 
