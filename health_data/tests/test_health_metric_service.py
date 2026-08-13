@@ -766,3 +766,38 @@ class HealthMetricServiceTest(TestCase):
                 start_date=date(2025, 1, 1),
                 end_date=date(2025, 1, 31),
             )
+
+
+class SaveManualMetricCompleteTaskTests(TestCase):
+    """complete_task=False 时仅新增指标数据，不驱动监测任务完成。"""
+
+    @patch("health_data.services.health_metric.task_service.complete_daily_monitoring_tasks_with_latest_task_id")
+    @patch("health_data.models.HealthMetric.objects.create")
+    def test_complete_task_false_skips_monitoring_task_completion(
+        self, mock_create, mock_complete_tasks
+    ):
+        HealthMetricService.save_manual_metric(
+            patient_id=1001,
+            metric_type=MetricType.HEART_RATE,
+            measured_at=timezone.now(),
+            value_main=Decimal("75"),
+            complete_task=False,
+        )
+        mock_complete_tasks.assert_not_called()
+        mock_create.assert_called_once()
+        self.assertIsNone(mock_create.call_args.kwargs.get("task_id"))
+
+    @patch("health_data.services.health_metric.task_service.complete_daily_monitoring_tasks_with_latest_task_id")
+    @patch("health_data.models.HealthMetric.objects.create")
+    def test_complete_task_default_true_keeps_monitoring_task_completion(
+        self, mock_create, mock_complete_tasks
+    ):
+        mock_complete_tasks.return_value = (1, 321)
+        HealthMetricService.save_manual_metric(
+            patient_id=1001,
+            metric_type=MetricType.HEART_RATE,
+            measured_at=timezone.now(),
+            value_main=Decimal("75"),
+        )
+        mock_complete_tasks.assert_called_once()
+        self.assertEqual(mock_create.call_args.kwargs.get("task_id"), 321)

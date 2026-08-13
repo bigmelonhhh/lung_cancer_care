@@ -481,6 +481,21 @@ def patient_home(request: HttpRequest) -> HttpResponse:
         if not plan_type:
             continue
 
+        if plan_type == "bp_hr":
+            # 血压/心率任务以当日血压+心率双项数据齐全才算完成；
+            # 单项录入仅新增数据，不驱动计划完成。
+            bp_info = list_data.get(MetricType.BLOOD_PRESSURE)
+            hr_info = list_data.get(MetricType.HEART_RATE)
+            if _is_today_data(bp_info) and _is_today_data(hr_info):
+                plan["status"] = "completed"
+                plan["subtitle"] = (
+                    f"今日已记录：血压{bp_info['value_display']}mmHg，"
+                    f"心率{hr_info['value_display']}"
+                )
+            else:
+                plan["status"] = "pending"
+            continue
+
         metric_config = PLAN_TYPE_METRIC_MAPPING.get(plan_type)
         if not metric_config:
             continue

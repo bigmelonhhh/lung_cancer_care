@@ -13,6 +13,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from django.apps import apps
+from django.db import transaction
 from django.utils import timezone
 from django.db.models import Count
 from django.db.models.functions import TruncMonth
@@ -688,6 +689,7 @@ class HealthMetricService:
         questionnaire_submission_id: int | None = None,
         task_id: int | None = None,
         measurement_context: str | None = None,
+        complete_task: bool = True,
     ) -> HealthMetric:
         """
         手动录入健康指标数据的通用入口。
@@ -726,6 +728,10 @@ class HealthMetricService:
         :param task_id: Optional[int]
             若指标已在上层解析到关联任务 ID，可直接传入；
             对监测/用药类型会优先使用该值，否则回退到自动匹配任务结果。
+        :param complete_task: bool
+            是否同步完成当天对应的监测任务，默认 True。
+            传 False 时仅新增指标数据，不驱动 DailyTask 完成
+            （用于血压/心率单项录入：计划完成以双项齐全为准）。
 
         【返回值】
         :return: HealthMetric
@@ -774,7 +780,7 @@ class HealthMetricService:
             measurement_context = None
 
         resolved_task_id = task_id
-        if metric_type in _MONITORING_TASK_TYPES:
+        if complete_task and metric_type in _MONITORING_TASK_TYPES:
             _, auto_task_id = task_service.complete_daily_monitoring_tasks_with_latest_task_id(
                 patient_id=patient_id,
                 metric_type=metric_type,
@@ -796,6 +802,93 @@ class HealthMetricService:
         )
         MetricAlertService.process_metric(metric)
         return metric
+
+    @classmethod
+    def save_blood_pressure_and_heart_rate(
+        cls,
+        *,
+        patient_id: int,
+        measured_at: datetime,
+        systolic: Decimal | None = None,
+        diastolic: Decimal | None = None,
+        heart_rate: Decimal | None = None,
+    ) -> tuple[dict[str, HealthMetric], bool]:
+        """原子保存血压/心率，并在当日双项齐全后完成两类监测任务。"""
+        if (systolic is None) != (diastolic is None):
+            raise ValueError("收缩压和舒张压必须同时提供。")
+        if systolic is None and heart_rate is None:
+            raise ValueError("血压和心率至少需要提供一项。")
+        if systolic is not None and not Decimal("50") <= systolic <= Decimal("250"):
+            raise ValueError("收缩压必须在50-250之间。")
+        if diastolic is not None and not Decimal("30") <= diastolic <= Decimal("150"):
+            raise ValueError("舒张压必须在30-150之间。")
+        if systolic is not None and diastolic is not None and systolic <= diastolic:
+            raise ValueError("收缩压应高于舒张压。")
+        if heart_rate is not None and not Decimal("30") <= heart_rate <= Decimal("200"):
+            raise ValueError("心率必须在30-200之间。")
+
+        target_date = timezone.localdate(measured_at)
+        current_tz = timezone.get_current_timezone()
+        day_start = timezone.make_aware(
+            datetime.combine(target_date, datetime.min.time()),
+            current_tz,
+        )
+        next_day_start = timezone.make_aware(
+            datetime.combine(target_date + timedelta(days=1), datetime.min.time()),
+            current_tz,
+        )
+
+        with transaction.atomic():
+            PatientProfile = apps.get_model("users", "PatientProfile")
+            PatientProfile.objects.select_for_update().get(pk=patient_id)
+            created_metrics: dict[str, HealthMetric] = {}
+            if systolic is not None:
+                created_metrics[MetricType.BLOOD_PRESSURE] = cls.save_manual_metric(
+                    patient_id=patient_id,
+                    metric_type=MetricType.BLOOD_PRESSURE,
+                    value_main=systolic,
+                    value_sub=diastolic,
+                    measured_at=measured_at,
+                    complete_task=False,
+                )
+            if heart_rate is not None:
+                created_metrics[MetricType.HEART_RATE] = cls.save_manual_metric(
+                    patient_id=patient_id,
+                    metric_type=MetricType.HEART_RATE,
+                    value_main=heart_rate,
+                    measured_at=measured_at,
+                    complete_task=False,
+                )
+
+            latest_metrics = {
+                metric_type: HealthMetric.objects.filter(
+                    patient_id=patient_id,
+                    metric_type=metric_type,
+                    measured_at__gte=day_start,
+                    measured_at__lt=next_day_start,
+                )
+                .order_by("-measured_at", "-id")
+                .first()
+                for metric_type in (
+                    MetricType.BLOOD_PRESSURE,
+                    MetricType.HEART_RATE,
+                )
+            }
+            plan_completed = all(latest_metrics.values())
+            if plan_completed:
+                for metric_type, latest_metric in latest_metrics.items():
+                    _, task_id = (
+                        task_service.complete_daily_monitoring_tasks_with_latest_task_id(
+                            patient_id=patient_id,
+                            metric_type=metric_type,
+                            occurred_at=measured_at,
+                        )
+                    )
+                    if task_id and latest_metric.task_id != task_id:
+                        latest_metric.task_id = task_id
+                        latest_metric.save(update_fields=["task_id"])
+
+        return created_metrics, plan_completed
 
     # ============
     # 客观指标数据更新 / 删除接口（主要面向手动录入数据）

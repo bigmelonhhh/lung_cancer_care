@@ -46,13 +46,21 @@ def _build_management_monitoring_plan(
         if group_type == "step" and not include_steps:
             continue
         group_tasks = tasks_by_group.get(group_type, [])
+        if group_type == "bp_hr":
+            # 血压/心率计划以双项齐全才算完成：要求组内所有任务均已完成。
+            group_completed = bool(group_tasks) and all(
+                task.get("status") == choices.TaskStatus.COMPLETED
+                for task in group_tasks
+            )
+        else:
+            group_completed = any(
+                task.get("status") == choices.TaskStatus.COMPLETED
+                for task in group_tasks
+            )
         if not group_tasks:
             status = ""
             status_text = "今日无计划"
-        elif any(
-            task.get("status") == choices.TaskStatus.COMPLETED
-            for task in group_tasks
-        ):
+        elif group_completed:
             status = "completed"
             status_text = "已完成"
         else:

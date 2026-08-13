@@ -75,6 +75,43 @@ class GeneralMonitoringMetricForm(forms.Form):
         return cleaned_data
 
 
+class BloodPressureHeartRateForm(forms.Form):
+    """血压/心率共用录入页的服务端输入校验。"""
+
+    MODE_BOTH = "both"
+    MODE_BLOOD_PRESSURE = "bp"
+    MODE_HEART_RATE = "heart"
+    MODE_CHOICES = (
+        (MODE_BOTH, "血压和心率"),
+        (MODE_BLOOD_PRESSURE, "血压"),
+        (MODE_HEART_RATE, "心率"),
+    )
+
+    mode = forms.ChoiceField(choices=MODE_CHOICES)
+    ssy = forms.IntegerField(required=False, min_value=50, max_value=250)
+    szy = forms.IntegerField(required=False, min_value=30, max_value=150)
+    heart = forms.IntegerField(required=False, min_value=30, max_value=200)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        mode = cleaned_data.get("mode")
+        if mode in {self.MODE_BOTH, self.MODE_BLOOD_PRESSURE}:
+            if cleaned_data.get("ssy") is None:
+                self.add_error("ssy", "请输入50-250之间的收缩压")
+            if cleaned_data.get("szy") is None:
+                self.add_error("szy", "请输入30-150之间的舒张压")
+            if (
+                cleaned_data.get("ssy") is not None
+                and cleaned_data.get("szy") is not None
+                and cleaned_data["ssy"] <= cleaned_data["szy"]
+            ):
+                self.add_error("szy", "收缩压应高于舒张压")
+        if mode in {self.MODE_BOTH, self.MODE_HEART_RATE}:
+            if cleaned_data.get("heart") is None:
+                self.add_error("heart", "请输入30-200之间的心率")
+        return cleaned_data
+
+
 class PatientEntryVerificationForm(forms.Form):
     name = forms.CharField(
         label="患者姓名",
