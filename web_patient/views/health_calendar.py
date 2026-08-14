@@ -320,6 +320,14 @@ def health_calendar(request: HttpRequest) -> HttpResponse:
 
         daily_plans.append(plan_data)
 
+    # 血压/心率任务以当日血压+心率双项数据齐全才算完成；
+    # 单项录入仅新增数据，不驱动计划完成（后置统一覆盖各提升路径）。
+    bp_metric = daily_metrics.get(MetricType.BLOOD_PRESSURE)
+    hr_metric = daily_metrics.get(MetricType.HEART_RATE)
+    for plan in daily_plans:
+        if plan.get("type") == "bp_hr":
+            plan["status"] = "completed" if (bp_metric and hr_metric) else "pending"
+
     # 排序
     daily_plans.sort(
         key=lambda item: CALENDAR_PLAN_SORT_ORDER.get(item.get("type"), 999)

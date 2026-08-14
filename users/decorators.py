@@ -159,6 +159,30 @@ def require_membership(view_func: Callable) -> Callable:
     return _wrapped_view
 
 
+def require_plan_access(view_func: Callable) -> Callable:
+    """
+    【业务说明】管理计划类页面访问控制：会员放行；免费用户存在进行中疗程（trial）同样放行。
+    【判定口径】复用 web_patient.services.home_plan_access.resolve_home_plan_access，
+        即 can_view_daily_plan = True（member 或 trial）才放行。
+    【用法】放在 @check_patient 之后，依赖 request.patient。
+    """
+    @wraps(view_func)
+    def _wrapped_view(request: HttpRequest, *args, **kwargs):
+        patient = getattr(request, "patient", None)
+        if patient is None:
+            return redirect(generate_menu_auth_url("market:product_buy"))
+        # 懒加载避免 users -> web_patient 循环引用
+        from web_patient.services.home_plan_access import resolve_home_plan_access
+
+        access = resolve_home_plan_access(patient)
+        if not access.can_view_daily_plan:
+            return redirect(generate_menu_auth_url("market:product_buy"))
+        request.home_plan_access = access
+        return view_func(request, *args, **kwargs)
+
+    return _wrapped_view
+
+
 __all__ = [
     "check_patient",
     "check_doctor",
@@ -168,4 +192,5 @@ __all__ = [
     "check_doctor_or_assistant",
     "auto_wechat_login",
     "require_membership",
+    "require_plan_access",
 ]

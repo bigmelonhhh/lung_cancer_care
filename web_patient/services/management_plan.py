@@ -82,7 +82,7 @@ def _classify_treatment_cycle(cycle, as_of_date: date) -> tuple[str, str]:
         return "ended", "已终止"
     if (
         cycle.status == choices.TreatmentCycleStatus.COMPLETED
-        or cycle.end_date < as_of_date
+        or (cycle.end_date is not None and cycle.end_date < as_of_date)
     ):
         return "ended", "已结束"
     if cycle.start_date > as_of_date:
@@ -90,15 +90,28 @@ def _classify_treatment_cycle(cycle, as_of_date: date) -> tuple[str, str]:
     return "in_progress", "进行中"
 
 
-def _build_course_items(patient, cycle, *, task_types: tuple[int, ...]) -> list[dict]:
+def _build_course_items(
+    patient,
+    cycle,
+    *,
+    task_types: tuple[int, ...],
+    task_date: date | None = None,
+) -> list[dict]:
     """构建单个疗程内按日期合并的复查和随访问卷条目。"""
 
+    task_filters = {
+        "patient": patient,
+        "task_type__in": task_types,
+    }
+    if task_date is not None:
+        task_filters["task_date"] = task_date
+    else:
+        task_filters["task_date__gte"] = cycle.start_date
+        if cycle.end_date is not None:
+            task_filters["task_date__lte"] = cycle.end_date
+
     tasks = (
-        DailyTask.objects.filter(
-            patient=patient,
-            task_type__in=task_types,
-            task_date__range=(cycle.start_date, cycle.end_date),
-        )
+        DailyTask.objects.filter(**task_filters)
         .order_by("-task_date", "task_type", "id")
     )
 
@@ -172,19 +185,23 @@ def build_treatment_course_sections(
     ),
     empty_subject: str = "复查与随访问卷计划",
     raise_errors: bool = False,
+    current_only: bool = False,
 ) -> list[dict]:
-    """构建固定的进行中、未开始和已结束疗程分区。"""
+    """构建疗程分区；受限访问只返回进行中疗程的今日条目。"""
 
     sections = build_empty_treatment_course_sections(empty_subject=empty_subject)
+    visible_sections = sections[:1] if current_only else sections
     sections_by_key = {section["key"]: section for section in sections}
     as_of_date = as_of_date or timezone.localdate()
 
     try:
         for cycle in _get_all_treatment_cycles(patient):
-            if not cycle.start_date or not cycle.end_date:
+            if not cycle.start_date:
                 continue
 
             section_key, status_text = _classify_treatment_cycle(cycle, as_of_date)
+            if current_only and section_key != "in_progress":
+                continue
             sections_by_key[section_key]["courses"].append(
                 {
                     "name": cycle.name,
@@ -195,6 +212,7 @@ def build_treatment_course_sections(
                         patient,
                         cycle,
                         task_types=task_types,
+                        task_date=as_of_date if current_only else None,
                     ),
                 }
             )
@@ -205,27 +223,39 @@ def build_treatment_course_sections(
             "构建患者管理计划疗程分区失败",
             extra={"patient_id": getattr(patient, "id", None)},
         )
-        return build_empty_treatment_course_sections(empty_subject=empty_subject)
+        fallback_sections = build_empty_treatment_course_sections(
+            empty_subject=empty_subject
+        )
+        return fallback_sections[:1] if current_only else fallback_sections
 
     sections_by_key["in_progress"]["courses"].sort(
-        key=lambda course: (course["start_date"], course["end_date"]),
+        key=lambda course: (
+            course["start_date"],
+            course["end_date"] or date.max,
+        ),
         reverse=True,
     )
     sections_by_key["not_started"]["courses"].sort(
-        key=lambda course: (course["start_date"], course["end_date"]),
+        key=lambda course: (
+            course["start_date"],
+            course["end_date"] or date.max,
+        ),
     )
     sections_by_key["ended"]["courses"].sort(
-        key=lambda course: (course["end_date"], course["start_date"]),
+        key=lambda course: (
+            course["end_date"] or date.min,
+            course["start_date"],
+        ),
         reverse=True,
     )
 
-    for section in sections:
+    for section in visible_sections:
         section["count"] = len(section["courses"])
         section["default_open"] = bool(
             section["key"] == "in_progress" and section["courses"]
         )
 
-    return sections
+    return visible_sections
 
 
 def build_checkup_course_sections(patient, *, as_of_date: date | None = None) -> list[dict]:

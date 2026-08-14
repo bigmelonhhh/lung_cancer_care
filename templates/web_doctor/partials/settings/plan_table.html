@@ -97,7 +97,9 @@
               {% for week_range in plan_view.header_week_ranges %}
               <th
                 colspan="{{ week_range.span }}"
-                class="px-2 py-2 border-b border-slate-200 bg-slate-50 {% if not forloop.last %}border-r border-slate-300{% endif %}"
+                {# 周分隔线用 inset shadow 代替 border-r：table-fixed 按首行单元格计算列宽， #}
+                {# 真实边框会把表头表格撑出亚像素误差，长疗程下累积成可见的列错位。 #}
+                class="px-2 py-2 border-b border-slate-200 bg-slate-50 {% if not forloop.last %}shadow-[inset_-1px_0_0_0_#cbd5e1]{% endif %}"
                 data-plan-range="{{ week_range.start_day }}-{{ week_range.end_day }}"
                 data-plan-range-start-day="{{ week_range.start_day }}"
                 data-plan-range-end-day="{{ week_range.end_day }}"
@@ -508,32 +510,59 @@
       var bodyTable = bodyScroll.querySelector('table');
       var headDayColumns = headTable.querySelectorAll('colgroup > col');
       var bodyColumns = bodyTable ? bodyTable.querySelectorAll('colgroup > col') : [];
+      // Remember the template-provided clamps so each resync can restore them
+      // before remeasuring, instead of reading back the pinned widths.
+      var originalBodyWidth = bodyTable ? bodyTable.style.width : '';
+      var originalBodyMinWidth = bodyTable ? bodyTable.style.minWidth : '';
+      var originalBodyMaxWidth = bodyTable ? bodyTable.style.maxWidth : '';
+      var originalHeadWidth = headTable.style.width;
+      var originalHeadMinWidth = headTable.style.minWidth;
+      var originalHeadMaxWidth = headTable.style.maxWidth;
 
       /**
        * Give both split tables the same explicit date-column widths. Chromium can
        * otherwise distribute sub-pixel remainders differently and accumulate a
-       * visible offset across long treatment cycles.
+       * visible offset across long treatment cycles. Widths are distributed as
+       * whole pixels (floor + remainder spread over the leading columns) so the
+       * header and body column edges land on identical positions even for
+       * 100-day cycles.
        * @returns {void}
        */
       function syncColumnWidths() {
         var dayCount = headDayColumns.length;
         if (!bodyTable || !dayCount || bodyColumns.length < dayCount + 3) return;
 
+        // Restore the template clamps first so remeasuring tracks the current
+        // container width instead of the widths pinned by the previous sync.
+        bodyTable.style.width = originalBodyWidth;
+        bodyTable.style.minWidth = originalBodyMinWidth;
+        bodyTable.style.maxWidth = originalBodyMaxWidth;
+        headTable.style.width = originalHeadWidth;
+        headTable.style.minWidth = originalHeadMinWidth;
+        headTable.style.maxWidth = originalHeadMaxWidth;
         var tableWidth = bodyTable.getBoundingClientRect().width;
-        var dateWidth = (tableWidth - 384) / dayCount;
-        if (dateWidth <= 0) return;
+        var totalDateWidth = Math.round(tableWidth - 384);
+        if (totalDateWidth <= 0) return;
+
+        var baseWidth = Math.floor(totalDateWidth / dayCount);
+        var remainder = totalDateWidth - baseWidth * dayCount;
 
         bodyColumns[0].style.width = '192px';
         bodyColumns[1].style.width = '96px';
         bodyColumns[2].style.width = '96px';
         for (var index = 0; index < dayCount; index += 1) {
-          var width = dateWidth + 'px';
+          var width = (baseWidth + (index < remainder ? 1 : 0)) + 'px';
           headDayColumns[index].style.width = width;
           bodyColumns[index + 3].style.width = width;
         }
-        headTable.style.width = (dateWidth * dayCount) + 'px';
-        headTable.style.minWidth = headTable.style.width;
-        headTable.style.maxWidth = headTable.style.width;
+        var bodyWidth = (384 + totalDateWidth) + 'px';
+        bodyTable.style.width = bodyWidth;
+        bodyTable.style.minWidth = bodyWidth;
+        bodyTable.style.maxWidth = bodyWidth;
+        var headWidth = totalDateWidth + 'px';
+        headTable.style.width = headWidth;
+        headTable.style.minWidth = headWidth;
+        headTable.style.maxWidth = headWidth;
       }
 
       /**

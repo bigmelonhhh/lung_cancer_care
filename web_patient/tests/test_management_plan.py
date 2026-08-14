@@ -178,9 +178,10 @@ class ManagementPlanViewTests(TestCase):
         self.assertEqual(statuses["测量尿酸"], "incomplete")
 
     @patch('web_patient.views.plan.get_daily_plan_summary')
-    def test_blood_pressure_and_heart_rate_remain_one_group_and_any_completion_wins(
+    def test_blood_pressure_and_heart_rate_remain_one_group(
         self, mock_get_plan
     ):
+        # 仅心率任务完成时，血压/心率计划不算完成（需双项齐全）。
         self.client.force_login(self.user)
         mock_get_plan.return_value = [
             {
@@ -188,6 +189,36 @@ class ManagementPlanViewTests(TestCase):
                 "title": "血压监测",
                 "metric_type": MetricType.BLOOD_PRESSURE,
                 "status": int(core_choices.TaskStatus.PENDING),
+            },
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": "心率监测",
+                "metric_type": MetricType.HEART_RATE,
+                "status": int(core_choices.TaskStatus.COMPLETED),
+            },
+        ]
+        response = self.client.get(self.url)
+
+        bp_hr_items = [
+            item
+            for item in response.context["monitoring_plan"]
+            if item["title"] == "测量血压/心率"
+        ]
+        self.assertEqual(len(bp_hr_items), 1)
+        self.assertEqual(bp_hr_items[0]["status"], "incomplete")
+
+    @patch('web_patient.views.plan.get_daily_plan_summary')
+    def test_blood_pressure_and_heart_rate_require_all_tasks_completed(
+        self, mock_get_plan
+    ):
+        # 血压、心率任务全部完成时，血压/心率计划才算完成。
+        self.client.force_login(self.user)
+        mock_get_plan.return_value = [
+            {
+                "task_type": int(core_choices.PlanItemCategory.MONITORING),
+                "title": "血压监测",
+                "metric_type": MetricType.BLOOD_PRESSURE,
+                "status": int(core_choices.TaskStatus.COMPLETED),
             },
             {
                 "task_type": int(core_choices.PlanItemCategory.MONITORING),

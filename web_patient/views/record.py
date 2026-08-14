@@ -8,6 +8,7 @@ from django.views.decorators.cache import never_cache
 from users.models import CustomUser
 from health_data.services.health_metric import HealthMetricService
 from health_data.services.monitoring_catalog import (
+    MONITORING_DEFINITIONS_BY_METRIC_TYPE,
     get_monitoring_definition_by_slug,
     get_monitoring_definitions,
     resolve_monitoring_definition,
@@ -35,7 +36,7 @@ from core.service.checkup import get_active_checkup_library
 from market.service.order import get_paid_orders_for_patient
 from web_patient.services.home_cache import invalidate_patient_home_plan_cache
 from web_patient.services.home_plan_access import resolve_home_plan_access
-from web_patient.forms import GeneralMonitoringMetricForm
+from web_patient.forms import BloodPressureHeartRateForm, GeneralMonitoringMetricForm
 from wx.services.oauth import generate_menu_auth_url
 import calendar
 import json
@@ -273,6 +274,22 @@ def query_last_metric(request: HttpRequest) -> JsonResponse:
                      
             elif plan_type == "checkup":
                  plan_data["subtitle"] = "已完成复查任务"
+
+        if plan_type == "bp_hr":
+            # 血压/心率计划以当日血压+心率双项数据齐全才算完成；
+            # 单项录入仅新增数据，不驱动计划完成。
+            bp_info = last_metrics.get(MetricType.BLOOD_PRESSURE)
+            hr_info = last_metrics.get(MetricType.HEART_RATE)
+            both_recorded = bool(
+                bp_info and is_target_date(bp_info)
+                and hr_info and is_target_date(hr_info)
+            )
+            plan_data["status"] = "completed" if both_recorded else "pending"
+            if both_recorded:
+                plan_data["subtitle"] = (
+                    f"今日已记录：血压{bp_info['value_display']}mmHg，"
+                    f"心率{hr_info['value_display']}"
+                )
 
         result[plan_type] = plan_data
 
@@ -518,6 +535,11 @@ def record_bp(request: HttpRequest) -> HttpResponse:
     # 优先从 GET 参数获取 patient_id
     patient = request.patient
     patient_id = patient.id or None
+    # mode 表达本页录入项：both=血压+心率（默认），bp=仅血压，heart=仅心率。
+    # 与 source（入口来源）正交，非法值回落 both，保证存量入口行为不变。
+    mode = request.GET.get("mode") or request.POST.get("mode") or "both"
+    if mode not in {"both", "bp", "heart"}:
+        mode = "both"
     selected_date_str = request.GET.get("selected_date") or request.POST.get(
         "selected_date"
     )
@@ -530,48 +552,50 @@ def record_bp(request: HttpRequest) -> HttpResponse:
 
     # 处理 POST 请求提交数据
     if request.method == "POST":
-        ssy_val = request.POST.get("ssy")
-        szy_val = request.POST.get("szy")
-        heart_val = request.POST.get("heart")
         record_time = request.POST.get("record_time")
         record_time_touched = request.POST.get("record_time_touched")
+        is_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest"
+        form_data = request.POST.copy()
+        form_data["mode"] = mode
+        form = BloodPressureHeartRateForm(form_data)
 
-        if ssy_val and szy_val and heart_val and patient_id:
+        if patient_id and form.is_valid():
             try:
                 record_time = _resolve_submitted_record_time(
                     record_time_raw=record_time,
                     record_time_touched_raw=record_time_touched,
                     selected_date=selected_date,
                 )
+                require_bp = mode in {"both", "bp"}
+                require_heart = mode in {"both", "heart"}
+                ssy_val = form.cleaned_data.get("ssy")
+                szy_val = form.cleaned_data.get("szy")
+                heart_val = form.cleaned_data.get("heart")
 
-                HealthMetricService.save_manual_metric(
+                HealthMetricService.save_blood_pressure_and_heart_rate(
                     patient_id=int(patient_id),
-                    metric_type=MetricType.BLOOD_PRESSURE,
-                    value_main=Decimal(ssy_val),
-                    value_sub=Decimal(szy_val),
                     measured_at=record_time,
+                    systolic=Decimal(ssy_val) if require_bp else None,
+                    diastolic=Decimal(szy_val) if require_bp else None,
+                    heart_rate=Decimal(heart_val) if require_heart else None,
                 )
-                HealthMetricService.save_manual_metric(
-                    patient_id=int(patient_id),
-                    metric_type=MetricType.HEART_RATE,
-                    value_main=Decimal(heart_val),
-                    measured_at=record_time,
-                )
-                # logging.info(f"血氧数据保存成功: patient_id={patient_id}")
-                
-                try:
-                    date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
-                    metric_plan_cache = request.session.get("metric_plan_cache") or {}
-                    day_cache = metric_plan_cache.get(date_key) or {}
-                    day_cache["bp_hr"] = {
-                        "status": "completed",
-                        "subtitle": f"已记录：血压{ssy_val}/{szy_val}mmHg，心率{heart_val}"
-                    }
-                    metric_plan_cache[date_key] = day_cache
-                    request.session["metric_plan_cache"] = metric_plan_cache
-                    request.session.modified = True
-                except Exception:
-                    pass
+
+                if mode == "both":
+                    # 双项录入成功后乐观更新首页 bp_hr 计划缓存，提供即时回显；
+                    # 计划完成态最终以当日血压+心率双项数据齐全为准。
+                    try:
+                        date_key = (selected_date.strftime("%Y-%m-%d") if selected_date else timezone.localdate().strftime("%Y-%m-%d"))
+                        metric_plan_cache = request.session.get("metric_plan_cache") or {}
+                        day_cache = metric_plan_cache.get(date_key) or {}
+                        day_cache["bp_hr"] = {
+                            "status": "completed",
+                            "subtitle": f"已记录：血压{ssy_val}/{szy_val}mmHg，心率{heart_val}"
+                        }
+                        metric_plan_cache[date_key] = day_cache
+                        request.session["metric_plan_cache"] = metric_plan_cache
+                        request.session.modified = True
+                    except Exception:
+                        pass
 
                 _invalidate_home_plan_cache_after_record(
                     patient_id,
@@ -580,20 +604,32 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 )
 
                 # AJAX 请求返回 JSON
-                if request.headers.get("x-requested-with") == "XMLHttpRequest":
+                if is_ajax:
+                    metric_data = {}
+                    if mode == "both":
+                        metric_data["bp_hr"] = {
+                            "ssy": ssy_val,
+                            "szy": szy_val,
+                            "heart": heart_val,
+                            "status": "completed"
+                        }
+                    elif mode == "bp":
+                        metric_data["bp"] = {
+                            "ssy": ssy_val,
+                            "szy": szy_val,
+                            "status": "completed"
+                        }
+                    else:
+                        metric_data["heart"] = {
+                            "heart": heart_val,
+                            "status": "completed"
+                        }
                     return JsonResponse({
                         "status": "success",
                         "redirect_url": "",
                         "refresh_flag": True,
                         **_build_saved_record_time_payload(record_time),
-                        "metric_data": {
-                            "bp_hr": {
-                                "ssy": ssy_val,
-                                "szy": szy_val,
-                                "heart": heart_val,
-                                "status": "completed"
-                            }
-                        }
+                        "metric_data": metric_data,
                     })
 
                 next_url = request.GET.get("next") or request.POST.get("next")
@@ -604,8 +640,25 @@ def record_bp(request: HttpRequest) -> HttpResponse:
                 messages.success(request, "血压心率记录成功")
                 return redirect(request.path)
             except Exception as e:
-                logging.info(f"保存体重数据失败: {e}")
+                logging.exception("保存血压/心率数据失败: %s", e)
+                if is_ajax:
+                    return JsonResponse(
+                        {"status": "error", "message": "保存失败，请稍后重试"},
+                        status=500,
+                    )
                 return redirect(request.path_info)
+        elif is_ajax:
+            error_message = "未找到患者信息"
+            if patient_id and form.errors:
+                error_message = next(iter(form.errors.values()))[0]
+            return JsonResponse(
+                {
+                    "status": "error",
+                    "message": error_message,
+                    "errors": form.errors.get_json_data() if patient_id else {},
+                },
+                status=400,
+            )
 
     now_local = timezone.localtime(timezone.now())
     if selected_date:
@@ -617,6 +670,7 @@ def record_bp(request: HttpRequest) -> HttpResponse:
         "patient_id": patient_id,
         "now_obj": now_local,
         "selected_date": selected_date.strftime("%Y-%m-%d") if selected_date else "",
+        "mode": mode,
     }
     return render(request, "web_patient/record_bp.html", context)
 
@@ -1513,14 +1567,29 @@ def _build_metric_record(
                 }
             )
     else:
-        data_fields.append(
-            {
-                "label": f"{title}（评分）",
-                "value": metric.display_value,
-                "is_large": True,
-                "key": "common",
-            }
-        )
+        definition = MONITORING_DEFINITIONS_BY_METRIC_TYPE.get(metric.metric_type)
+        if definition:
+            # 客观监测指标（心率/步数）：不附加评分提示，
+            # key 用 slug 复用前端数值输入与 value_main 映射，unit 供弹框标签使用。
+            data_fields.append(
+                {
+                    "label": title,
+                    "value": metric.display_value,
+                    "is_large": True,
+                    "key": definition.slug,
+                    "unit": definition.unit,
+                }
+            )
+        else:
+            # 主观评分/量表类记录保留评分提示
+            data_fields.append(
+                {
+                    "label": f"{title}（评分）",
+                    "value": metric.display_value,
+                    "is_large": True,
+                    "key": "common",
+                }
+            )
 
     return {
         "id": metric.id,
@@ -2187,6 +2256,7 @@ def health_record_detail(request: HttpRequest) -> HttpResponse:
         "spo2",
         "bp",
         "bp_hr",
+        "heart",
         "glucose",
         "ketone",
         "uric_acid",
