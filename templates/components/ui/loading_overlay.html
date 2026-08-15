@@ -1,0 +1,32 @@
+{% comment %}
+全屏加载蒙层组件（无业务语义，可复用）。
+
+用法：
+  {% include "components/ui/loading_overlay.html" with overlay_id="workspace-loading-overlay" %}
+  {% include "components/ui/loading_overlay.html" with overlay_id="reports-loading" label="报告加载中..." sub_label="正在整理影像资料" %}
+
+参数：
+  overlay_id: 蒙层元素 ID，供 hx-indicator="#..." 引用，默认 global-loading-overlay
+  label:      主文案，默认 加载中...
+  sub_label:  可选副文案
+
+说明：
+  - 显隐由 htmx 的 .htmx-request class 驱动，默认隐藏且不拦截点击
+  - z-[10002] 高于全站弹窗最高层级（z-[10001]），加载时覆盖一切浮层
+  - 每个页面按 overlay_id 挂载一次即可，勿在会被重复 swap 的局部模板中引用
+{% endcomment %}
+<style>
+  #{{ overlay_id|default:'global-loading-overlay' }} { opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .18s ease-out, visibility 0s linear .18s; }
+  #{{ overlay_id|default:'global-loading-overlay' }}.htmx-request { opacity: 1; visibility: visible; pointer-events: auto; transition-delay: 0s; }
+  #{{ overlay_id|default:'global-loading-overlay' }} .ui-loading-card { transform: scale(.96); transition: transform .18s ease-out; }
+  #{{ overlay_id|default:'global-loading-overlay' }}.htmx-request .ui-loading-card { transform: scale(1); }
+</style>
+<div id="{{ overlay_id|default:'global-loading-overlay' }}"
+     class="htmx-indicator fixed inset-0 z-[10002] flex items-center justify-center bg-slate-900/20 backdrop-blur-sm"
+     role="status" aria-live="polite" aria-label="{{ label|default:'加载中...' }}">
+  <div class="ui-loading-card flex flex-col items-center gap-3 rounded-2xl bg-white px-8 py-6 shadow-xl ring-1 ring-slate-900/5">
+    {% include "components/ui/spinner.html" with size="lg" only %}
+    <span class="text-sm font-medium text-slate-600">{{ label|default:'加载中...' }}</span>
+    {% if sub_label %}<span class="text-xs text-slate-400">{{ sub_label }}</span>{% endif %}
+  </div>
+</div>

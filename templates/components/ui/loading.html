@@ -1,4 +1,17 @@
+{% comment %}
+行内加载组件（spinner + 文案横向排列，无业务语义）。
+适用于按钮旁、列表内等行内加载提示；内容区占位用 loading_placeholder.html，全屏遮罩用 loading_overlay.html。
+
+用法：
+  {% include "components/ui/loading.html" %}
+  {% include "components/ui/loading.html" with label="保存中..." %}
+
+参数：
+  label:      文案，默认 加载中...
+  extra_class: 追加到外层容器的类
+  attrs:      追加到外层容器的额外属性（仅传可信字面量）
+{% endcomment %}
 <div class="inline-flex items-center gap-2 text-sm font-medium text-slate-500 {{ extra_class|default:'' }}" {{ attrs|default:""|safe }}>
-  <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-500" aria-hidden="true"></span>
+  {% include "components/ui/spinner.html" with size="sm" only %}
   <span>{{ label|default:"加载中..." }}</span>
 </div>

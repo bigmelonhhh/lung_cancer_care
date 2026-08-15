@@ -543,12 +543,17 @@
                 return;
             }
 
-            const overlay = ensureLoadingOverlay();
+            const workspaceOverlaySelector = '#workspace-loading-overlay';
+            const hasWorkspaceOverlay = !!document.querySelector(workspaceOverlaySelector);
+            const overlay = hasWorkspaceOverlay ? null : ensureLoadingOverlay();
+            const indicatorSelector = hasWorkspaceOverlay ? workspaceOverlaySelector : null;
             const workspaceUrl = '/doctor/workspace/patient/' + patientId + '/';
-            htmxGet(workspaceUrl, '#main-content', null)
+            htmxGet(workspaceUrl, '#main-content', indicatorSelector)
+                .then(function() {
+                    return htmxGet(indicatorsUrl, '#patient-content', indicatorSelector);
+                })
                 .then(function() {
                     removeLoadingOverlay(overlay);
-                    return htmxGet(indicatorsUrl, '#patient-content', '#workspace-loading-overlay');
                 })
                 .catch(function() {
                     removeLoadingOverlay(overlay);

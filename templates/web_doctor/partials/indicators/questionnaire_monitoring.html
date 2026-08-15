@@ -12,7 +12,7 @@
     }
   </style>
   <div id="questionnaire-loading" class="htmx-indicator absolute inset-0 z-50 flex items-center justify-center bg-white/50">
-    <div class="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent"></div>
+    {% include "components/ui/spinner.html" with size="md" only %}
   </div>
   <div class="mb-4 flex items-center justify-between border-l-4 border-indigo-500 pl-2">
     <h2 class="font-bold text-gray-800">随访问卷</h2>

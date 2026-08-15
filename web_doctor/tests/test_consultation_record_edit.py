@@ -300,7 +300,7 @@ class ConsultationModalLayeringTemplateTests(SimpleTestCase):
     def test_home_checkup_modal_teleports_to_body(self):
         content = self._read("templates/web_doctor/partials/home/checkup_record_modal.html")
         self.assertIn("<template x-teleport=\"body\">", content)
-        self.assertIn("class=\"fixed inset-0 z-[9999] bg-gray-500 bg-opacity-75 transition-opacity\"", content)
+        self.assertIn("class=\"fixed inset-0 z-[9999] bg-slate-900/50 transition-opacity\"", content)
         self.assertIn("class=\"fixed inset-0 z-[10000] w-screen overflow-y-auto\"", content)
         self.assertIn("x-show=\"showRecordTypePrompt\"", content)
         self.assertIn("class=\"fixed inset-0 z-[10001]\"", content)

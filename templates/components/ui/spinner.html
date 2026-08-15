@@ -1,0 +1,28 @@
+{% comment %}
+加载 Spinner 原子组件（全站加载动画的统一视觉来源，无业务语义）。
+
+用法：
+  {% include "components/ui/spinner.html" %}
+  {% include "components/ui/spinner.html" with size="sm" %}
+  {% include "components/ui/spinner.html" with size="xl" extra_class="text-rose-500" %}
+
+参数：
+  size:       sm(16px) / md(32px，默认) / lg(40px) / xl(48px)
+  extra_class: 追加到 svg 上的类（如 text-* 覆盖颜色）
+
+说明：
+  - 尺寸通过 svg width/height 属性写死，不依赖 Tailwind 尺寸类，CSS 缺失/缓存过期时也不会放大变形
+  - 旋转动画使用 SVG 内置 SMIL animateTransform，不依赖外部 CSS 动画
+  - 颜色走 currentColor（默认跟随父级文字色，项目内由 text-indigo-500 着为靛蓝）
+  - 需要调整全站加载动画时只需改本文件
+{% endcomment %}
+<svg class="align-middle text-indigo-500 {{ extra_class|default:'' }}"
+     width="{% if size == 'sm' %}16{% elif size == 'lg' %}40{% elif size == 'xl' %}48{% else %}32{% endif %}"
+     height="{% if size == 'sm' %}16{% elif size == 'lg' %}40{% elif size == 'xl' %}48{% else %}32{% endif %}"
+     viewBox="0 0 24 24" fill="none" role="presentation" aria-hidden="true">
+  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" opacity="0.2" />
+  <g>
+    <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="4" stroke-linecap="round" />
+    <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+  </g>
+</svg>

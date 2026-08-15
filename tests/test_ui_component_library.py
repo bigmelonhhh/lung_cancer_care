@@ -458,7 +458,25 @@ class UiComponentLibraryTests(SimpleTestCase):
             {"label": "加载中..."},
         )
         self.assertIn("加载中...", loading_html)
-        self.assertIn("animate-spin", loading_html)
+        # spinner 原子采用 SVG 内置 SMIL 旋转动画 + 写死的尺寸属性，不依赖 Tailwind 类
+        self.assertIn("animateTransform", loading_html)
+        self.assertIn('width="16"', loading_html)
+
+        loading_overlay_html = render_to_string(
+            "components/ui/loading_overlay.html",
+            {"overlay_id": "workspace-loading-overlay"},
+        )
+        self.assertIn('id="workspace-loading-overlay"', loading_overlay_html)
+        self.assertIn("visibility: hidden", loading_overlay_html)
+        self.assertIn("visibility: visible", loading_overlay_html)
+        self.assertIn('role="status"', loading_overlay_html)
+
+        loading_placeholder_html = render_to_string(
+            "components/ui/loading_placeholder.html",
+            {"title": "正在加载患者工作区", "size": "xl"},
+        )
+        self.assertIn("正在加载患者工作区", loading_placeholder_html)
+        self.assertIn('width="48"', loading_placeholder_html)
 
         table_empty_html = render_to_string(
             "components/ui/table_empty.html",

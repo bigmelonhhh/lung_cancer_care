@@ -103,6 +103,9 @@
 <!-- 引入待办事项弹框组件 -->
 {% include "components/todo_modal.html" %}
 
+<!-- 全局加载蒙层（患者工作区 Tab 切换等 hx-indicator="#workspace-loading-overlay" 使用，每页仅挂载一次） -->
+{% include "components/ui/loading_overlay.html" with overlay_id="workspace-loading-overlay" %}
+
 <script src="{% static 'web_doctor/reports_history.js' %}"></script>
 <script src="{% static 'web_doctor/doctor_workspace_sidebar.js' %}"></script>
 

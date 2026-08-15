@@ -1,9 +1,2 @@
-<div class="h-full min-h-full w-full flex flex-col items-center justify-center text-center px-6 py-10 text-slate-500">
-  <svg class="animate-spin h-12 w-12 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
-  <p class="text-sm text-slate-600 mb-1 mt-2">正在为该患者加载工作区</p>
-  <p class="text-sm text-slate-400">整理监测数据与治疗计划，请稍候…</p>
-</div>
-
+{% comment %}患者工作区初次加载占位：仅保留业务文案与撑满容器的布局，视觉统一走 loading_placeholder 组件。{% endcomment %}
+{% include "components/ui/loading_placeholder.html" with title="正在为该患者加载工作区" sub_label="整理监测数据与治疗计划，请稍候…" size="xl" extra_class="h-full min-h-full w-full" %}
