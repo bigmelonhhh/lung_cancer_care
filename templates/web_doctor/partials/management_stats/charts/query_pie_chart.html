@@ -1,6 +1,18 @@
 <div class="bg-white p-4 rounded-lg shadow-sm h-full flex flex-col items-center">
     <h4 class="text-sm font-medium text-slate-700 mb-4">{{ chart.title }}</h4>
-    <div id="{{ chart.id }}" class="w-full h-64"></div>
+    <div class="relative w-full h-64">
+        <div id="{{ chart.id }}" class="w-full h-full"></div>
+        <!-- 环形中心总计（pointer-events-none，不遮挡图表悬浮交互） -->
+        <div id="{{ chart.id }}-center" class="absolute inset-x-0 text-center pointer-events-none" style="top: 42%; transform: translateY(-50%);">
+            <div id="{{ chart.id }}-total" class="text-xl font-bold text-slate-800 leading-tight">0</div>
+            <div class="text-xs text-slate-400 mt-0.5">总咨询(次)</div>
+        </div>
+        <!-- 空数据态 -->
+        <div id="{{ chart.id }}-empty" class="hidden absolute inset-0 flex-col items-center justify-center text-slate-400">
+            <svg class="w-8 h-8 mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"></path></svg>
+            <span class="text-xs">暂无咨询数据</span>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -19,6 +31,13 @@
         var maxRetries = 20; 
         var retryCount = 0;
 
+        function getValueByName(name) {
+            for (var i = 0; i < pieData.length; i++) {
+                if (pieData[i].name === name) return pieData[i].value;
+            }
+            return 0;
+        }
+
         function initChart() {
             if (typeof echarts === 'undefined') {
                 if (window.LCCCharts && typeof window.LCCCharts.ensureEcharts === 'function') {
@@ -36,6 +55,37 @@
 
             var chartDom = document.getElementById(chartId);
             if (!chartDom) return;
+
+            // 汇总总数用于环形中心展示与空态判断（纯展示层计算，不影响后端数据）
+            var total = 0;
+            for (var i = 0; i < pieData.length; i++) {
+                total += pieData[i].value;
+            }
+
+            var centerDom = document.getElementById(chartId + '-center');
+            var totalDom = document.getElementById(chartId + '-total');
+            var emptyDom = document.getElementById(chartId + '-empty');
+            if (totalDom) totalDom.textContent = total;
+
+            if (total === 0) {
+                var emptyChart = echarts.getInstanceByDom(chartDom);
+                if (emptyChart) {
+                    emptyChart.dispose();
+                }
+                chartDom.classList.add('hidden');
+                if (centerDom) centerDom.classList.add('hidden');
+                if (emptyDom) {
+                    emptyDom.classList.remove('hidden');
+                    emptyDom.classList.add('flex');
+                }
+                return;
+            }
+            chartDom.classList.remove('hidden');
+            if (centerDom) centerDom.classList.remove('hidden');
+            if (emptyDom) {
+                emptyDom.classList.add('hidden');
+                emptyDom.classList.remove('flex');
+            }
             
             var existingChart = echarts.getInstanceByDom(chartDom);
             if (existingChart) {
@@ -46,14 +96,21 @@
             var option = {
                 tooltip: {
                     trigger: 'item',
-                    formatter: '{b}: {c} ({d}%)'
+                    formatter: function (params) {
+                        return params.name + '<br/>' + params.value + ' 次 · ' + params.percent + '%';
+                    }
                 },
                 legend: {
-                    orient: 'vertical',
-                    left: 'left',
-                    top: 'center',
-                    itemWidth: 12,
-                    itemHeight: 12,
+                    orient: 'horizontal',
+                    left: 'center',
+                    bottom: 0,
+                    icon: 'circle',
+                    itemWidth: 8,
+                    itemHeight: 8,
+                    itemGap: 12,
+                    formatter: function (name) {
+                        return name + '  ' + getValueByName(name) + '次';
+                    },
                     textStyle: {
                         fontSize: 12,
                         color: '#64748b'
@@ -63,19 +120,39 @@
                     {
                         name: '时间段分布',
                         type: 'pie',
-                        radius: '70%',
-                        center: ['65%', '50%'], 
-                        data: pieData,
-                        emphasis: {
-                            itemStyle: {
-                                shadowBlur: 10,
-                                shadowOffsetX: 0,
-                                shadowColor: 'rgba(0, 0, 0, 0.5)'
-                            }
+                        radius: ['42%', '64%'],
+                        center: ['50%', '42%'],
+                        avoidLabelOverlap: true,
+                        itemStyle: {
+                            borderColor: '#fff',
+                            borderWidth: 2,
+                            borderRadius: 4
                         },
                         label: {
-                            show: false 
-                        }
+                            show: true,
+                            formatter: '{d}%',
+                            fontSize: 11,
+                            color: '#64748b'
+                        },
+                        labelLine: {
+                            length: 8,
+                            length2: 8,
+                            smooth: true
+                        },
+                        emphasis: {
+                            scale: true,
+                            scaleSize: 6,
+                            itemStyle: {
+                                shadowBlur: 12,
+                                shadowOffsetX: 0,
+                                shadowColor: 'rgba(15, 23, 42, 0.18)'
+                            },
+                            label: {
+                                fontWeight: 'bold',
+                                color: '#334155'
+                            }
+                        },
+                        data: pieData
                     }
                 ]
             };

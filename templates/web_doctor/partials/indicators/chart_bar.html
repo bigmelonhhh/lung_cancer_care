@@ -44,16 +44,12 @@
       const option = {
         tooltip: {
           trigger: 'axis',
+          className: 'lcc-indicator-axis-tooltip',
           formatter: function (params) {
-            if (!params || !params.length) return '';
-            const lines = [params[0].axisValue];
-            params.forEach(function (param) {
+            return window.LCCCharts.formatAxisTooltip(params, function (param) {
               const series = seriesData[param.seriesIndex] || {};
-              const value = param.value;
-              const missing = (series.missing || [])[param.dataIndex] === 1;
-              lines.push(param.marker + ' ' + param.seriesName + ': ' + (missing || value === null || value === undefined ? '-' : value));
+              return (series.missing || [])[param.dataIndex] === 1;
             });
-            return lines.join('<br>');
           }
         },
         legend: { data: seriesData.map(function (item) { return item.name; }), top: 0, right: 0 },

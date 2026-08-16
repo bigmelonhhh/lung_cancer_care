@@ -442,7 +442,8 @@ class IndicatorsLogicTests(TestCase):
         self.assertIn("connectNulls: true", html)
         self.assertIn("symbolSize: 8", html)
         self.assertIn("data: [0.0, null, 95.0]", html)
-        self.assertIn("? '-' : value", html)
+        self.assertIn("window.LCCCharts.formatAxisTooltip(params)", html)
+        self.assertNotIn("? '-' : value", html)
 
     @patch("web_doctor.views.indicators.QuestionnaireSubmissionService.list_daily_cough_hemoptysis_flags", return_value=[])
     @patch("web_doctor.views.indicators.get_adherence_metrics_batch", return_value=[])
@@ -501,6 +502,8 @@ class IndicatorsLogicTests(TestCase):
         self.assertIn("symbolSize: 8", html)
         self.assertIn('"data": [0.0, null, null]', html)
         self.assertIn("data: series.data", html)
+        self.assertIn("window.LCCCharts.formatAxisTooltip(params", html)
+        self.assertIn("(series.missing || [])[param.dataIndex] === 1", html)
         oral_series = context["charts"]["oral_mucosa"]["series"][0]
         self.assertEqual(len(oral_series["missing"]), 3)
         self.assertEqual(context["charts"]["oral_mucosa"]["y_max"], 10)
@@ -841,7 +844,8 @@ class IndicatorsLogicTests(TestCase):
         self.assertIn("connectNulls: true", html)
         self.assertIn("symbolSize: 8", html)
         self.assertIn("data: [1.2, 2.8, null, null]", html)
-        self.assertIn("? '-' : value", html)
+        self.assertIn("window.LCCCharts.formatAxisTooltip(params)", html)
+        self.assertNotIn("? '-' : value", html)
         self.assertIn("血常规-白细胞计数（WBC） *10^9/L", chart["title"])
         self.assertEqual(chart["empty_message"], "")
         self.assertEqual(context["review_indicator"]["focus_metric"]["current_value"], 2.8)

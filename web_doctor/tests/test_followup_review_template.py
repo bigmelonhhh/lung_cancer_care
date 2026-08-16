@@ -112,6 +112,7 @@ class FollowupReviewTemplateTests(TestCase):
         self.assertNotIn("None", html)
         self.assertIn("connectNulls: true", html)
         self.assertIn("symbolSize: 8", html)
-        self.assertIn("? '-' : value", html)
+        self.assertIn("window.LCCCharts.formatAxisTooltip(params)", html)
+        self.assertNotIn("? '-' : value", html)
         self.assertNotIn("2026-03-27 ~ 2026-04-25", html)
         self.assertNotIn("暂无复查结果数据", html)
