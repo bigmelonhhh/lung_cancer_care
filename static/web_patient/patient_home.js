@@ -189,44 +189,57 @@
   }
 
   function submitMedication() {
+    const submitButton = document.getElementById('medication-submit-btn');
+    const submitGuard = window.LCCSubmitGuard;
+    const showSubmitError = function (message) {
+      if (submitGuard) {
+        submitGuard.toast(message, 'error');
+        return;
+      }
+      window.alert(message);
+    };
     if (!PATIENT_ID) {
-      alert('未找到患者信息');
+      showSubmitError('未找到患者信息');
       return;
     }
     if (!URLS.submitMedication) {
-      alert('提交地址未配置');
+      showSubmitError('提交地址未配置');
+      return;
+    }
+    if (!submitButton || !submitGuard) {
+      console.error('Medication submit guard is unavailable');
+      showSubmitError('提交组件加载失败，请刷新页面重试');
       return;
     }
 
-    fetch(URLS.submitMedication, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'X-CSRFToken': CSRF_TOKEN
+    return submitGuard.run({
+      guardKey: 'patient-home-medication',
+      button: submitButton,
+      verifyUrl: URLS.patientHome || window.location.href,
+      request: function () {
+        return submitGuard.postForm(
+          URLS.submitMedication,
+          new URLSearchParams({ patient_id: PATIENT_ID }),
+          { csrfToken: CSRF_TOKEN }
+        );
       },
-      body: new URLSearchParams({
-        patient_id: PATIENT_ID
-      })
-    })
-      .then(function (response) {
-        return response.json();
-      })
-      .then(function (data) {
-        if (data.success) {
-          if (URLS.patientHome) {
-            writeHomePlanRefreshMarker('medication');
-            window.location.replace(URLS.patientHome + '?medication_taken=true');
-            return;
-          }
-          window.location.reload();
+      getSubmissionState: function (response, data) {
+        if (data && data.success === true) return 'succeeded';
+        if (data && data.success === false) return 'failed';
+        return 'pending';
+      },
+      getErrorMessage: function (data) {
+        return data && data.message ? data.message : '提交失败';
+      },
+      onSuccess: function () {
+        if (URLS.patientHome) {
+          writeHomePlanRefreshMarker('medication');
+          window.location.replace(URLS.patientHome + '?medication_taken=true');
           return;
         }
-        alert(data.message || '提交失败');
-      })
-      .catch(function (error) {
-        console.error('Error:', error);
-        alert('提交出错，请稍后重试');
-      });
+        window.location.reload();
+      }
+    });
   }
 
   function buildTaskActionUrl(type, specificUrl) {
@@ -646,6 +659,10 @@
   window.addEventListener('beforeunload', handleHomeBeforeUnload);
   document.addEventListener('visibilitychange', handleHomeVisibilityChange);
   document.addEventListener('click', handleHomeTaskAction);
+  const medicationSubmitButton = document.getElementById('medication-submit-btn');
+  if (medicationSubmitButton) {
+    medicationSubmitButton.addEventListener('click', submitMedication);
+  }
 
   window.showMemberOnlyModal = showMemberOnlyModal;
   window.closeMemberOnlyModal = closeMemberOnlyModal;

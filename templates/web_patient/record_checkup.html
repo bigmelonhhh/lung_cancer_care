@@ -1,6 +1,10 @@
 {% extends "layouts/base_portal.html" %}
 {% load static %}
 
+{% block extra_head %}
+<script src="{% static 'web_patient/submit_guard.js' %}" defer></script>
+{% endblock %}
+
 {% block body %}
 <div class="min-h-screen bg-gray-50 pb-24 relative" data-entry-source="{{ entry_source|default:'' }}">
     <!-- Explicit CSRF Token -->
@@ -58,7 +62,7 @@
                                 {% for img in item.existing_images %}
                                 <div class="relative group w-full aspect-square" id="existing-img-{{ img.id }}">
                                     {% include "components/ui/privacy_image.html" with src=img.url size_class="w-full" alt=item.name aria_label="查看已上传复查原图" extra_class="cursor-pointer" attrs='onclick="viewImage(this.children[0].src)"' %}
-                                    <button type="button" 
+                                    <button type="button" data-checkup-existing-delete
                                             onclick="event.stopPropagation(); deleteExistingImage({{ img.id }}, '{{ item.id }}')"
                                             aria-label="删除{{ item.name }}图片"
                                             class="absolute inset-x-0 bottom-0 z-10 flex h-8 items-center justify-center rounded-b-2xl bg-slate-700/70 px-2 text-xs font-medium text-white backdrop-blur-sm transition-colors hover:bg-slate-700/80 active:bg-slate-800/80">
@@ -73,7 +77,7 @@
                         <!-- 图片预览区域 -->
                         <div id="preview-container-{{ item.id }}" class="grid grid-cols-3 gap-3 pb-2">
                             <!-- 添加按钮 -->
-                            <div onclick="triggerUpload('{{ item.id }}')" class="flex flex-col w-full aspect-square bg-gray-50 border border-gray-200 rounded-lg items-center justify-center cursor-pointer active:bg-gray-100 transition">
+                            <div onclick="triggerUpload('{{ item.id }}')" data-checkup-upload-trigger role="button" aria-disabled="false" class="flex flex-col w-full aspect-square bg-gray-50 border border-gray-200 rounded-lg items-center justify-center cursor-pointer active:bg-gray-100 transition">
                                 <svg class="w-8 h-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
                                 </svg>
@@ -96,7 +100,7 @@
 
     <!-- Submit Button -->
     <div class="fixed bottom-8 left-0 right-0 px-6 z-30">
-        <button onclick="submitCheckup()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-full shadow-lg shadow-blue-200 active:scale-95 transition">
+        <button id="checkup-submit-btn" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-full shadow-lg shadow-blue-200 active:scale-95 transition disabled:opacity-60 disabled:cursor-not-allowed">
             提交
         </button>
     </div>
@@ -202,6 +206,28 @@
 <script>
 // State to store uploaded files per item
 const uploads = {};
+let checkupSubmissionLocked = false;
+
+function setCheckupSubmissionLocked(locked) {
+    checkupSubmissionLocked = Boolean(locked);
+    document.querySelectorAll('input[type="file"]').forEach(input => {
+        input.disabled = checkupSubmissionLocked;
+    });
+    document.querySelectorAll('[data-checkup-upload-trigger]').forEach(trigger => {
+        trigger.setAttribute('aria-disabled', checkupSubmissionLocked ? 'true' : 'false');
+        trigger.classList.toggle('pointer-events-none', checkupSubmissionLocked);
+        trigger.classList.toggle('opacity-50', checkupSubmissionLocked);
+    });
+    document.querySelectorAll('[data-checkup-existing-delete], [data-role="upload-actions"] button').forEach(button => {
+        button.disabled = checkupSubmissionLocked;
+    });
+}
+
+window.addEventListener('lcc:submit-state', event => {
+    const detail = event.detail || {};
+    if (detail.guardKey !== 'record-checkup') return;
+    setCheckupSubmissionLocked(['submitting', 'unknown', 'succeeded'].includes(detail.state));
+});
 let selectionValidationChain = Promise.resolve();
 let validationInFlight = 0;
 let pendingSelectionError = '';
@@ -443,6 +469,10 @@ if (modalContent) {
 }
 
 function triggerUpload(itemId) {
+    if (checkupSubmissionLocked) {
+        showStatus('提交处理中，暂不能修改图片', 'info');
+        return;
+    }
     document.getElementById(`file-input-${itemId}`).click();
 }
 
@@ -499,6 +529,11 @@ function compressionErrorMessage(error, fileName) {
 }
 
 function handleFileChange(event, itemId) {
+    if (checkupSubmissionLocked) {
+        event.target.value = '';
+        showStatus('提交处理中，暂不能修改图片', 'info');
+        return;
+    }
     const fileList = event.target.files;
     if (!fileList || fileList.length === 0) return;
     const files = Array.from(fileList);
@@ -585,6 +620,10 @@ function processUpload(entry) {
 }
 
 function retryUpload(fileId) {
+    if (checkupSubmissionLocked) {
+        showStatus('提交处理中，暂不能重新处理图片', 'info');
+        return;
+    }
     const entry = getAllUploads().find(item => item.id === fileId);
     if (!entry || entry.status !== 'failed') return;
     processUpload(entry);
@@ -654,6 +693,7 @@ function updatePreviewState(entry) {
         retryButton.className = 'flex-1 border-r border-white/30 bg-red-600/90 transition-colors active:bg-red-700';
         retryButton.textContent = '重试';
         retryButton.setAttribute('aria-label', '重试处理复查图片');
+        retryButton.disabled = checkupSubmissionLocked;
         retryButton.onclick = function(event) {
             event.stopPropagation();
             retryUpload(entry.id);
@@ -666,6 +706,7 @@ function updatePreviewState(entry) {
     deleteButton.className = 'flex-1 transition-colors hover:bg-slate-700/80 active:bg-slate-800/80';
     deleteButton.textContent = '删除';
     deleteButton.setAttribute('aria-label', '删除待上传的复查图片');
+    deleteButton.disabled = checkupSubmissionLocked;
     deleteButton.onclick = function(event) {
         event.stopPropagation();
         removeFile(entry.itemId, entry.id);
@@ -714,6 +755,10 @@ document.addEventListener('keydown', function(event) {
 });
 
 function removeFile(itemId, fileId) {
+    if (checkupSubmissionLocked) {
+        showStatus('提交处理中，暂不能删除图片', 'info');
+        return;
+    }
     if (confirm("确定要移除这张待上传的图片吗？")) {
         const entry = uploads[itemId] ? uploads[itemId].find(item => item.id === fileId) : null;
         if (compressionQueue) compressionQueue.cancel(fileId);
@@ -737,6 +782,10 @@ function removeFile(itemId, fileId) {
 
 // 删除已上传图片
 function deleteExistingImage(imageId, itemId) {
+    if (checkupSubmissionLocked) {
+        showStatus('提交处理中，暂不能删除图片', 'info');
+        return;
+    }
     if (!confirm("确定要删除这张已上传的图片吗？此操作无法撤销。")) {
         return;
     }
@@ -834,17 +883,12 @@ function submitCheckup() {
 
     // CSRF
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-    // 按钮禁用与文案
-    const submitBtn = document.querySelector('button[onclick="submitCheckup()"]');
-    const originalText = submitBtn.innerText;
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = `
-        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        ${T('submitting', '提交中...')}
-    `;
+    const submitBtn = document.getElementById('checkup-submit-btn');
+    const submitGuard = window.LCCSubmitGuard;
+    if (!submitBtn || !submitGuard) {
+        showStatus('提交组件加载失败，请刷新页面重试', 'error');
+        return;
+    }
 
     // 串行提交批次
     const dates = Object.keys(batches);
@@ -880,48 +924,86 @@ function submitCheckup() {
             };
             formData.append('upload_meta', JSON.stringify(meta));
         } catch (e) {}
-        const resp = await fetch("{% url 'web_patient:record_checkup' %}", {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': csrfToken },
-            body: formData
-        });
-        let data = null;
-        try { data = await resp.json(); } catch (e) { data = null; }
-        if (!resp.ok) {
-            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : T('serverError', '服务器异常，请联系管理员');
-            throw new Error(msg);
+        const result = await submitGuard.postForm(
+            "{% url 'web_patient:record_checkup' %}",
+            formData,
+            { csrfToken: csrfToken }
+        );
+        const data = result.payload;
+        if (result.response.status === 202 || (data && data.status === 'pending')) {
+            const error = new Error('提交结果暂未确认，请返回计划页核对');
+            error.kind = 'unknown';
+            throw error;
         }
         // 成功标准：沿用现有接口（code===200）
-        if (!data || data.code !== 200) {
-            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : T('uploadFailed', '上传失败，请重试');
-            throw new Error(msg);
+        if (!data || typeof data.code === 'undefined') {
+            const error = new Error('提交结果暂未确认，请返回计划页核对');
+            error.kind = 'unknown';
+            throw error;
         }
-        return data;
+        if (data.code !== 200) {
+            const msg = (data && (data.msg || data.message)) ? (data.msg || data.message) : T('uploadFailed', '上传失败，请重试');
+            const error = new Error(msg);
+            error.kind = 'failed';
+            throw error;
+        }
+        return result;
     };
 
-    (async () => {
-        try {
+    let completedBatchCount = 0;
+    const entrySource = getEntrySource();
+    const verifyUrl = entrySource !== 'home' && document.referrer && document.referrer.includes(window.location.host)
+        ? document.referrer
+        : HOME_URL;
+    setCheckupSubmissionLocked(true);
+    return submitGuard.run({
+        guardKey: 'record-checkup',
+        button: submitBtn,
+        verifyUrl: verifyUrl,
+        loadingText: T('submitting', '提交中...'),
+        successText: T('uploadSuccess', '上传成功'),
+        request: async () => {
             for (const d of dates) {
-                await postOneBatch(d);
+                try {
+                    await postOneBatch(d);
+                    completedBatchCount += 1;
+                } catch (error) {
+                    if (completedBatchCount > 0) {
+                        error.kind = 'unknown';
+                        error.message = '部分报告可能已提交成功，请刷新页面确认后再操作';
+                    }
+                    throw error;
+                }
             }
-            // 全部成功
-            submitBtn.innerText = T('uploadSuccess', '上传成功');
+            return { response: { ok: true, status: 200 }, payload: { code: 200 } };
+        },
+        getSubmissionState: (response, data) => {
+            if (data && data.code === 200) return 'succeeded';
+            if (data && typeof data.code !== 'undefined') return 'failed';
+            return 'pending';
+        },
+        getErrorMessage: data => (data && (data.msg || data.message)) || T('uploadFailed', '上传失败，请重试'),
+        onFailure: error => {
+            setCheckupSubmissionLocked(false);
+            showStatus(error.message || T('uploadFailed', '上传失败，请重试'), 'error');
+        },
+        onUnknown: error => {
+            showStatus(error.message || '提交结果暂未确认，请点击按钮返回计划页核对', 'error');
+        },
+        onSuccess: () => {
             submitBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
             submitBtn.classList.add('bg-green-600', 'hover:bg-green-700');
             showStatus(T('uploadSuccess', '上传成功'), 'success');
-            const entrySource = getEntrySource();
             if (entrySource === 'home') {
                 writeHomePlanRefreshMarker('checkup');
             }
             try { localStorage.setItem('refresh_flag', 'true'); } catch(e) {}
             setTimeout(() => { returnAfterCheckup(entrySource); }, 300);
-        } catch (err) {
-            showStatus(err.message || T('uploadFailed', '上传失败，请重试'), 'error');
-            submitBtn.disabled = false;
-            submitBtn.innerText = originalText;
         }
-    })();
+    });
 }
+
+document.getElementById('checkup-submit-btn').addEventListener('click', submitCheckup);
 
 function cleanupUploadTasks() {
     if (compressionQueue) compressionQueue.destroy();

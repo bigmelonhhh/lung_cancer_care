@@ -1,4 +1,8 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
+{% block extra_head %}
+<script src="{% static 'web_patient/submit_guard.js' %}" defer></script>
+{% endblock %}
 {% block title %}{% if mode == 'bp' %}录入血压{% elif mode == 'heart' %}录入心率{% else %}当前血压与心率{% endif %}
 {%endblock %}
 {% block body %}
@@ -188,8 +192,10 @@
     </form>
     <!-- 6. Submit Button -->
     <button
-      onclick="submitBP()"
-      class="w-full mt-8 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-200 active:scale-[0.98] transition hover:bg-blue-700"
+      id="bp-submit-btn"
+      type="submit"
+      form="bp-form"
+      class="w-full mt-8 bg-blue-600 text-white font-bold py-3.5 rounded-xl shadow-md shadow-blue-200 active:scale-[0.98] transition hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
     >
       确定
     </button>
@@ -327,43 +333,41 @@
     // AJAX 提交逻辑
     const form = document.getElementById("bp-form");
     const formData = new FormData(form);
-    const submitBtn = document.querySelector('button[onclick="submitBP()"]');
-    const originalText = submitBtn.innerText;
-    
-    submitBtn.disabled = true;
-    submitBtn.innerText = '提交中...';
-    
-    fetch(form.action, {
-        method: 'POST',
-        headers: {
-            'X-Requested-With': 'XMLHttpRequest',
-            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+    const submitBtn = document.getElementById('bp-submit-btn');
+    const submitGuard = window.LCCSubmitGuard;
+    if (!submitBtn || !submitGuard) {
+        showToast('提交组件加载失败，请刷新页面重试', 'error');
+        return;
+    }
+    const selectedDate = formData.get("selected_date") || "";
+    const source = (new URLSearchParams(window.location.search).get('source') || '').trim();
+    const calendarUrl = "{% url 'web_patient:health_calendar' %}";
+    const homeUrl = "{% url 'web_patient:patient_home' %}";
+    const verifyUrl = source === 'calendar'
+      ? calendarUrl + (selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '')
+      : source !== 'home' && document.referrer && document.referrer.includes(window.location.host)
+        ? document.referrer
+        : homeUrl;
+
+    return submitGuard.run({
+        guardKey: 'record-bp-' + inputMode,
+        button: submitBtn,
+        verifyUrl: verifyUrl,
+        request: () => submitGuard.postForm(form.action, formData, {
+            csrfToken: formData.get('csrfmiddlewaretoken')
+        }),
+        getSubmissionState: (response, data) => {
+            if (data && data.status === 'success') return 'succeeded';
+            if (data && ['error', 'failed'].includes(data.status)) return 'failed';
+            return 'pending';
         },
-        body: formData
-    })
-    .then(async response => {
-        let data = null;
-        try {
-          data = await response.json();
-        } catch (error) {
-          data = null;
-        }
-        if (!response.ok) {
-          throw new Error((data && data.message) || "提交失败，请稍后重试");
-        }
-        return data;
-    })
-    .then(data => {
-        if (data.status === 'success') {
+        getErrorMessage: data => '提交失败：' + ((data && data.message) || '未知错误'),
+        onSuccess: data => {
             syncSavedRecordTime(data);
-            const selectedDate = formData.get("selected_date") || "";
             const dateParam = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : "";
             const syncUrl = "{% url 'web_patient:query_last_metric' %}" + dateParam;
-            const urlParams = new URLSearchParams(window.location.search);
-            const source = (urlParams.get('source') || '').trim();
 
             localStorage.setItem("refresh_flag", "true");
-            submitBtn.innerText = "提交成功";
             fetch(syncUrl, { headers: { "X-Requested-With": "XMLHttpRequest" } })
               .then((r) => (r.ok ? r.json() : null))
               .catch(() => showToast("网络异常，状态同步稍后完成", "error"));
@@ -381,21 +385,16 @@
                 history.back();
               } else {
                 window.location.href = "{% url 'web_patient:patient_home' %}";
-              }
-            }, 300);
-        } else {
-            showToast("提交失败：" + (data.message || "未知错误"), "error");
-            submitBtn.disabled = false;
-            submitBtn.innerText = originalText;
+                }
+              }, 300);
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        showToast(error.message || "网络错误，请稍后重试", "error");
-        submitBtn.disabled = false;
-        submitBtn.innerText = originalText;
     });
   }
+
+  document.getElementById('bp-form').addEventListener('submit', function(event) {
+    event.preventDefault();
+    submitBP();
+  });
 
   // Simple date picker handler to update display (Mock)
   document

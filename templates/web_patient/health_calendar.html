@@ -1,6 +1,7 @@
 {% extends "layouts/base_portal.html" %}
 {% load static %}
 {% block extra_head %}
+<script src="{% static 'web_patient/submit_guard.js' %}" defer></script>
 <!-- Flatpickr CSS -->
 <link rel="stylesheet" href="{% static 'vendor/flatpickr/4.6.13/flatpickr.min.css' %}">
 <link rel="stylesheet" href="{% static 'vendor/flatpickr/4.6.13/themes/airbnb.css' %}">
@@ -160,7 +161,7 @@
       <div class="text-center mt-12 mb-6">
         <p class="text-slate-600 text-lg font-semibold leading-relaxed">请确认已完成今日用药</p>
       </div>
-      <button onclick="submitMedication()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-full shadow-lg transition">我已服药</button>
+      <button id="calendar-medication-submit-btn" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-full shadow-lg transition">我已服药</button>
       <div class="mt-6">
         <button onclick="closeMedicationModal()" class="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition">
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -260,6 +261,10 @@
       // Update Content
       fetchTasks(dateParam);
     };
+    const medicationSubmitButton = document.getElementById('calendar-medication-submit-btn');
+    if (medicationSubmitButton) {
+      medicationSubmitButton.addEventListener('click', submitMedication);
+    }
   });
 
   // --- 3. Axios & Data Fetching ---
@@ -331,51 +336,67 @@
 
   function submitMedication() {
       const patientId = "{{ patient.id|default:'' }}";
+      const submitButton = document.getElementById('calendar-medication-submit-btn');
+      const submitGuard = window.LCCSubmitGuard;
       if (!patientId) {
         showToast('未找到患者信息', 'error');
         return;
       }
+      if (!submitButton || !submitGuard) {
+        showToast('提交组件加载失败，请刷新页面重试', 'error');
+        return;
+      }
 
-      fetch("{% url 'web_patient:submit_medication' %}", {
-          method: 'POST',
-          headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-              'X-CSRFToken': '{{ csrf_token }}'
-          },
-          body: new URLSearchParams({
-            'patient_id': patientId,
-            'selected_date': resolveActiveDateStr()
-          })
-      })
-      .then(r => r.json())
-      .then(data => {
-          if (data.success) {
-            // Optimistic UI update
-            try {
-              const actionEl = document.getElementById('plan-action-medication');
-              if (actionEl) {
-                actionEl.innerHTML = `
-                  <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                    </svg>
-                  </div>
-                `;
-              }
-              const subtitleEl = document.getElementById('plan-subtitle-medication');
-              if (subtitleEl) {
-                subtitleEl.textContent = '已服药';
-                subtitleEl.classList.add('text-emerald-600','font-medium');
-                subtitleEl.classList.remove('text-slate-500');
-              }
-            } catch(e) {}
-            // Refresh current date view (server-side align)
-            fetchTasks(resolveActiveDateStr());
+      const selectedDate = resolveActiveDateStr();
+      return submitGuard.run({
+        guardKey: 'health-calendar-medication',
+        button: submitButton,
+        verifyUrl: window.location.href,
+        request: function() {
+          return submitGuard.postForm(
+            "{% url 'web_patient:submit_medication' %}",
+            new URLSearchParams({
+              patient_id: patientId,
+              selected_date: selectedDate
+            }),
+            { csrfToken: '{{ csrf_token }}' }
+          );
+        },
+        getSubmissionState: function(response, data) {
+          if (data && data.success === true) return 'succeeded';
+          if (data && data.success === false) return 'failed';
+          return 'pending';
+        },
+        getErrorMessage: function(data) {
+          return data && data.message ? data.message : '提交失败';
+        },
+        keepDisabledOnSuccess: false,
+        onSuccess: function() {
+            // 用户可在请求期间关闭弹窗并切换日期，旧请求不得覆盖新日期视图。
+            if (resolveActiveDateStr() === selectedDate) {
+              try {
+                const actionEl = document.getElementById('plan-action-medication');
+                if (actionEl) {
+                  actionEl.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  `;
+                }
+                const subtitleEl = document.getElementById('plan-subtitle-medication');
+                if (subtitleEl) {
+                  subtitleEl.textContent = '已服药';
+                  subtitleEl.classList.add('text-emerald-600','font-medium');
+                  subtitleEl.classList.remove('text-slate-500');
+                }
+              } catch(e) {}
+              fetchTasks(selectedDate);
+            }
             closeMedicationModal();
-          }
-          else showToast(data.message || '提交失败', 'error');
-      })
-      .catch(() => showToast('网络异常，提交失败，请稍后重试', 'error'));
+        }
+      });
   }
 
   function handleTaskClick(title, type, specificUrl) {

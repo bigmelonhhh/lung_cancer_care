@@ -1,4 +1,9 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
+
+{% block extra_head %}
+<script src="{% static 'web_patient/submit_guard.js' %}" defer></script>
+{% endblock %}
 
 {% block title %}当前{{ metric.title }}{% endblock %}
 
@@ -67,8 +72,8 @@
       </div>
     </form>
 
-    <button type="button" id="submit-button"
-            class="mt-8 w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-md shadow-blue-200 active:scale-[0.98]">
+    <button type="submit" form="monitoring-form" id="submit-button"
+            class="mt-8 w-full rounded-xl bg-blue-600 py-3.5 font-bold text-white shadow-md shadow-blue-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60">
       确定提交{{ metric.title }}
     </button>
   </div>
@@ -88,64 +93,81 @@
     }
   });
 
-  submitButton.addEventListener('click', async () => {
+  form.addEventListener('submit', event => {
+    event.preventDefault();
     const data = new FormData(form);
     if (!data.get('value') || ('{{ metric.metric_type }}' === 'M_GLU' && !data.get('measurement_context'))) {
       errorMessage.classList.remove('hidden');
       return;
     }
     errorMessage.classList.add('hidden');
-    submitButton.disabled = true;
-    submitButton.textContent = '提交中...';
-    try {
-      const response = await fetch(window.location.href, {
-        method: 'POST',
-        headers: {
-          'X-Requested-With': 'XMLHttpRequest',
-          'X-CSRFToken': data.get('csrfmiddlewaretoken')
-        },
-        body: data
-      });
-      const payload = await response.json();
-      if (!response.ok || payload.status !== 'success') {
-        throw new Error(payload.message || '提交失败');
-      }
-      const source = new URLSearchParams(window.location.search).get('source');
-      try {
-        localStorage.setItem('refresh_flag', 'true');
-      } catch (error) {}
-      if (source === 'home') {
-        try {
-          const markerKey = 'home_plan_refresh_marker';
-          const marker = JSON.parse(localStorage.getItem(markerKey) || '{}');
-          const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
-          if (!completedTypes.includes(payload.plan_type)) completedTypes.push(payload.plan_type);
-          localStorage.setItem(markerKey, JSON.stringify({
-            completedTypes,
-            date: new Date().toISOString().slice(0, 10),
-            expiresAt: Date.now() + 10 * 60 * 1000
-          }));
-        } catch (error) {}
-        window.location.replace("{% url 'web_patient:patient_home' %}?" + encodeURIComponent(payload.plan_type) + "=true");
-      } else if (source === 'calendar') {
-        const selectedDate = data.get('selected_date');
-        const calendarUrl = "{% url 'web_patient:health_calendar' %}";
-        window.location.replace(
-          selectedDate
-            ? calendarUrl + "?date=" + encodeURIComponent(selectedDate)
-            : calendarUrl
-        );
-      } else if (document.referrer && document.referrer.includes(window.location.host)) {
-        history.back();
-      } else {
-        window.location.href = "{% url 'web_patient:patient_home' %}";
-      }
-    } catch (error) {
-      errorMessage.textContent = error.message || '提交失败，请重试';
+    const submitGuard = window.LCCSubmitGuard;
+    if (!submitGuard) {
+      errorMessage.textContent = '提交组件加载失败，请刷新页面重试';
       errorMessage.classList.remove('hidden');
-      submitButton.disabled = false;
-      submitButton.textContent = '确定提交{{ metric.title }}';
+      return;
     }
+    const selectedDate = data.get('selected_date') || '';
+    const source = (new URLSearchParams(window.location.search).get('source') || '').trim();
+    const calendarUrl = "{% url 'web_patient:health_calendar' %}";
+    const homeUrl = "{% url 'web_patient:patient_home' %}";
+    const verifyUrl = source === 'calendar'
+      ? calendarUrl + (selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '')
+      : source !== 'home' && document.referrer && document.referrer.includes(window.location.host)
+        ? document.referrer
+        : homeUrl;
+
+    submitGuard.run({
+      guardKey: 'record-general-{{ metric.slug }}',
+      button: submitButton,
+      verifyUrl: verifyUrl,
+      request: () => submitGuard.postForm(window.location.href, data, {
+        csrfToken: data.get('csrfmiddlewaretoken')
+      }),
+      getSubmissionState: (response, payload) => {
+        if (payload && payload.status === 'success') return 'succeeded';
+        if (payload && ['error', 'failed'].includes(payload.status)) return 'failed';
+        return 'pending';
+      },
+      getErrorMessage: payload => payload && payload.message ? payload.message : '提交失败',
+      onFailure: error => {
+        errorMessage.textContent = error.message || '提交失败，请重试';
+        errorMessage.classList.remove('hidden');
+      },
+      onUnknown: () => {
+        errorMessage.textContent = '提交结果暂未确认，请点击按钮返回计划页核对';
+        errorMessage.classList.remove('hidden');
+      },
+      onSuccess: payload => {
+        try {
+          localStorage.setItem('refresh_flag', 'true');
+        } catch (error) {}
+        if (source === 'home') {
+          try {
+            const markerKey = 'home_plan_refresh_marker';
+            const marker = JSON.parse(localStorage.getItem(markerKey) || '{}');
+            const completedTypes = Array.isArray(marker.completedTypes) ? marker.completedTypes : [];
+            if (!completedTypes.includes(payload.plan_type)) completedTypes.push(payload.plan_type);
+            localStorage.setItem(markerKey, JSON.stringify({
+              completedTypes,
+              date: new Date().toISOString().slice(0, 10),
+              expiresAt: Date.now() + 10 * 60 * 1000
+            }));
+          } catch (error) {}
+          window.location.replace("{% url 'web_patient:patient_home' %}?" + encodeURIComponent(payload.plan_type) + "=true");
+        } else if (source === 'calendar') {
+          window.location.replace(
+            selectedDate
+              ? calendarUrl + "?date=" + encodeURIComponent(selectedDate)
+              : calendarUrl
+          );
+        } else if (document.referrer && document.referrer.includes(window.location.host)) {
+          history.back();
+        } else {
+          window.location.href = "{% url 'web_patient:patient_home' %}";
+        }
+      }
+    });
   });
 })();
 </script>

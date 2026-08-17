@@ -63,6 +63,24 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
         )
         return checkup
 
+    def _create_medication_task(self):
+        today = timezone.localdate()
+        TreatmentCycle.objects.create(
+            patient=self.patient,
+            name="用药测试疗程",
+            start_date=today,
+            end_date=today,
+            cycle_days=1,
+            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
+        )
+        DailyTask.objects.create(
+            patient=self.patient,
+            task_date=today,
+            task_type=PlanItemCategory.MEDICATION,
+            title="用药提醒",
+            status=TaskStatus.PENDING,
+        )
+
     def _create_questionnaire_submission(self):
         questionnaire, _ = Questionnaire.objects.get_or_create(
             code=QuestionnaireCode.Q_ANXIETY,
@@ -160,22 +178,7 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
     def test_patient_home_medication_task_opens_modal(self):
         page_errors = []
         self.page.on("pageerror", lambda error: page_errors.append(str(error)))
-        today = timezone.localdate()
-        TreatmentCycle.objects.create(
-            patient=self.patient,
-            name="用药测试疗程",
-            start_date=today,
-            end_date=today,
-            cycle_days=1,
-            status=core_choices.TreatmentCycleStatus.IN_PROGRESS,
-        )
-        DailyTask.objects.create(
-            patient=self.patient,
-            task_date=today,
-            task_type=PlanItemCategory.MEDICATION,
-            title="用药提醒",
-            status=TaskStatus.PENDING,
-        )
+        self._create_medication_task()
 
         self._open("web_patient:patient_home")
 
@@ -193,6 +196,286 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
             any("handleTaskClick is not defined" in message for message in page_errors),
             page_errors,
         )
+
+    def test_patient_home_medication_submit_guard_coalesces_rapid_clicks(self):
+        self._create_medication_task()
+        request_count = 0
+
+        def capture_submission(route):
+            nonlocal request_count
+            request_count += 1
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"success": true}',
+            )
+
+        self.page.route("**/p/api/medication/submit/**", capture_submission)
+        self._open("web_patient:patient_home")
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+
+        self.page.evaluate(
+            """
+            () => {
+                const button = document.getElementById('medication-submit-btn');
+                for (let index = 0; index < 5; index += 1) button.click();
+            }
+            """
+        )
+        self.page.wait_for_url("**/p/home/?medication_taken=true")
+
+        self.assertEqual(request_count, 1)
+
+    def test_patient_home_medication_unknown_result_offers_verification_across_reload(self):
+        self._create_medication_task()
+        self.page.route("**/p/api/medication/submit/**", lambda route: route.abort())
+        self._open("web_patient:patient_home")
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+
+        submit_button = self.page.locator("#medication-submit-btn")
+        submit_button.click()
+
+        expect(submit_button).to_be_enabled()
+        expect(submit_button).to_have_text("核对提交结果")
+
+        self.page.reload(wait_until="domcontentloaded")
+        restored_button = self.page.locator("#medication-submit-btn")
+        expect(restored_button).to_be_enabled()
+        expect(restored_button).to_have_text("核对提交结果")
+
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+        expect(restored_button).to_be_visible()
+        with self.page.expect_navigation(wait_until="domcontentloaded"):
+            restored_button.click()
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+        expect(self.page.locator("#medication-submit-btn")).to_be_enabled()
+        expect(self.page.locator("#medication-submit-btn")).to_have_text("我已按时服药")
+
+    def test_patient_home_medication_html_403_is_known_failure(self):
+        self._create_medication_task()
+        self.page.route(
+            "**/p/api/medication/submit/**",
+            lambda route: route.fulfill(
+                status=403,
+                content_type="text/html",
+                body="<html><body>CSRF verification failed</body></html>",
+            ),
+        )
+        self._open("web_patient:patient_home")
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+
+        submit_button = self.page.locator("#medication-submit-btn")
+        submit_button.click()
+
+        expect(submit_button).to_be_enabled()
+        expect(submit_button).to_have_text("我已按时服药")
+        expect(self.page.locator("#lcc-submit-toast-container")).to_contain_text(
+            "页面校验或登录状态已失效"
+        )
+
+    def test_patient_home_medication_pending_response_offers_verification(self):
+        self._create_medication_task()
+        self.page.route(
+            "**/p/api/medication/submit/**",
+            lambda route: route.fulfill(
+                status=202,
+                content_type="application/json",
+                body='{"status": "pending"}',
+            ),
+        )
+        self._open("web_patient:patient_home")
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+
+        submit_button = self.page.locator("#medication-submit-btn")
+        submit_button.click()
+
+        expect(submit_button).to_be_enabled()
+        expect(submit_button).to_have_text("核对提交结果")
+
+    def test_patient_home_medication_guard_load_failure_is_visible(self):
+        self._create_medication_task()
+        dialog_messages = []
+
+        def accept_dialog(dialog):
+            dialog_messages.append(dialog.message)
+            dialog.accept()
+
+        self.page.on("dialog", accept_dialog)
+        self._open("web_patient:patient_home")
+        self.page.locator(
+            '#plan-action-medication [data-home-task-action="medication"]'
+        ).click()
+        self.page.evaluate("window.LCCSubmitGuard = null")
+
+        self.page.locator("#medication-submit-btn").click()
+
+        self.assertIn("提交组件加载失败，请刷新页面重试", dialog_messages)
+
+    def test_health_calendar_medication_submit_guard_coalesces_rapid_clicks(self):
+        request_count = 0
+
+        def capture_submission(route):
+            nonlocal request_count
+            request_count += 1
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"success": true}',
+            )
+
+        self.page.route("**/p/api/medication/submit/**", capture_submission)
+        self._open("web_patient:health_calendar")
+        self.page.evaluate("openMedicationModal()")
+
+        self.page.evaluate(
+            """
+            () => {
+                const button = document.getElementById('calendar-medication-submit-btn');
+                for (let index = 0; index < 5; index += 1) button.click();
+            }
+            """
+        )
+
+        expect(self.page.locator("#medication-modal")).to_be_hidden()
+        self.assertEqual(request_count, 1)
+
+    def test_health_calendar_old_medication_response_does_not_replace_new_date(self):
+        self._open("web_patient:health_calendar")
+        submitted_date = timezone.localdate().isoformat()
+        selected_date = (timezone.localdate() - timedelta(days=1)).isoformat()
+        self.page.evaluate(
+            """
+            () => {
+                const realFetch = window.fetch.bind(window);
+                window.__resolveMedicationSubmit = null;
+                window.__calendarFetchDates = [];
+                window.fetch = (url, options) => {
+                    if (String(url).includes('/p/api/medication/submit/')) {
+                        return new Promise(resolve => {
+                            window.__resolveMedicationSubmit = () => resolve(new Response(
+                                JSON.stringify({success: true}),
+                                {status: 200, headers: {'Content-Type': 'application/json'}}
+                            ));
+                        });
+                    }
+                    return realFetch(url, options);
+                };
+                window.axios.get = url => {
+                    window.__calendarFetchDates.push(String(url));
+                    return Promise.resolve({data: '<div id="selected-date-sentinel">新日期内容</div>'});
+                };
+            }
+            """
+        )
+        self.page.evaluate("openMedicationModal()")
+        self.page.locator("#calendar-medication-submit-btn").click()
+        self.page.wait_for_function("() => typeof window.__resolveMedicationSubmit === 'function'")
+
+        self.page.evaluate("closeMedicationModal()")
+        self.page.evaluate(
+            "dateStr => { fpInstance.setDate(dateStr, false); updatePageContent(dateStr); }",
+            selected_date,
+        )
+        expect(self.page.locator("#current-date-display")).to_have_text(selected_date)
+        expect(self.page.locator("#selected-date-sentinel")).to_be_visible()
+
+        self.page.evaluate("window.__resolveMedicationSubmit()")
+        expect(self.page.locator("#calendar-medication-submit-btn")).to_be_enabled()
+        expect(self.page.locator("#current-date-display")).to_have_text(selected_date)
+        expect(self.page.locator("#selected-date-sentinel")).to_be_visible()
+        self.assertIn(f"date={selected_date}", self.page.url)
+        self.assertEqual(
+            self.page.evaluate("window.__calendarFetchDates"),
+            [f"?date={selected_date}&ajax=1"],
+        )
+        self.assertNotEqual(submitted_date, selected_date)
+
+    def test_submit_guard_bfcache_restores_success_button(self):
+        self._open("web_patient:health_calendar")
+        self.page.evaluate(
+            """
+            async () => {
+                const button = document.createElement('button');
+                button.id = 'bfcache-success-button';
+                button.textContent = '原始按钮';
+                document.body.appendChild(button);
+                await window.LCCSubmitGuard.run({
+                    guardKey: 'bfcache-success-test',
+                    button,
+                    request: () => Promise.resolve({
+                        response: {ok: true, status: 200},
+                        payload: {success: true}
+                    }),
+                    getSubmissionState: () => 'succeeded'
+                });
+            }
+            """
+        )
+        button = self.page.locator("#bfcache-success-button")
+        expect(button).to_be_disabled()
+        expect(button).to_have_text("提交成功")
+
+        self.page.evaluate(
+            "window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted: true}))"
+        )
+        expect(button).to_be_enabled()
+        expect(button).to_have_text("原始按钮")
+
+    def test_temperature_enter_uses_guarded_form_submission(self):
+        request_count = 0
+
+        self._open("web_patient:record_temperature", params={"source": "home"})
+
+        def capture_submission(route):
+            nonlocal request_count
+            request_count += 1
+            route.fulfill(
+                status=200,
+                content_type="application/json",
+                body='{"status": "success"}',
+            )
+
+        self.page.route("**/p/record/temperature/**", capture_submission)
+        temperature_input = self.page.locator("#temperature-input")
+        temperature_input.fill("36.5")
+        temperature_input.press("Enter")
+        self.page.wait_for_url("**/p/home/?temperature=true")
+
+        self.assertEqual(request_count, 1)
+
+    def test_temperature_unknown_result_returns_to_plan_without_resubmitting(self):
+        request_count = 0
+
+        def abort_submission(route):
+            nonlocal request_count
+            request_count += 1
+            route.abort()
+
+        self._open("web_patient:record_temperature", params={"source": "home"})
+        self.page.route("**/p/record/temperature/**", abort_submission)
+        self.page.locator("#temperature-input").fill("36.5")
+        submit_button = self.page.locator("#temperature-submit-btn")
+        submit_button.click()
+
+        expect(submit_button).to_be_enabled()
+        expect(submit_button).to_have_text("核对提交结果")
+        with self.page.expect_navigation(wait_until="domcontentloaded"):
+            submit_button.click()
+
+        self.assertIn(reverse("web_patient:patient_home"), self.page.url)
+        self.assertEqual(request_count, 1)
 
     def test_patient_home_trial_can_open_task_without_member_extras(self):
         Order.objects.filter(patient=self.patient).delete()
@@ -564,8 +847,52 @@ class PatientPagesBrowserTests(PatientBrowserTestCase):
             375,
         )
 
-        self.page.locator('button[onclick="submitCheckup()"]:visible').click()
+        self.page.locator('#checkup-submit-btn:visible').click()
         expect(self.page.locator("#status-message")).to_contain_text("请至少上传")
+
+    def test_record_checkup_submission_freezes_upload_queue(self):
+        self._create_checkup_task()
+        self._open("web_patient:record_checkup")
+        self.page.evaluate("closeModal()")
+        item_id = self.page.locator(".checkup-item").first.get_attribute("data-id")
+        self.assertTrue(item_id)
+        self.page.evaluate(
+            """
+            itemId => {
+                const file = new File(['checkup'], 'locked-checkup.png', {type: 'image/png'});
+                uploads[itemId] = [{
+                    id: 'locked-file',
+                    itemId,
+                    file,
+                    fileName: file.name,
+                    originalSize: file.size,
+                    compressedSize: file.size,
+                    usedOriginal: true,
+                    policy: null,
+                    networkInfo: null,
+                    status: 'ready'
+                }];
+                window.__checkupPostStarted = false;
+                window.LCCSubmitGuard.postForm = () => {
+                    window.__checkupPostStarted = true;
+                    return new Promise(() => {});
+                };
+            }
+            """,
+            item_id,
+        )
+
+        self.page.locator("#checkup-submit-btn").click()
+        self.page.wait_for_function("() => window.__checkupPostStarted === true")
+
+        expect(self.page.locator('input[type="file"]').first).to_be_disabled()
+        self.assertTrue(self.page.evaluate("checkupSubmissionLocked"))
+        self.page.evaluate("itemId => removeFile(itemId, 'locked-file')", item_id)
+        self.assertEqual(
+            self.page.evaluate("itemId => uploads[itemId].length", item_id),
+            1,
+        )
+        expect(self.page.locator("#status-message")).to_contain_text("暂不能删除图片")
 
     def test_plan_followup_examination_and_calendar_pages_load(self):
         self._open("web_patient:management_plan")

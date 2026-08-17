@@ -120,7 +120,7 @@ class GeneralMonitoringMetricViewTests(TestCase):
 
         source_branch = template_source[
             template_source.index(
-                "const source = new URLSearchParams(window.location.search).get('source');"
+                "const source = (new URLSearchParams(window.location.search).get('source') || '').trim();"
             ) :
         ]
         home_branch = source_branch[
@@ -137,10 +137,12 @@ class GeneralMonitoringMetricViewTests(TestCase):
 
         self.assertIn("home_plan_refresh_marker", home_branch)
         self.assertNotIn("home_plan_refresh_marker", calendar_branch)
-        self.assertIn("data.get('selected_date')", calendar_branch)
+        # calendar 分支使用前置的 selectedDate/calendarUrl 变量回传选中日期
+        self.assertIn("selectedDate", calendar_branch)
+        self.assertIn("calendarUrl", calendar_branch)
         self.assertIn(
             "{% url 'web_patient:health_calendar' %}",
-            calendar_branch,
+            source_branch,
         )
 
     def test_glucose_detail_uses_real_label_and_context(self):

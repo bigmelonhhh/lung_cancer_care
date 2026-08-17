@@ -2,6 +2,8 @@
 {% load static %}
 
 {% block extra_head %}
+<script src="{% static 'web_patient/submit_guard.js' %}" defer></script>
+<script src="{% static 'web_patient/patient_home.js' %}" defer></script>
 <style>
   @supports (content-visibility: auto) {
     .home-below-fold {
@@ -24,7 +26,6 @@
 
 {% block body %}
 {{ patient_home_config|json_script:"patient-home-config" }}
-<script src="{% static 'web_patient/patient_home.js' %}" defer></script>
 
 <div class="min-h-screen bg-[#F4F6F9] pb-20 relative font-sans">
   <div
@@ -514,7 +515,8 @@
 
         <div class="mt-6 w-full mb-3">
           <button
-            onclick="submitMedication()"
+            id="medication-submit-btn"
+            type="button"
             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-full shadow-lg shadow-blue-200 active:scale-95 transition-transform"
           >
             我已按时服药
