@@ -489,7 +489,7 @@
                 if (document.getElementById('todo-nav-loading-overlay')) return document.getElementById('todo-nav-loading-overlay');
                 const overlay = document.createElement('div');
                 overlay.id = 'todo-nav-loading-overlay';
-                overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm';
+                overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 backdrop-blur-sm';
                 overlay.innerHTML = '<div class="flex flex-col items-center justify-center text-center px-6 py-10 text-slate-500"><p class="text-sm font-medium text-slate-600">加载中...</p></div>';
                 document.body.appendChild(overlay);
                 return overlay;
@@ -537,18 +537,25 @@
             const indicatorsUrl = '/doctor/workspace/patient/' + patientId + '/indicators/' + (query ? ('?' + query) : '');
             const hasPatientContent = !!document.getElementById('patient-content');
             if (hasPatientContent) {
-                htmxGet(indicatorsUrl, '#patient-content', '#workspace-loading-overlay').catch(function() {
+                // 与下方分支保持一致：蒙层不存在时传 null，由 htmx 静默降级
+                const indicatorSelector = document.getElementById('workspace-loading-overlay') ? '#workspace-loading-overlay' : null;
+                htmxGet(indicatorsUrl, '#patient-content', indicatorSelector).catch(function() {
                     alert('加载患者指标失败，请稍后重试');
                 });
                 return;
             }
 
-            const overlay = ensureLoadingOverlay();
+            const workspaceOverlaySelector = '#workspace-loading-overlay';
+            const hasWorkspaceOverlay = !!document.querySelector(workspaceOverlaySelector);
+            const overlay = hasWorkspaceOverlay ? null : ensureLoadingOverlay();
+            const indicatorSelector = hasWorkspaceOverlay ? workspaceOverlaySelector : null;
             const workspaceUrl = '/doctor/workspace/patient/' + patientId + '/';
-            htmxGet(workspaceUrl, '#main-content', null)
+            htmxGet(workspaceUrl, '#main-content', indicatorSelector)
+                .then(function() {
+                    return htmxGet(indicatorsUrl, '#patient-content', indicatorSelector);
+                })
                 .then(function() {
                     removeLoadingOverlay(overlay);
-                    return htmxGet(indicatorsUrl, '#patient-content', '#workspace-loading-overlay');
                 })
                 .catch(function() {
                     removeLoadingOverlay(overlay);

@@ -83,88 +83,93 @@
 
         <div class="p-6">
         {# 顶部操作栏 #}
-        <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center justify-between mb-6">
             <div class="flex gap-4">
-                <button @click="$dispatch('open-record-modal', { type: '', source: 'timeline' })" class="px-4 py-2 bg-white border border-slate-200 rounded text-slate-600 text-sm hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2 shadow-sm">
-                    <span class="text-lg leading-none">+</span> 新增记录
+                <button @click="$dispatch('open-record-modal', { type: '', source: 'timeline' })" class="inline-flex items-center gap-1.5 h-9 px-4 bg-white border border-slate-200 rounded-lg text-slate-600 text-sm font-medium shadow-sm hover:border-indigo-400 hover:text-indigo-600 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    新增记录
                 </button>
             </div>
             
             {# 图例 #}
-            <div class="flex items-center gap-4 text-sm">
+            <div class="flex items-center gap-3 text-xs text-slate-500">
                 <div class="flex items-center gap-1">
-                    <svg class="w-4 h-4 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
-                    <span class="text-slate-600">复查</span>
+                    <svg class="w-3.5 h-3.5 text-green-600" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                    <span>复查</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <svg class="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                    <span class="text-slate-600">门诊</span>
+                    <svg class="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    <span>门诊</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <svg class="w-4 h-4 text-purple-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/></svg>
-                    <span class="text-slate-600">住院</span>
+                    <svg class="w-3.5 h-3.5 text-purple-600" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/></svg>
+                    <span>住院</span>
                 </div>
             </div>
         </div>
 
         {# 时间轴图表 #}
-        <div id="checkup-timeline-month-bars" class="relative w-full overflow-x-auto pb-4">
-            <div class="min-w-[800px] flex justify-between items-end min-h-40 relative px-4">
+        <div id="checkup-timeline-month-bars" class="relative w-full overflow-x-auto pb-2">
+            <div class="min-w-[800px] flex justify-between items-end relative px-2">
                 {# 月份柱状条 #}
                 {% for month_data in timeline_data %}
+                {% with total=month_data.checkup_count|add:month_data.outpatient_count|add:month_data.hospitalization_count %}
                 <div 
-                    class="flex flex-col items-center gap-2 cursor-pointer group relative  "
+                    class="flex-1 min-w-[64px] flex flex-col items-center gap-1.5 cursor-pointer group relative rounded-lg pt-2 pb-1 transition-colors"
                     data-testid="checkup-month-bar"
                     data-checkup-month="{{ month_data.month_label }}"
-                    :class="selectedMonth === '{{ month_data.month_label }}' ? 'bg-[rgba(22,164,106,0.3)] ' : 'bg-[#f1f1f1]'"
+                    :class="selectedMonth === '{{ month_data.month_label }}' ? 'bg-green-50' : 'hover:bg-slate-50'"
                     @click="selectMonth('{{ month_data.month_label }}')"
                 >
                     {# 柱子上方的图标统计 #}
-                    <div class="flex flex-col items-center gap-1 mb-1 h-[80px] justify-end">
+                    <div class="flex flex-col items-center gap-0.5 h-16 justify-end">
                         {% if month_data.checkup_count > 0 %}
-                        <div class="flex items-center text-sm text-slate-600">
-                            <svg class="w-4 h-4 text-green-600 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+                        <div class="flex items-center text-xs text-slate-600">
+                            <svg class="w-3.5 h-3.5 text-green-600 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
                             <span data-testid="checkup-month-count-checkup">{{ month_data.checkup_count }}</span>
                         </div>
                         {% endif %}
                         
                         {% if month_data.outpatient_count > 0 %}
-                        <div class="flex items-center text-sm text-slate-600">
-                            <svg class="w-4 h-4 text-amber-500 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        <div class="flex items-center text-xs text-slate-600">
+                            <svg class="w-3.5 h-3.5 text-amber-500 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                             <span data-testid="checkup-month-count-outpatient">{{ month_data.outpatient_count }}</span>
                         </div>
                         {% endif %}
                         
                         {% if month_data.hospitalization_count > 0 %}
-                        <div class="flex items-center text-sm text-slate-600 ">
-                            <svg class="w-4 h-4 text-purple-600 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/></svg>
+                        <div class="flex items-center text-xs text-slate-600">
+                            <svg class="w-3.5 h-3.5 text-purple-600 mr-0.5" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-7-2h2v-2h-2v2zm0-4h2v-2h-2v2zm0-4h2V7h-2v2z"/></svg>
                             <span data-testid="checkup-month-count-hospitalization">{{ month_data.hospitalization_count }}</span>
                         </div>
                         {% endif %}
                     </div>
 
-                    {# 柱体 #}
+                    {# 柱体：高度按当月事件总数分档，选中月份高亮为绿色 #}
                     <div 
-                        class="w-8 transition-all duration-300 rounded-t-sm"
+                        class="w-7 transition-all duration-300{% if total == 0 %} h-1.5 rounded-full bg-slate-200{% elif total <= 2 %} h-6 rounded-t-md{% elif total <= 4 %} h-10 rounded-t-md{% else %} h-14 rounded-t-md{% endif %}"
+                        {% if total > 0 %}:class="selectedMonth === '{{ month_data.month_label }}' ? 'bg-green-500' : 'bg-slate-300 group-hover:bg-slate-400'"{% endif %}
                     ></div>
 
                     {# 月份标签 #}
                     <div 
-                        class="text-sm font-medium transition-colors  text-black  p-2"
-                        :class="selectedMonth === '{{ month_data.month_label }}' ? ' bg-green-600' : 'bg-[#c4bcbc]'"
+                        class="text-xs font-medium px-2.5 py-1 rounded-full transition-colors whitespace-nowrap"
+                        :class="selectedMonth === '{{ month_data.month_label }}' ? 'bg-green-600 text-white shadow-sm' : 'text-slate-500 group-hover:text-slate-800'"
                     >
                         {{ month_data.month_name }}
                     </div>
-
-                   
                 </div>
+                {% endwith %}
                 {% endfor %}
             </div>
         </div>
 
                 {# 底部详情展示区域 #}
-        <div id="checkup-timeline-details" class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto ">
-            <div class="text-xs text-slate-500 mb-2">提示：日期优先显示报告日期，缺失时显示创建日期</div>
+        <div id="checkup-timeline-details" class="mt-4 bg-slate-50/50 rounded-lg border border-slate-100 p-4 min-h-[120px] overflow-x-auto">
+            <div class="flex items-center gap-1.5 text-xs text-slate-400 mb-3">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span>提示：日期优先显示报告日期，缺失时显示创建日期</span>
+            </div>
             <div class="w-full flex gap-4 min-w-max relative pt-6">
                 {# 时间轴横线 #}
                 <div class="absolute top-2.5 left-0 w-full h-0.5 bg-slate-200"></div>
@@ -174,30 +179,33 @@
                     {% for event in month_data.events %}
                     <div class="relative flex flex-col items-center group">
                         {# 时间轴上的圆点 #}
-                        <div class="w-3 h-3 rounded-full border-2 bg-white z-10 mb-2 
-                             {% if event.type == 'checkup' %}border-green-600 text-green-600
-                             {% elif event.type == 'outpatient' %}border-amber-500 text-amber-500
-                             {% else %}border-purple-600 text-purple-600{% endif %}">
+                        <div class="w-3 h-3 rounded-full border-2 bg-white z-10 mb-2
+                             {% if event.type == 'checkup' %}border-green-600
+                             {% elif event.type == 'outpatient' %}border-amber-500
+                             {% else %}border-purple-600{% endif %}">
                         </div>
-                        
+
                         {# 卡片内容 #}
-                        <div class="w-44 rounded overflow-hidden shadow-sm border text-center transition-transform hover:-translate-y-1 
-                             {% if event.type == 'checkup' %}border-green-200 bg-green-50
-                             {% elif event.type == 'outpatient' %}border-amber-200 bg-amber-50
-                             {% else %}border-purple-200 bg-purple-50{% endif %}">
-                            <div class="py-1 text-xs font-bold text-white 
-                                 {% if event.type == 'checkup' %}bg-green-600
-                                 {% elif event.type == 'outpatient' %}bg-amber-500
-                                 {% else %}bg-purple-600{% endif %}">
-                                {{ event.type_display }}
-                            </div>
-                            <div class="py-1.5 text-[11px] font-medium text-slate-700">
-                                {{ event.date_display }}
+                        <div class="w-40 rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden text-center transition-all group-hover:shadow-md group-hover:-translate-y-0.5">
+                            <div class="h-0.5 w-full
+                                 {% if event.type == 'checkup' %}bg-green-500
+                                 {% elif event.type == 'outpatient' %}bg-amber-400
+                                 {% else %}bg-purple-500{% endif %}"></div>
+                            <div class="px-3 py-2.5">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-inset
+                                     {% if event.type == 'checkup' %}bg-green-50 text-green-700 ring-green-200
+                                     {% elif event.type == 'outpatient' %}bg-amber-50 text-amber-700 ring-amber-200
+                                     {% else %}bg-purple-50 text-purple-700 ring-purple-200{% endif %}">
+                                    {{ event.type_display }}
+                                </span>
+                                <div class="mt-1.5 text-sm font-semibold text-slate-800">
+                                    {{ event.date_display }}
+                                </div>
                             </div>
                         </div>
                     </div>
                     {% empty %}
-                    <div class=" flex flex-col items-center justify-center py-8 text-slate-400 " style="width: 100%;">
+                    <div class="flex flex-col items-center justify-center py-8 text-slate-400" style="width: 100%;">
                         <svg class="w-12 h-12 mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
                         </svg>

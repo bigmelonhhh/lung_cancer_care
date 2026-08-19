@@ -432,7 +432,7 @@ class FollowupRefreshTemplateTests(SimpleTestCase):
                 template_path = Path(settings.BASE_DIR) / "templates" / "web_patient" / template_name
                 content = template_path.read_text(encoding="utf-8")
 
-                self.assertIn("const source = (urlParams.get('source') || '').trim();", content)
+                self.assertIn("const source = (new URLSearchParams(window.location.search).get('source') || '').trim();", content)
                 self.assertIn("if (source === 'home') {", content)
                 self.assertIn("function writeHomePlanRefreshMarker(type)", content)
                 metric_type = success_param.split("=")[0]

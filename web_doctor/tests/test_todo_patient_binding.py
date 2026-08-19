@@ -280,6 +280,22 @@ class TodoPatientBindingTests(TestCase):
         content = response.content.decode('utf-8')
         self.assertIn('todo_pending_jump', content)
 
+    def test_doctor_workspace_todo_indicator_covers_both_navigation_requests(self):
+        url = reverse('web_doctor:doctor_workspace')
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 200)
+        content = response.content.decode('utf-8')
+        self.assertEqual(content.count('id="workspace-loading-overlay"'), 1)
+        self.assertIn(
+            "htmxGet(workspaceUrl, '#main-content', indicatorSelector)",
+            content,
+        )
+        self.assertIn(
+            "return htmxGet(indicatorsUrl, '#patient-content', indicatorSelector)",
+            content,
+        )
+
     def test_doctor_todo_list_hides_process_button(self):
         self.client.force_login(self.doctor_user)
         url = reverse('web_doctor:doctor_todo_list')

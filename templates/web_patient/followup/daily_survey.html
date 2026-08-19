@@ -1,4 +1,9 @@
 {% extends "layouts/base_portal.html" %}
+{% load static %}
+
+{% block extra_head %}
+<script src="{% static 'web_patient/submit_guard.js' %}" defer></script>
+{% endblock %}
 
 {% block body %}
 <div class="min-h-screen bg-slate-50 pb-safe-bottom font-sans">
@@ -363,74 +368,96 @@
         async function submitAll() {
             // Show Modal
             submitModal.classList.remove('hidden');
-            nextBtn.disabled = true;
-            
+            const submitGuard = window.LCCSubmitGuard;
+            if (!submitGuard) {
+                submitModal.classList.add('hidden');
+                alert('提交组件加载失败，请刷新页面重试');
+                return;
+            }
+
             const totalSubmissions = surveyIds.length;
-            let successCount = 0;
             const urlParams = new URLSearchParams(window.location.search);
             const selectedDate = urlParams.get('selected_date') || '';
             const source = getEntrySource();
+            const verifyUrl = source !== 'home' && document.referrer && document.referrer.includes(window.location.host)
+                ? document.referrer
+                : HOME_URL;
 
-            for (let i = 0; i < totalSubmissions; i++) {
-                const sId = surveyIds[i];
-                const answers = allAnswers[sId];
-                
-                // Update status text
-                submitStatusText.textContent = `正在提交第 ${i + 1} / ${totalSubmissions} 个问卷...`;
-                
-                // Construct Payload for Single Submission
-                const payload = {
-                    patient_id: patientId,
-                    questionnaire_id: parseInt(sId),
-                    answers: answers || [], // Ensure answers is not undefined
-                    selected_date: selectedDate
-                };
-                
-                try {
+            let completedSubmissionCount = 0;
+            return submitGuard.run({
+                guardKey: 'daily-survey-submit-all',
+                button: nextBtn,
+                verifyUrl: verifyUrl,
+                request: async () => {
+                    for (let i = 0; i < totalSubmissions; i++) {
+                        const sId = surveyIds[i];
+                        const answers = allAnswers[sId];
+                        submitStatusText.textContent = `正在提交第 ${i + 1} / ${totalSubmissions} 个问卷...`;
+
+                        const payload = {
+                            patient_id: patientId,
+                            questionnaire_id: parseInt(sId),
+                            answers: answers || [],
+                            selected_date: selectedDate
+                        };
                     const submitUrl = selectedDate ? "{% url 'web_patient:submit_surveys' %}" + `?selected_date=${encodeURIComponent(selectedDate)}` : "{% url 'web_patient:submit_surveys' %}";
-                    const response = await fetch(submitUrl, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                        },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (!data.success && !data.submission_id) { // Accept success:true or submission_id presence
-                        throw new Error(data.error || '提交失败');
+                        try {
+                            const result = await submitGuard.postJson(submitUrl, payload, {
+                                csrfToken: document.querySelector('[name=csrfmiddlewaretoken]').value
+                            });
+                            const data = result.payload;
+                            if (result.response.status === 202 || (data && data.status === 'pending')) {
+                                const error = new Error('提交结果暂未确认，请返回计划页核对');
+                                error.kind = 'unknown';
+                                throw error;
+                            }
+                            if (!data || (data.success !== true && !data.submission_id && data.success !== false && !data.error)) {
+                                const error = new Error('提交结果暂未确认，请返回计划页核对');
+                                error.kind = 'unknown';
+                                throw error;
+                            }
+                            if (data.success === false || (!data.success && !data.submission_id)) {
+                                const error = new Error(data.error || '提交失败');
+                                error.kind = 'failed';
+                                throw error;
+                            }
+                            completedSubmissionCount += 1;
+                        } catch (error) {
+                            console.error(`Survey ${sId} failed:`, error);
+                            if (completedSubmissionCount > 0) {
+                                error.kind = 'unknown';
+                                error.message = '部分问卷可能已提交成功，请返回计划页确认后再操作';
+                            }
+                            throw error;
+                        }
                     }
-                    successCount++;
-                    
-                } catch (error) {
-                    console.error(`Survey ${sId} failed:`, error);
-                    alert(`第 ${i + 1} 个问卷提交失败: ${error.message}`);
-                    // Stop on error? Or continue? 
-                    // Usually better to stop and let user retry.
+                    return { response: { ok: true, status: 200 }, payload: { success: true } };
+                },
+                getSubmissionState: (response, data) => {
+                    if (data && data.success === true) return 'succeeded';
+                    if (data && data.success === false) return 'failed';
+                    return 'pending';
+                },
+                getErrorMessage: data => (data && data.error) || '提交失败',
+                onFailure: () => {
                     submitModal.classList.add('hidden');
-                    nextBtn.disabled = false;
-                    nextBtn.textContent = '已完成答卷，提交';
-                    return; 
+                },
+                onUnknown: () => {
+                    submitModal.classList.add('hidden');
+                },
+                onSuccess: () => {
+                    submitStatusText.textContent = '提交完成！';
+                    localStorage.setItem('refresh_flag', 'true');
+                    localStorage.setItem('metric_data', JSON.stringify({
+                        "followup": "completed",
+                        "followup_completed": true
+                    }));
+                    if (source === 'home') {
+                        writeHomePlanRefreshMarker('followup');
+                    }
+                    setTimeout(() => { returnAfterSurvey(source); }, 300);
                 }
-            }
-            
-            // All success
-            submitStatusText.textContent = '提交完成！';
-            
-            // 存储刷新标记和数据
-            localStorage.setItem('refresh_flag', 'true');
-            // 存储最新的指标数据（可选，首页会通过接口重新拉取）
-            localStorage.setItem('metric_data', JSON.stringify({
-                "followup": "completed",
-                "followup_completed": true
-            }));
-            if (source === 'home') {
-                writeHomePlanRefreshMarker('followup');
-            }
-
-            setTimeout(() => { returnAfterSurvey(source); }, 300);
+            });
         }
     });
 </script>

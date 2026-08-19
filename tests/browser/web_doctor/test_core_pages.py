@@ -1,4 +1,5 @@
 from datetime import timedelta
+from decimal import Decimal
 
 from django.test import tag
 from django.utils import timezone
@@ -12,6 +13,14 @@ from core.models import (
     StandardFieldValueType,
     TreatmentCycle,
     choices,
+)
+from health_data.models import (
+    CheckupResultValue,
+    HealthMetric,
+    MetricType,
+    QuestionnaireSubmission,
+    ReportImage,
+    ReportUpload,
 )
 from tests.browser.web_doctor.base import DoctorBrowserTestCase, expect
 
@@ -37,6 +46,75 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
             standard_field=field,
             is_active=True,
         )
+
+    def _assert_axis_tooltip_hides_missing_date(
+        self, chart_id, expected_value, absent_text=None
+    ):
+        self.page.wait_for_function(
+            """chartId => {
+                const chartDom = document.getElementById(chartId);
+                return Boolean(
+                    chartDom
+                    && window.echarts
+                    && window.echarts.getInstanceByDom(chartDom)
+                );
+            }""",
+            arg=chart_id,
+        )
+        indexes = self.page.evaluate(
+            """({ chartId, expectedValue }) => {
+                const chartDom = document.getElementById(chartId);
+                const chart = window.echarts.getInstanceByDom(chartDom);
+                const option = chart.getOption();
+                const values = option.series[0].data.map(function (item) {
+                    return item && typeof item === 'object' && 'value' in item
+                        ? item.value
+                        : item;
+                });
+                return {
+                    missing: values.findIndex(function (value) {
+                        return value === null || value === undefined || value === '-';
+                    }),
+                    valid: values.findIndex(function (value) {
+                        return value !== null
+                            && value !== undefined
+                            && value !== '-'
+                            && Number(value) === Number(expectedValue);
+                    })
+                };
+            }""",
+            {"chartId": chart_id, "expectedValue": float(expected_value)},
+        )
+        self.assertGreaterEqual(indexes["missing"], 0, "Expected a missing chart point.")
+        self.assertGreaterEqual(indexes["valid"], 0, "Expected a valid chart point.")
+
+        def show_tooltip(data_index):
+            self.page.evaluate(
+                """({ chartId, dataIndex }) => {
+                    const chartDom = document.getElementById(chartId);
+                    const chart = window.echarts.getInstanceByDom(chartDom);
+                    const labels = chart.getOption().xAxis[0].data;
+                    chart.dispatchAction({
+                        type: 'showTip',
+                        x: chart.convertToPixel({ xAxisIndex: 0 }, labels[dataIndex]),
+                        y: chart.getHeight() / 2
+                    });
+                }""",
+                {"chartId": chart_id, "dataIndex": data_index},
+            )
+
+        tooltip = self.page.locator(
+            "#%s .lcc-indicator-axis-tooltip" % chart_id
+        )
+        show_tooltip(indexes["valid"])
+        expect(tooltip).to_be_visible(timeout=10000)
+        expect(tooltip).to_contain_text(str(expected_value))
+        if absent_text:
+            self.assertNotIn(absent_text, tooltip.text_content() or "")
+
+        show_tooltip(indexes["missing"])
+        expect(tooltip).to_be_hidden(timeout=10000)
+        self.assertNotIn("-", tooltip.text_content() or "")
 
     def _open_followup_review_config_modal(self):
         self.page.locator("#followup-review-section").get_by_role("button", name="配置").click()
@@ -109,8 +187,142 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(self.page.get_by_test_id("reports-history-content")).to_be_visible(timeout=10000)
         expect(self.page.locator("#patient-content")).to_contain_text("诊疗记录", timeout=10000)
 
+    def test_indicator_axis_tooltip_hides_missing_values_and_keeps_real_zero(self):
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_OXYGEN,
+            measured_at=timezone.now(),
+            value_main=Decimal("95"),
+            source="manual",
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-indicators").click()
+        expect(self.page.locator("#indicators-wrapper")).to_be_visible(timeout=10000)
+        self.page.wait_for_function(
+            "window.LCCCharts && typeof window.LCCCharts.formatAxisTooltip === 'function'"
+        )
+
+        tooltip_results = self.page.evaluate(
+            """() => {
+                const format = window.LCCCharts.formatAxisTooltip;
+                const marker = '<span class="marker"></span>';
+                return {
+                    missing: format([
+                        { axisValue: '08-16', seriesName: '血氧', value: null, marker }
+                    ]),
+                    zero: format([
+                        { axisValue: '08-16', seriesName: '血氧', value: 0, marker }
+                    ]),
+                    mixed: format([
+                        { axisValue: '08-16', seriesName: '收缩压', value: 120, marker },
+                        { axisValue: '08-16', seriesName: '舒张压', value: null, marker }
+                    ]),
+                    questionnaireMissing: format(
+                        [{ axisValue: '08-16', seriesName: '量表', value: 0, dataIndex: 0, marker }],
+                        function () { return true; }
+                    ),
+                    escaped: format([
+                        { axisValue: '<日期>', seriesName: '<指标>', value: '<值>', marker }
+                    ])
+                };
+            }"""
+        )
+
+        self.assertEqual(tooltip_results["missing"], "")
+        self.assertIn("血氧: 0", tooltip_results["zero"])
+        self.assertIn("收缩压: 120", tooltip_results["mixed"])
+        self.assertNotIn("舒张压", tooltip_results["mixed"])
+        self.assertEqual(tooltip_results["questionnaireMissing"], "")
+        self.assertIn("&lt;日期&gt;", tooltip_results["escaped"])
+        self.assertIn("&lt;指标&gt;: &lt;值&gt;", tooltip_results["escaped"])
+
+        self._assert_axis_tooltip_hides_missing_date("chart-spo2", Decimal("95"))
+
+    def test_multi_series_axis_tooltip_hides_only_missing_series(self):
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_PRESSURE,
+            measured_at=timezone.now(),
+            value_main=Decimal("120"),
+            value_sub=None,
+            source="manual",
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-indicators").click()
+        expect(self.page.locator("#indicators-wrapper")).to_be_visible(timeout=10000)
+
+        self._assert_axis_tooltip_hides_missing_date(
+            "chart-bp", Decimal("120"), absent_text="舒张压"
+        )
+
+    def test_followup_review_axis_tooltip_hides_missing_dates(self):
+        mapping = self._create_followup_review_mapping()
+        report_date = timezone.localdate()
+        upload = ReportUpload.objects.create(patient=self.patient)
+        image = ReportImage.objects.create(
+            upload=upload,
+            image_url="https://example.com/browser-followup-review.jpg",
+            record_type=ReportImage.RecordType.CHECKUP,
+            checkup_item=mapping.checkup_item,
+            report_date=report_date,
+        )
+        CheckupResultValue.objects.create(
+            patient=self.patient,
+            report_image=image,
+            checkup_item=mapping.checkup_item,
+            standard_field=mapping.standard_field,
+            report_date=report_date,
+            raw_name="浏览器白细胞",
+            normalized_name="浏览器白细胞",
+            raw_value="4.2",
+            value_numeric=Decimal("4.2"),
+            unit="*10^9/L",
+        )
+        self.patient.indicator_preferences = {
+            "version": 1,
+            "followup_review": {"selected_mapping_ids": [mapping.id]},
+        }
+        self.patient.save(update_fields=["indicator_preferences"])
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-indicators").click()
+        expect(self.page.locator("#indicators-wrapper")).to_be_visible(timeout=10000)
+
+        self._assert_axis_tooltip_hides_missing_date(
+            "chart-followup-review-0", Decimal("4.2")
+        )
+
+    def test_questionnaire_axis_tooltip_hides_missing_dates_and_keeps_zero(self):
+        questionnaire = Questionnaire.objects.create(
+            name="浏览器零分量表",
+            code="Q_BROWSER_ZERO_TOOLTIP",
+            is_active=True,
+        )
+        QuestionnaireSubmission.objects.create(
+            patient=self.patient,
+            questionnaire=questionnaire,
+            total_score=Decimal("0"),
+        )
+
+        self.open_patient_workspace()
+        self.page.get_by_test_id("workspace-tab-indicators").click()
+        expect(self.page.locator("#indicators-wrapper")).to_be_visible(timeout=10000)
+
+        self._assert_axis_tooltip_hides_missing_date(
+            "chart-questionnaire-%s" % questionnaire.id, Decimal("0")
+        )
+
     def test_indicators_filter_controls_survive_search_refresh(self):
         today = timezone.localdate()
+        HealthMetric.objects.create(
+            patient=self.patient,
+            metric_type=MetricType.BLOOD_OXYGEN,
+            measured_at=timezone.now(),
+            value_main=Decimal("95"),
+            source="manual",
+        )
         selected_cycle = TreatmentCycle.objects.create(
             patient=self.patient,
             name="浏览器中间疗程",
@@ -155,6 +367,7 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(search_button).to_be_visible(timeout=10000)
         expect(start_input).to_have_value(start_value)
         expect(end_input).to_have_value(end_value)
+        self._assert_axis_tooltip_hides_missing_date("chart-spo2", Decimal("95"))
 
         form.locator("[data-routine-filter-type]").select_option("cycle")
         cycle_select = form.locator('select[name="cycle_id"]')
@@ -174,6 +387,7 @@ class DoctorCorePagesBrowserTests(DoctorBrowserTestCase):
         expect(form.get_by_role("button", name="搜索")).to_be_visible(timeout=10000)
         expect(cycle_select).to_have_value(str(selected_cycle.id))
         expect(self.page.locator("#patient-content")).to_contain_text("浏览器中间疗程", timeout=10000)
+        self._assert_axis_tooltip_hides_missing_date("chart-spo2", Decimal("95"))
 
     def test_followup_review_config_modal_reopens_after_cancel_and_save(self):
         self._create_followup_review_mapping()

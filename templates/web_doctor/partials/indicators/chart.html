@@ -178,18 +178,9 @@
             var option = {
                 tooltip: {
                     trigger: 'axis',
+                    className: 'lcc-indicator-axis-tooltip',
                     formatter: function(params) {
-                        if (!params || !params.length) return '';
-                        var lines = [params[0].axisValue];
-                        params.forEach(function(param) {
-                            var value = param.value;
-                            if ((value === undefined || value === null) && param.data && param.data.value !== undefined) {
-                                value = param.data.value;
-                            }
-                            var display = value === undefined || value === null ? '-' : value;
-                            lines.push(param.marker + ' ' + param.seriesName + ': ' + display);
-                        });
-                        return lines.join('<br/>');
+                        return window.LCCCharts.formatAxisTooltip(params);
                     }
                 },
                 legend: {
